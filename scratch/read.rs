@@ -1,12 +1,12 @@
 #![allow(unused_imports, unused_variables)]
 use diesel::prelude::*;
-use twbm::dal::establish_connection;
-use twbm::models::Bookmark;
-use twbm::schema::bookmarks::dsl::bookmarks;
+use bkmr::dal::establish_connection;
+use bkmr::models::Bookmark;
+use bkmr::schema::bookmarks::dsl::bookmarks;
 
 #[allow(unused_imports)]
 use log::{debug, error, log_enabled, info, Level};
-use twbm::schema::bookmarks::flags;
+use bkmr::schema::bookmarks::flags;
 
 fn main() {
     env_logger::init();

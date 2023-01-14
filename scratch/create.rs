@@ -1,6 +1,6 @@
 #![allow(unused_imports, unused_variables)]
 use std::io::{Read, stdin};
-use twbm::dal::{create_bookmark, establish_connection};
+use bkmr::dal::{create_bookmark, establish_connection};
 
 fn main() {
     let connection = &mut establish_connection();

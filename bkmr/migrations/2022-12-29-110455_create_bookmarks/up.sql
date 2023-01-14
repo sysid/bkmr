@@ -99,6 +99,6 @@ values
        ('http://none/none', '', ',,', '', 0),
        ('/Users/Q187392', 'home', ',,', '', 0),
        ('$HOME/dev', 'dev', ',,', '', 0),
-       ('$HOME/dev/s/private/rs-twbm/twbm/tests/resources/rtwbm.pptx', 'pptx', ',,', '', 0),
-       ('shell::vim +/"## SqlAlchemy" $HOME/dev/s/private/rs-twbm/twbm/tests/resources/sample_docu.md', 'shell open vim', ',,', '', 0)
+       ('$HOME/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx', 'pptx', ',,', '', 0),
+       ('shell::vim +/"## SqlAlchemy" $HOME/dev/s/public/bkmr/bkmr/tests/resources/sample_docu.md', 'shell open vim', ',,', '', 0)
        ;

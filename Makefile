@@ -12,7 +12,7 @@ SHELL	= bash
 
 app_root = .
 app_root ?= .
-pkg_src =  $(app_root)/twbm
+pkg_src =  $(app_root)/bkmr
 tests_src = $(app_root)/tests
 
 # Makefile directory
@@ -31,54 +31,54 @@ ADMIN::  ## ##################################################################
 
 .PHONY: test-open-uri-url
 test-open-uri-url:  ## test-open-uri-url
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo test --package twbm --lib process::test::test_open_bm::case_1 -- --nocapture
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --lib process::test::test_open_bm::case_1 -- --nocapture
 
 .PHONY: test-open-uri-pptx
 test-open-uri-pptx:  ## test-open-uri-pptx
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo test --package twbm --lib process::test::test_open_bm::case_2 -- --nocapture
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --lib process::test::test_open_bm::case_2 -- --nocapture
 
 .PHONY: test-open-uri-vim
 test-open-uri-vim:  ## test-open-uri-vim
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo test --package twbm --lib process::test::test_open_bm::case_3 -- --nocapture
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --lib process::test::test_open_bm::case_3 -- --nocapture
 
 .PHONY: test-open-uri-all
 test-open-uri-all: test-open-uri-vim test-open-uri-pptx test-open-uri-url  ## test-open-uri all
 
 .PHONY: run-show
 run-show: init-db  ## run-show
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d show 1,10
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d show 1,10
 
 .PHONY: run-init-db
 run-init-db:  ## run-init-db
-	test -f /tmp/rtwbm_test.db && rm -v /tmp/rtwbm_test.db
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d create-db /tmp/rtwbm_test.db
-	open /tmp/rtwbm_test.db
+	test -f /tmp/bkmr_test.db && rm -v /tmp/bkmr_test.db
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d create-db /tmp/bkmr_test.db
+	open /tmp/bkmr_test.db
 
 .PHONY: run-edit
 run-edit: init-db   ## run-edit
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d edit 1,3
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d edit 1,3
 
 .PHONY: run-tags
 run-tags: init-db  ## run-tags
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d tags bbb
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d tags bbb
 	@echo "------ all tags -----"
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d tags
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d tags
 
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d delete 1,2,3
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d delete 1,2,3
 
 .PHONY: run-add
 run-add: init-db  ## run-add
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'
 
 .PHONY: run-search
 run-search: init-db  ## run-search interactively for manual tests
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo run -- -d -d search
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d search
 
 .PHONY: init-db
 init-db:  ## init-db
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo test --package twbm --test test_lib test_dal::test_init_db -- --exact
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
 
 .PHONY: install-diesel-cli
 install-diesel-cli:  ## install-diesel-cli
@@ -87,22 +87,23 @@ install-diesel-cli:  ## install-diesel-cli
 
 .PHONY: test-vim
 test-vim:  ## test-vim
-	#pushd twbm && cargo test --color=always --package twbm --lib process::test::test_do_edit -- --nocapture --ignored
-	RTWBM_DB_URL=../db/twbm.db pushd twbm && cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
+	#pushd bkmr && cargo test --color=always --package bkmr --lib process::test::test_do_edit -- --nocapture --ignored
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
 
 .PHONY: test-dal
 test-dal:  ## test-dal
-	RTWBM_DB_URL=../db/twbm.db RUST_LOG=DEBUG pushd twbm && cargo test --package twbm --test test_lib "" -- --test-threads=1
+	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test --package bkmr --test test_lib "" -- --test-threads=1
 
 .PHONY: test
 test:  test-dal  ## test (must run DB test before to init ?!?)
-	RTWBM_DB_URL=../db/twbm.db RUST_LOG=DEBUG pushd twbm && cargo test --package twbm -- --test-threads=1 # --nocapture
+	#BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test --package bkmr -- --test-threads=1  # --nocapture
+	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test -- --test-threads=1  # --nocapture
 
 .PHONY: benchmark
 benchmark:  ## benchmark
-	time RTWBM_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 /Users/Q187392/dev/s/private/rs-twbm/twbm/target/release/twbm search zzzeek --np
+	time BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 /Users/Q187392/dev/s/private/rs-bkmr/bkmr/target/release/bkmr search zzzeek --np
 	@echo "-----------------------------------------------------------"
-	time TWBM_DB_URL=sqlite://///Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 /Users/Q187392/.local/bin/twbm search zzzeek --np
+	time bkmr_DB_URL=sqlite://///Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 /Users/Q187392/.local/bin/bkmr search zzzeek --np
 
 
 ################################################################################
@@ -115,17 +116,17 @@ all: clean build install  ## all
 
 .PHONY: build
 build:  ## build
-	pushd twbm && cargo build --release
+	pushd bkmr && cargo build --release
 
 .PHONY: install
 install:  ## install
-	#pushd twbm && cargo install --path . --root ~/.cargo
-	@cp -vf twbm/target/release/twbm ~/bin/rtwbm
+	#pushd bkmr && cargo install --path . --root ~/.cargo
+	@cp -vf bkmr/target/release/bkmr ~/bin/bkmr
 
 .PHONY: uninstall
 uninstall:  ## uninstall
-	#pushd twbm && cargo uninstall --root ~/.cargo
-	@test -f ~/bin/rtwbm && rm -v ~/bin/rtwbm
+	#pushd bkmr && cargo uninstall --root ~/.cargo
+	@test -f ~/bin/bkmr && rm -v ~/bin/bkmr
 
 .PHONY: bump-major
 bump-major:  ## bump-major, tag and push
@@ -167,7 +168,7 @@ clean-pyc: ## remove Python file artifacts
 
 .PHONY: clean-rs
 clean-rs:  ## clean-rs
-	pushd twbm && cargo clean -v
+	pushd bkmr && cargo clean -v
 
 ################################################################################
 # Misc \

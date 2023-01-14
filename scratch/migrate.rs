@@ -1,7 +1,7 @@
 use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 
-use twbm::dal::establish_connection;
+use bkmr::dal::establish_connection;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 

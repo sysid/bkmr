@@ -8,8 +8,8 @@ use log::{debug, error, info, log_enabled, Level};
 use rstest::*;
 use std::collections::HashSet;
 use std::error::Error;
-use twbm::dal::Dal;
-use twbm::models::NewBookmark;
+use bkmr::dal::Dal;
+use bkmr::models::NewBookmark;
 
 mod test_dal;
 

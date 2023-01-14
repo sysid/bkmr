@@ -310,7 +310,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
     println!("Modified content: {}", modified_content);
     println!("lines: {:?}", lines);
 
-    // let mut dal = Dal::new(String::from("../db/twbm.db"));
+    // let mut dal = Dal::new(String::from("../db/bkmr.db"));
     Dal::new(CONFIG.db_url.clone())
         .update_bookmark(new_bm)
         .with_context(|| format!("({}:{}) Error updating bookmark", function_name!(), line!()))?;
@@ -354,7 +354,7 @@ mod test {
 
     #[fixture]
     fn bms() -> Vec<Bookmark> {
-        let mut dal = Dal::new(String::from("../db/twbm.db"));
+        let mut dal = Dal::new(String::from("../db/bkmr.db"));
         init_db(&mut dal.conn).expect("Error DB init");
         let bms = dal.get_bookmarks("");
         bms.unwrap()
@@ -376,9 +376,9 @@ mod test {
     #[ignore = "Manual Test with Makefile"]
     #[case("https://www.google.com")]
     #[ignore = "Manual Test with Makefile"]
-    #[case("./tests/resources/rtwbm.pptx")]
+    #[case("./tests/resources/bkmr.pptx")]
     #[ignore = "Manual Test with Makefile"]
-    #[case(r#####"shell::vim +/"## SqlAlchemy" $HOME/dev/s/private/rs-twbm/twbm/tests/resources/sample_docu.md"#####)]
+    #[case(r#####"shell::vim +/"## SqlAlchemy" $HOME/dev/s/private/bkmr/bkmr/tests/resources/sample_docu.md"#####)]
     fn test_open_bm(#[case] bm: &str) {
         _open_bm(bm).unwrap();
     }

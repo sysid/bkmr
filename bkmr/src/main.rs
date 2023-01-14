@@ -10,13 +10,13 @@ use log::{debug, error, info};
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use twbm::bms::Bookmarks;
-use twbm::{create_normalized_tag_string};
-use twbm::dal::Dal;
-use twbm::environment::CONFIG;
-use twbm::helper::{ensure_int_vector, init_db};
-use twbm::models::NewBookmark;
-use twbm::process::{delete_bms, edit_bms, process, show_bms};
+use bkmr::bms::Bookmarks;
+use bkmr::{create_normalized_tag_string};
+use bkmr::dal::Dal;
+use bkmr::environment::CONFIG;
+use bkmr::helper::{ensure_int_vector, init_db};
+use bkmr::models::NewBookmark;
+use bkmr::process::{delete_bms, edit_bms, process, show_bms};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

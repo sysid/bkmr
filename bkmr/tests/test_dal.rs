@@ -3,14 +3,14 @@ use stdext::function_name;
 use rstest::{fixture, rstest};
 use std::collections::HashSet;
 // use stdext::function_name;
-use twbm::dal::Dal;
-use twbm::helper;
-use twbm::models::NewBookmark;
+use bkmr::dal::Dal;
+use bkmr::helper;
+use bkmr::models::NewBookmark;
 
 #[fixture]
 pub fn dal() -> Dal {
     helper::init_logger();
-    let mut dal = Dal::new(String::from("../db/twbm.db"));
+    let mut dal = Dal::new(String::from("../db/bkmr.db"));
     helper::init_db(&mut dal.conn).expect("Error DB init");
     dal
 }

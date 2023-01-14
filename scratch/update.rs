@@ -1,9 +1,9 @@
 #![allow(unused_imports, unused_variables)]
 use diesel::prelude::*;
 use std::env::args;
-use twbm::schema::bookmarks::dsl::bookmarks;
-use twbm::models;
-use twbm::dal::establish_connection;
+use bkmr::schema::bookmarks::dsl::bookmarks;
+use bkmr::models;
+use bkmr::dal::establish_connection;
 
 fn main() {
     let id = args()

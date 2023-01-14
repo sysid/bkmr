@@ -1,9 +1,9 @@
 #![allow(unused_imports, unused_variables)]
 use diesel::prelude::*;
 use std::env::args;
-use twbm::dal::establish_connection;
-use twbm::schema::bookmarks::dsl::bookmarks;
-use twbm::schema::bookmarks::URL;
+use bkmr::dal::establish_connection;
+use bkmr::schema::bookmarks::dsl::bookmarks;
+use bkmr::schema::bookmarks::URL;
 
 fn main() {
     let target = args().nth(1).expect("Expected a target to match against");

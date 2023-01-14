@@ -1,20 +1,20 @@
 use rstest::{fixture, rstest};
-use twbm::dal::Dal;
-use twbm::helper;
-use twbm::models::Bookmark;
-use twbm::process::{delete_bms, do_edit};
+use bkmr::dal::Dal;
+use bkmr::helper;
+use bkmr::models::Bookmark;
+use bkmr::process::{delete_bms, do_edit};
 
 #[fixture]
 pub fn dal() -> Dal {
     helper::init_logger();
-    let mut dal = Dal::new(String::from("../db/twbm.db"));
+    let mut dal = Dal::new(String::from("../db/bkmr.db"));
     helper::init_db(&mut dal.conn).expect("Error DB init");
     dal
 }
 
 #[fixture]
 fn bms() -> Vec<Bookmark> {
-    let mut dal = Dal::new(String::from("../db/twbm.db"));
+    let mut dal = Dal::new(String::from("../db/bkmr.db"));
     // init_db(&mut dal.conn).expect("Error DB init");
     let bms = dal.get_bookmarks("");
     bms.unwrap()

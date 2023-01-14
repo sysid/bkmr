@@ -75,11 +75,14 @@ mod test {
 
     // Tests are fragile, because they depend on machine specific setup
     #[rstest]
-    // #[case("", None)]
-    // #[case("~/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))]  // link resolved
-    // #[case("$HOME/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))]
-    // #[case("https://www.google.com", None)]
-    #[case("./tests/resources/rtwbm.pptx", Some("/Users/Q187392/dev/s/private/rs-twbm/twbm/tests/resources/rtwbm.pptx".to_string()))]  // link resolved
+    #[case("", None)]
+    #[ignore = "fragile"]
+    #[case("~/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))]  // link resolved
+    #[ignore = "fragile"]
+    #[case("$HOME/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))]
+    #[case("https://www.google.com", None)]
+    #[ignore = "fragile"]
+    #[case("./tests/resources/bkmr.pptx", Some("/Users/Q187392/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx".to_string()))]  // link resolved
     fn test_abspath(#[case] x: &str, #[case] expected: Option<String>) {
         assert_eq!(abspath(x), expected);
     }

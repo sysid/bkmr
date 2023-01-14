@@ -11,7 +11,7 @@ pub struct Config {
 
 impl Config {
     fn new() -> Config {
-        let db_url = env::var("RTWBM_DB_URL").unwrap_or("../db/twbm.db".to_string());
+        let db_url = env::var("BKMR_DB_URL").unwrap_or("../db/bkmr.db".to_string());
         // test db_url as path exists
         let path = std::path::Path::new(&db_url);
         if !path.exists() {
@@ -53,7 +53,7 @@ mod test {
     fn test_config() {
         println!("Using database at {}", CONFIG.db_url);
         println!("Listening on port {}", CONFIG.port);
-        assert_eq!(CONFIG.db_url, String::from("../db/twbm.db"));
+        assert_eq!(CONFIG.db_url, String::from("../db/bkmr.db"));
         assert_eq!(CONFIG.port, 9999);
     }
 }
