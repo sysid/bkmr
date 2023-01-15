@@ -8,6 +8,7 @@ use stdext::function_name;
 use termcolor::Ansi;
 use tuikit::prelude::*;
 use crate::models::Bookmark;
+use crate::process::{edit_bms, open_bms};
 
 impl SkimItem for Bookmark {
     fn text(&self) -> Cow<str> {
@@ -52,12 +53,12 @@ fn fake_create_item(item: &str) {
     println!("Creating a new item `{}`...", item);
 }
 
-pub fn fzf(bms: &Vec<Bookmark>) -> i32 {
+pub fn fzf_process(bms: &Vec<Bookmark>) {
     let options = SkimOptionsBuilder::default()
         .height(Some("50%"))
         .multi(true)
         // For full list of accepted keywords see `parse_event` in `src/event.rs`.
-        .bind(vec!["ctrl-o:accept"])
+        .bind(vec!["ctrl-o:accept", "ctrl-e:accept"])
         .build()
         .unwrap();
 
@@ -69,23 +70,39 @@ pub fn fzf(bms: &Vec<Bookmark>) -> i32 {
     drop(tx_item); // so that skim could know when to stop waiting for more items.
 
     Skim::run_with(&options, Some(rx_item)).map(|out| match out.final_key {
-        // Delete each selected item
-        Key::Backspace => out.selected_items.iter().for_each(|i| fake_delete_item(&i.text())),
-        // Create a new item based on the query
-        Key::Enter => fake_create_item(out.query.as_ref()),
-        Key::Ctrl('o') => {
-            debug!("({}:{}) query: {:?} cmd: {:?}", function_name!(), line!(), out.query, out.cmd);
+        Key::Ctrl('e') => {
+            let filtered = filter_bms(out);
+            // id selection not necessary since all bms are filtered, just open all bms
+            let ids = (1..=filtered.len()).map(|i| i as i32).collect();
+            debug!("({}:{}) {:?}, {:?}", function_name!(), line!(), ids, filtered);
 
-            out.selected_items.iter().for_each(|i| {
-                println!("{}{}", i.output(), "\n");
+            edit_bms(ids, filtered).unwrap_or_else(|e| {
+                debug!("{}: {}", function_name!(), e);
             });
-            let selected_bms = out.selected_items.iter().
-                map(|selected_item| (**selected_item).as_any().downcast_ref::<Bookmark>().unwrap().to_owned())
-                .collect::<Vec<Bookmark>>();
-            debug!("({}:{}) selected_bms: {:?}", function_name!(), line!(), selected_bms);
+        }
+        Key::Ctrl('o') => {
+            let filtered = filter_bms(out);
+            // id selection not necessary since all bms are filtered, just open all bms
+            let ids = (1..=filtered.len()).map(|i| i as i32).collect();
+            debug!("({}:{}) {:?}, {:?}", function_name!(), line!(), ids, filtered);
+
+            open_bms(ids, filtered).unwrap_or_else(|e| {
+                debug!("{}: {}", function_name!(), e);
+            });
         }
         _ => (),
     });
+}
 
-    1 as i32
+fn filter_bms(out: SkimOutput) -> Vec<Bookmark> {
+    debug!("({}:{}) query: {:?} cmd: {:?}", function_name!(), line!(), out.query, out.cmd);
+
+    out.selected_items.iter().for_each(|i| {
+        println!("{}{}", i.output(), "\n");
+    });
+    let selected_bms = out.selected_items.iter().
+        map(|selected_item| (**selected_item).as_any().downcast_ref::<Bookmark>().unwrap().to_owned())
+        .collect::<Vec<Bookmark>>();
+    debug!("({}:{}) selected_bms: {:?}", function_name!(), line!(), selected_bms);
+    selected_bms
 }

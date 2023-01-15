@@ -194,7 +194,7 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
     }
 }
 
-fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
+pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("({}:{}) {:?}", function_name!(), line!(), ids);
 
     do_sth_with_bms(ids, bms, open_bm)

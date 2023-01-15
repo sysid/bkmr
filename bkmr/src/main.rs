@@ -212,7 +212,7 @@ fn main() {
 
             if *non_interactive {
                 debug!("Non Interactive");
-                let ids = fzf::fzf(&bms.bms);
+                let ids = fzf::fzf_process(&bms.bms);
                 // process(bms);
             } else {
                 println!("Found {} bookmarks", bms.bms.len());

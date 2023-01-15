@@ -13,7 +13,7 @@ use bkmr::dal::Dal;
 use bkmr::models::{Bookmark, NewBookmark};
 use stdext::function_name;
 use bkmr::{helper};
-use bkmr::fzf::fzf;
+use bkmr::fzf::fzf_process;
 
 mod test_dal;
 
@@ -52,6 +52,7 @@ fn bms() -> Vec<Bookmark> {
 
 /// uses interactive console
 #[rstest]
+#[ignore = "Interactive via Makefile"]
 fn test_fzf(bms: Vec<Bookmark>) {
-    let ids = fzf(&bms);
+    let ids = fzf_process(&bms);
 }
