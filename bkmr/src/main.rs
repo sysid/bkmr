@@ -173,6 +173,8 @@ fn main() {
                         tags_prefix.clone().unwrap()
                     );
                 }
+            } else {
+                _tags_all = tags_all.clone().unwrap_or_default();
             }
             debug!("({}:{}) tags: {:?}", function_name!(), line!(), _tags_all);
 

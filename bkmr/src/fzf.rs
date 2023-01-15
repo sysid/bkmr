@@ -29,7 +29,7 @@ impl SkimItem for Bookmark {
         let start_idx_url = end_idx_metadata + 1;
         let end_idx_url = start_idx_url + self.URL.len() + 1;
         let attr_url = Attr {
-            fg: Color::BLUE,
+            fg: Color::YELLOW,
             ..Attr::default()
         };
         AnsiString::new_str(
