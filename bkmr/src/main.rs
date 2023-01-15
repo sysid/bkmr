@@ -11,7 +11,7 @@ use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::bms::Bookmarks;
-use bkmr::{create_normalized_tag_string};
+use bkmr::{create_normalized_tag_string, fzf};
 use bkmr::dal::Dal;
 use bkmr::environment::CONFIG;
 use bkmr::helper::{ensure_int_vector, init_db};
@@ -212,6 +212,7 @@ fn main() {
 
             if *non_interactive {
                 debug!("Non Interactive");
+                let ids = fzf::fzf(&bms.bms);
                 // process(bms);
             } else {
                 println!("Found {} bookmarks", bms.bms.len());
@@ -222,13 +223,6 @@ fn main() {
                 stdout.reset().unwrap();
                 process(&bms.bms);
             }
-
-            // if *tags_prefix { println!("prefix"); }
-            // if *tags_exact { println!("Exact"); }
-            // if *tags_all { println!("all"); }
-            // if *tags_all_not { println!("all_not"); }
-            // if *tags_any { println!("any"); }
-            // if *tags_any_not { println!("any_not"); }
         }
         Some(Commands::Open { ids }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());

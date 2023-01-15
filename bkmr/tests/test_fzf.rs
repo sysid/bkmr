@@ -10,10 +10,10 @@ use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 use bkmr::dal::Dal;
-// use bkmr::fzf;
 use bkmr::models::{Bookmark, NewBookmark};
 use stdext::function_name;
 use bkmr::{helper};
+use bkmr::fzf::fzf;
 
 mod test_dal;
 
@@ -47,4 +47,11 @@ fn bms() -> Vec<Bookmark> {
     // init_db(&mut dal.conn).expect("Error DB init");
     let bms = dal.get_bookmarks("");
     bms.unwrap()
+}
+
+
+/// uses interactive console
+#[rstest]
+fn test_fzf(bms: Vec<Bookmark>) {
+    let ids = fzf(&bms);
 }

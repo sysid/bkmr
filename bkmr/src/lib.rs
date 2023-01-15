@@ -2,10 +2,18 @@
 #![crate_name = "bkmr"]
 // #![allow(unused_variables, unused_imports)]
 
+extern crate skim;
+
 use std::collections::HashSet;
+use std::io::Cursor;
 
 #[allow(unused_imports)]
 use diesel::prelude::*;
+use log::debug;
+use skim::prelude::*;
+use stdext::function_name;
+
+use crate::models::Bookmark;
 
 pub mod bms;
 pub mod dal;
@@ -14,6 +22,7 @@ pub mod helper;
 pub mod models;
 pub mod process;
 pub mod schema;
+pub mod fzf;
 
 pub fn clean_tags(tags: Vec<String>) -> Vec<String> {
     // let tags = HashSet::new();
@@ -84,9 +93,10 @@ fn init() {
 
 #[cfg(test)]
 mod test {
-    use crate::{clean_tags, create_normalized_tag_string, match_all_tags, match_any_tags, match_exact_tags, normalize_tag_string};
     use log::debug;
     use rstest::*;
+
+    use crate::{clean_tags, create_normalized_tag_string, match_all_tags, match_any_tags, match_exact_tags, normalize_tag_string};
 
     fn parse_tags(tags: Vec<String>) -> String {
         let _tags = clean_tags(tags);
@@ -178,11 +188,11 @@ mod test {
     }
 
     #[rstest]
-    #[case(Some("tag1,tag2".to_string()), vec!["tag1", "tag2"])]
-    #[case(Some("tag1, tag2".to_string()), vec!["tag1", "tag2"])]
-    #[case(Some("tag2,tag1".to_string()), vec!["tag1", "tag2"])]
-    #[case(Some(" tag2,tag1 ".to_string()), vec!["tag1", "tag2"])]
-    #[case(None, vec![])]
+    #[case(Some("tag1,tag2".to_string()), vec ! ["tag1", "tag2"])]
+    #[case(Some("tag1, tag2".to_string()), vec ! ["tag1", "tag2"])]
+    #[case(Some("tag2,tag1".to_string()), vec ! ["tag1", "tag2"])]
+    #[case(Some(" tag2,tag1 ".to_string()), vec ! ["tag1", "tag2"])]
+    #[case(None, vec ! [])]
     fn test_normalize_tag_string(#[case] input: Option<String>, #[case] expected: Vec<&str>) {
         let expected: Vec<String> = expected.iter().map(|x| x.to_string()).collect();
         debug!("{:?}, {:?}", input, expected);
@@ -199,4 +209,3 @@ mod test {
         assert_eq!(create_normalized_tag_string(input), expected)
     }
 }
-
