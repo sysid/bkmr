@@ -1,6 +1,6 @@
 use std::{fs, io};
 
-use anyhow::{Context};
+use anyhow::Context;
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -97,7 +97,12 @@ pub fn process(bms: &Vec<Bookmark>) {
             "p" => {
                 let ids = helper::ensure_int_vector(&tokens.split_off(1));
                 if ids.is_none() {
-                    error!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                    error!(
+                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        function_name!(),
+                        line!(),
+                        ids
+                    );
                     continue;
                 }
 
@@ -109,7 +114,12 @@ pub fn process(bms: &Vec<Bookmark>) {
             "d" => {
                 let ids = helper::ensure_int_vector(&tokens.split_off(1));
                 if ids.is_none() {
-                    error!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                    error!(
+                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        function_name!(),
+                        line!(),
+                        ids
+                    );
                     continue;
                 }
 
@@ -121,7 +131,12 @@ pub fn process(bms: &Vec<Bookmark>) {
             "e" => {
                 let ids = helper::ensure_int_vector(&tokens.split_off(1));
                 if ids.is_none() {
-                    error!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                    error!(
+                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        function_name!(),
+                        line!(),
+                        ids
+                    );
                     continue;
                 }
                 edit_bms(ids.unwrap(), bms.clone()).unwrap_or_else(|e| {
@@ -135,7 +150,12 @@ pub fn process(bms: &Vec<Bookmark>) {
             s if regex.is_match(s) => {
                 let ids = helper::ensure_int_vector(&tokens);
                 if ids.is_none() {
-                    error!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                    error!(
+                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        function_name!(),
+                        line!(),
+                        ids
+                    );
                     continue;
                 }
                 open_bms(ids.unwrap(), bms.clone()).unwrap_or_else(|e| {
@@ -177,10 +197,20 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
             .with_context(|| format!("({}:{}) Error opening {}", function_name!(), line!(), uri))?;
 
         let status = child.wait().expect("Failed to wait on Vim");
-        debug!("({}:{}) Exit status from command: {:?}", function_name!(), line!(), status);
+        debug!(
+            "({}:{}) Exit status from command: {:?}",
+            function_name!(),
+            line!(),
+            status
+        );
         Ok(())
     } else {
-        debug!("({}:{}) General OS open {:?}", function_name!(), line!(), uri);
+        debug!(
+            "({}:{}) General OS open {:?}",
+            function_name!(),
+            line!(),
+            uri
+        );
         // todo error propagation upstream not working
         match abspath(uri) {
             Some(p) => {
@@ -229,21 +259,9 @@ fn do_sth_with_bms(
     for id in ids {
         if id as usize <= bms.len() {
             let bm = &bms[id as usize - 1];
-            debug!(
-                    "({}:{}) {:?}: bm {:?}",
-                    function_name!(),
-                    line!(),
-                    id,
-                    bm
-                );
-            do_sth(bm).with_context(|| {
-                format!(
-                    "({}:{}): bm {:?}",
-                    function_name!(),
-                    line!(),
-                    bm
-                )
-            })?;
+            debug!("({}:{}) {:?}: bm {:?}", function_name!(), line!(), id, bm);
+            do_sth(bm)
+                .with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
         }
     }
     Ok(())
@@ -395,7 +413,7 @@ mod test {
     #[case(vec ! [])]
     fn test_print_ids(bms: Vec<Bookmark>, #[case] tokens: Vec<i32>) {
         print_ids(tokens, bms).unwrap();
-    }  // todo assert missing
+    } // todo assert missing
 
     #[rstest]
     #[case(vec ! [1])]
@@ -405,7 +423,7 @@ mod test {
             Ok(())
         });
         assert!(result.is_ok());
-    }  // todo assert missing
+    } // todo assert missing
 
     #[rstest]
     fn test_do_sth_with_bms_error(bms: Vec<Bookmark>) {

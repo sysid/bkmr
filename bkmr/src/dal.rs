@@ -48,8 +48,8 @@ impl Dal {
             WHERE id = ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn)?;
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn)?;
 
         sql_query(
             "
@@ -58,8 +58,8 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn)?;
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn)?;
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
 
@@ -67,8 +67,7 @@ impl Dal {
         Ok(())
     }
     pub fn clean_table(&mut self) -> Result<(), DieselError> {
-        sql_query("DELETE FROM bookmarks WHERE id != 1;")
-            .execute(&mut self.conn)?;
+        sql_query("DELETE FROM bookmarks WHERE id != 1;").execute(&mut self.conn)?;
         debug!("({}:{}) {:?}", function_name!(), line!(), "Cleaned table.");
         Ok(())
     }
@@ -144,7 +143,7 @@ impl Dal {
 
     /// get ordered vector of tags
     pub fn get_all_tags_as_vec(&mut self) -> Vec<String> {
-        let all_tags = self.get_all_tags().unwrap();  //todo handle error
+        let all_tags = self.get_all_tags().unwrap(); //todo handle error
         let mut all_tags: Vec<String> = all_tags.into_iter().map(|t| t.tag).collect();
         debug!("({}:{}) {:?}", function_name!(), line!(), all_tags);
         all_tags.sort();

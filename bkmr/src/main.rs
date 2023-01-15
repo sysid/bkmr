@@ -1,8 +1,8 @@
+use camino::Utf8Path;
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process;
-use camino::Utf8Path;
 
 use clap::{Parser, Subcommand};
 
@@ -11,9 +11,10 @@ use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::bms::Bookmarks;
-use bkmr::{create_normalized_tag_string, fzf};
+use bkmr::create_normalized_tag_string;
 use bkmr::dal::Dal;
 use bkmr::environment::CONFIG;
+use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::models::NewBookmark;
 use bkmr::process::{delete_bms, edit_bms, process, show_bms};
@@ -44,25 +45,25 @@ enum Commands {
         /// FTS query (full text search)
         fts_query: Option<String>,
         #[arg(
-        short = 'e',
-        long = "exact",
-        help = "match exact, comma separated list"
+            short = 'e',
+            long = "exact",
+            help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
         #[arg(short = 't', long = "tags", help = "match all, comma separated list")]
         tags_all: Option<String>,
         #[arg(
-        short = 'T',
-        long = "Tags",
-        help = "not match all, comma separated list"
+            short = 'T',
+            long = "Tags",
+            help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
         #[arg(short = 'n', long = "ntags", help = "match any, comma separated list")]
         tags_any: Option<String>,
         #[arg(
-        short = 'N',
-        long = "Ntags",
-        help = "not match any, comma separated list"
+            short = 'N',
+            long = "Ntags",
+            help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
         #[arg(long = "prefix", help = "tags to prefix the tags option")]
@@ -73,6 +74,8 @@ enum Commands {
         order_asc: bool,
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
+        #[arg(long = "fzf", help = "no prompt")]
+        is_fuzzy: bool,
     },
     Open {
         /// list of ids, separated by comma, no blanks
@@ -108,9 +111,7 @@ enum Commands {
         ids: String,
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
-    Show {
-        ids: String,
-    },
+    Show { ids: String },
     /// tag for which related tags should be shown. No input: all tags are printed
     Tags {
         /// tag for which related tags should be shown. No input: all tags are shown
@@ -149,17 +150,18 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Search {
-                 fts_query,
-                 tags_exact,
-                 tags_all,
-                 tags_all_not,
-                 tags_any,
-                 tags_any_not,
-                 tags_prefix,
-                 order_desc,
-                 order_asc,
-                 non_interactive,
-             }) => {
+            fts_query,
+            tags_exact,
+            tags_all,
+            tags_all_not,
+            tags_any,
+            tags_any_not,
+            tags_prefix,
+            order_desc,
+            order_asc,
+            non_interactive,
+            is_fuzzy,
+        }) => {
             let mut _tags_all = String::from("");
             if tags_prefix.is_some() {
                 if tags_all.is_none() {
@@ -207,12 +209,15 @@ fn main() {
                 bms.bms.sort_by_key(|bm| bm.metadata.to_lowercase())
             }
 
+            if *is_fuzzy {
+                fzf_process(&bms.bms);
+                return ();
+            }
             debug!("({}:{})\n{:#?}\n", function_name!(), line!(), bms.bms);
             show_bms(&bms.bms);
 
             if *non_interactive {
-                debug!("Non Interactive");
-                let ids = fzf::fzf_process(&bms.bms);
+                debug!("Non Interactive. Exiting");
                 // process(bms);
             } else {
                 println!("Found {} bookmarks", bms.bms.len());
@@ -229,7 +234,12 @@ fn main() {
             let ids: Vec<String> = ids.split(',').map(|s| s.to_owned()).collect();
             let ids = ensure_int_vector(&ids);
             if ids.is_none() {
-                error!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                error!(
+                    "({}:{}) Invalid input, only numbers allowed {:?}",
+                    function_name!(),
+                    line!(),
+                    ids
+                );
                 return;
             }
 
@@ -241,34 +251,41 @@ fn main() {
                         open::that(bm.URL).unwrap();
                     }
                     Err(_) => {
-                        error!("({}:{}) Bookmark with id {} not found", function_name!(), line!(), id);
+                        error!(
+                            "({}:{}) Bookmark with id {} not found",
+                            function_name!(),
+                            line!(),
+                            id
+                        );
                     }
                 }
             }
         }
         Some(Commands::Add {
-                 url,
-                 tags,
-                 title,
-                 desc,
-                 edit,
-             }) => {
+            url,
+            tags,
+            title,
+            desc,
+            edit,
+        }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             debug!(
                 "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}",
                 function_name!(),
                 line!(),
-                url, tags, title, desc, edit
+                url,
+                tags,
+                title,
+                desc,
+                edit
             );
-            match dal.insert_bookmark(
-                NewBookmark {
-                    URL: url.to_string(),
-                    metadata: title.to_owned().unwrap_or("".to_string()),
-                    tags: create_normalized_tag_string(tags.to_owned()),
-                    desc: desc.to_owned().unwrap_or("".to_string()),
-                    flags: 0,
-                },
-            ) {
+            match dal.insert_bookmark(NewBookmark {
+                URL: url.to_string(),
+                metadata: title.to_owned().unwrap_or("".to_string()),
+                tags: create_normalized_tag_string(tags.to_owned()),
+                desc: desc.to_owned().unwrap_or("".to_string()),
+                flags: 0,
+            }) {
                 Ok(bms) => println!("Added bookmark: {:?}", bms),
                 Err(e) => {
                     eprintln!("Error saving bookmark: {:?}", e);
@@ -279,32 +296,52 @@ fn main() {
         Some(Commands::Delete { ids }) => {
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
             if ids.is_none() {
-                eprintln!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                eprintln!(
+                    "({}:{}) Invalid input, only numbers allowed {:?}",
+                    function_name!(),
+                    line!(),
+                    ids
+                );
                 process::exit(1);
             }
-            let bms = Bookmarks::new("".to_string());  // load all bms
+            let bms = Bookmarks::new("".to_string()); // load all bms
             delete_bms(ids.unwrap(), bms.bms.clone()).unwrap_or_else(|e| {
-                eprintln!("Error ({}:{}) Deleting Bookmarks: {:?}", function_name!(), line!(), e);
+                eprintln!(
+                    "Error ({}:{}) Deleting Bookmarks: {:?}",
+                    function_name!(),
+                    line!(),
+                    e
+                );
                 process::exit(1);
             });
         }
         Some(Commands::Update {
-                 ids,
-                 tags,
-                 tags_not,
-                 force,
-             }) => {
+            ids,
+            tags,
+            tags_not,
+            force,
+        }) => {
             println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
         }
         Some(Commands::Edit { ids }) => {
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
             if ids.is_none() {
-                eprintln!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                eprintln!(
+                    "({}:{}) Invalid input, only numbers allowed {:?}",
+                    function_name!(),
+                    line!(),
+                    ids
+                );
                 process::exit(1);
             }
-            let bms = Bookmarks::new("".to_string());  // load all bms
+            let bms = Bookmarks::new("".to_string()); // load all bms
             edit_bms(ids.unwrap(), bms.bms.clone()).unwrap_or_else(|e| {
-                eprintln!("Error ({}:{}) Editing Bookmarks: {:?}", function_name!(), line!(), e);
+                eprintln!(
+                    "Error ({}:{}) Editing Bookmarks: {:?}",
+                    function_name!(),
+                    line!(),
+                    e
+                );
                 process::exit(1);
             });
         }
@@ -312,7 +349,12 @@ fn main() {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
             if ids.is_none() {
-                eprintln!("({}:{}) Invalid input, only numbers allowed {:?}", function_name!(), line!(), ids);
+                eprintln!(
+                    "({}:{}) Invalid input, only numbers allowed {:?}",
+                    function_name!(),
+                    line!(),
+                    ids
+                );
                 process::exit(1);
             }
             let mut bms = vec![];
@@ -329,16 +371,12 @@ fn main() {
                 }
             }
             show_bms(&bms);
-        },
+        }
         Some(Commands::Tags { tag }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             let tags = match tag {
-                Some(tag) => {
-                    dal.get_related_tags(tag)
-                }
-                None => {
-                    dal.get_all_tags()
-                }
+                Some(tag) => dal.get_related_tags(tag),
+                None => dal.get_all_tags(),
             };
             match tags {
                 Ok(tags) => {
@@ -347,7 +385,12 @@ fn main() {
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error ({}:{}) Getting all tags: {:?}", function_name!(), line!(), e);
+                    eprintln!(
+                        "Error ({}:{}) Getting all tags: {:?}",
+                        function_name!(),
+                        line!(),
+                        e
+                    );
                     process::exit(1);
                 }
             }
@@ -363,20 +406,29 @@ fn main() {
                     debug!("({}:{}) Created {:?}", function_name!(), line!(), parent);
                 }
 
-
                 let mut dal = Dal::new(path.to_string());
                 match init_db(&mut dal.conn) {
                     Ok(_) => {
                         println!("Database created at {:?}", path);
                     }
                     Err(e) => {
-                        eprintln!("Error ({}:{}) Creating database: {:?}", function_name!(), line!(), e);
+                        eprintln!(
+                            "Error ({}:{}) Creating database: {:?}",
+                            function_name!(),
+                            line!(),
+                            e
+                        );
                         process::exit(1);
                     }
                 }
                 let _ = dal.clean_table();
             } else {
-                eprintln!("({}:{}) Database already exists at {:?}.", function_name!(), line!(), path);
+                eprintln!(
+                    "({}:{}) Database already exists at {:?}.",
+                    function_name!(),
+                    line!(),
+                    path
+                );
                 process::exit(1);
             }
         }

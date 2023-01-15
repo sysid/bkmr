@@ -1,8 +1,8 @@
+use camino::Utf8Path;
 use diesel::sqlite::Sqlite;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use log::debug;
 use std::error::Error;
-use camino::Utf8Path;
 use stdext::function_name;
 
 pub fn init_logger() {
@@ -34,7 +34,8 @@ pub fn ensure_int_vector(vec: &Vec<String>) -> Option<Vec<i32>> {
         .map(|mut v| {
             v.sort_by(|a, b| a.cmp(b));
             v
-        }).ok()
+        })
+        .ok()
 }
 
 /// resolves existing path and follows symlinks, returns None if path does not exist
@@ -77,12 +78,12 @@ mod test {
     #[rstest]
     #[case("", None)]
     #[ignore = "fragile"]
-    #[case("~/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))]  // link resolved
+    #[case("~/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))] // link resolved
     #[ignore = "fragile"]
     #[case("$HOME/dev/binx", Some("/Users/Q187392/dev/s/private/devops-binx".to_string()))]
     #[case("https://www.google.com", None)]
     #[ignore = "fragile"]
-    #[case("./tests/resources/bkmr.pptx", Some("/Users/Q187392/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx".to_string()))]  // link resolved
+    #[case("./tests/resources/bkmr.pptx", Some("/Users/Q187392/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx".to_string()))] // link resolved
     fn test_abspath(#[case] x: &str, #[case] expected: Option<String>) {
         assert_eq!(abspath(x), expected);
     }

@@ -1,19 +1,19 @@
 #![allow(unused_imports, unused_variables)]
 
+use bkmr::dal::Dal;
+use bkmr::fzf::fzf_process;
+use bkmr::helper;
+use bkmr::models::{Bookmark, NewBookmark};
 use diesel::result::Error as DieselError;
 use diesel::sqlite::Sqlite;
 use diesel::SqliteConnection;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use log::{debug, error, info, Level, log_enabled};
+use log::{debug, error, info, log_enabled, Level};
 use rstest::*;
 use std::collections::HashSet;
 use std::env;
 use std::error::Error;
-use bkmr::dal::Dal;
-use bkmr::models::{Bookmark, NewBookmark};
 use stdext::function_name;
-use bkmr::{helper};
-use bkmr::fzf::fzf_process;
 
 mod test_dal;
 
@@ -48,7 +48,6 @@ fn bms() -> Vec<Bookmark> {
     let bms = dal.get_bookmarks("");
     bms.unwrap()
 }
-
 
 /// uses interactive console
 #[rstest]

@@ -1,8 +1,8 @@
-use rstest::{fixture, rstest};
 use bkmr::dal::Dal;
 use bkmr::helper;
 use bkmr::models::Bookmark;
 use bkmr::process::{delete_bms, do_edit};
+use rstest::{fixture, rstest};
 
 #[fixture]
 pub fn dal() -> Dal {

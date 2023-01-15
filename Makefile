@@ -103,6 +103,10 @@ test:  test-dal  ## test (must run DB test before to init ?!?)
 	#BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test --package bkmr -- --test-threads=1  # --nocapture
 	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test -- --test-threads=1  # --nocapture
 
+.PHONY: test-with-data
+test-with-data:  ## test-with-data
+	BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 pushd bkmr && cargo run -- search --fzf
+
 .PHONY: benchmark
 benchmark:  ## benchmark
 	time BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 /Users/Q187392/dev/s/private/rs-bkmr/bkmr/target/release/bkmr search zzzeek --np

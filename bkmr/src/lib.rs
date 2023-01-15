@@ -5,24 +5,18 @@
 extern crate skim;
 
 use std::collections::HashSet;
-use std::io::Cursor;
 
 #[allow(unused_imports)]
-use diesel::prelude::*;
-use log::debug;
-use skim::prelude::*;
 use stdext::function_name;
-
-use crate::models::Bookmark;
 
 pub mod bms;
 pub mod dal;
 pub mod environment;
+pub mod fzf;
 pub mod helper;
 pub mod models;
 pub mod process;
 pub mod schema;
-pub mod fzf;
 
 pub fn clean_tags(tags: Vec<String>) -> Vec<String> {
     // let tags = HashSet::new();
@@ -96,7 +90,10 @@ mod test {
     use log::debug;
     use rstest::*;
 
-    use crate::{clean_tags, create_normalized_tag_string, match_all_tags, match_any_tags, match_exact_tags, normalize_tag_string};
+    use crate::{
+        clean_tags, create_normalized_tag_string, match_all_tags, match_any_tags, match_exact_tags,
+        normalize_tag_string,
+    };
 
     fn parse_tags(tags: Vec<String>) -> String {
         let _tags = clean_tags(tags);
