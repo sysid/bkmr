@@ -29,6 +29,10 @@ MAN_BINS = $(filter-out ./tw-extras.md, $(MANS))
 # Admin \
 ADMIN::  ## ##################################################################
 
+.PHONY: test-url-details
+test-url-details:  ## test-url-details (charm strang verbose output)
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_lib test_load_url_details -- --exact
+
 .PHONY: test-fzf
 test-fzf:  ## test-fzf
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture

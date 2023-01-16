@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 // use bkmr::fzf;
-use bkmr::helper;
+use bkmr::{helper, load_url_details};
 use bkmr::models::{Bookmark, NewBookmark};
 use stdext::function_name;
 
@@ -47,4 +47,12 @@ fn bms() -> Vec<Bookmark> {
     // init_db(&mut dal.conn).expect("Error DB init");
     let bms = dal.get_bookmarks("");
     bms.unwrap()
+}
+
+#[rstest]
+fn test_load_url_details() {
+    let result = load_url_details("https://www.rust-lang.org/");
+    assert!(result.is_ok());
+    // assert_eq!(result.unwrap().title, "The Rust Programming Language");
+    // println!("Result: {:?}", result);
 }
