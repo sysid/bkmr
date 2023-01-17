@@ -11,8 +11,8 @@ use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 // use bkmr::fzf;
-use bkmr::{helper, load_url_details};
 use bkmr::models::{Bookmark, NewBookmark};
+use bkmr::{helper, load_url_details};
 use stdext::function_name;
 
 mod test_dal;

@@ -5,19 +5,21 @@ use std::path::PathBuf;
 use std::process;
 
 use clap::{Parser, Subcommand};
+use diesel::result::DatabaseErrorKind;
+use diesel::result::Error::DatabaseError;
 
 use log::{debug, error, info};
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::bms::Bookmarks;
-use bkmr::{create_normalized_tag_string, load_url_details};
 use bkmr::dal::Dal;
 use bkmr::environment::CONFIG;
 use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::models::NewBookmark;
 use bkmr::process::{delete_bms, edit_bms, process, show_bms};
+use bkmr::{create_normalized_tag_string, load_url_details};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -45,25 +47,25 @@ enum Commands {
         /// FTS query (full text search)
         fts_query: Option<String>,
         #[arg(
-        short = 'e',
-        long = "exact",
-        help = "match exact, comma separated list"
+            short = 'e',
+            long = "exact",
+            help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
         #[arg(short = 't', long = "tags", help = "match all, comma separated list")]
         tags_all: Option<String>,
         #[arg(
-        short = 'T',
-        long = "Tags",
-        help = "not match all, comma separated list"
+            short = 'T',
+            long = "Tags",
+            help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
         #[arg(short = 'n', long = "ntags", help = "match any, comma separated list")]
         tags_any: Option<String>,
         #[arg(
-        short = 'N',
-        long = "Ntags",
-        help = "not match any, comma separated list"
+            short = 'N',
+            long = "Ntags",
+            help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
         #[arg(long = "prefix", help = "tags to prefix the tags option")]
@@ -136,12 +138,24 @@ fn main() {
         1 => {
             let _ = env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
+                .filter_module("skim", log::LevelFilter::Info)
+                .filter_module("tuikit", log::LevelFilter::Info)
+                .filter_module("html5ever", log::LevelFilter::Info)
+                .filter_module("reqwest", log::LevelFilter::Info)
+                .filter_module("mio", log::LevelFilter::Info)
+                .filter_module("want", log::LevelFilter::Info)
                 .try_init();
             info!("Debug mode: info");
         }
         2 => {
             let _ = env_logger::builder()
                 .filter_level(log::LevelFilter::max())
+                .filter_module("skim", log::LevelFilter::Info)
+                .filter_module("tuikit", log::LevelFilter::Info)
+                .filter_module("html5ever", log::LevelFilter::Info)
+                .filter_module("reqwest", log::LevelFilter::Info)
+                .filter_module("mio", log::LevelFilter::Info)
+                .filter_module("want", log::LevelFilter::Info)
                 .try_init();
             debug!("Debug mode: debug");
         }
@@ -150,18 +164,18 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Search {
-                 fts_query,
-                 tags_exact,
-                 tags_all,
-                 tags_all_not,
-                 tags_any,
-                 tags_any_not,
-                 tags_prefix,
-                 order_desc,
-                 order_asc,
-                 non_interactive,
-                 is_fuzzy,
-             }) => {
+            fts_query,
+            tags_exact,
+            tags_all,
+            tags_all_not,
+            tags_any,
+            tags_any_not,
+            tags_prefix,
+            order_desc,
+            order_asc,
+            non_interactive,
+            is_fuzzy,
+        }) => {
             let mut _tags_all = String::from("");
             if tags_prefix.is_some() {
                 if tags_all.is_none() {
@@ -264,12 +278,12 @@ fn main() {
             }
         }
         Some(Commands::Add {
-                 url,
-                 tags,
-                 title,
-                 desc,
-                 no_web,
-             }) => {
+            url,
+            tags,
+            title,
+            desc,
+            no_web,
+        }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             debug!(
                 "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}",
@@ -282,26 +296,25 @@ fn main() {
                 no_web,
             );
 
-            let url = url.to_string();
-            let tags = create_normalized_tag_string(tags.to_owned());
-
-            let mut _title = "".to_string();
-            let mut _description = "".to_string();
-            let mut _keywords = "".to_string();
-
-            (_title, _description, _keywords) = if !*no_web {
+            let (_title, _description, _keywords) = if !*no_web {
                 let result = load_url_details(&url);
-                debug!("({}:{}) Fetched URL: {:?}", function_name!(), line!(), result);
                 match result {
                     Ok(details) => {
+                        debug!(
+                            "({}:{}) Fetched URL: {:?}",
+                            function_name!(),
+                            line!(),
+                            details
+                        );
                         (
                             details.0.unwrap_or("".to_string()),
                             details.1.unwrap_or("".to_string()),
-                            details.2.unwrap_or("".to_string())
+                            details.2.unwrap_or("".to_string()),
                         )
                     }
                     Err(e) => {
-                        eprintln!("Cannot add URL details from web: {:?}", e);
+                        error!("Cannot add URL details from web: {:?}", e);
+                        eprintln!("Cannot enrich URL data from web.");
                         ("".to_string(), "".to_string(), "".to_string())
                     }
                 }
@@ -309,23 +322,37 @@ fn main() {
                 ("".to_string(), "".to_string(), "".to_string())
             };
 
-            // let mut title = title.to_owned().unwrap_or("".to_string());
-            // let mut description = desc.to_owned().unwrap_or("".to_string());
-            // let mut keywords = "".to_string();
+            let title = title.to_owned().unwrap_or(_title);
+            let description = desc.to_owned().unwrap_or(_description);
+            debug!(
+                "({}:{}) title: {:?}, description: {:?}",
+                function_name!(),
+                line!(),
+                title,
+                description
+            );
 
-            // match dal.insert_bookmark(NewBookmark {
-            //     URL: url.to_string(),
-            //     metadata: title.to_owned().unwrap_or("".to_string()),
-            //     tags: create_normalized_tag_string(tags.to_owned()),
-            //     desc: desc.to_owned().unwrap_or("".to_string()),
-            //     flags: 0,
-            // }) {
-            //     Ok(bms) => println!("Added bookmark: {:?}", bms),
-            //     Err(e) => {
-            //         eprintln!("Error saving bookmark: {:?}", e);
-            //         process::exit(1);
-            //     }
-            // }
+            match dal.insert_bookmark(NewBookmark {
+                URL: url.to_string(),
+                metadata: title,
+                tags: create_normalized_tag_string(tags.to_owned()),
+                desc: description,
+                flags: 0,
+            }) {
+                Ok(bms) => println!("Added bookmark: {:?}", bms),
+                Err(e) => {
+                    if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {
+                        eprintln!("Bookmark already exists: {}", url);
+                    } else {
+                        error!(
+                            "({}:{}) Error adding bookmark: {:?}",
+                            function_name!(),
+                            line!(),
+                            e
+                        );
+                    }
+                }
+            }
         }
         Some(Commands::Delete { ids }) => {
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
@@ -350,11 +377,11 @@ fn main() {
             });
         }
         Some(Commands::Update {
-                 ids,
-                 tags,
-                 tags_not,
-                 force,
-             }) => {
+            ids,
+            tags,
+            tags_not,
+            force,
+        }) => {
             println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
         }
         Some(Commands::Edit { ids }) => {

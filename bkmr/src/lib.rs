@@ -4,11 +4,11 @@
 
 extern crate skim;
 
-use std::collections::HashSet;
 use log::debug;
 use reqwest::blocking::Client;
 use select::document::Document;
 use select::predicate::{Attr, Name};
+use std::collections::HashSet;
 
 #[allow(unused_imports)]
 use stdext::function_name;
@@ -77,22 +77,38 @@ pub fn create_normalized_tag_string(tag_str: Option<String>) -> String {
     format!(",{},", normalize_tag_string(tag_str).join(","))
 }
 
-
-pub fn load_url_details(url: &str) -> Result<(Option<String>, Option<String>, Option<String>), anyhow::Error> {
+pub fn load_url_details(
+    url: &str,
+) -> Result<(Option<String>, Option<String>, Option<String>), anyhow::Error> {
     let client = Client::new();
     let body = client.get(url).send()?.text()?;
-    println!("{}", body);
 
     let document = Document::from(body.as_str());
     // let document = Document::from(body.to_string());
 
-    let title = document.find(Name("title")).next().and_then(|n| Some(n.text().trim().to_string()));
+    let title = document
+        .find(Name("title"))
+        .next()
+        .and_then(|n| Some(n.text().trim().to_string()));
     debug!("({}:{}) Title {:?}", function_name!(), line!(), title);
 
-    let description = document.find(Attr("name", "description")).next().and_then(|n| n.attr("content")).map(|s| s.to_string());
-    debug!("({}:{}) Description {:?}", function_name!(), line!(), description);
+    let description = document
+        .find(Attr("name", "description"))
+        .next()
+        .and_then(|n| n.attr("content"))
+        .map(|s| s.to_string());
+    debug!(
+        "({}:{}) Description {:?}",
+        function_name!(),
+        line!(),
+        description
+    );
 
-    let keywords = document.find(Attr("name", "keywords")).next().and_then(|node| node.attr("content")).map(|s| s.to_string());
+    let keywords = document
+        .find(Attr("name", "keywords"))
+        .next()
+        .and_then(|node| node.attr("content"))
+        .map(|s| s.to_string());
     debug!("({}:{}) Keywords {:?}", function_name!(), line!(), keywords);
 
     Ok((title, description, keywords))
