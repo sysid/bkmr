@@ -11,7 +11,7 @@ use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::bms::Bookmarks;
-use bkmr::create_normalized_tag_string;
+use bkmr::{create_normalized_tag_string, load_url_details};
 use bkmr::dal::Dal;
 use bkmr::environment::CONFIG;
 use bkmr::fzf::fzf_process;
@@ -45,25 +45,25 @@ enum Commands {
         /// FTS query (full text search)
         fts_query: Option<String>,
         #[arg(
-            short = 'e',
-            long = "exact",
-            help = "match exact, comma separated list"
+        short = 'e',
+        long = "exact",
+        help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
         #[arg(short = 't', long = "tags", help = "match all, comma separated list")]
         tags_all: Option<String>,
         #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "not match all, comma separated list"
+        short = 'T',
+        long = "Tags",
+        help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
         #[arg(short = 'n', long = "ntags", help = "match any, comma separated list")]
         tags_any: Option<String>,
         #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "not match any, comma separated list"
+        short = 'N',
+        long = "Ntags",
+        help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
         #[arg(long = "prefix", help = "tags to prefix the tags option")]
@@ -89,8 +89,8 @@ enum Commands {
         title: Option<String>,
         #[arg(short = 'd', long = "description", help = "title")]
         desc: Option<String>,
-        #[arg(short = 'e', long = "edit", help = "open in editor")]
-        edit: bool,
+        #[arg(long = "no-web", help = "do not fetch URL data")]
+        no_web: bool,
     },
     Delete {
         /// list of ids, separated by comma, no blanks
@@ -150,18 +150,18 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Search {
-            fts_query,
-            tags_exact,
-            tags_all,
-            tags_all_not,
-            tags_any,
-            tags_any_not,
-            tags_prefix,
-            order_desc,
-            order_asc,
-            non_interactive,
-            is_fuzzy,
-        }) => {
+                 fts_query,
+                 tags_exact,
+                 tags_all,
+                 tags_all_not,
+                 tags_any,
+                 tags_any_not,
+                 tags_prefix,
+                 order_desc,
+                 order_asc,
+                 non_interactive,
+                 is_fuzzy,
+             }) => {
             let mut _tags_all = String::from("");
             if tags_prefix.is_some() {
                 if tags_all.is_none() {
@@ -264,12 +264,12 @@ fn main() {
             }
         }
         Some(Commands::Add {
-            url,
-            tags,
-            title,
-            desc,
-            edit,
-        }) => {
+                 url,
+                 tags,
+                 title,
+                 desc,
+                 no_web,
+             }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             debug!(
                 "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}",
@@ -279,21 +279,53 @@ fn main() {
                 tags,
                 title,
                 desc,
-                edit
+                no_web,
             );
-            match dal.insert_bookmark(NewBookmark {
-                URL: url.to_string(),
-                metadata: title.to_owned().unwrap_or("".to_string()),
-                tags: create_normalized_tag_string(tags.to_owned()),
-                desc: desc.to_owned().unwrap_or("".to_string()),
-                flags: 0,
-            }) {
-                Ok(bms) => println!("Added bookmark: {:?}", bms),
-                Err(e) => {
-                    eprintln!("Error saving bookmark: {:?}", e);
-                    process::exit(1);
+
+            let url = url.to_string();
+            let tags = create_normalized_tag_string(tags.to_owned());
+
+            let mut _title = "".to_string();
+            let mut _description = "".to_string();
+            let mut _keywords = "".to_string();
+
+            (_title, _description, _keywords) = if !*no_web {
+                let result = load_url_details(&url);
+                debug!("({}:{}) Fetched URL: {:?}", function_name!(), line!(), result);
+                match result {
+                    Ok(details) => {
+                        (
+                            details.0.unwrap_or("".to_string()),
+                            details.1.unwrap_or("".to_string()),
+                            details.2.unwrap_or("".to_string())
+                        )
+                    }
+                    Err(e) => {
+                        eprintln!("Cannot add URL details from web: {:?}", e);
+                        ("".to_string(), "".to_string(), "".to_string())
+                    }
                 }
-            }
+            } else {
+                ("".to_string(), "".to_string(), "".to_string())
+            };
+
+            // let mut title = title.to_owned().unwrap_or("".to_string());
+            // let mut description = desc.to_owned().unwrap_or("".to_string());
+            // let mut keywords = "".to_string();
+
+            // match dal.insert_bookmark(NewBookmark {
+            //     URL: url.to_string(),
+            //     metadata: title.to_owned().unwrap_or("".to_string()),
+            //     tags: create_normalized_tag_string(tags.to_owned()),
+            //     desc: desc.to_owned().unwrap_or("".to_string()),
+            //     flags: 0,
+            // }) {
+            //     Ok(bms) => println!("Added bookmark: {:?}", bms),
+            //     Err(e) => {
+            //         eprintln!("Error saving bookmark: {:?}", e);
+            //         process::exit(1);
+            //     }
+            // }
         }
         Some(Commands::Delete { ids }) => {
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
@@ -318,11 +350,11 @@ fn main() {
             });
         }
         Some(Commands::Update {
-            ids,
-            tags,
-            tags_not,
-            force,
-        }) => {
+                 ids,
+                 tags,
+                 tags_not,
+                 force,
+             }) => {
             println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
         }
         Some(Commands::Edit { ids }) => {
