@@ -375,6 +375,7 @@ fn main() {
                 );
                 process::exit(1);
             });
+            eprintln!("Deleted {:?} bookmarks", ids);
         }
         Some(Commands::Update {
             ids,
