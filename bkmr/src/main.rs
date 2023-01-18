@@ -47,25 +47,25 @@ enum Commands {
         /// FTS query (full text search)
         fts_query: Option<String>,
         #[arg(
-            short = 'e',
-            long = "exact",
-            help = "match exact, comma separated list"
+        short = 'e',
+        long = "exact",
+        help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
         #[arg(short = 't', long = "tags", help = "match all, comma separated list")]
         tags_all: Option<String>,
         #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "not match all, comma separated list"
+        short = 'T',
+        long = "Tags",
+        help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
         #[arg(short = 'n', long = "ntags", help = "match any, comma separated list")]
         tags_any: Option<String>,
         #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "not match any, comma separated list"
+        short = 'N',
+        long = "Ntags",
+        help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
         #[arg(long = "prefix", help = "tags to prefix the tags option")]
@@ -76,13 +76,15 @@ enum Commands {
         order_asc: bool,
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
-        #[arg(long = "fzf", help = "no prompt")]
+        #[arg(long = "fzf", help = "use fuzzy finder")]
         is_fuzzy: bool,
     },
+    /// Open/launch bookmarks
     Open {
         /// list of ids, separated by comma, no blanks
         ids: String,
     },
+    /// add a bookmark
     Add {
         url: String,
         /// list of tags, separated by comma, no blanks in between
@@ -93,11 +95,15 @@ enum Commands {
         desc: Option<String>,
         #[arg(long = "no-web", help = "do not fetch URL data")]
         no_web: bool,
+        #[arg(short = 'e', long = "edit", help = "edit the bookmark while adding")]
+        edit: bool,
     },
+    /// Delete bookmarks
     Delete {
         /// list of ids, separated by comma, no blanks
         ids: String,
     },
+    /// Update bookmarks
     Update {
         /// list of ids, separated by comma, no blanks
         ids: String,
@@ -108,6 +114,7 @@ enum Commands {
         #[arg(short = 'f', long = "force", help = "overwrite taglist with tags")]
         force: bool,
     },
+    /// Edit bookmarks
     Edit {
         /// Edit bookmarks, list of ids, separated by comma, no blanks
         ids: String,
@@ -119,8 +126,9 @@ enum Commands {
         /// tag for which related tags should be shown. No input: all tags are shown
         tag: Option<String>,
     },
+    /// Initialize bookmark database
     CreateDb {
-        /// Create DB with full text search capabilities
+        /// pathname to database file
         path: String,
     },
 }
@@ -164,18 +172,18 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Search {
-            fts_query,
-            tags_exact,
-            tags_all,
-            tags_all_not,
-            tags_any,
-            tags_any_not,
-            tags_prefix,
-            order_desc,
-            order_asc,
-            non_interactive,
-            is_fuzzy,
-        }) => {
+                 fts_query,
+                 tags_exact,
+                 tags_all,
+                 tags_all_not,
+                 tags_any,
+                 tags_any_not,
+                 tags_prefix,
+                 order_desc,
+                 order_asc,
+                 non_interactive,
+                 is_fuzzy,
+             }) => {
             let mut _tags_all = String::from("");
             if tags_prefix.is_some() {
                 if tags_all.is_none() {
@@ -278,15 +286,16 @@ fn main() {
             }
         }
         Some(Commands::Add {
-            url,
-            tags,
-            title,
-            desc,
-            no_web,
-        }) => {
+                 url,
+                 tags,
+                 title,
+                 desc,
+                 no_web,
+                 edit,
+             }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             debug!(
-                "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}",
+                "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
                 function_name!(),
                 line!(),
                 url,
@@ -294,6 +303,7 @@ fn main() {
                 title,
                 desc,
                 no_web,
+                edit,
             );
 
             let (_title, _description, _keywords) = if !*no_web {
@@ -339,7 +349,14 @@ fn main() {
                 desc: description,
                 flags: 0,
             }) {
-                Ok(bms) => println!("Added bookmark: {:?}", bms),
+                Ok(bms) => {
+                    if *edit {
+                        edit_bms(vec![1], bms.clone()).unwrap_or_else(|e| {
+                            error!("({}:{}) Error editing bookmark: {:?}", function_name!(), line!(), e);
+                        });
+                    }
+                    println!("Added bookmark: {:?}", bms)
+                },
                 Err(e) => {
                     if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {
                         eprintln!("Bookmark already exists: {}", url);
@@ -366,7 +383,7 @@ fn main() {
                 process::exit(1);
             }
             let bms = Bookmarks::new("".to_string()); // load all bms
-            delete_bms(ids.unwrap(), bms.bms.clone()).unwrap_or_else(|e| {
+            delete_bms(ids.clone().unwrap(), bms.bms.clone()).unwrap_or_else(|e| {
                 eprintln!(
                     "Error ({}:{}) Deleting Bookmarks: {:?}",
                     function_name!(),
@@ -378,11 +395,11 @@ fn main() {
             eprintln!("Deleted {:?} bookmarks", ids);
         }
         Some(Commands::Update {
-            ids,
-            tags,
-            tags_not,
-            force,
-        }) => {
+                 ids,
+                 tags,
+                 tags_not,
+                 force,
+             }) => {
             println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
         }
         Some(Commands::Edit { ids }) => {

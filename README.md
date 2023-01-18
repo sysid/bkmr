@@ -6,12 +6,13 @@
 
 Features:
 - manages URIs in sqlite database
-- full-text search across URIs
+- full-text search across URIs with semantic ranking (FTS5)
+- fuzzy search (similar to FZF)
+- tags for URI classification
 - knows how to open HTTP URLs, directories, files (e.g. Office, Images, ....)
 - can execute URIs as shell commands via the protocol prefix: 'shell::'
   URI-Example: `shell::vim +/"## SqlAlchemy" $HOME/document.md`
-- tags for URI classification
-- check tags for consistency when adding new bookmark
+- enriches added URL with title and description from Web
 
 To harness `bkmr`'s power use full-text query syntax (see: https://www.sqlite.org/fts5.html chapter 3).
 
