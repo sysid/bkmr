@@ -87,8 +87,21 @@ fn test_update_bm(mut dal: Dal) {
 }
 
 #[rstest]
-fn test_delete_bm2(mut dal: Dal) {
-    dal.delete_bookmark2(4).unwrap(); // asdf2
+fn test_clean_table(mut dal: Dal) {
+    let _bms = dal.clean_table();
+    let mut ids = Vec::new();
+    let bms = dal.get_bookmarks("").unwrap();
+    for (i, _bm) in bms.iter().enumerate() {
+        ids.push(bms[i].id)
+    }
+    // println!("The ids are: {:?}", ids);
+    assert!(ids.contains(&1));
+    assert_eq!(ids.len(), 1);
+}
+
+#[rstest]
+fn test_batch_execute(mut dal: Dal) {
+    dal.batch_execute(4).unwrap(); // asdf2
     let mut ids = Vec::new();
 
     let bms = dal.get_bookmarks("").unwrap();
@@ -101,16 +114,18 @@ fn test_delete_bm2(mut dal: Dal) {
 }
 
 #[rstest]
-fn test_clean_table(mut dal: Dal) {
-    let _bms = dal.clean_table();
+fn test_delete_bm2(mut dal: Dal) {
+    let n = dal.delete_bookmark2(4).unwrap(); // asdf2
     let mut ids = Vec::new();
+    assert_eq!(n, 1);
+
     let bms = dal.get_bookmarks("").unwrap();
     for (i, _bm) in bms.iter().enumerate() {
         ids.push(bms[i].id)
     }
-    // println!("The ids are: {:?}", ids);
-    assert!(ids.contains(&1));
-    assert_eq!(ids.len(), 1);
+    println!("The ids are: {:?}", ids);
+    assert!(!ids.contains(&11));
+    assert_eq!(ids.len(), 10);
 }
 
 #[rstest]

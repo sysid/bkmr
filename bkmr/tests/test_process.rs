@@ -35,6 +35,7 @@ fn test_delete_bms(mut dal: Dal, bms: Vec<Bookmark>) {
     let _ = bms[0].clone();
     // make sure input is sorted as it would be using the helper
     let ids = helper::ensure_int_vector(&vec!["6".to_string(), "2".to_string(), "3".to_string()]);
+    // let ids = helper::ensure_int_vector(&vec!["6".to_string()]);
     delete_bms(ids.unwrap(), bms).unwrap();
 
     assert_eq!(dal.get_bookmarks("").unwrap().len(), 8);

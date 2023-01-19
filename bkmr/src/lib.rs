@@ -33,7 +33,7 @@ pub fn clean_tags(tags: Vec<String>) -> Vec<String> {
         .collect();
     _tags.sort();
     _tags.dedup();
-    println!("{:?}", _tags);
+    debug!("({}:{}) {:?}", function_name!(), line!(), _tags);
     _tags
 }
 

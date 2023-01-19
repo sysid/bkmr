@@ -167,7 +167,7 @@ fn main() {
                 .try_init();
             debug!("Debug mode: debug");
         }
-        _ => println!("Don't be crazy"),
+        _ => eprintln!("Don't be crazy"),
     }
 
     match &cli.command {
@@ -355,7 +355,7 @@ fn main() {
                             error!("({}:{}) Error editing bookmark: {:?}", function_name!(), line!(), e);
                         });
                     }
-                    println!("Added bookmark: {:?}", bms)
+                    println!("Added bookmark: {:?}", bms[0].URL)
                 },
                 Err(e) => {
                     if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {

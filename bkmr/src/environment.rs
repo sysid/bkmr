@@ -15,7 +15,7 @@ impl Config {
         // test db_url as path exists
         let path = std::path::Path::new(&db_url);
         if !path.exists() {
-            println!("Error: db_url path does not exist: {:?}", db_url);
+            eprintln!("Error: db_url path does not exist: {:?}", db_url);
             process::exit(1);
         }
         let port = env::var("PORT")

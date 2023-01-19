@@ -238,6 +238,7 @@ pub fn delete_bms(mut ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("({}:{}) {:?}", function_name!(), line!(), &ids);
     fn delete_bm(bm: &Bookmark) -> anyhow::Result<()> {
         let _ = Dal::new(CONFIG.db_url.clone()).delete_bookmark2(bm.id)?;
+        eprintln!("Deleted: {}", bm.URL);
         Ok(())
     }
     do_sth_with_bms(ids, bms, delete_bm).with_context(|| {

@@ -5,6 +5,7 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::sql_types::{Integer, Text};
 use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
+use diesel::connection::SimpleConnection;
 use log::debug;
 use stdext::function_name;
 
@@ -39,18 +40,33 @@ impl Dal {
         // diesel::delete(bookmarks.filter(id.eq(1))).execute(&mut self.conn)
         diesel::delete(bookmarks.filter(id.eq(id_))).get_results(&mut self.conn)
     }
-    pub fn delete_bookmark2(&mut self, id_: i32) -> Result<(), DieselError> {
+    /// POC for multiple statements, not used in application
+    pub fn batch_execute(&mut self, id_: i32) -> Result<(), DieselError> {
+        let query = "
+            BEGIN TRANSACTION;
+            DELETE FROM bookmarks WHERE id = 2;
+            UPDATE bookmarks SET id = id - 1 WHERE id > 2;
+            COMMIT;
+        ";
+        self.conn.batch_execute(query)?;
+        debug!("({}:{}) Deleted and Compacted {:?}", function_name!(), line!(), id_);
+        Ok(())
+    }
+    pub fn delete_bookmark2(&mut self, id_: i32) -> Result<usize, DieselError> {
         sql_query("BEGIN TRANSACTION;").execute(&mut self.conn)?;
 
-        sql_query(
+        // Gotcha: 'returning *' not working within transaction
+        let n = sql_query(
             "
             DELETE FROM bookmarks
             WHERE id = ?;
         ",
         )
-        .bind::<Integer, _>(id_)
-        .execute(&mut self.conn)?;
+            .bind::<Integer, _>(id_)
+            .execute(&mut self.conn);
+        debug!("({}:{}) Deleting {:?}", function_name!(), line!(), id_);
 
+        // database compaction
         sql_query(
             "
             UPDATE bookmarks
@@ -58,13 +74,14 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-        .bind::<Integer, _>(id_)
-        .execute(&mut self.conn)?;
+            .bind::<Integer, _>(id_)
+            .execute(&mut self.conn)?;
+        debug!("({}:{}) {:?}", function_name!(), line!(), "Compacting");
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
+        debug!("({}:{}) Deleted and Compacted, n: {:?}", function_name!(), line!(), n);
 
-        debug!("({}:{}) {:?}", function_name!(), line!(), "Compacted");
-        Ok(())
+        Ok(n?)
     }
     pub fn clean_table(&mut self) -> Result<(), DieselError> {
         sql_query("DELETE FROM bookmarks WHERE id != 1;").execute(&mut self.conn)?;

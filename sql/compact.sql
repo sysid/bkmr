@@ -7,6 +7,15 @@ SET id = id - 1
 WHERE id > :deleted_id;
 COMMIT;
 
+BEGIN TRANSACTION;
+DELETE
+FROM bookmarks
+WHERE id = :deleted_id
+returning *;
+UPDATE bookmarks
+SET id = id - 1
+WHERE id > :deleted_id;
+COMMIT;
 
 -- Variant 2
 BEGIN TRANSACTION;
