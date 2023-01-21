@@ -6,7 +6,7 @@ use stdext::function_name;
 use crate::dal::Dal;
 use crate::environment::CONFIG;
 use crate::models::Bookmark;
-use crate::{match_all_tags, match_any_tags, match_exact_tags, normalize_tag_string};
+use crate::tag::Tags;
 
 #[derive(Debug)]
 pub struct Bookmarks {
@@ -47,11 +47,12 @@ impl Bookmarks {
         match not {
             false => bms
                 .into_iter()
-                .filter(|bm| match_all_tags(&tags, &bm.split_tags().into_iter().collect()))
+                // .filter(|bm| Tags::match_all_tags(&tags, &bm.get_tags().into_iter().collect()))
+                .filter(|bm| Tags::match_all_tags(&tags, &bm.get_tags()))
                 .collect(),
             true => bms
                 .into_iter()
-                .filter(|bm| !match_all_tags(&tags, &bm.split_tags().into_iter().collect()))
+                .filter(|bm| !Tags::match_all_tags(&tags, &bm.get_tags()))
                 .collect(),
         }
     }
@@ -67,11 +68,11 @@ impl Bookmarks {
         match not {
             false => bms
                 .into_iter()
-                .filter(|bm| match_any_tags(&tags, &bm.split_tags().into_iter().collect()))
+                .filter(|bm| Tags::match_any_tags(&tags, &bm.get_tags()))
                 .collect(),
             true => bms
                 .into_iter()
-                .filter(|bm| !match_any_tags(&tags, &bm.split_tags().into_iter().collect()))
+                .filter(|bm| !Tags::match_any_tags(&tags, &bm.get_tags()))
                 .collect(),
         }
     }
@@ -87,11 +88,11 @@ impl Bookmarks {
         match not {
             false => bms
                 .into_iter()
-                .filter(|bm| match_exact_tags(&tags, &bm.split_tags().into_iter().collect()))
+                .filter(|bm| Tags::match_exact_tags(&tags, &bm.get_tags()))
                 .collect(),
             true => bms
                 .into_iter()
-                .filter(|bm| !match_exact_tags(&tags, &bm.split_tags().into_iter().collect()))
+                .filter(|bm| !Tags::match_exact_tags(&tags, &bm.get_tags()))
                 .collect(),
         }
     }
@@ -103,11 +104,11 @@ impl Bookmarks {
         tags_any_not: Option<String>,
         tags_exact: Option<String>,
     ) {
-        let tags_all_ = normalize_tag_string(tags_all);
-        let tags_any_ = normalize_tag_string(tags_any);
-        let tags_all_not_ = normalize_tag_string(tags_all_not);
-        let tags_any_not_ = normalize_tag_string(tags_any_not);
-        let tags_exact_ = normalize_tag_string(tags_exact);
+        let tags_all_ = Tags::normalize_tag_string(tags_all);
+        let tags_any_ = Tags::normalize_tag_string(tags_any);
+        let tags_all_not_ = Tags::normalize_tag_string(tags_all_not);
+        let tags_any_not_ = Tags::normalize_tag_string(tags_any_not);
+        let tags_exact_ = Tags::normalize_tag_string(tags_exact);
 
         if !tags_exact_.is_empty() {
             self.bms = Bookmarks::match_exact(tags_exact_, self.bms.clone(), false);
@@ -131,9 +132,9 @@ impl Bookmarks {
 
 #[cfg(test)]
 mod test {
-    use log::debug;
+    #[allow(unused_imports)]
     use rstest::*;
-
+    #[allow(unused_imports)]
     use super::*;
 
     #[ctor::ctor]
@@ -147,54 +148,4 @@ mod test {
             .try_init();
     }
 
-    #[rstest]
-    fn test_init_bms() {
-        let bms = Bookmarks::new("".to_string());
-        assert_eq!(bms.bms.len(), 11);
-    }
-
-    #[rstest]
-    #[case(vec![String::from("aaa"), String::from("bbb")], 0)]
-    #[case(vec![String::from("xyz")], 1)]
-    #[case(vec![String::from("")], 0)]
-    #[case(vec![], 0)]
-    fn test_check_tags(#[case] tags: Vec<String>, #[case] expected: usize) {
-        let mut bms = Bookmarks::new("".to_string());
-        let unknown_tags = bms.check_tags(tags);
-        debug!("{:?}", unknown_tags);
-        assert_eq!(unknown_tags.len(), expected);
-    }
-
-    #[rstest]
-    fn test_match_all() {
-        let mut bms = Bookmarks::new("".to_string());
-        bms.filter(Some(",xxx,yyy,".to_string()), None, None, None, None);
-        assert_eq!(bms.bms.len(), 1);
-        assert_eq!(bms.bms[0].id, 2);
-    }
-    #[rstest]
-    fn test_match_all_not() {
-        let mut bms = Bookmarks::new("".to_string());
-        bms.filter(None, None, Some(",xxx,yyy,".to_string()), None, None);
-        assert_eq!(bms.bms.len(), 10);
-        assert_ne!(bms.bms[0].id, 2);
-    }
-    #[rstest]
-    fn test_match_any() {
-        let mut bms = Bookmarks::new("".to_string());
-        bms.filter(None, Some(",xxx,ccc,".to_string()), None, None, None);
-        assert_eq!(bms.bms.len(), 4);
-    }
-    #[rstest]
-    fn test_match_any_not() {
-        let mut bms = Bookmarks::new("".to_string());
-        bms.filter(None, None, None, Some(",xxx,ccc,".to_string()), None);
-        assert_eq!(bms.bms.len(), 7);
-    }
-    #[rstest]
-    fn test_match_exact() {
-        let mut bms = Bookmarks::new("".to_string());
-        bms.filter(None, None, None, None, Some(",aaa,bbb,".to_string()));
-        assert_eq!(bms.bms.len(), 2);
-    }
 }

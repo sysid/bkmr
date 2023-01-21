@@ -19,7 +19,8 @@ use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::models::NewBookmark;
 use bkmr::process::{delete_bms, edit_bms, process, show_bms};
-use bkmr::{create_normalized_tag_string, load_url_details};
+use bkmr::{load_url_details};
+use bkmr::tag::Tags;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -345,7 +346,7 @@ fn main() {
             match dal.insert_bookmark(NewBookmark {
                 URL: url.to_string(),
                 metadata: title,
-                tags: create_normalized_tag_string(tags.to_owned()),
+                tags: Tags::create_normalized_tag_string(tags.to_owned()),
                 desc: description,
                 flags: 0,
             }) {
@@ -400,7 +401,24 @@ fn main() {
                  tags_not,
                  force,
              }) => {
+            if *force && (tags.is_none() || tags_not.is_some()) {
+                eprintln!("({}:{}) Force update requires tags but no ntags.", function_name!(), line!());
+                process::exit(1);
+            }
+            let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
+            if ids.is_none() {
+                eprintln!(
+                    "({}:{}) Invalid input, only numbers allowed {:?}",
+                    function_name!(),
+                    line!(),
+                    ids
+                );
+                process::exit(1);
+            }
+            let tags = Tags::normalize_tag_string(tags.clone());
+            let tags_not = Tags::normalize_tag_string(tags_not.clone());
             println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
+            bkmr::update_bookmarks(ids.unwrap(), tags, tags_not, *force);
         }
         Some(Commands::Edit { ids }) => {
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());

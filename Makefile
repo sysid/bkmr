@@ -52,6 +52,10 @@ test-open-uri-vim:  ## test-open-uri-vim
 .PHONY: test-open-uri-all
 test-open-uri-all: test-open-uri-vim test-open-uri-pptx test-open-uri-url  ## test-open-uri all
 
+.PHONY: run-update
+run-update:  ## run-update
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
+
 .PHONY: run-show
 run-show: init-db  ## run-show
 	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d show 1,10

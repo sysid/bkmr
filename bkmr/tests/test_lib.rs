@@ -12,7 +12,7 @@ use std::env;
 use std::error::Error;
 // use bkmr::fzf;
 use bkmr::models::{Bookmark, NewBookmark};
-use bkmr::{helper, load_url_details};
+use bkmr::{helper, load_url_details, update_bm, update_bookmarks};
 use stdext::function_name;
 
 mod test_dal;
@@ -50,9 +50,31 @@ fn bms() -> Vec<Bookmark> {
 }
 
 #[rstest]
+#[ignore = "seems to hang in Pycharm, but not Makefile"]
 fn test_load_url_details() {
     let result = load_url_details("https://www.rust-lang.org/");
     assert!(result.is_ok());
     // assert_eq!(result.unwrap().title, "The Rust Programming Language");
     // println!("Result: {:?}", result);
+}
+
+#[rstest]
+#[case(1, vec ! [], vec ! [], false, ",ccc,yyy,".to_string())]
+#[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], false, ",ccc,t1,t2,yyy,".to_string())]
+#[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], true, ",t1,t2,".to_string())]
+#[case(1, vec ! [], vec ! ["ccc".to_string()], false, ",yyy,".to_string())]
+fn test_update_bm(
+    mut dal: Dal,
+    #[case] id: i32,
+    #[case] tags: Vec<String>,
+    #[case] tags_not: Vec<String>,
+    #[case] force: bool,
+    #[case] expected: String,
+) {
+    // let mut dal = Dal::new(String::from("../db/bkmr.db"));
+    update_bm(id, &tags, &tags_not, &mut dal, force);
+
+    let bm = dal.get_bookmark_by_id(id).unwrap();
+    assert_eq!(bm.tags, expected);
+    println!("bm: {:?}", bm);
 }

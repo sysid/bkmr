@@ -1,14 +1,17 @@
 #![allow(non_snake_case)]
 
+use stdext::function_name;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
 use diesel::sql_types::Text;
+use log::debug;
+use crate::tag::Tags;
 
 use super::schema::bookmarks;
 
 #[derive(QueryableByName, Debug, PartialOrd, PartialEq)]
-pub struct Tags {
+pub struct TagsFrequency {
     #[diesel(sql_type = Integer)]
     pub n: i32,
     #[diesel(sql_type = Text)]
@@ -29,16 +32,16 @@ pub struct Bookmark {
 }
 
 impl Bookmark {
-    pub fn split_tags(&self) -> Vec<String> {
-        self.tags
-            .split(",")
-            .filter(|x| *x != "")
-            .map(|s| s.to_string())
-            .collect()
+    pub fn get_tags(&self) -> Vec<String> {
+        Tags::normalize_tag_string(Some(self.tags.clone()))
+    }
+    pub fn set_tags(&mut self, tags: Vec<String>) {
+        self.tags = format!(",{},", Tags::clean_tags(tags).join(","));
+        debug!("({}:{}) {:?}", function_name!(), line!(), self);
     }
 }
 
-#[derive(Insertable)]
+#[derive(Insertable, Clone, Debug, PartialOrd, PartialEq)]
 #[diesel(table_name = bookmarks)]
 pub struct NewBookmark {
     pub URL: String,
@@ -50,7 +53,6 @@ pub struct NewBookmark {
 
 #[cfg(test)]
 mod test {
-
     use crate::models::Bookmark;
     use chrono::NaiveDate;
     use rstest::*;
@@ -70,13 +72,22 @@ mod test {
                 .unwrap(),
         }
     }
+
     #[rstest]
     fn test_bm(bm: Bookmark) {
         println!("{:?}", bm);
     }
+
     #[rstest]
-    fn test_split_tags(bm: Bookmark) {
+    fn test_get_tags(bm: Bookmark) {
         println!("{:?}", bm);
-        assert_eq!(bm.split_tags(), vec!("aaa", "xxx"));
+        assert_eq!(bm.get_tags(), vec!("aaa", "xxx"));
+    }
+    #[rstest]
+    fn test_set_tags(mut bm: Bookmark) {
+        println!("{:?}", bm);
+        bm.set_tags(vec!("zzz".to_string()));
+        assert_eq!(bm.get_tags(), vec!("zzz".to_string()));
     }
 }
+

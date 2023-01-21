@@ -9,7 +9,7 @@ use diesel::connection::SimpleConnection;
 use log::debug;
 use stdext::function_name;
 
-use crate::models::{Bookmark, NewBookmark, Tags};
+use crate::models::{Bookmark, NewBookmark, TagsFrequency};
 use crate::schema::bookmarks::dsl::bookmarks;
 use crate::schema::bookmarks::{desc, flags, id, metadata, tags, URL};
 
@@ -135,7 +135,7 @@ impl Dal {
     }
 
     /// get frequency based ordered list of all tags
-    pub fn get_all_tags(&mut self) -> Result<Vec<Tags>, DieselError> {
+    pub fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>, DieselError> {
         let tags_query = sql_query(
             "
             -- name: get_all_tags
@@ -167,7 +167,7 @@ impl Dal {
         all_tags
     }
     /// get frequency based ordered list of related tags for a given tag
-    pub fn get_related_tags(&mut self, tag: &str) -> Result<Vec<Tags>, DieselError> {
+    pub fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>, DieselError> {
         let search_tag = format!("%,{},%", tag);
         let tags_query = sql_query(
             "
