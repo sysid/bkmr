@@ -1,5 +1,5 @@
-use std::collections::HashSet;
 use log::debug;
+use std::collections::HashSet;
 use stdext::function_name;
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Default)]
@@ -69,7 +69,6 @@ impl Tags {
     }
 }
 
-
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
@@ -84,10 +83,10 @@ fn init() {
 
 #[cfg(test)]
 mod test {
-    use stdext::function_name;
+    use crate::tag::Tags;
     use log::debug;
     use rstest::*;
-    use crate::tag::Tags;
+    use stdext::function_name;
 
     #[rstest]
     fn test_default() {
@@ -100,7 +99,11 @@ mod test {
     #[case(Some("a,b".to_string()), ",a,b,".to_string(), vec ! ["a".to_string(), "b".to_string()])]
     #[case(Some(",,,b,a".to_string()), ",a,b,".to_string(), vec ! ["a".to_string(), "b".to_string()])]
     #[case(None, ",,".to_string(), vec ! [])]
-    fn test_tags(#[case] tag: Option<String>, #[case] expected: String, #[case] expected_vec: Vec<String>) {
+    fn test_tags(
+        #[case] tag: Option<String>,
+        #[case] expected: String,
+        #[case] expected_vec: Vec<String>,
+    ) {
         let tags = Tags::new(tag.clone());
         assert_eq!(tags.tag, expected);
         assert_eq!(tags.tags, expected_vec);

@@ -1,12 +1,12 @@
 #![allow(non_snake_case)]
 
-use stdext::function_name;
+use crate::tag::Tags;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
 use diesel::sql_types::Text;
 use log::debug;
-use crate::tag::Tags;
+use stdext::function_name;
 
 use super::schema::bookmarks;
 
@@ -86,8 +86,7 @@ mod test {
     #[rstest]
     fn test_set_tags(mut bm: Bookmark) {
         println!("{:?}", bm);
-        bm.set_tags(vec!("zzz".to_string()));
+        bm.set_tags(vec!["zzz".to_string()]);
         assert_eq!(bm.get_tags(), vec!("zzz".to_string()));
     }
 }
-

@@ -1,0 +1,9 @@
+bkmr search -t optimization  # p
+
+bkmr add -e https://wwww.google.com xxx,yyy --title 'xxxxxx'
+bkdm search -t xxx  # d 1
+
+bkdm search -N admin,ob google
+
+bkmr search -t optimization --fzf  # schedulingteacher
+bkmr show 11,12

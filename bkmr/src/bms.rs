@@ -133,9 +133,9 @@ impl Bookmarks {
 #[cfg(test)]
 mod test {
     #[allow(unused_imports)]
-    use rstest::*;
-    #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
+    use rstest::*;
 
     #[ctor::ctor]
     fn init() {
@@ -147,5 +147,4 @@ mod test {
             // Ignore errors initializing the logger if tests race to configure it
             .try_init();
     }
-
 }

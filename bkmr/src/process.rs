@@ -326,15 +326,15 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         flags: bm.flags,
         last_update_ts: Default::default(), // will be overwritten by diesel
     };
-    println!("Modified content: {}", modified_content);
-    println!("lines: {:?}", lines);
+    // println!("Modified content: {}", modified_content);
+    debug!("({}:{}) lines: {:?}", function_name!(), line!(), lines);
 
-    // let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    Dal::new(CONFIG.db_url.clone())
+    let updated = Dal::new(CONFIG.db_url.clone())
         .update_bookmark(new_bm)
         .with_context(|| format!("({}:{}) Error updating bookmark", function_name!(), line!()))?;
     // Delete the temporary file
     fs::remove_file("temp.txt")?;
+    show_bms(&updated);
     Ok(())
 }
 
@@ -346,7 +346,7 @@ fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
         ids
     };
     let ids_str: Vec<String> = ids.iter().map(|x| x.to_string()).collect();
-    println!("{}", ids_str.join(" "));
+    println!("{}", ids_str.join(","));
     Ok(())
 }
 

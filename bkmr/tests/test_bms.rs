@@ -1,7 +1,7 @@
-use log::debug;
 use bkmr::bms::Bookmarks;
 use bkmr::dal::Dal;
 use bkmr::helper;
+use log::debug;
 use rstest::*;
 
 #[ctor::ctor]

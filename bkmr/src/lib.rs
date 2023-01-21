@@ -10,12 +10,12 @@ use select::document::Document;
 use select::predicate::{Attr, Name};
 use std::collections::HashSet;
 
-#[allow(unused_imports)]
-use stdext::function_name;
 use crate::dal::Dal;
 use crate::environment::CONFIG;
 use crate::models::Bookmark;
 use crate::tag::Tags;
+#[allow(unused_imports)]
+use stdext::function_name;
 
 pub mod bms;
 pub mod dal;
@@ -26,7 +26,6 @@ pub mod models;
 pub mod process;
 pub mod schema;
 pub mod tag;
-
 
 /// creates list of normalized tags from "tag1,t2,t3" string
 /// be aware of shell parsing rules, so no blanks or quotes
@@ -76,42 +75,61 @@ pub fn update_bookmarks(ids: Vec<i32>, tags: Vec<String>, tags_not: Vec<String>,
     }
 }
 
-pub fn update_bm(id: i32 , tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut Dal, force: bool) {
+pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut Dal, force: bool) {
     let tags: HashSet<String> = tags.into_iter().map(|s| s.to_string()).collect();
     let tags_not: HashSet<String> = tags_not.into_iter().map(|s| s.to_string()).collect();
-    debug!("({}:{}) tags {:?}, tags_not {:?}", function_name!(), line!(), tags, tags_not);
+    debug!(
+        "({}:{}) tags {:?}, tags_not {:?}",
+        function_name!(),
+        line!(),
+        tags,
+        tags_not
+    );
 
     let bm = dal.get_bookmark_by_id(id);
     if let Err(e) = bm {
-        warn!("({}:{}) Cannot load {:?}, continue.", function_name!(), line!(), e);
-        return
+        warn!(
+            "({}:{}) Cannot load {:?}, continue.",
+            function_name!(),
+            line!(),
+            e
+        );
+        return;
     }
     let bm = bm.unwrap();
 
-    let mut new_tags = Tags::normalize_tag_string(Some(bm.tags.clone())).into_iter().map(|s| s.to_string()).collect::<HashSet<String>>();
+    let mut new_tags = Tags::normalize_tag_string(Some(bm.tags.clone()))
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<HashSet<String>>();
     if force {
         new_tags = tags.clone();
     } else {
         new_tags.extend(tags.clone());
-        new_tags = new_tags.difference(&tags_not).map(|s| s.to_string()).collect();
+        new_tags = new_tags
+            .difference(&tags_not)
+            .map(|s| s.to_string())
+            .collect();
     }
 
     let mut bm_tags: Vec<String> = new_tags.into_iter().map(|s| s.to_string()).collect();
     bm_tags.sort();
     debug!("({}:{}) {:?}", function_name!(), line!(), bm_tags);
 
-    let bm = dal.update_bookmark(
-        Bookmark {
-            tags: format!(",{},", bm_tags.join(",")),
-            ..bm
-        }
-    );
+    let bm = dal.update_bookmark(Bookmark {
+        tags: format!(",{},", bm_tags.join(",")),
+        ..bm
+    });
     if let Err(e) = bm {
-        error!("({}:{}) Error update {:?}, continue.", function_name!(), line!(), e);
+        error!(
+            "({}:{}) Error update {:?}, continue.",
+            function_name!(),
+            line!(),
+            e
+        );
         return;
     }
 }
-
 
 #[cfg(test)]
 #[ctor::ctor]
@@ -128,8 +146,7 @@ fn init() {
 #[cfg(test)]
 mod test {
     #[allow(unused_imports)]
-    use rstest::*;
-    #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
+    use rstest::*;
 }
-

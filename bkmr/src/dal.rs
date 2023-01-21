@@ -1,11 +1,11 @@
 use std::fmt;
 use std::fmt::Debug;
 
+use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::sql_types::{Integer, Text};
 use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
-use diesel::connection::SimpleConnection;
 use log::debug;
 use stdext::function_name;
 
@@ -49,7 +49,12 @@ impl Dal {
             COMMIT;
         ";
         self.conn.batch_execute(query)?;
-        debug!("({}:{}) Deleted and Compacted {:?}", function_name!(), line!(), id_);
+        debug!(
+            "({}:{}) Deleted and Compacted {:?}",
+            function_name!(),
+            line!(),
+            id_
+        );
         Ok(())
     }
     pub fn delete_bookmark2(&mut self, id_: i32) -> Result<usize, DieselError> {
@@ -62,8 +67,8 @@ impl Dal {
             WHERE id = ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn);
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn);
         debug!("({}:{}) Deleting {:?}", function_name!(), line!(), id_);
 
         // database compaction
@@ -74,12 +79,17 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn)?;
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn)?;
         debug!("({}:{}) {:?}", function_name!(), line!(), "Compacting");
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
-        debug!("({}:{}) Deleted and Compacted, n: {:?}", function_name!(), line!(), n);
+        debug!(
+            "({}:{}) Deleted and Compacted, n: {:?}",
+            function_name!(),
+            line!(),
+            n
+        );
 
         Ok(n?)
     }

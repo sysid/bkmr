@@ -17,9 +17,9 @@ use bkmr::dal::Dal;
 use bkmr::environment::CONFIG;
 use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
+use bkmr::load_url_details;
 use bkmr::models::NewBookmark;
 use bkmr::process::{delete_bms, edit_bms, process, show_bms};
-use bkmr::{load_url_details};
 use bkmr::tag::Tags;
 
 #[derive(Parser)]
@@ -47,36 +47,46 @@ enum Commands {
     Search {
         /// FTS query (full text search)
         fts_query: Option<String>,
+
         #[arg(
-        short = 'e',
-        long = "exact",
-        help = "match exact, comma separated list"
+            short = 'e',
+            long = "exact",
+            help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
+
         #[arg(short = 't', long = "tags", help = "match all, comma separated list")]
         tags_all: Option<String>,
+
         #[arg(
-        short = 'T',
-        long = "Tags",
-        help = "not match all, comma separated list"
+            short = 'T',
+            long = "Tags",
+            help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
+
         #[arg(short = 'n', long = "ntags", help = "match any, comma separated list")]
         tags_any: Option<String>,
+
         #[arg(
-        short = 'N',
-        long = "Ntags",
-        help = "not match any, comma separated list"
+            short = 'N',
+            long = "Ntags",
+            help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
+
         #[arg(long = "prefix", help = "tags to prefix the tags option")]
         tags_prefix: Option<String>,
+
         #[arg(short = 'o', long = "descending", help = "order by age, descending")]
         order_desc: bool,
+
         #[arg(short = 'O', long = "ascending", help = "order by age, ascending")]
         order_asc: bool,
+
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
+
         #[arg(long = "fzf", help = "use fuzzy finder")]
         is_fuzzy: bool,
     },
@@ -132,6 +142,13 @@ enum Commands {
         /// pathname to database file
         path: String,
     },
+    #[command(hide = true)]
+    Xxx {
+        /// list of ids, separated by comma, no blanks
+        ids: String,
+        #[arg(short = 't', long = "tags", help = "add tags to taglist")]
+        tags: Option<String>,
+    },
 }
 
 fn main() {
@@ -173,18 +190,18 @@ fn main() {
 
     match &cli.command {
         Some(Commands::Search {
-                 fts_query,
-                 tags_exact,
-                 tags_all,
-                 tags_all_not,
-                 tags_any,
-                 tags_any_not,
-                 tags_prefix,
-                 order_desc,
-                 order_asc,
-                 non_interactive,
-                 is_fuzzy,
-             }) => {
+            fts_query,
+            tags_exact,
+            tags_all,
+            tags_all_not,
+            tags_any,
+            tags_any_not,
+            tags_prefix,
+            order_desc,
+            order_asc,
+            non_interactive,
+            is_fuzzy,
+        }) => {
             let mut _tags_all = String::from("");
             if tags_prefix.is_some() {
                 if tags_all.is_none() {
@@ -287,13 +304,13 @@ fn main() {
             }
         }
         Some(Commands::Add {
-                 url,
-                 tags,
-                 title,
-                 desc,
-                 no_web,
-                 edit,
-             }) => {
+            url,
+            tags,
+            title,
+            desc,
+            no_web,
+            edit,
+        }) => {
             let mut dal = Dal::new(CONFIG.db_url.clone());
             debug!(
                 "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
@@ -324,7 +341,7 @@ fn main() {
                         )
                     }
                     Err(e) => {
-                        error!("Cannot add URL details from web: {:?}", e);
+                        debug!("Cannot enrich URL details from web: {:?}", e);
                         eprintln!("Cannot enrich URL data from web.");
                         ("".to_string(), "".to_string(), "".to_string())
                     }
@@ -353,11 +370,16 @@ fn main() {
                 Ok(bms) => {
                     if *edit {
                         edit_bms(vec![1], bms.clone()).unwrap_or_else(|e| {
-                            error!("({}:{}) Error editing bookmark: {:?}", function_name!(), line!(), e);
+                            error!(
+                                "({}:{}) Error editing bookmark: {:?}",
+                                function_name!(),
+                                line!(),
+                                e
+                            );
                         });
                     }
                     println!("Added bookmark: {:?}", bms[0].URL)
-                },
+                }
                 Err(e) => {
                     if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {
                         eprintln!("Bookmark already exists: {}", url);
@@ -393,16 +415,19 @@ fn main() {
                 );
                 process::exit(1);
             });
-            eprintln!("Deleted {:?} bookmarks", ids);
         }
         Some(Commands::Update {
-                 ids,
-                 tags,
-                 tags_not,
-                 force,
-             }) => {
+            ids,
+            tags,
+            tags_not,
+            force,
+        }) => {
             if *force && (tags.is_none() || tags_not.is_some()) {
-                eprintln!("({}:{}) Force update requires tags but no ntags.", function_name!(), line!());
+                eprintln!(
+                    "({}:{}) Force update requires tags but no ntags.",
+                    function_name!(),
+                    line!()
+                );
                 process::exit(1);
             }
             let ids = ensure_int_vector(&ids.split(',').map(|s| s.to_owned()).collect());
@@ -528,6 +553,9 @@ fn main() {
                 );
                 process::exit(1);
             }
+        }
+        Some(Commands::Xxx { ids, tags }) => {
+            eprintln!("({}:{}) ids: {:?}, tags: {:?}", function_name!(), line!(), ids, tags);
         }
         None => {}
     }

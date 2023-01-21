@@ -19,7 +19,33 @@ To harness `bkmr`'s power use full-text query syntax (see: https://www.sqlite.or
 ## Usage
 ```bash
 bkmr --help
+
+A bookmark manager for the terminal
+
+Usage: bkmr [OPTIONS] [NAME] [COMMAND]
+
+Commands:
+  search     Searches Bookmarks
+  open       Open/launch bookmarks
+  add        add a bookmark
+  delete     Delete bookmarks
+  update     Update bookmarks
+  edit       Edit bookmarks
+  show       Show Bookmarks (list of ids, separated by comma, no blanks)
+  tags       tag for which related tags should be shown. No input: all tags are printed
+  create-db  Initialize bookmark database
+  help       Print this message or the help of the given subcommand(s)
+
+Arguments:
+  [NAME]  Optional name to operate on
+
+Options:
+  -c, --config <FILE>  Sets a custom config file
+  -d, --debug...       Turn debugging information on
+  -h, --help           Print help information
+  -V, --version        Print version information
 ```
+<a href="https://asciinema.org/a/rDjGHV4LC8k9yuLTIhlGS1rv0?autoplay=1&speed=2"><img src="https://asciinema.org/a/rDjGHV4LC8k9yuLTIhlGS1rv0.png" width="836"/></a>
 
 ### Examples
 ```bash
