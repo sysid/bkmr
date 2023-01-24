@@ -378,7 +378,8 @@ fn main() {
                             );
                         });
                     }
-                    println!("Added bookmark: {:?}", bms[0].URL)
+                    println!("Added bookmark: {:?}", bms[0].id);
+                    show_bms(&bms)
                 }
                 Err(e) => {
                     if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {

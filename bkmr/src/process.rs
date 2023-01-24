@@ -258,12 +258,14 @@ fn do_sth_with_bms(
 ) -> anyhow::Result<()> {
     debug!("({}:{}) {:?}", function_name!(), line!(), ids);
     for id in ids {
-        if id as usize <= bms.len() {
-            let bm = &bms[id as usize - 1];
-            debug!("({}:{}) {:?}: bm {:?}", function_name!(), line!(), id, bm);
-            do_sth(bm)
-                .with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
+        if id as usize > bms.len() {
+            eprintln!("Id {} out of range", id);
+            continue;
         }
+        let bm = &bms[id as usize - 1];
+        debug!("({}:{}) {:?}: bm {:?}", function_name!(), line!(), id, bm);
+        do_sth(bm)
+            .with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
     }
     Ok(())
 }
