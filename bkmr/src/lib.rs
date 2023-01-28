@@ -131,6 +131,10 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
     }
 }
 
+// pub fn add_bm(bm: Bookmark) {
+//
+// }
+
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {

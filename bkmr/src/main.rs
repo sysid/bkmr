@@ -323,6 +323,18 @@ fn main() {
                 no_web,
                 edit,
             );
+            match dal.bm_exists(url) {
+                Ok(exists) => {
+                    if exists {
+                        eprintln!("Bookmark already exists.");
+                        return;
+                    }
+                }
+                Err(e) => {
+                    error!("({}:{}) Error: {:?}", function_name!(), line!(), e);
+                    return;
+                }
+            }
 
             let (_title, _description, _keywords) = if !*no_web {
                 let result = load_url_details(&url);

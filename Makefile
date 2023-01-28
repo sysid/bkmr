@@ -84,6 +84,7 @@ run-delete: init-db  ## run-delete
 run-add: init-db  ## run-add
 	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'  # should add bespoke URI
 	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should overwrite title from web
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2
 
 .PHONY: run-search
 run-search: init-db  ## run-search interactively for manual tests

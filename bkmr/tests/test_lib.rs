@@ -78,3 +78,14 @@ fn test_update_bm(
     assert_eq!(bm.tags, expected);
     println!("bm: {:?}", bm);
 }
+
+// #[rstest]
+// fn test_add_bm(mut dal: Dal) {
+//     let bm = NewBookmark {
+//         URL: "https://www.rust-lang.org/".to_string(),
+//         metadata: "The Rust Programming Language".to_string(),
+//         tags: ",ccc,yyy,".to_string(),
+//         ..Default::default()
+//     };
+//     let _ = add_bm();
+// }

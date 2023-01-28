@@ -144,6 +144,15 @@ impl Dal {
         Ok(bms?)
     }
 
+    pub fn bm_exists(&mut self, url: &str) -> Result<bool, DieselError> {
+        let bms = sql_query(
+            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks \
+            where URL = ?;",
+        );
+        let bms = bms.bind::<Text, _>(url).get_results::<Bookmark>(&mut self.conn)?;
+        Ok(bms.len() > 0)
+    }
+
     /// get frequency based ordered list of all tags
     pub fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>, DieselError> {
         let tags_query = sql_query(

@@ -60,6 +60,15 @@ fn test_get_bookmarks(mut dal: Dal, #[case] input: &str, #[case] expected: i32) 
 }
 
 #[rstest]
+#[case("https://www.google.com", true)]
+#[case("https://www.doesnotexists.com", false)]
+fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) {
+    let exists = dal.bm_exists(input);
+    // println!("The bookmarks are: {:?}", bms);
+    assert_eq!(exists.unwrap(), expected);
+}
+
+#[rstest]
 fn test_insert_bm(mut dal: Dal) {
     // init_db(&mut dal.conn).expect("Error DB init");
     #[allow(non_snake_case)]
