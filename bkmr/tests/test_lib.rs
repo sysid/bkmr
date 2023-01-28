@@ -50,12 +50,12 @@ fn bms() -> Vec<Bookmark> {
 }
 
 #[rstest]
-#[ignore = "seems to hang in Pycharm, but not Makefile"]
+// #[ignore = "seems to hang in Pycharm, but not Makefile"]
 fn test_load_url_details() {
     let result = load_url_details("https://www.rust-lang.org/");
+    println!("Result: {:?}", result);
     assert!(result.is_ok());
-    // assert_eq!(result.unwrap().title, "The Rust Programming Language");
-    // println!("Result: {:?}", result);
+    assert_eq!(result.unwrap().0, "Rust Programming Language");
 }
 
 #[rstest]

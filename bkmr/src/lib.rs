@@ -31,7 +31,7 @@ pub mod tag;
 /// be aware of shell parsing rules, so no blanks or quotes
 pub fn load_url_details(
     url: &str,
-) -> Result<(Option<String>, Option<String>, Option<String>), anyhow::Error> {
+) -> Result<(String, String, String), anyhow::Error> {
     let client = Client::new();
     let body = client.get(url).send()?.text()?;
 
@@ -41,14 +41,18 @@ pub fn load_url_details(
     let title = document
         .find(Name("title"))
         .next()
-        .and_then(|n| Some(n.text().trim().to_string()));
+        .and_then(|n| Some(n.text().trim().to_string()))
+        .unwrap_or("".to_string())
+        ;
     debug!("({}:{}) Title {:?}", function_name!(), line!(), title);
 
     let description = document
         .find(Attr("name", "description"))
         .next()
         .and_then(|n| n.attr("content"))
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .unwrap_or("".to_string())
+        ;
     debug!(
         "({}:{}) Description {:?}",
         function_name!(),
@@ -60,7 +64,9 @@ pub fn load_url_details(
         .find(Attr("name", "keywords"))
         .next()
         .and_then(|node| node.attr("content"))
-        .map(|s| s.to_string());
+        .map(|s| s.to_string())
+        .unwrap_or("".to_string())
+        ;
     debug!("({}:{}) Keywords {:?}", function_name!(), line!(), keywords);
 
     Ok((title, description, keywords))

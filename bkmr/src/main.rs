@@ -323,41 +323,14 @@ fn main() {
                 no_web,
                 edit,
             );
-            match dal.bm_exists(url) {
-                Ok(exists) => {
-                    if exists {
-                        eprintln!("Bookmark already exists.");
-                        return;
-                    }
-                }
-                Err(e) => {
-                    error!("({}:{}) Error: {:?}", function_name!(), line!(), e);
-                    return;
-                }
-            }
 
             let (_title, _description, _keywords) = if !*no_web {
                 let result = load_url_details(&url);
-                match result {
-                    Ok(details) => {
-                        debug!(
-                            "({}:{}) Fetched URL: {:?}",
-                            function_name!(),
-                            line!(),
-                            details
-                        );
-                        (
-                            details.0.unwrap_or("".to_string()),
-                            details.1.unwrap_or("".to_string()),
-                            details.2.unwrap_or("".to_string()),
-                        )
-                    }
-                    Err(e) => {
-                        debug!("Cannot enrich URL details from web: {:?}", e);
-                        eprintln!("Cannot enrich URL data from web.");
-                        ("".to_string(), "".to_string(), "".to_string())
-                    }
-                }
+                result.unwrap_or_else(|e| {
+                    debug!("Cannot enrich URL details from web: {:?}", e);
+                    eprintln!("Cannot enrich URL data from web.");
+                    ("".to_string(), "".to_string(), "".to_string())
+                })
             } else {
                 ("".to_string(), "".to_string(), "".to_string())
             };

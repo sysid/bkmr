@@ -31,7 +31,7 @@ ADMIN::  ## ##################################################################
 
 .PHONY: test-url-details
 test-url-details:  ## test-url-details (charm strang verbose output)
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_lib test_load_url_details -- --exact
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
 
 .PHONY: test-fzf
 test-fzf:  ## test-fzf
