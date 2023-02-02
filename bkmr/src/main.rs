@@ -19,7 +19,7 @@ use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::load_url_details;
 use bkmr::models::NewBookmark;
-use bkmr::process::{delete_bms, edit_bms, process, show_bms};
+use bkmr::process::{delete_bms, edit_bms, open_bm, process, show_bms};
 use bkmr::tag::Tags;
 
 #[derive(Parser)]
@@ -290,7 +290,8 @@ fn main() {
                 match bm {
                     Ok(bm) => {
                         debug!("({}:{}) Opening {:?}", function_name!(), line!(), bm);
-                        open::that(bm.URL).unwrap();
+                        open_bm(&bm).unwrap();
+                        // open::that(bm.URL).unwrap();
                     }
                     Err(_) => {
                         error!(

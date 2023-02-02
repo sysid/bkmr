@@ -178,7 +178,7 @@ pub fn edit_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn open_bm(bm: &Bookmark) -> anyhow::Result<()> {
+pub fn open_bm(bm: &Bookmark) -> anyhow::Result<()> {
     _open_bm(&bm.URL)?;
     Ok(())
 }
