@@ -1,20 +1,19 @@
 # bkmr
 
-# Bookmark Manager and Launcher
+# Ultrafast Bookmark Manager and Launcher
 
 [sysid blog: twbm](https://sysid.github.io/bkmr/)
 
 Features:
-- manages URIs in sqlite database
-- full-text search across URIs with semantic ranking (FTS5)
-- fuzzy search (similar to FZF)
-- tags for URI classification
+- full-text search with semantic ranking (FTS5)
+- fuzzy search `--fzf` (CTRL-O: open, CTRL-E: edit)
+- tags for classification
 - knows how to open HTTP URLs, directories, files (e.g. Office, Images, ....)
-- can execute URIs as shell commands via the protocol prefix: 'shell::'
+- can execute URI strings as shell commands via protocol prefix: 'shell::'
   URI-Example: `shell::vim +/"## SqlAlchemy" $HOME/document.md`
-- enriches added URL with title and description from Web
+- automatically enriches URLs with title and description from Web
 
-To harness `bkmr`'s power use full-text query syntax (see: https://www.sqlite.org/fts5.html chapter 3).
+To fully use `bkmr`'s full-text query power see: https://www.sqlite.org/fts5.html (chapter 3).
 
 ## Usage
 ```bash
@@ -45,7 +44,8 @@ Options:
   -h, --help           Print help information
   -V, --version        Print version information
 ```
-<a href="https://asciinema.org/a/rDjGHV4LC8k9yuLTIhlGS1rv0?autoplay=1&speed=2"><img src="https://asciinema.org/a/rDjGHV4LC8k9yuLTIhlGS1rv0.png" width="836"/></a>
+
+<a href="https://asciinema.org/a/ULCDIrw4pG9diaVJb17AjIAa7?autoplay=1&speed=2"><img src="https://asciinema.org/a/ULCDIrw4pG9diaVJb17AjIAa7.png" width="836"/></a>
 
 ### Examples
 ```bash
@@ -77,16 +77,17 @@ Tags must be separated by comma without blanks.
 ## Installation
 1. standard Rust install via `cargo`
 2. initialize the database: `bkmr create-db db_path`
+3. add URLs 
 
 
-## Configuration
-Location of sqlite database must be known:
+### Configuration
+Location of created sqlite database must be known:
 ```bash
 export "BKMR_DB_URL=db-path"
 ```
 
 ## Benchmarking
-- -20x faster than the original after warming up Python.
+- ca. 20x faster than the Python original [twbm](https://github.com/sysid/twbm) after warming up Python.
 ```bash
 time twbm search 'zzz*' --np
 0. zzzeek : Asynchronous Python and Databases [345]
@@ -109,9 +110,6 @@ real    0m0.014s
 user    0m0.005s
 sys     0m0.009s
 ```
-
-- panics on null values in DB, but there should'nt be any
-- script provided for finding and cleaning
 
 <!-- Badges -->
 [pypi-image]: https://img.shields.io/pypi/v/bkmr?color=blue
