@@ -2,7 +2,7 @@
 
 # Ultrafast Bookmark Manager and Launcher
 
-[sysid blog: twbm](https://sysid.github.io/bkmr/)
+[sysid blog: bkmr](https://sysid.github.io/bkmr/)
 
 Features:
 - full-text search with semantic ranking (FTS5)
