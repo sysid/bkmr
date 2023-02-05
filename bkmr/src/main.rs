@@ -87,7 +87,7 @@ enum Commands {
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
 
-        #[arg(long = "fzf", help = "use fuzzy finder")]
+        #[arg(long = "fzf", help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]")]
         is_fuzzy: bool,
     },
     /// Open/launch bookmarks

@@ -78,7 +78,6 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
                 ids,
                 filtered
             );
-
             edit_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
@@ -94,7 +93,21 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
                 ids,
                 filtered
             );
-
+            open_bms(ids, filtered).unwrap_or_else(|e| {
+                debug!("{}: {}", function_name!(), e);
+            });
+        }
+        Key::Enter => {
+            let filtered = filter_bms(out);
+            // id selection not necessary since all bms are filtered, just open all bms
+            let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
+            debug!(
+                "({}:{}) {:?}, {:?}",
+                function_name!(),
+                line!(),
+                ids,
+                filtered
+            );
             open_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
