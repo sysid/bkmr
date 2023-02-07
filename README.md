@@ -75,9 +75,9 @@ Tags must be separated by comma without blanks.
 
 
 ## Installation
-1. standard Rust install via `cargo`
+1. WIP, for now: `cargo build --release` and then put `./target/release/bkmr` somewhere on your `PATH`
 2. initialize the database: `bkmr create-db db_path`
-3. add URLs 
+3. add URLs
 
 
 ### Configuration
