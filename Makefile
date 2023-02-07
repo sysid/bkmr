@@ -139,7 +139,8 @@ build:  ## build
 
 .PHONY: install
 install:  ## install
-	#pushd bkmr && cargo install --path . --root ~/.cargo
+	@#pushd bkmr && cargo install --path . --root ~/.cargo
+	@test -f ~/bin/bkmr && rm -v ~/bin/bkmr
 	@cp -vf bkmr/target/release/bkmr ~/bin/bkmr
 
 .PHONY: uninstall
