@@ -133,6 +133,10 @@ BUILDING:  ## ##################################################################
 all: clean build install  ## all
 	:
 
+.PHONY: upload
+upload:  ## upload
+	pushd bkmr && cargo release publish --execute
+
 .PHONY: build
 build:  ## build
 	pushd bkmr && cargo build --release

@@ -1,0 +1,25 @@
+name: Release crate
+on:
+  workflow_dispatch:
+
+jobs:
+  publish_lib:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Use cached dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Prepare
+        run: cargo install cargo-release
+
+      - name: Login to Crates.io
+        run: cargo login ${{ secrets.CRATESIO_TOKEN }}
+
+      - name: Publish lib
+        working-directory: ./bkmr
+        run: cargo release publish --no-confirm
