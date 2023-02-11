@@ -90,25 +90,29 @@ export "BKMR_DB_URL=db-path"
 - ca. 20x faster than the Python original [twbm](https://github.com/sysid/twbm) after warming up Python.
 ```bash
 time twbm search 'zzz*' --np
-0. zzzeek : Asynchronous Python and Databases [345]
+0. zzzeek : Asynchronous Python and Databases [343]
    https://techspot.zzzeek.org/2015/02/15/asynchronous-python-and-databases/
    async, knowhow, py
 
+
 Found: 1
-345
+343
 
-real    0m0.259s
-user    0m0.220s
-sys     0m0.037s
+real    0m0.501s
+user    0m0.268s
+sys     0m0.070s
 
 
 
-time bmkr search 'zzz*' --np
--bash: bmkr: command not found
+time bkmr search 'zzz*' --np
+1. zzzeek : Asynchronous Python and Databases [343]
+   https://techspot.zzzeek.org/2015/02/15/asynchronous-python-and-databases/
+   async knowhow py
 
-real    0m0.014s
-user    0m0.005s
-sys     0m0.009s
+
+real    0m0.027s
+user    0m0.008s
+sys     0m0.016s
 ```
 
 <!-- Badges -->
