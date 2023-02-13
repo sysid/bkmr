@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "Ultrafast Bookmark Manager and Launcher"
 keywords = ["bookmark", "launcher"]
@@ -34,7 +34,7 @@ assert_cmd = "2.0.7"
 ctor = "0.1.26"
 mockall = "0.11.3"
 rstest = "0.16.0"
-test-log = "0.2.11"
+test-log = "0.2.21"
 tuikit = "0.5.0"
 select = "0.6.0"
 reqwest = {version = "0.11.13", features = ["blocking", "json"] }
