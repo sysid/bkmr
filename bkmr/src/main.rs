@@ -505,7 +505,6 @@ fn main() {
             }
         }
         Some(Commands::CreateDb { path }) => {
-            println!("Show not implemented yet. {:?}", path);
             let path = Utf8Path::new(path);
             if !path.exists() {
                 println!("Creating database at {:?}", path);
