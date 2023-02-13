@@ -264,8 +264,7 @@ fn do_sth_with_bms(
         }
         let bm = &bms[id as usize - 1];
         debug!("({}:{}) {:?}: bm {:?}", function_name!(), line!(), id, bm);
-        do_sth(bm)
-            .with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
+        do_sth(bm).with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
     }
     Ok(())
 }

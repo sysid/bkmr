@@ -149,7 +149,9 @@ impl Dal {
             "SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks \
             where URL = ?;",
         );
-        let bms = bms.bind::<Text, _>(url).get_results::<Bookmark>(&mut self.conn)?;
+        let bms = bms
+            .bind::<Text, _>(url)
+            .get_results::<Bookmark>(&mut self.conn)?;
         Ok(bms.len() > 0)
     }
 

@@ -87,7 +87,10 @@ enum Commands {
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
 
-        #[arg(long = "fzf", help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]")]
+        #[arg(
+            long = "fzf",
+            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
+        )]
         is_fuzzy: bool,
     },
     /// Open/launch bookmarks
@@ -154,6 +157,10 @@ enum Commands {
 fn main() {
     let mut stdout = StandardStream::stdout(ColorChoice::Always);
     let cli = Cli::parse();
+    if cli.command.is_none() {
+        eprintln!("No command given. Usage: bkmr <command> [options]"); // TODO: use clap native
+        return;
+    }
     // Note, only flags can have multiple occurrences
     match cli.debug {
         0 => {
@@ -541,7 +548,13 @@ fn main() {
             }
         }
         Some(Commands::Xxx { ids, tags }) => {
-            eprintln!("({}:{}) ids: {:?}, tags: {:?}", function_name!(), line!(), ids, tags);
+            eprintln!(
+                "({}:{}) ids: {:?}, tags: {:?}",
+                function_name!(),
+                line!(),
+                ids,
+                tags
+            );
         }
         None => {}
     }

@@ -29,9 +29,7 @@ pub mod tag;
 
 /// creates list of normalized tags from "tag1,t2,t3" string
 /// be aware of shell parsing rules, so no blanks or quotes
-pub fn load_url_details(
-    url: &str,
-) -> Result<(String, String, String), anyhow::Error> {
+pub fn load_url_details(url: &str) -> Result<(String, String, String), anyhow::Error> {
     let client = Client::new();
     let body = client.get(url).send()?.text()?;
 
@@ -42,8 +40,7 @@ pub fn load_url_details(
         .find(Name("title"))
         .next()
         .and_then(|n| Some(n.text().trim().to_string()))
-        .unwrap_or("".to_string())
-        ;
+        .unwrap_or("".to_string());
     debug!("({}:{}) Title {:?}", function_name!(), line!(), title);
 
     let description = document
@@ -51,8 +48,7 @@ pub fn load_url_details(
         .next()
         .and_then(|n| n.attr("content"))
         .map(|s| s.to_string())
-        .unwrap_or("".to_string())
-        ;
+        .unwrap_or("".to_string());
     debug!(
         "({}:{}) Description {:?}",
         function_name!(),
@@ -65,8 +61,7 @@ pub fn load_url_details(
         .next()
         .and_then(|node| node.attr("content"))
         .map(|s| s.to_string())
-        .unwrap_or("".to_string())
-        ;
+        .unwrap_or("".to_string());
     debug!("({}:{}) Keywords {:?}", function_name!(), line!(), keywords);
 
     Ok((title, description, keywords))
