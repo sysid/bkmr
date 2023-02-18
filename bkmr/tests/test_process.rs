@@ -24,7 +24,11 @@ fn bms() -> Vec<Bookmark> {
 #[ignore = "Manual Test: make test-vim"]
 fn test_do_edit(mut dal: Dal, bms: Vec<Bookmark>) {
     let bm = bms[0].clone();
-    do_edit(&bm).unwrap();
+    // avoid panic as it would with CLI call
+    do_edit(&bm).unwrap_or_else(|e| {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
+    });
 
     println!("{:#?}", dal.get_bookmark_by_id(bm.id).unwrap());
 }

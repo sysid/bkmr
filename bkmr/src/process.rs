@@ -299,15 +299,19 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         )
     })?;
 
+    // get default OS editor in varialbe to use in Command::new
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+    debug!("({}:{}) Using editor: {:?}", function_name!(), line!(), editor);
     // Open the temporary file with Vim
-    Command::new("vim")
+    Command::new(&editor)
         .arg("temp.txt")
         .status()
         .with_context(|| {
             format!(
-                "({}:{}) Error opening temp file with vim",
+                "({}:{}) Error opening temp file with [{}], check your EDITOR variable.",
                 function_name!(),
-                line!()
+                line!(),
+                &editor
             )
         })?;
 

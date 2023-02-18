@@ -101,7 +101,7 @@ install-diesel-cli:  ## install-diesel-cli
 	asdf reshim rust
 
 .PHONY: test-vim
-test-vim:  ## test-vim
+test-vim:  ## test-vim: run with EDITOR= make test-vim
 	#pushd bkmr && cargo test --color=always --package bkmr --lib process::test::test_do_edit -- --nocapture --ignored
 	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
 
