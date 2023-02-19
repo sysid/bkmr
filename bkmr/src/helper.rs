@@ -23,6 +23,9 @@ pub fn init_db(
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     debug!("({}:{}) {:?}", function_name!(), line!(), "--> initdb <--");
     connection.revert_all_migrations(MIGRATIONS)?;
+    connection.pending_migrations(MIGRATIONS)?.iter().for_each(|m| {
+        debug!("({}:{}) Pending Migration: {}", function_name!(), line!(), m.name());
+    });
     connection.run_pending_migrations(MIGRATIONS)?;
     Ok(())
 }
@@ -67,9 +70,9 @@ mod test {
 
     // todo: emtpy vec
     #[rstest]
-    #[case(vec!["1".to_string(), "2".to_string(), "3".to_string()], Some(vec![1, 2, 3]))]
-    #[case(vec!["3".to_string(), "1".to_string(), "2".to_string()], Some(vec![1, 2, 3]))]
-    #[case(vec!["a".to_string(), "2".to_string(), "3".to_string()], None)]
+    #[case(vec ! ["1".to_string(), "2".to_string(), "3".to_string()], Some(vec ! [1, 2, 3]))]
+    #[case(vec ! ["3".to_string(), "1".to_string(), "2".to_string()], Some(vec ! [1, 2, 3]))]
+    #[case(vec ! ["a".to_string(), "2".to_string(), "3".to_string()], None)]
     fn test_ensure_int_vector(#[case] x: Vec<String>, #[case] expected: Option<Vec<i32>>) {
         assert_eq!(ensure_int_vector(&x), expected);
     }
