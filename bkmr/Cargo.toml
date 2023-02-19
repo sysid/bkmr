@@ -24,6 +24,7 @@ log = "0.4.17"
 open = "3.2.0"
 predicates = "2.1.5"
 regex = "1.7.0"
+rusqlite = { version = "0.28.0", features = ["bundled"] }  # https://github.com/sysid/bkmr/issues/6#issuecomment-1435966997
 shellexpand = "3.0.0"
 skim = "0.10.2"
 stdext = "0.3.1"
