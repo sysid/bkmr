@@ -55,15 +55,15 @@ impl Tags {
     }
 
     pub fn match_all_tags(tags: &Vec<String>, bm_tags: &Vec<String>) -> bool {
-        let set1: HashSet<String> = tags.into_iter().map(|s| s.to_string()).collect();
-        let set2: HashSet<String> = bm_tags.into_iter().map(|s| s.to_string()).collect();
+        let set1: HashSet<_> = tags.iter().collect();
+        let set2: HashSet<_> = bm_tags.iter().collect();
         let intersect = set1.intersection(&set2).collect::<HashSet<_>>();
         intersect == set1.iter().collect()
     }
 
     pub fn match_any_tags(tags: &Vec<String>, bm_tags: &Vec<String>) -> bool {
-        let set1: HashSet<String> = tags.into_iter().map(|s| s.to_string()).collect();
-        let set2: HashSet<String> = bm_tags.into_iter().map(|s| s.to_string()).collect();
+        let set1: HashSet<_> = tags.iter().collect();
+        let set2: HashSet<_> = bm_tags.iter().collect();
         let intersect = set1.intersection(&set2).collect::<HashSet<_>>();
         intersect.len() > 0
     }

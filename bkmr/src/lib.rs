@@ -4,6 +4,7 @@
 
 extern crate skim;
 
+use itertools::Itertools;
 use log::{debug, error, warn};
 use reqwest::blocking::Client;
 use select::document::Document;
@@ -39,16 +40,16 @@ pub fn load_url_details(url: &str) -> Result<(String, String, String), anyhow::E
     let title = document
         .find(Name("title"))
         .next()
-        .and_then(|n| Some(n.text().trim().to_string()))
-        .unwrap_or("".to_string());
+        .and_then(|n| Some(n.text().trim().to_owned()))
+        .unwrap_or_default();
+
     debug!("({}:{}) Title {:?}", function_name!(), line!(), title);
 
     let description = document
         .find(Attr("name", "description"))
         .next()
         .and_then(|n| n.attr("content"))
-        .map(|s| s.to_string())
-        .unwrap_or("".to_string());
+        .unwrap_or_default();
     debug!(
         "({}:{}) Description {:?}",
         function_name!(),
@@ -60,11 +61,11 @@ pub fn load_url_details(url: &str) -> Result<(String, String, String), anyhow::E
         .find(Attr("name", "keywords"))
         .next()
         .and_then(|node| node.attr("content"))
-        .map(|s| s.to_string())
-        .unwrap_or("".to_string());
+        .unwrap_or_default();
+
     debug!("({}:{}) Keywords {:?}", function_name!(), line!(), keywords);
 
-    Ok((title, description, keywords))
+    Ok((title, description.to_owned(), keywords.to_owned()))
 }
 
 pub fn update_bookmarks(ids: Vec<i32>, tags: Vec<String>, tags_not: Vec<String>, force: bool) {
@@ -77,8 +78,8 @@ pub fn update_bookmarks(ids: Vec<i32>, tags: Vec<String>, tags_not: Vec<String>,
 }
 
 pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut Dal, force: bool) {
-    let tags: HashSet<String> = tags.into_iter().map(|s| s.to_string()).collect();
-    let tags_not: HashSet<String> = tags_not.into_iter().map(|s| s.to_string()).collect();
+    let tags: HashSet<String> = tags.iter().cloned().collect();
+    let tags_not: HashSet<String> = tags_not.iter().cloned().collect();
     debug!(
         "({}:{}) tags {:?}, tags_not {:?}",
         function_name!(),
@@ -99,22 +100,21 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
     }
     let bm = bm.unwrap();
 
-    let mut new_tags = Tags::normalize_tag_string(Some(bm.tags.clone()))
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect::<HashSet<String>>();
-    if force {
-        new_tags = tags.clone();
+    let new_tags = if force {
+        tags.clone()
     } else {
-        new_tags.extend(tags.clone());
-        new_tags = new_tags
+        let mut new_tags = Tags::normalize_tag_string(Some(bm.tags.clone()))
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect::<HashSet<String>>();
+        new_tags.extend(tags);
+        new_tags
             .difference(&tags_not)
             .map(|s| s.to_string())
-            .collect();
-    }
+            .collect()
+    };
 
-    let mut bm_tags: Vec<String> = new_tags.into_iter().map(|s| s.to_string()).collect();
-    bm_tags.sort();
+    let bm_tags: Vec<String> = new_tags.iter().sorted().cloned().collect();
     debug!("({}:{}) {:?}", function_name!(), line!(), bm_tags);
 
     let bm = dal.update_bookmark(Bookmark {
