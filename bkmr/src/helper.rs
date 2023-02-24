@@ -23,9 +23,17 @@ pub fn init_db(
 ) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
     debug!("({}:{}) {:?}", function_name!(), line!(), "--> initdb <--");
     connection.revert_all_migrations(MIGRATIONS)?;
-    connection.pending_migrations(MIGRATIONS)?.iter().for_each(|m| {
-        debug!("({}:{}) Pending Migration: {}", function_name!(), line!(), m.name());
-    });
+    connection
+        .pending_migrations(MIGRATIONS)?
+        .iter()
+        .for_each(|m| {
+            debug!(
+                "({}:{}) Pending Migration: {}",
+                function_name!(),
+                line!(),
+                m.name()
+            );
+        });
     connection.run_pending_migrations(MIGRATIONS)?;
     Ok(())
 }

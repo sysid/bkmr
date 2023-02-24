@@ -45,8 +45,8 @@ impl SkimItem for Bookmark {
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
-        let _text = format!("[{}] {}, {}", &self.id, &self.metadata, &self.URL);
-        ItemPreview::AnsiText(format!("\x1b[31mhello:\x1b[m\n{}", _text))
+        let text = format!("[{}] {}, {}", &self.id, &self.metadata, &self.URL);
+        ItemPreview::AnsiText(format!("\x1b[31mhello:\x1b[m\n{}", text))
     }
 }
 

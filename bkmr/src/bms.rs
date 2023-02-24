@@ -23,16 +23,16 @@ impl Bookmarks {
         Bookmarks {
             fts_query: fts_query.clone(),
             bms: dal
-                .get_bookmarks(fts_query.as_str())
+                .get_bookmarks(&fts_query)
                 .expect("Error getting bookmarks"),
             dal,
         }
     }
     pub fn check_tags(&mut self, tags: Vec<String>) -> Vec<String> {
         let all_tags: HashSet<String> = HashSet::from_iter(self.dal.get_all_tags_as_vec());
-        let tags = HashSet::from_iter(tags.into_iter().filter(|s| *s != ""));
+        let tags = HashSet::from_iter(tags.into_iter().filter(|s| !s.is_empty()));
         debug!("({}:{}) {:?}", function_name!(), line!(), all_tags);
-        tags.difference(&all_tags).map(|s| s.to_string()).collect()
+        tags.difference(&all_tags).cloned().collect()
     }
 
     pub fn match_all(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {

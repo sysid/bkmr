@@ -209,20 +209,16 @@ fn main() {
             non_interactive,
             is_fuzzy,
         }) => {
-            let mut _tags_all = String::from("");
-            if tags_prefix.is_some() {
-                if tags_all.is_none() {
-                    _tags_all = tags_prefix.clone().unwrap();
+            let _tags_all = if let Some(tags_prefix) = tags_prefix {
+                if let Some(tags_all) = tags_all {
+                    format!("{},{}", tags_all.clone(), tags_prefix)
                 } else {
-                    _tags_all = format!(
-                        "{},{}",
-                        tags_all.clone().unwrap(),
-                        tags_prefix.clone().unwrap()
-                    );
+                    tags_prefix.clone()
                 }
             } else {
-                _tags_all = tags_all.clone().unwrap_or_default();
-            }
+                tags_all.clone().unwrap_or_default()
+            };
+
             debug!("({}:{}) tags: {:?}", function_name!(), line!(), _tags_all);
 
             let fts_query = fts_query.clone().unwrap_or("".to_string());
