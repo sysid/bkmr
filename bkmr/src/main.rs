@@ -1,7 +1,6 @@
 use camino::Utf8Path;
 use std::fs::create_dir_all;
 use std::io::Write;
-use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::process;
 
@@ -197,11 +196,7 @@ fn main() {
                 return value;
             }
         }
-        Commands::Open { ids } => {
-            if let ControlFlow::Break(_) = open_bookmarks(ids) {
-                return;
-            }
-        }
+        Commands::Open { ids } => open_bookmarks(ids),
         Commands::Add {
             url,
             tags,
@@ -309,7 +304,7 @@ fn save_bookmarks(
     None
 }
 
-fn open_bookmarks(ids: String) -> ControlFlow<()> {
+fn open_bookmarks(ids: String) {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     let ids = get_ids(ids);
     for id in ids.unwrap() {
@@ -330,7 +325,6 @@ fn open_bookmarks(ids: String) -> ControlFlow<()> {
             }
         }
     }
-    ControlFlow::Continue(())
 }
 
 fn add_bookmark(
