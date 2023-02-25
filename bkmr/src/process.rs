@@ -95,76 +95,64 @@ pub fn process(bms: &Vec<Bookmark>) {
         let regex = Regex::new(r"^\d+").unwrap(); // Create a new Regex object
         match tokens[0].as_str() {
             "p" => {
-                let ids = helper::ensure_int_vector(&tokens.split_off(1));
-                if ids.is_none() {
+                if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
+                    print_ids(ids, bms.clone()).unwrap_or_else(|e| {
+                        error!("({}:{}) {}", function_name!(), line!(), e);
+                    });
+                } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        "({}:{}) Invalid input, only numbers allowed",
                         function_name!(),
-                        line!(),
-                        ids
+                        line!()
                     );
-                    continue;
                 }
-
-                print_ids(ids.unwrap(), bms.clone()).unwrap_or_else(|e| {
-                    error!("({}:{}) {}", function_name!(), line!(), e);
-                });
-                break;
             }
             "d" => {
-                let ids = helper::ensure_int_vector(&tokens.split_off(1));
-                if ids.is_none() {
+                if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
+                    delete_bms(ids, bms.clone()).unwrap_or_else(|e| {
+                        error!("({}:{}) {}", function_name!(), line!(), e);
+                    });
+                    break;
+                } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        "({}:{}) Invalid input, only numbers allowed",
                         function_name!(),
                         line!(),
-                        ids
                     );
-                    continue;
                 }
-
-                delete_bms(ids.unwrap(), bms.clone()).unwrap_or_else(|e| {
-                    error!("({}:{}) {}", function_name!(), line!(), e);
-                });
-                break;
             }
             "e" => {
-                let ids = helper::ensure_int_vector(&tokens.split_off(1));
-                if ids.is_none() {
+                if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
+                    edit_bms(ids, bms.clone()).unwrap_or_else(|e| {
+                        error!("({}:{}) {}", function_name!(), line!(), e);
+                    });
+                    break;
+                } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        "({}:{}) Invalid input, only numbers allowed",
                         function_name!(),
                         line!(),
-                        ids
                     );
-                    continue;
                 }
-                edit_bms(ids.unwrap(), bms.clone()).unwrap_or_else(|e| {
-                    error!("({}:{}) {}", function_name!(), line!(), e);
-                });
-                break;
             }
             "h" => println!("{}", help_text),
             "q" => break,
             // Use Regex object in a guard
             s if regex.is_match(s) => {
-                let ids = helper::ensure_int_vector(&tokens);
-                if ids.is_none() {
+                if let Some(ids) = helper::ensure_int_vector(&tokens) {
+                    open_bms(ids, bms.clone()).unwrap_or_else(|e| {
+                        error!("({}:{}) {}", function_name!(), line!(), e);
+                    });
+                } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed {:?}",
+                        "({}:{}) Invalid input, only numbers allowed",
                         function_name!(),
                         line!(),
-                        ids
                     );
-                    continue;
                 }
-                open_bms(ids.unwrap(), bms.clone()).unwrap_or_else(|e| {
-                    error!("({}:{}) {}", function_name!(), line!(), e);
-                });
-                break;
             }
             _ => {
-                println!("{}", "Invalid Input");
+                println!("Invalid Input");
                 println!("{}", help_text);
             }
         }
