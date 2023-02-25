@@ -14,12 +14,25 @@ use crate::environment::{CONFIG, FzfEnvOpts};
 
 impl SkimItem for Bookmark {
     fn text(&self) -> Cow<str> {
-        // let _text = format!("[{}] {}, {}", &self.id, &self.metadata, &self.URL);
-        let _text = format!("[{}] {}, {}, {}", self.id, self.tags, self.metadata, self.URL); // same??
+        let FzfEnvOpts { 
+            show_tags, 
+            ..
+        } = &CONFIG.fzf_opts;
+
+        let _text = match show_tags {
+            false => format!("[{}] {}, {}", self.id, self.metadata, self.URL),
+            true => format!("[{}] {}, {}, {}", self.id, self.tags, self.metadata, self.URL)
+        };
         Cow::Owned(_text)
         // Cow::Borrowed(_text.as_str())
     }
+
     fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
+        let FzfEnvOpts { 
+            show_tags, 
+            ..
+        } = &CONFIG.fzf_opts;
+
         let start_idx_tags = self.id.to_string().len() + 2;
         let end_idx_tags = start_idx_tags + self.tags.len() + 1;
         let attr_tags = Attr {
@@ -27,7 +40,10 @@ impl SkimItem for Bookmark {
             ..Attr::default()
         };
 
-        let start_idx_metadata = end_idx_tags + 1;
+        let start_idx_metadata = match show_tags { 
+            false => self.id.to_string().len() + 2,
+            true => end_idx_tags + 1
+        };
         let end_idx_metadata = start_idx_metadata + self.metadata.len() + 1;
         let attr_metadata = Attr {
             fg: Color::GREEN,
@@ -42,17 +58,29 @@ impl SkimItem for Bookmark {
             ..Attr::default()
         };
 
-        AnsiString::new_str(
-            context.text,
-            vec![
-                (attr_tags, (start_idx_tags as u32, end_idx_tags as u32)),
-                (
-                    attr_metadata,
-                    (start_idx_metadata as u32, end_idx_metadata as u32),
-                ),
-                (attr_url, (start_idx_url as u32, end_idx_url as u32)),
-            ],
-        )
+        match show_tags {
+            false => AnsiString::new_str(
+                context.text,
+                vec![
+                    (
+                        attr_metadata,
+                        (start_idx_metadata as u32, end_idx_metadata as u32),
+                    ),
+                    (attr_url, (start_idx_url as u32, end_idx_url as u32)),
+                ],
+            ),
+            true => AnsiString::new_str(
+                context.text,
+                vec![
+                    (attr_tags, (start_idx_tags as u32, end_idx_tags as u32)),
+                    (
+                        attr_metadata,
+                        (start_idx_metadata as u32, end_idx_metadata as u32),
+                    ),
+                    (attr_url, (start_idx_url as u32, end_idx_url as u32)),
+                ],
+            )
+        }
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
@@ -65,6 +93,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
     let FzfEnvOpts { 
         reverse, 
         height, 
+        ..
     } = &CONFIG.fzf_opts;
 
     let options = SkimOptionsBuilder::default()

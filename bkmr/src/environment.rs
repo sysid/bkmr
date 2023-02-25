@@ -18,6 +18,8 @@ pub struct FzfEnvOpts {
     pub height: String,
     #[clap(long)]
     pub reverse: bool,
+    #[clap(long)]
+    pub show_tags: bool,
 }
 
 impl Config {
