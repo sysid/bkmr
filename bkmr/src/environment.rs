@@ -1,5 +1,6 @@
 use std::{env, process};
-
+use clap::Parser;
+use shellwords;
 use lazy_static::lazy_static;
 
 // #[allow(dead_code)]
@@ -7,6 +8,16 @@ use lazy_static::lazy_static;
 pub struct Config {
     pub db_url: String,
     pub port: u16,
+    pub fzf_opts: FzfEnvOpts
+}
+
+#[derive(Debug)]
+#[derive(Parser)]
+pub struct FzfEnvOpts {
+    #[clap(long)]
+    pub height: String,
+    #[clap(long)]
+    pub reverse: bool,
 }
 
 impl Config {
@@ -18,12 +29,29 @@ impl Config {
             eprintln!("Error: db_url path does not exist: {:?}", db_url);
             process::exit(1);
         }
-        let port = env::var("PORT")
+        let port = env::var("BKMR_PORT")
             .unwrap_or("9999".to_string())
             .parse()
-            .expect("PORT must be a number");
+            .expect("BKMR_PORT must be a number");
 
-        Config { db_url, port }
+        let fzf_opts = env::var("BKMR_FZF_OPTS").unwrap_or("--height 50%".to_string());
+        let mut fzf_opts_args = shellwords::split(&fzf_opts).unwrap();
+
+        /* 
+          clap::try_parse_from was first designed to parse 
+          a Vec containing the arguments of a basic shell command :
+          the first item of the Vec must always be the command name. 
+          Nevertheless, if we have to parse an env variable like here, and not a shell command, 
+          we can easily insert an empty String to replace the command-name.
+        */
+        fzf_opts_args.insert(0, "".to_string());
+
+        let Ok(fzf_opts) = FzfEnvOpts::try_parse_from(&fzf_opts_args) else {
+            eprintln!("Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.", fzf_opts_args);
+            process::exit(1) 
+        };
+
+        Config { db_url, port, fzf_opts }
     }
 }
 
