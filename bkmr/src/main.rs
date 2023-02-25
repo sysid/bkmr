@@ -98,7 +98,7 @@ enum Commands {
         /// list of ids, separated by comma, no blanks
         ids: String,
     },
-    /// add a bookmark
+    /// Add a bookmark
     Add {
         url: String,
         /// list of tags, separated by comma, no blanks in between
