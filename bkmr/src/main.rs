@@ -135,9 +135,9 @@ enum Commands {
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
     Show { ids: String },
-    /// tag for which related tags should be shown. No input: all tags are printed
+    /// Tag for which related tags should be shown. No input: all tags are printed
     Tags {
-        /// tag for which related tags should be shown. No input: all tags are shown
+        /// Tag for which related tags should be shown. No input: all tags are shown
         tag: Option<String>,
     },
     /// Initialize bookmark database
