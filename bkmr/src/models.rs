@@ -18,7 +18,7 @@ pub struct TagsFrequency {
     pub tag: String,
 }
 
-#[derive(Queryable, QueryableByName, Debug, PartialOrd, PartialEq, Clone)]
+#[derive(Queryable, QueryableByName, Debug, PartialOrd, PartialEq, Clone, Default)]
 #[diesel(table_name = bookmarks)]
 pub struct Bookmark {
     pub id: i32,
@@ -62,14 +62,12 @@ mod test {
         Bookmark {
             id: 1,
             URL: String::from("www.sysid.de"),
-            metadata: String::from(""),
             tags: String::from(",aaa,xxx,"),
-            desc: String::from(""),
-            flags: 0,
             last_update_ts: NaiveDate::from_ymd_opt(2016, 7, 8)
                 .unwrap()
                 .and_hms_opt(9, 10, 11)
                 .unwrap(),
+            ..Default::default()
         }
     }
 
