@@ -14,9 +14,9 @@ pub struct Config {
 pub struct FzfEnvOpts {
     #[clap(long, default_value = "50%")]
     pub height: String,
-    #[clap(long)]
+    #[clap(long, default_value_t = false)]
     pub reverse: bool,
-    #[clap(long)]
+    #[clap(long, default_value_t = false)]
     pub show_tags: bool,
 }
 
@@ -34,8 +34,7 @@ impl Config {
             .parse()
             .expect("BKMR_PORT must be a number");
 
-        let fzf_opts = env::var("BKMR_FZF_OPTS").unwrap_or("".to_string());
-        let mut fzf_opts_args = fzf_opts.split(" ").collect::<Vec<_>>();
+        let fzf_opts = env::var("BKMR_FZF_OPTS");
 
         /* 
           clap::try_parse_from was first designed to parse 
@@ -44,7 +43,14 @@ impl Config {
           Nevertheless, if we have to parse an env variable like here, and not a shell command, 
           we can easily insert an empty String to replace the command-name.
         */
-        fzf_opts_args.insert(0, "");
+        let fzf_opts_args = match &fzf_opts {
+            Ok(options_string) => {
+                let mut args = options_string.split(" ").collect::<Vec<_>>();
+                args.insert(0, "");
+                args
+            },
+            Err(_) => vec![""]
+        };
 
         let Ok(fzf_opts) = FzfEnvOpts::try_parse_from(&fzf_opts_args) else {
             eprintln!("Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.", fzf_opts_args);
