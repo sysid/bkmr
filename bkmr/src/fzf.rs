@@ -1,4 +1,5 @@
 use crate::models::Bookmark;
+use crate::tag::Tags;
 use crate::process::{edit_bms, open_bms};
 use log::debug;
 use skim::prelude::*;
@@ -21,7 +22,15 @@ impl SkimItem for Bookmark {
 
         let _text = match show_tags {
             false => format!("[{}] {}, {}", self.id, self.metadata, self.URL),
-            true => format!("[{}] {}, {}, {}", self.id, self.tags, self.metadata, self.URL)
+            true => { 
+                format!(
+                    "[{}] {}, {}, {}",
+                    self.id,
+                    Tags::change_tag_string_delimiter(&(self.tags), " | "),
+                    self.metadata,
+                    self.URL
+                )
+            }
         };
         Cow::Owned(_text)
         // Cow::Borrowed(_text.as_str())
@@ -34,7 +43,13 @@ impl SkimItem for Bookmark {
         } = &CONFIG.fzf_opts;
 
         let start_idx_tags = self.id.to_string().len() + 2;
-        let end_idx_tags = start_idx_tags + self.tags.len() + 1;
+        let end_idx_tags = match show_tags {
+            false => 0,
+            true => {
+                let tags = Tags::change_tag_string_delimiter(&(self.tags), " | ");
+                start_idx_tags + tags.len() + 1
+            }
+        };
         let attr_tags = Attr {
             fg: Color::LIGHT_MAGENTA,
             ..Attr::default()
