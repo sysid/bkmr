@@ -179,7 +179,7 @@ fn main() {
             non_interactive,
             is_fuzzy,
         } => {
-            if let Some(value) = save_bookmarks(
+            if let Some(value) = search_bookmarks(
                 tags_prefix,
                 tags_all,
                 fts_query,
@@ -229,7 +229,7 @@ fn main() {
     // Continued program logic goes here...
 }
 
-fn save_bookmarks(
+fn search_bookmarks(
     tags_prefix: Option<String>,
     tags_all: Option<String>,
     fts_query: Option<String>,
