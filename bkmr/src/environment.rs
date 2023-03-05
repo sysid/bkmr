@@ -57,7 +57,7 @@ impl Config {
             process::exit(1) 
         };
 
-        Config { db_url, port, fzf_opts }
+        Config { db_url, port, fzf_opts } 
     }
 }
 
@@ -87,7 +87,11 @@ mod test {
     fn test_config() {
         println!("Using database at {}", CONFIG.db_url);
         println!("Listening on port {}", CONFIG.port);
+        println!("Using fzf defaults {:?}", CONFIG.fzf_opts);
         assert_eq!(CONFIG.db_url, String::from("../db/bkmr.db"));
         assert_eq!(CONFIG.port, 9999);
+        assert_eq!(CONFIG.fzf_opts.height, String::from("50%"));
+        assert_eq!(CONFIG.fzf_opts.reverse, false);
+        assert_eq!(CONFIG.fzf_opts.show_tags, false);
     }
 }
