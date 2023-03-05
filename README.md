@@ -26,12 +26,12 @@ Usage: bkmr [OPTIONS] [NAME] [COMMAND]
 Commands:
   search     Searches Bookmarks
   open       Open/launch bookmarks
-  add        add a bookmark
+  add        Add a bookmark
   delete     Delete bookmarks
   update     Update bookmarks
   edit       Edit bookmarks
   show       Show Bookmarks (list of ids, separated by comma, no blanks)
-  tags       tag for which related tags should be shown. No input: all tags are printed
+  tags       Tag for which related tags should be shown. No input: all tags are printed
   create-db  Initialize bookmark database
   help       Print this message or the help of the given subcommand(s)
 
