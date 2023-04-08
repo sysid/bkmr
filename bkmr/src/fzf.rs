@@ -1,28 +1,31 @@
-use crate::models::Bookmark;
-use crate::tag::Tags;
-use crate::process::{edit_bms, open_bms};
+use std::borrow::Cow;
+use std::sync::Arc;
+
+use crossterm::{execute, terminal::{Clear, ClearType}};
 use log::debug;
-use skim::prelude::*;
 use skim::{
     AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem, SkimItemReceiver,
     SkimItemSender,
 };
-use std::borrow::Cow;
-use std::sync::Arc;
+use skim::prelude::*;
 use stdext::function_name;
 use tuikit::prelude::*;
+
 use crate::environment::{CONFIG, FzfEnvOpts};
+use crate::models::Bookmark;
+use crate::process::{edit_bms, open_bms};
+use crate::tag::Tags;
 
 impl SkimItem for Bookmark {
     fn text(&self) -> Cow<str> {
-        let FzfEnvOpts { 
-            show_tags, 
+        let FzfEnvOpts {
+            show_tags,
             ..
         } = &CONFIG.fzf_opts;
 
         let _text = match show_tags {
             false => format!("[{}] {}, {}", self.id, self.metadata, self.URL),
-            true => { 
+            true => {
                 format!(
                     "[{}] {}, {}, {}",
                     self.id,
@@ -37,8 +40,8 @@ impl SkimItem for Bookmark {
     }
 
     fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
-        let FzfEnvOpts { 
-            show_tags, 
+        let FzfEnvOpts {
+            show_tags,
             ..
         } = &CONFIG.fzf_opts;
 
@@ -55,7 +58,7 @@ impl SkimItem for Bookmark {
             ..Attr::default()
         };
 
-        let start_idx_metadata = match show_tags { 
+        let start_idx_metadata = match show_tags {
             false => self.id.to_string().len() + 2,
             true => end_idx_tags + 1
         };
@@ -105,9 +108,9 @@ impl SkimItem for Bookmark {
 }
 
 pub fn fzf_process(bms: &Vec<Bookmark>) {
-    let FzfEnvOpts { 
-        reverse, 
-        height, 
+    let FzfEnvOpts {
+        reverse,
+        height,
         ..
     } = &CONFIG.fzf_opts;
 
@@ -172,6 +175,11 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             open_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
+        }
+        Key::ESC => {
+            debug!("({}:{}) Esc", function_name!(), line!());
+            let mut stdout = std::io::stdout();
+            execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         _ => (),
     });
