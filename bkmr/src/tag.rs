@@ -48,6 +48,10 @@ impl Tags {
         format!(",{},", Self::normalize_tag_string(tag_str).join(","))
     }
 
+    pub fn change_tag_string_delimiter(tag_str: &str, new_delimiter: &str) -> String {
+        tag_str.split(',').collect::<Vec<_>>().join(new_delimiter)
+    }
+
     pub fn match_exact_tags(tags: &Vec<String>, bm_tags: &Vec<String>) -> bool {
         let set1: HashSet<String> = tags.into_iter().map(|s| s.to_string()).collect();
         let set2: HashSet<String> = bm_tags.into_iter().map(|s| s.to_string()).collect();
