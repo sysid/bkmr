@@ -101,11 +101,10 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
     let bm = bm.unwrap();
 
     let new_tags = if force {
-        tags.clone()
+        tags
     } else {
         let mut new_tags = Tags::normalize_tag_string(Some(bm.tags.clone()))
             .into_iter()
-            .map(|s| s.to_string())
             .collect::<HashSet<String>>();
         new_tags.extend(tags);
         new_tags
@@ -128,7 +127,6 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
             line!(),
             e
         );
-        return;
     }
 }
 

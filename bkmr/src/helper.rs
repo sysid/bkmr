@@ -38,12 +38,13 @@ pub fn init_db(
     Ok(())
 }
 
+#[allow(clippy::ptr_arg)]
 pub fn ensure_int_vector(vec: &Vec<String>) -> Option<Vec<i32>> {
     vec.iter()
         .map(|s| s.parse::<i32>())
         .collect::<Result<Vec<_>, _>>()
         .map(|mut v| {
-            v.sort_by(|a, b| a.cmp(b));
+            v.sort();
             v
         })
         .ok()

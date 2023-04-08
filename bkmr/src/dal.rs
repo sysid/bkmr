@@ -125,9 +125,9 @@ impl Dal {
         bm
     }
     pub fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>, DieselError> {
-        if query == "" {
+        if query.is_empty() {
             // select all
-            return Ok(bookmarks.load::<Bookmark>(&mut self.conn)?);
+            return bookmarks.load::<Bookmark>(&mut self.conn);
         }
         self.get_bookmarks_fts(query)
     }
@@ -140,7 +140,7 @@ impl Dal {
             order by rank",
         );
         let bms = bms.bind::<Text, _>(fts_query).get_results(&mut self.conn);
-        Ok(bms?)
+        bms
     }
 
     pub fn bm_exists(&mut self, url: &str) -> Result<bool, DieselError> {
@@ -151,7 +151,7 @@ impl Dal {
         let bms = bms
             .bind::<Text, _>(url)
             .get_results::<Bookmark>(&mut self.conn)?;
-        Ok(bms.len() > 0)
+        Ok(!bms.is_empty())
     }
 
     /// get frequency based ordered list of all tags
@@ -175,7 +175,7 @@ impl Dal {
         ",
         );
         let tags_result = tags_query.get_results(&mut self.conn);
-        Ok(tags_result?)
+        tags_result
     }
 
     /// get ordered vector of tags
@@ -212,7 +212,7 @@ impl Dal {
         let tags_result = tags_query
             .bind::<Text, _>(search_tag)
             .get_results(&mut self.conn);
-        Ok(tags_result?)
+        tags_result
     }
 }
 

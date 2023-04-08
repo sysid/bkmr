@@ -180,7 +180,7 @@ fn main() {
             non_interactive,
             is_fuzzy,
         } => {
-            if let Some(value) = search_bookmarks(
+            if let Some(_value) = search_bookmarks(
                 tags_prefix,
                 tags_all,
                 fts_query,
@@ -193,9 +193,7 @@ fn main() {
                 is_fuzzy,
                 non_interactive,
                 stdout,
-            ) {
-                return value;
-            }
+            ) {}
         }
         Commands::Open { ids } => open_bookmarks(ids),
         Commands::Add {
@@ -246,22 +244,22 @@ fn search_bookmarks(
 ) -> Option<()> {
     let _tags_all = if let Some(tags_prefix) = tags_prefix {
         if let Some(tags_all) = tags_all {
-            format!("{},{}", tags_all.clone(), tags_prefix)
+            format!("{},{}", tags_all, tags_prefix)
         } else {
-            tags_prefix.clone()
+            tags_prefix
         }
     } else {
         tags_all.clone().unwrap_or_default()
     };
     debug!("({}:{}) tags: {:?}", function_name!(), line!(), _tags_all);
-    let fts_query = fts_query.clone().unwrap_or_default();
+    let fts_query = fts_query.unwrap_or_default();
     let mut bms = Bookmarks::new(fts_query);
     bms.filter(
         Some(_tags_all),
-        tags_any.clone(),
-        tags_all_not.clone(),
-        tags_any_not.clone(),
-        tags_exact.clone(),
+        tags_any,
+        tags_all_not,
+        tags_any_not,
+        tags_exact,
     );
     if order_desc {
         debug!(
@@ -387,8 +385,8 @@ fn add_bookmark(
     } else {
         Default::default()
     };
-    let title = title.to_owned().unwrap_or(_title);
-    let description = desc.to_owned().unwrap_or(_description);
+    let title = title.unwrap_or(_title);
+    let description = desc.unwrap_or(_description);
     debug!(
         "({}:{}) title: {:?}, description: {:?}",
         function_name!(),
@@ -399,7 +397,7 @@ fn add_bookmark(
     match dal.insert_bookmark(NewBookmark {
         URL: url.to_string(),
         metadata: title,
-        tags: Tags::create_normalized_tag_string(tags.to_owned()),
+        tags: Tags::create_normalized_tag_string(tags),
         desc: description,
         flags: 0,
     }) {
@@ -435,7 +433,7 @@ fn add_bookmark(
 fn delete_bookmarks(ids: String) {
     let ids = get_ids(ids);
     let bms = Bookmarks::new("".to_string());
-    delete_bms(ids.clone().unwrap(), bms.bms.clone()).unwrap_or_else(|e| {
+    delete_bms(ids.unwrap(), bms.bms).unwrap_or_else(|e| {
         eprintln!(
             "Error ({}:{}) Deleting Bookmarks: {:?}",
             function_name!(),
@@ -456,8 +454,8 @@ fn update_bookmarks(force: bool, tags: Option<String>, tags_not: Option<String>,
         process::exit(1);
     }
     let ids = get_ids(ids);
-    let tags = Tags::normalize_tag_string(tags.clone());
-    let tags_not = Tags::normalize_tag_string(tags_not.clone());
+    let tags = Tags::normalize_tag_string(tags);
+    let tags_not = Tags::normalize_tag_string(tags_not);
     println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
     bkmr::update_bookmarks(ids.unwrap(), tags, tags_not, force);
 }
@@ -465,7 +463,7 @@ fn update_bookmarks(force: bool, tags: Option<String>, tags_not: Option<String>,
 fn edit_bookmarks(ids: String) {
     let ids = get_ids(ids);
     let bms = Bookmarks::new("".to_string());
-    edit_bms(ids.unwrap(), bms.bms.clone()).unwrap_or_else(|e| {
+    edit_bms(ids.unwrap(), bms.bms).unwrap_or_else(|e| {
         eprintln!(
             "Error ({}:{}) Editing Bookmarks: {:?}",
             function_name!(),
