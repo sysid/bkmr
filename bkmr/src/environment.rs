@@ -11,7 +11,7 @@ pub struct Config {
 
 impl Config {
     fn new() -> Config {
-        let db_url = env::var("BKMR_DB_URL").unwrap_or("../db/bkmr.db".to_string());
+        let db_url = env::var("BKMR_DB_URL").unwrap_or_else(|_| "../db/bkmr.db".to_string());
         // test db_url as path exists
         let path = std::path::Path::new(&db_url);
         if !path.exists() {
@@ -19,7 +19,7 @@ impl Config {
             process::exit(1);
         }
         let port = env::var("PORT")
-            .unwrap_or("9999".to_string())
+            .unwrap_or_else(|_| "9999".to_string())
             .parse()
             .expect("PORT must be a number");
 

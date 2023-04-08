@@ -7,6 +7,7 @@ use std::process;
 use clap::{Parser, Subcommand};
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error::DatabaseError;
+use inquire::Confirm;
 
 use log::{debug, error, info};
 use stdext::function_name;
@@ -347,6 +348,35 @@ fn add_bookmark(
         no_web,
         edit,
     );
+
+    let unknown_tags =
+        Bookmarks::new("".to_string()).check_tags(Tags::normalize_tag_string(tags.clone()));
+    if !unknown_tags.is_empty() {
+        debug!(
+            "({}:{}) unknown_tags: {:?}",
+            function_name!(),
+            line!(),
+            unknown_tags
+        );
+        eprintln!("Unknown tags: {:?}", unknown_tags);
+        let ans = Confirm::new(format!("Unknown tags: {:?}, create?", unknown_tags).as_str())
+            .with_default(false)
+            .with_help_message("Make sure the new tags are really necessary.")
+            .prompt();
+
+        match ans {
+            Ok(true) => {}
+            Ok(false) => {
+                eprintln!("Aborted");
+                return;
+            }
+            Err(_) => {
+                eprintln!("Error, try again later");
+                return;
+            }
+        }
+    }
+
     let (_title, _description, _keywords) = if !no_web {
         let result = load_url_details(&url);
         result.unwrap_or_else(|e| {

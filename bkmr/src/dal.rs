@@ -32,7 +32,7 @@ impl Dal {
     }
 
     fn establish_connection(database_url: &str) -> SqliteConnection {
-        SqliteConnection::establish(&database_url)
+        SqliteConnection::establish(database_url)
             .unwrap_or_else(|e| panic!("Error connecting to {}: {:?}", database_url, e))
     }
 
@@ -90,8 +90,7 @@ impl Dal {
             line!(),
             n
         );
-
-        Ok(n?)
+        n
     }
     pub fn clean_table(&mut self) -> Result<(), DieselError> {
         sql_query("DELETE FROM bookmarks WHERE id != 1;").execute(&mut self.conn)?;
@@ -123,7 +122,7 @@ impl Dal {
             where id = ?;",
         );
         let bm = bms.bind::<Integer, _>(id_).get_result(&mut self.conn);
-        Ok(bm?)
+        bm
     }
     pub fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>, DieselError> {
         if query == "" {

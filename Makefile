@@ -84,7 +84,7 @@ run-delete: init-db  ## run-delete
 .PHONY: run-add
 run-add: init-db  ## run-add
 	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'  # should add bespoke URI
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should overwrite title from web
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should prompt for unknown tags and overwrite title from web
 	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2
 
 .PHONY: run-search
@@ -182,6 +182,15 @@ create-release:  ## create a release on GitHub via the gh cli
 		echo "You do not have the github-cli installed. Please create release from the repo manually."; \
 		exit 1; \
 	fi
+
+.PHONY: format
+format:  ## format
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo fmt
+
+.PHONY: lint
+lint:  ## lint
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo clippy
+
 
 ################################################################################
 # Clean \
