@@ -36,7 +36,8 @@ test-url-details:  ## test-url-details (charm strang verbose output)
 .PHONY: test-fzf
 test-fzf:  ## test-fzf
 	# requires to uncomment associated test
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	#RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
 
 .PHONY: test-open-uri-url
 test-open-uri-url:  ## test-open-uri-url

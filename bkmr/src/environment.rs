@@ -1,5 +1,5 @@
 use std::{env, process};
-
+use clap::Parser;
 use lazy_static::lazy_static;
 
 // #[allow(dead_code)]
@@ -7,6 +7,17 @@ use lazy_static::lazy_static;
 pub struct Config {
     pub db_url: String,
     pub port: u16,
+    pub fzf_opts: FzfEnvOpts
+}
+
+#[derive(Parser, Debug)]
+pub struct FzfEnvOpts {
+    #[clap(long, default_value = "50%")]
+    pub height: String,
+    #[clap(long, default_value_t = false)]
+    pub reverse: bool,
+    #[clap(long, default_value_t = false)]
+    pub show_tags: bool,
 }
 
 impl Config {
@@ -18,12 +29,35 @@ impl Config {
             eprintln!("Error: db_url path does not exist: {:?}", db_url);
             process::exit(1);
         }
-        let port = env::var("PORT")
+        let port = env::var("BKMR_PORT")
             .unwrap_or_else(|_| "9999".to_string())
             .parse()
-            .expect("PORT must be a number");
+            .expect("BKMR_PORT must be a number");
 
-        Config { db_url, port }
+        let fzf_opts = env::var("BKMR_FZF_OPTS");
+
+        /*
+          clap::try_parse_from was first designed to parse
+          a Vec containing the arguments of a basic shell command :
+          the first item of the Vec must always be the command name.
+          Nevertheless, if we have to parse an env variable like here, and not a shell command,
+          we can easily insert an empty String to replace the command-name.
+        */
+        let fzf_opts_args = match &fzf_opts {
+            Ok(options_string) => {
+                let mut args = options_string.split(" ").collect::<Vec<_>>();
+                args.insert(0, "");
+                args
+            },
+            Err(_) => vec![""]
+        };
+
+        let Ok(fzf_opts) = FzfEnvOpts::try_parse_from(&fzf_opts_args) else {
+            eprintln!("Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.", fzf_opts_args);
+            process::exit(1)
+        };
+
+        Config { db_url, port, fzf_opts }
     }
 }
 
@@ -53,7 +87,11 @@ mod test {
     fn test_config() {
         println!("Using database at {}", CONFIG.db_url);
         println!("Listening on port {}", CONFIG.port);
+        println!("Using fzf defaults {:?}", CONFIG.fzf_opts);
         assert_eq!(CONFIG.db_url, String::from("../db/bkmr.db"));
         assert_eq!(CONFIG.port, 9999);
+        assert_eq!(CONFIG.fzf_opts.height, String::from("50%"));
+        assert_eq!(CONFIG.fzf_opts.reverse, false);
+        assert_eq!(CONFIG.fzf_opts.show_tags, false);
     }
 }
