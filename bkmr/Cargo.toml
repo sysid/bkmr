@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Ultrafast Bookmark Manager and Launcher"
 keywords = ["bookmark", "launcher"]
@@ -22,7 +22,7 @@ env_logger = "0.10.0"
 indoc = "2.0.1"
 inquire = "0.6.1"
 lazy_static = "1.4.0"
-log = "0.4.17"
+log = "0.4.27"
 open = "4.0.1"
 predicates = "3.0.2"
 regex = "1.7.3"
