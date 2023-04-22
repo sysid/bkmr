@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2021"
 description = "Ultrafast Bookmark Manager and Launcher"
 keywords = ["bookmark", "launcher"]
@@ -14,7 +14,7 @@ license = "BSD-3-Clause"
 anyhow = "1.0.70"
 arboard = "3.2.0"
 camino = "1.1.4"
-chrono = "0.4.24"
+chrono = "0.5.04"
 clap = { version = "4.2.1", features = ["unstable-doc"] }
 crossterm = "0.26.1"
 diesel = { version = "2.0.3", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
