@@ -2,16 +2,16 @@
 
 # Ultrafast Bookmark Manager and Launcher
 
-[sysid blog: bkmr](https://sysid.github.io/bkmr/)
-
 Features:
 - full-text search with semantic ranking (FTS5)
-- fuzzy search `--fzf` (CTRL-O: open, CTRL-E: edit)
+- fuzzy search `--fzf` (CTRL-O: copy to clipboard, CTRL-E: edit, Enter: open)
 - tags for classification
 - knows how to open HTTP URLs, directories, files (e.g. Office, Images, ....)
 - can execute URI strings as shell commands via protocol prefix: 'shell::'
   URI-Example: `shell::vim +/"## SqlAlchemy" $HOME/document.md`
 - automatically enriches URLs with title and description from Web
+
+> `bkmr search --fzf` is a great way to quickly find and open bookmarks.
 
 To fully use `bkmr`'s full-text query power see: https://www.sqlite.org/fts5.html (chapter 3).
 
@@ -123,6 +123,8 @@ real    0m0.027s
 user    0m0.008s
 sys     0m0.016s
 ```
+[sysid blog: bkmr](https://sysid.github.io/bkmr/)
+
 
 <!-- Badges -->
 [pypi-image]: https://img.shields.io/pypi/v/bkmr?color=blue

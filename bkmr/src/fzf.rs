@@ -1,5 +1,8 @@
 use std::borrow::Cow;
 use std::sync::Arc;
+use arboard::Clipboard;
+use itertools::Itertools; // Import the itertools trait
+
 
 use crossterm::{execute, terminal::{Clear, ClearType}};
 use log::debug;
@@ -145,11 +148,14 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             edit_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
+            // clear screen
+            let mut stdout = std::io::stdout();
+            execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         Key::Ctrl('o') => {
             let filtered = filter_bms(out);
             // id selection not necessary since all bms are filtered, just open all bms
-            let ids = (1..=filtered.len()).map(|i| i as i32).collect();
+            let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
             debug!(
                 "({}:{}) {:?}, {:?}",
                 function_name!(),
@@ -157,7 +163,16 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
                 ids,
                 filtered
             );
-            open_bms(ids, filtered).unwrap_or_else(|e| {
+            // open_bms(ids, filtered).unwrap_or_else(|e| {
+            //     debug!("{}: {}", function_name!(), e);
+            // });
+            // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
+            let mut clipboard = Clipboard::new().unwrap();
+            let urls = filtered
+                .iter()
+                .map(|bm| &bm.URL)
+                .join("\n");
+            clipboard.set_text(urls).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
         }
