@@ -8,6 +8,7 @@ use clap::{Parser, Subcommand};
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error::DatabaseError;
 use inquire::Confirm;
+use itertools::Itertools;
 
 use log::{debug, error, info};
 use stdext::function_name;
@@ -50,9 +51,9 @@ enum Commands {
         fts_query: Option<String>,
 
         #[arg(
-            short = 'e',
-            long = "exact",
-            help = "match exact, comma separated list"
+        short = 'e',
+        long = "exact",
+        help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
 
@@ -60,9 +61,9 @@ enum Commands {
         tags_all: Option<String>,
 
         #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "not match all, comma separated list"
+        short = 'T',
+        long = "Tags",
+        help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
 
@@ -70,9 +71,9 @@ enum Commands {
         tags_any: Option<String>,
 
         #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "not match any, comma separated list"
+        short = 'N',
+        long = "Ntags",
+        help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
 
@@ -89,8 +90,8 @@ enum Commands {
         non_interactive: bool,
 
         #[arg(
-            long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
+        long = "fzf",
+        help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
         )]
         is_fuzzy: bool,
     },
@@ -156,7 +157,10 @@ enum Commands {
 }
 
 fn main() {
-    let stdout = StandardStream::stdout(ColorChoice::Always);
+    // let stdout = StandardStream::stdout(ColorChoice::Always);
+    // use stderr as human output in order to make stdout output passable to downstream processes
+    let stderr = StandardStream::stderr(ColorChoice::Always);
+
     let cli = Cli::parse();
 
     set_logger(&cli);
@@ -192,7 +196,7 @@ fn main() {
                 order_asc,
                 is_fuzzy,
                 non_interactive,
-                stdout,
+                stderr,
             ) {}
         }
         Commands::Open { ids } => open_bookmarks(ids),
@@ -240,7 +244,7 @@ fn search_bookmarks(
     order_asc: bool,
     is_fuzzy: bool,
     non_interactive: bool,
-    mut stdout: StandardStream,
+    mut stderr: StandardStream,
 ) -> Option<()> {
     let _tags_all = if let Some(tags_prefix) = tags_prefix {
         if let Some(tags_all) = tags_all {
@@ -288,16 +292,18 @@ fn search_bookmarks(
     }
     debug!("({}:{})\n{:#?}\n", function_name!(), line!(), bms.bms);
     show_bms(&bms.bms);
+    eprintln!("Found {} bookmarks", bms.bms.len());
+
     if non_interactive {
-        debug!("Non Interactive. Exiting");
-        // process(bms);
+        debug!("Non Interactive. Exiting..");
+        let ids: Vec<String> = bms.bms.iter().map(|bm| bm.id).sorted().map(|id| id.to_string()).collect();
+        println!("{}", ids.join(","));
     } else {
-        println!("Found {} bookmarks", bms.bms.len());
-        stdout
+        stderr
             .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
             .unwrap();
-        writeln!(&mut stdout, "Selection: ").unwrap();
-        stdout.reset().unwrap();
+        writeln!(&mut stderr, "Selection: ").unwrap();
+        stderr.reset().unwrap();
         process(&bms.bms);
     }
     None

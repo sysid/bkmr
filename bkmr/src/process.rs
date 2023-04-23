@@ -19,41 +19,42 @@ use crate::helper::abspath;
 use crate::models::Bookmark;
 
 pub fn show_bms(bms: &Vec<Bookmark>) {
-    let mut stdout = StandardStream::stdout(ColorChoice::Always);
+    // let mut stdout = StandardStream::stdout(ColorChoice::Always);
+    let mut stderr = StandardStream::stderr(ColorChoice::Always);
     let first_col_width = bms.len().to_string().len();
 
     for (i, bm) in bms.iter().enumerate() {
-        stdout
+        stderr
             .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
             .unwrap();
-        write!(&mut stdout, "{:first_col_width$}. {}", i + 1, bm.metadata).unwrap();
-        stdout
+        write!(&mut stderr, "{:first_col_width$}. {}", i + 1, bm.metadata).unwrap();
+        stderr
             .set_color(ColorSpec::new().set_fg(Some(Color::White)))
             .unwrap();
-        write!(&mut stdout, " [{}]\n", bm.id).unwrap();
+        write!(&mut stderr, " [{}]\n", bm.id).unwrap();
 
-        stdout
+        stderr
             .set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))
             .unwrap();
-        writeln!(&mut stdout, "{:first_col_width$}  {}", "", bm.URL).unwrap();
+        writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.URL).unwrap();
 
         if bm.desc != "" {
-            stdout
+            stderr
                 .set_color(ColorSpec::new().set_fg(Some(Color::White)))
                 .unwrap();
-            writeln!(&mut stdout, "{:first_col_width$}  {}", "", bm.desc).unwrap();
+            writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.desc).unwrap();
         }
 
         let tags = bm.tags.replace(",", " ");
         if tags.find(|c: char| !c.is_whitespace()).is_some() {
-            stdout
+            stderr
                 .set_color(ColorSpec::new().set_fg(Some(Color::Blue)))
                 .unwrap();
-            writeln!(&mut stdout, "{:first_col_width$}  {}", "", tags.trim()).unwrap();
+            writeln!(&mut stderr, "{:first_col_width$}  {}", "", tags.trim()).unwrap();
         }
 
-        stdout.reset().unwrap();
-        println!();
+        stderr.reset().unwrap();
+        eprintln!();
     }
 }
 
@@ -81,7 +82,7 @@ pub fn process(bms: &Vec<Bookmark>) {
     "#;
 
     loop {
-        print!("> ");
+        eprint!("> ");
         io::stdout().flush().unwrap();
 
         let mut input = String::new();
@@ -99,6 +100,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     print_ids(ids, bms.clone()).unwrap_or_else(|e| {
                         error!("({}:{}) {}", function_name!(), line!(), e);
                     });
+                    break;
                 } else {
                     error!(
                         "({}:{}) Invalid input, only numbers allowed",
@@ -338,12 +340,18 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
 
 fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("({}:{}) ids: {:?}", function_name!(), line!(), ids);
-    let ids = if ids.len() == 0 {
-        (1..=bms.len() as i32).collect()
+    let selected_bms = if ids.len() == 0 {
+        bms // print all
     } else {
-        ids
+        ids.iter()
+            .filter_map(|id| bms.get(*id as usize - 1))
+            .cloned()
+            .collect::<Vec<Bookmark>>()
     };
-    let ids_str: Vec<String> = ids.iter().map(|x| x.to_string()).collect();
+
+    let mut bm_ids: Vec<i32> = selected_bms.iter().map(|bm| bm.id).collect();
+    bm_ids.sort(); // Sort the list of bm.id values numerically
+    let ids_str: Vec<String> = bm_ids.iter().map(|id| id.to_string()).collect();
     println!("{}", ids_str.join(","));
     Ok(())
 }

@@ -33,5 +33,5 @@ fn test_show_bms() {
     cmd.args(&["-d", "-d", "show", "1,2"])
         .assert()
         .stderr(predicate::str::contains("Debug mode: debug"))
-        .stdout(predicate::str::contains("Google"));
+        .stderr(predicate::str::contains("Google"));
 }
