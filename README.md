@@ -70,6 +70,11 @@ bkmr add /home/user/presentation.pptx tag1,tag2 --title 'My super Presentation'
 
 # Adding shell commands as URI
 bkmr add "shell::vim +/'# SqlAlchemy' sql.md" shell,sql,doc --title 'sqlalchemy snippets'
+
+# Bulk updating bookmarks: all bms with tag 'sa' also get tag 'py'
+bkmr update -t py $(bkmr search -t sa --np)
+# Bulk updating bookmarks: all bms with tag 'gh' should have 'git' removed
+bkmr update -n git $(bkmr search -t gh --np)
 ```
 Tags must be separated by comma without blanks.
 
