@@ -133,6 +133,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
     }
     drop(tx_item); // so that skim could know when to stop waiting for more items.
 
+    let mut stdout = std::io::stdout();
     Skim::run_with(&options, Some(rx_item)).map(|out| match out.final_key {
         Key::Ctrl('e') => {
             let filtered = filter_bms(out);
@@ -149,7 +150,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
                 debug!("{}: {}", function_name!(), e);
             });
             // clear screen
-            let mut stdout = std::io::stdout();
+            // let mut stdout = std::io::stdout();
             execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         Key::Ctrl('o') => {
@@ -175,6 +176,9 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             clipboard.set_text(urls).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
+            println!("Copied URLs to clipboard");
+            // let mut stdout = std::io::stdout();
+            execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         Key::Enter => {
             let filtered = filter_bms(out);
@@ -190,10 +194,12 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             open_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });
+            // let mut stdout = std::io::stdout();
+            execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         Key::ESC => {
             debug!("({}:{}) Esc", function_name!(), line!());
-            let mut stdout = std::io::stdout();
+            // let mut stdout = std::io::stdout();
             execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         _ => (),
