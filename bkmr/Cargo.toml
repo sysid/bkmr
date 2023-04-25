@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "0.6.1"
+version = "0.6.2"
 edition = "2021"
 description = "Ultrafast Bookmark Manager and Launcher"
 keywords = ["bookmark", "launcher"]
