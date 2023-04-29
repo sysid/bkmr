@@ -78,10 +78,6 @@ run-tags: init-db  ## run-tags
 	@echo "------ all tags -----"
 	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d tags
 
-.PHONY: run-show
-run-show: init-db  ## run-show
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d show 1,2,3
-
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
 	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d delete 1,2,3
