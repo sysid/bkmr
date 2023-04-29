@@ -21,7 +21,7 @@ use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::load_url_details;
 use bkmr::models::NewBookmark;
-use bkmr::process::{delete_bms, edit_bms, open_bm, process, show_bms};
+use bkmr::process::{bms_to_json, delete_bms, edit_bms, open_bm, process, show_bms};
 use bkmr::tag::Tags;
 
 #[derive(Parser)]
@@ -94,6 +94,12 @@ enum Commands {
         help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
         )]
         is_fuzzy: bool,
+
+        #[arg(
+        long = "json",
+        help = "non-interactive mode, output as json"
+        )]
+        is_json: bool,
     },
     /// Open/launch bookmarks
     Open {
@@ -183,6 +189,7 @@ fn main() {
             order_asc,
             non_interactive,
             is_fuzzy,
+            is_json,
         } => {
             if let Some(_value) = search_bookmarks(
                 tags_prefix,
@@ -195,6 +202,7 @@ fn main() {
                 order_desc,
                 order_asc,
                 is_fuzzy,
+                is_json,
                 non_interactive,
                 stderr,
             ) {}
@@ -243,6 +251,7 @@ fn search_bookmarks(
     order_desc: bool,
     order_asc: bool,
     is_fuzzy: bool,
+    is_json: bool,
     non_interactive: bool,
     mut stderr: StandardStream,
 ) -> Option<()> {
@@ -291,6 +300,10 @@ fn search_bookmarks(
         return Some(());
     }
     debug!("({}:{})\n{:#?}\n", function_name!(), line!(), bms.bms);
+    if is_json {
+        bms_to_json(&bms.bms);
+        return None;
+    }
     show_bms(&bms.bms);
     eprintln!("Found {} bookmarks", bms.bms.len());
 

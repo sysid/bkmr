@@ -75,6 +75,9 @@ bkmr add "shell::vim +/'# SqlAlchemy' sql.md" shell,sql,doc --title 'sqlalchemy 
 bkmr update -t py $(bkmr search -t sa --np)
 # Bulk updating bookmarks: all bms with tag 'gh' should have 'git' removed
 bkmr update -n git $(bkmr search -t gh --np)
+
+# JSON dump of entire database
+bkmr search --json
 ```
 Tags must be separated by comma without blanks.
 

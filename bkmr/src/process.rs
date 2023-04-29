@@ -10,6 +10,7 @@ use indoc::formatdoc;
 use log::{debug, error};
 use regex::Regex;
 use stdext::function_name;
+use serde_json;
 
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
@@ -45,14 +46,14 @@ pub fn show_bms(bms: &Vec<Bookmark>) {
             .unwrap();
         writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.URL).unwrap();
 
-        if bm.desc != "" {
+        if !bm.desc.is_empty() {
             stderr
                 .set_color(ColorSpec::new().set_fg(Some(Color::White)))
                 .unwrap();
             writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.desc).unwrap();
         }
 
-        let tags = bm.tags.replace(",", " ");
+        let tags = bm.tags.replace(',', " ");
         if tags.find(|c: char| !c.is_whitespace()).is_some() {
             stderr
                 .set_color(ColorSpec::new().set_fg(Some(Color::Blue)))
@@ -65,11 +66,17 @@ pub fn show_bms(bms: &Vec<Bookmark>) {
     }
 }
 
+pub fn bms_to_json(bms: &Vec<Bookmark>) {
+    let json = serde_json::to_string_pretty(bms).expect("Failed to serialize bookmarks to JSON.");
+    io::stdout().write_all(json.as_bytes()).expect("Failed to write JSON to stdout.");
+    println!();
+}
+
 fn parse(input: &str) -> Vec<String> {
-    let binding = input.trim().replace(",", "").to_lowercase();
+    let binding = input.trim().replace(',', "").to_lowercase();
     let tokens = binding
-        .split(" ")
-        .filter(|s| *s != "")
+        .split(' ')
+        .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .collect();
     debug!("({}:{}) {:?}", function_name!(), line!(), tokens);
@@ -96,7 +103,7 @@ pub fn process(bms: &Vec<Bookmark>) {
         io::stdin().read_line(&mut input).unwrap();
 
         let mut tokens = parse(&input);
-        if tokens.len() == 0 {
+        if tokens.is_empty() {
             break;
         }
 
@@ -321,8 +328,8 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
     let modified_content = fs::read_to_string("temp.txt")
         .with_context(|| format!("({}:{}) Error reading temp file", function_name!(), line!()))?;
     let lines: Vec<&str> = modified_content
-        .split("\n")
-        .filter(|l| !l.starts_with("#"))
+        .split('\n')
+        .filter(|l| !l.starts_with('#'))
         .collect();
     let new_bm = Bookmark {
         id: bm.id,
@@ -347,7 +354,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
 
 fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("({}:{}) ids: {:?}", function_name!(), line!(), ids);
-    let selected_bms = if ids.len() == 0 {
+    let selected_bms = if ids.is_empty() {
         bms // print all
     } else {
         ids.iter()
@@ -395,12 +402,17 @@ mod test {
     #[rstest]
     #[ignore = "Manual Test"]
     fn test_process(bms: Vec<Bookmark>) {
-        process(&mut bms.clone());
+        process(&bms);
     }
 
     #[rstest]
     fn test_show_bms(bms: Vec<Bookmark>) {
         show_bms(&bms);
+    }
+
+    #[rstest]
+    fn test_bms_to_json(bms: Vec<Bookmark>) {
+        bms_to_json(&bms);
     }
 
     // Config is for Makefile tests. DO NOT RUN HERE
@@ -441,7 +453,7 @@ mod test {
 
     #[rstest]
     fn test_do_sth_with_bms_error(bms: Vec<Bookmark>) {
-        let result = do_sth_with_bms(vec![1 as i32], bms, |bm| {
+        let result = do_sth_with_bms(vec![1], bms, |bm| {
             println!("FN: {:?}", bm);
             Err(anyhow!("Anyhow Error"))
         });

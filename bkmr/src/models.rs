@@ -1,12 +1,14 @@
 #![allow(non_snake_case)]
 
-use crate::tag::Tags;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
 use diesel::sql_types::Text;
 use log::debug;
+use serde::{Serialize};
 use stdext::function_name;
+
+use crate::tag::Tags;
 
 use super::schema::bookmarks;
 
@@ -18,7 +20,7 @@ pub struct TagsFrequency {
     pub tag: String,
 }
 
-#[derive(Queryable, QueryableByName, Debug, PartialOrd, PartialEq, Clone, Default)]
+#[derive(Queryable, QueryableByName, Debug, PartialOrd, PartialEq, Clone, Default, Serialize)]
 #[diesel(table_name = bookmarks)]
 pub struct Bookmark {
     pub id: i32,
@@ -27,6 +29,7 @@ pub struct Bookmark {
     pub tags: String,
     pub desc: String,
     pub flags: i32,
+    #[serde(with = "serde_with::chrono::NaiveDateTime")]
     pub last_update_ts: NaiveDateTime,
     // pub last_update_ts: DateTime<Utc>,
 }
@@ -53,9 +56,10 @@ pub struct NewBookmark {
 
 #[cfg(test)]
 mod test {
-    use crate::models::Bookmark;
     use chrono::NaiveDate;
     use rstest::*;
+
+    use crate::models::Bookmark;
 
     #[fixture]
     fn bm() -> Bookmark {

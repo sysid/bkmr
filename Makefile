@@ -95,8 +95,8 @@ run-add: init-db  ## run-add
 .PHONY: run-search
 run-search: init-db  ## run-search interactively for manual tests
 	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d search --np 1>/dev/null  # filter stderr out
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d search --np
 	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d search
+	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- search --json  # json output
 
 .PHONY: init-db
 init-db:  ## init-db
