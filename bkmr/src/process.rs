@@ -4,6 +4,7 @@ use anyhow::Context;
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
+use atty::Stream;
 
 use indoc::formatdoc;
 use log::{debug, error};
@@ -20,7 +21,13 @@ use crate::models::Bookmark;
 
 pub fn show_bms(bms: &Vec<Bookmark>) {
     // let mut stdout = StandardStream::stdout(ColorChoice::Always);
-    let mut stderr = StandardStream::stderr(ColorChoice::Always);
+        // Check if the output is a TTY
+    let color_choice = if atty::is(Stream::Stdout) {
+        ColorChoice::Auto
+    } else {
+        ColorChoice::Never
+    };
+    let mut stderr = StandardStream::stderr(color_choice);
     let first_col_width = bms.len().to_string().len();
 
     for (i, bm) in bms.iter().enumerate() {

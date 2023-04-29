@@ -13,6 +13,7 @@ license = "BSD-3-Clause"
 [dependencies]
 anyhow = "1.0.70"
 arboard = "3.2.0"
+atty = "0.2.14"
 camino = "1.1.4"
 chrono = "0.4.24"
 clap = { version = "4.2.1", features = ["unstable-doc"] }
