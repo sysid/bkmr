@@ -94,14 +94,16 @@ Location of created sqlite database must be known:
 export "BKMR_DB_URL=db-path"
 ```
 
+#### FZF Customization
 You can set (not required) this variable to change `--fzf` mode default options:
 ```bash
 export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags"
 ```
 Currently available flags: 
-- `--reverse` (defaults to false)
-- `--height` (defaults to 50%)
-- ``--show-tags`` (defaults to false)
+- `--reverse` (defaults to false): show input line on top and reverse alphabetical order
+- `--height` (defaults to 50%): screen usage of current terminal
+- ``--show-tags`` (defaults to false): show tags
+
 
 ## Benchmarking
 - ca. 20x faster than the Python original [twbm](https://github.com/sysid/twbm) after warming up Python.
