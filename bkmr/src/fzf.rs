@@ -16,7 +16,7 @@ use tuikit::prelude::*;
 
 use crate::environment::{CONFIG, FzfEnvOpts};
 use crate::models::Bookmark;
-use crate::process::{edit_bms, open_bms};
+use crate::process::{delete_bms, edit_bms, open_bms};
 use crate::tag::Tags;
 
 impl SkimItem for Bookmark {
@@ -177,6 +177,29 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
                 debug!("{}: {}", function_name!(), e);
             });
             println!("Copied URLs to clipboard");
+            // let mut stdout = std::io::stdout();
+            execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
+        }
+        Key::Ctrl('d') => {
+            let filtered = filter_bms(out);
+            // id selection not necessary since all bms are filtered, just open all bms
+            let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
+            debug!(
+                "({}:{}) {:?}, {:?}",
+                function_name!(),
+                line!(),
+                ids,
+                filtered
+            );
+            // open_bms(ids, filtered).unwrap_or_else(|e| {
+            //     debug!("{}: {}", function_name!(), e);
+            // });
+            // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
+            // Delete the bookmarks
+            delete_bms(ids.clone(), filtered.clone()).unwrap_or_else(|e| {
+                debug!("{}: {}", function_name!(), e);
+            });
+            println!("Deleted Bookmark: {:?}", filtered[0].URL);
             // let mut stdout = std::io::stdout();
             execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }

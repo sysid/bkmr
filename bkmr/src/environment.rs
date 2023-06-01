@@ -89,8 +89,8 @@ mod test {
         println!("Listening on port {}", CONFIG.port);
         println!("Using fzf defaults {:?}", CONFIG.fzf_opts);
         assert_eq!(CONFIG.port, 9999);
-        assert_eq!(CONFIG.fzf_opts.height, String::from("50%"));
-        assert_eq!(CONFIG.fzf_opts.reverse, false);
-        assert_eq!(CONFIG.fzf_opts.show_tags, false);
+        assert_eq!(CONFIG.fzf_opts.height, String::from("100%"));
+        assert_eq!(CONFIG.fzf_opts.reverse, true);
+        assert_eq!(CONFIG.fzf_opts.show_tags, true);
     }
 }
