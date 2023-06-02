@@ -4,7 +4,7 @@
 
 Features:
 - full-text search with semantic ranking (FTS5)
-- fuzzy search `--fzf` (CTRL-O: copy to clipboard, CTRL-E: edit, Enter: open)
+- fuzzy search `--fzf` (CTRL-O: copy to clipboard, CTRL-E: edit, CTRL-D: delete, Enter: open)
 - tags for classification
 - knows how to open HTTP URLs, directories, files (e.g. Office, Images, ....)
 - can execute URI strings as shell commands via protocol prefix: 'shell::'

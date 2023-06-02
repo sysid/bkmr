@@ -122,7 +122,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
         .height(Some(&height))
         .multi(true)
         // For full list of accepted keywords see `parse_event` in `src/event.rs`.
-        .bind(vec!["ctrl-o:accept", "ctrl-e:accept"])
+        .bind(vec!["ctrl-o:accept", "ctrl-e:accept", "ctrl-d:accept"])
         .build()
         .unwrap();
 
@@ -191,10 +191,6 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
                 ids,
                 filtered
             );
-            // open_bms(ids, filtered).unwrap_or_else(|e| {
-            //     debug!("{}: {}", function_name!(), e);
-            // });
-            // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
             // Delete the bookmarks
             delete_bms(ids.clone(), filtered.clone()).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
