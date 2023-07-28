@@ -13,7 +13,8 @@ SHELL	= bash
 app_root = .
 app_root ?= .
 pkg_src =  $(app_root)/bkmr
-tests_src = $(app_root)/tests
+tests_src = $(app_root)/bkmr/tests
+BINARY = bkmr
 
 # Makefile directory
 CODE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
@@ -31,72 +32,72 @@ ADMIN::  ## ##################################################################
 
 .PHONY: test-url-details
 test-url-details:  ## test-url-details (charm strang verbose output)
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
 
 .PHONY: test-fzf
 test-fzf:  ## test-fzf
 	# requires to uncomment associated test
-	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
-	#RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	#RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
 
 .PHONY: test-open-uri-url
 test-open-uri-url:  ## test-open-uri-url
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --lib process::test::test_open_bm::case_1 -- --nocapture
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib process::test::test_open_bm::case_1 -- --nocapture
 
 .PHONY: test-open-uri-pptx
 test-open-uri-pptx:  ## test-open-uri-pptx
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --lib process::test::test_open_bm::case_2 -- --nocapture
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib process::test::test_open_bm::case_2 -- --nocapture
 
 .PHONY: test-open-uri-vim
 test-open-uri-vim:  ## test-open-uri-vim
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --lib process::test::test_open_bm::case_3 -- --nocapture
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib process::test::test_open_bm::case_3 -- --nocapture
 
 .PHONY: test-open-uri-all
 test-open-uri-all: test-open-uri-vim test-open-uri-pptx test-open-uri-url  ## test-open-uri all
 
 .PHONY: run-update
 run-update:  ## run-update
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
 
 .PHONY: run-show
 run-show: init-db  ## run-show
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d show 1,10
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d show 1,10
 
 .PHONY: run-init-db
 run-init-db:  ## run-init-db
 	test -f /tmp/bkmr_test.db && rm -v /tmp/bkmr_test.db
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d create-db /tmp/bkmr_test.db
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d create-db /tmp/bkmr_test.db
 	open /tmp/bkmr_test.db
 
 .PHONY: run-edit
 run-edit: init-db   ## run-edit
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d edit 1,3
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d edit 1,3
 
 .PHONY: run-tags
 run-tags: init-db  ## run-tags
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d tags bbb
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d tags bbb
 	@echo "------ all tags -----"
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d tags
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d tags
 
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d delete 1,2,3
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d delete 1,2,3
 
 .PHONY: run-add
 run-add: init-db  ## run-add
-	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'  # should add bespoke URI
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should prompt for unknown tags and overwrite title from web
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d add https://www.rust-lang.org t1,t2
+	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'  # should add bespoke URI
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should prompt for unknown tags and overwrite title from web
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d add https://www.rust-lang.org t1,t2
 
 .PHONY: run-search
 run-search: init-db  ## run-search interactively for manual tests
-	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d search --np 1>/dev/null  # filter stderr out
-	#BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- -d -d search
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo run -- search --json  # json output
+	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d search --np 1>/dev/null  # filter stderr out
+	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d search
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- search --json  # json output
 
 .PHONY: init-db
 init-db:  ## init-db
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
 
 .PHONY: install-diesel-cli
 install-diesel-cli:  ## install-diesel-cli
@@ -105,21 +106,21 @@ install-diesel-cli:  ## install-diesel-cli
 
 .PHONY: test-vim
 test-vim:  ## test-vim: run with EDITOR= make test-vim
-	#pushd bkmr && cargo test --color=always --package bkmr --lib process::test::test_do_edit -- --nocapture --ignored
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
+	#pushd $(pkg_src) && cargo test --color=always --package bkmr --lib process::test::test_do_edit -- --nocapture --ignored
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
 
 .PHONY: test-dal
 test-dal:  ## test-dal
-	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test --package bkmr --test test_lib "" -- --test-threads=1
+	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test --package bkmr --test test_lib "" -- --test-threads=1
 
 .PHONY: test
 test:  test-dal  ## test (must run DB test before to init ?!?)
-	#BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test --package bkmr -- --test-threads=1  # --nocapture
-	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd bkmr && cargo test -- --test-threads=1  # --nocapture
+	#BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test --package bkmr -- --test-threads=1  # --nocapture
+	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test -- --test-threads=1  # --nocapture
 
 .PHONY: test-with-data
 test-with-data:  ## test-with-data
-	BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 pushd bkmr && cargo run -- search --fzf
+	BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 pushd $(pkg_src) && cargo run -- search --fzf
 
 .PHONY: benchmark
 benchmark:  ## benchmark
@@ -138,22 +139,19 @@ all: clean build install  ## all
 
 .PHONY: upload
 upload:  ## upload
-	pushd bkmr && cargo release publish --execute
+	pushd $(pkg_src) && cargo release publish --execute
 
 .PHONY: build
 build:  ## build
-	pushd bkmr && cargo build --release
+	pushd $(pkg_src) && cargo build --release
 
 .PHONY: install
-install:  ## install
-	@#pushd bkmr && cargo install --path . --root ~/.cargo
-	@test -f ~/bin/bkmr && rm -v ~/bin/bkmr
-	@cp -vf bkmr/target/release/bkmr ~/bin/bkmr
+install: uninstall  ## install
+	@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
 
 .PHONY: uninstall
 uninstall:  ## uninstall
-	#pushd bkmr && cargo uninstall --root ~/.cargo
-	@test -f ~/bin/bkmr && rm -v ~/bin/bkmr
+	-@test -f ~/bin/$(BINARY) && rm -v ~/bin/$(BINARY)
 
 .PHONY: bump-major
 bump-major:  ## bump-major, tag and push
@@ -188,11 +186,11 @@ create-release:  ## create a release on GitHub via the gh cli
 
 .PHONY: format
 format:  ## format
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo fmt
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo fmt
 
 .PHONY: lint
 lint:  ## lint
-	BKMR_DB_URL=../db/bkmr.db pushd bkmr && cargo clippy
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy
 
 
 ################################################################################
@@ -220,7 +218,7 @@ clean-pyc: ## remove Python file artifacts
 
 .PHONY: clean-rs
 clean-rs:  ## clean-rs
-	pushd bkmr && cargo clean -v
+	pushd $(pkg_src) && cargo clean -v
 
 ################################################################################
 # Misc \
