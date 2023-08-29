@@ -16,7 +16,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::dal::Dal;
 use crate::environment::CONFIG;
-use crate::helper;
+use crate::{helper, update_bm};
 use crate::helper::abspath;
 use crate::models::Bookmark;
 
@@ -131,6 +131,7 @@ pub fn process(bms: &Vec<Bookmark>) {
         p:              print all ids
         d <n1> <n2>:    delete selection
         e:              edit selection
+        t:              touch selection
         q | ENTER:      quit
         h:              help
     "#;
@@ -191,6 +192,20 @@ pub fn process(bms: &Vec<Bookmark>) {
                     );
                 }
             }
+            "t" => {
+                if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
+                    touch_bms(ids, bms.clone()).unwrap_or_else(|e| {
+                        error!("({}:{}) {}", function_name!(), line!(), e);
+                    });
+                    break;
+                } else {
+                    error!(
+                        "({}:{}) Invalid input, only numbers allowed",
+                        function_name!(),
+                        line!(),
+                    );
+                }
+            }
             "h" => println!("{}", help_text),
             "q" => break,
             // Use Regex object in a guard
@@ -213,6 +228,13 @@ pub fn process(bms: &Vec<Bookmark>) {
             }
         }
     }
+}
+
+pub fn touch_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
+    debug!("({}:{}) {:?}", function_name!(), line!(), ids);
+    do_sth_with_bms(ids, bms, do_touch)
+        .with_context(|| format!("({}:{}) Error touching bookmarks", function_name!(), line!()))?;
+    Ok(())
 }
 
 pub fn edit_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
@@ -270,9 +292,10 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
 
 pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("({}:{}) {:?}", function_name!(), line!(), ids);
-
-    do_sth_with_bms(ids, bms, open_bm)
+    do_sth_with_bms(ids.clone(), bms.clone(), open_bm)
         .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
+    do_sth_with_bms(ids, bms, do_touch)
+        .with_context(|| format!("({}:{}) Error touching bookmarks", function_name!(), line!()))?;
     Ok(())
 }
 
@@ -310,6 +333,15 @@ fn do_sth_with_bms(
         debug!("({}:{}) {:?}: bm {:?}", function_name!(), line!(), id, bm);
         do_sth(bm).with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
     }
+    Ok(())
+}
+
+/// update the last_update_ts field of a bookmark
+pub fn do_touch(bm: &Bookmark) -> anyhow::Result<()> {
+    let mut dal = Dal::new(CONFIG.db_url.clone());
+    update_bm(bm.id, &vec![], &vec![], &mut dal, false);
+    let bm = dal.get_bookmark_by_id(bm.id)?;
+    show_bms(&vec![bm], &ALL_FIELDS);
     Ok(())
 }
 
@@ -388,7 +420,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         .with_context(|| format!("({}:{}) Error updating bookmark", function_name!(), line!()))?;
     // Delete the temporary file
     fs::remove_file("temp.txt")?;
-    show_bms(&updated, &[DisplayField::Id, DisplayField::URL, DisplayField::Metadata, DisplayField::Desc]);
+    show_bms(&updated, &ALL_FIELDS);
     Ok(())
 }
 
@@ -446,7 +478,9 @@ mod test {
     }
 
     #[rstest]
+    #[ignore = "Manual Test"]
     fn test_show_bms(bms: Vec<Bookmark>) {
+        // show individual fields
         show_bms(&bms, &[
             DisplayField::Id,
             DisplayField::URL,
@@ -456,6 +490,7 @@ mod test {
             // DisplayField::LastUpdateTs,
         ]);
         // show_bms(&bms, &DEFAULT_FIELDS);
+        // show_bms(&bms, &ALL_FIELDS);
     }
 
     #[rstest]

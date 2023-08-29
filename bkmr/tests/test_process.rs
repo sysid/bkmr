@@ -1,7 +1,9 @@
+use std::thread::sleep;
+use std::time::Duration;
 use bkmr::dal::Dal;
 use bkmr::helper;
 use bkmr::models::Bookmark;
-use bkmr::process::{delete_bms, do_edit};
+use bkmr::process::{delete_bms, do_edit, do_touch};
 use rstest::{fixture, rstest};
 
 #[fixture]
@@ -18,6 +20,16 @@ fn bms() -> Vec<Bookmark> {
     // init_db(&mut dal.conn).expect("Error DB init");
     let bms = dal.get_bookmarks("");
     bms.unwrap()
+}
+#[rstest]
+fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
+    let bm_before = dal.get_bookmark_by_id(1)?;
+    sleep(Duration::from_secs(1));
+    do_touch(&bm_before)?;
+    let bm_after = dal.get_bookmark_by_id(1)?;
+    assert!(bm_before.last_update_ts < bm_after.last_update_ts);
+    assert_eq!(bm_before.tags, bm_after.tags);
+    Ok(())
 }
 
 #[rstest]

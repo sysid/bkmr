@@ -169,6 +169,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // });
             // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
             let mut clipboard = Clipboard::new().unwrap();
+            // TODO: do_touch required here
             let urls = filtered
                 .iter()
                 .map(|bm| &bm.URL)
