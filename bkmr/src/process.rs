@@ -20,7 +20,7 @@ use crate::helper;
 use crate::helper::abspath;
 use crate::models::Bookmark;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {
     Id,
     URL,

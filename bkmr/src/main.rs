@@ -21,7 +21,7 @@ use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::load_url_details;
 use bkmr::models::NewBookmark;
-use bkmr::process::{bms_to_json, DEFAULT_FIELDS, delete_bms, edit_bms, open_bm, process, show_bms};
+use bkmr::process::{ALL_FIELDS, bms_to_json, DEFAULT_FIELDS, delete_bms, DisplayField, edit_bms, open_bm, process, show_bms};
 use bkmr::tag::Tags;
 
 #[derive(Parser)]
@@ -255,6 +255,7 @@ fn search_bookmarks(
     non_interactive: bool,
     mut stderr: StandardStream,
 ) -> Option<()> {
+    let mut fields = DEFAULT_FIELDS.to_vec();  // Convert array to Vec
     let _tags_all = if let Some(tags_prefix) = tags_prefix {
         if let Some(tags_all) = tags_all {
             format!("{},{}", tags_all, tags_prefix)
@@ -283,6 +284,8 @@ fn search_bookmarks(
         );
         bms.bms.sort_by_key(|bm| bm.last_update_ts);
         bms.bms.reverse();
+        fields.push(DisplayField::LastUpdateTs);   // Add the new enum variant
+
     } else if order_asc {
         debug!(
             "({}:{}) order_asc {:?}",
@@ -291,6 +294,7 @@ fn search_bookmarks(
             order_asc
         );
         bms.bms.sort_by_key(|bm| bm.last_update_ts);
+        fields.push(DisplayField::LastUpdateTs);   // Add the new enum variant
     } else {
         debug!("({}:{}) order_by_metadata", function_name!(), line!());
         bms.bms.sort_by_key(|bm| bm.metadata.to_lowercase())
@@ -304,7 +308,7 @@ fn search_bookmarks(
         bms_to_json(&bms.bms);
         return None;
     }
-    show_bms(&bms.bms, &DEFAULT_FIELDS);
+    show_bms(&bms.bms, &fields);
     eprintln!("Found {} bookmarks", bms.bms.len());
 
     if non_interactive {
@@ -570,7 +574,7 @@ fn show_bookmarks(ids: String) {
             }
         }
     }
-    show_bms(&bms, &DEFAULT_FIELDS);
+    show_bms(&bms, &ALL_FIELDS);
 }
 
 fn get_ids(ids: String) -> Option<Vec<i32>> {
