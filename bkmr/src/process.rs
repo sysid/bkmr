@@ -20,9 +20,44 @@ use crate::helper;
 use crate::helper::abspath;
 use crate::models::Bookmark;
 
-pub fn show_bms(bms: &Vec<Bookmark>) {
+#[derive(Debug, PartialEq)]
+pub enum DisplayField {
+    Id,
+    URL,
+    Metadata,  // title
+    Tags,
+    Desc,
+    Flags,
+    LastUpdateTs,
+}
+
+#[allow(dead_code)]
+pub const MINIMUM_FIELDS: [DisplayField; 3] = [
+    DisplayField::Id,
+    DisplayField::URL,
+    DisplayField::Metadata,
+];
+#[allow(dead_code)]
+pub const DEFAULT_FIELDS: [DisplayField; 5] = [
+    DisplayField::Id,
+    DisplayField::URL,
+    DisplayField::Metadata,
+    DisplayField::Desc,
+    DisplayField::Tags,
+];
+#[allow(dead_code)]
+pub const ALL_FIELDS: [DisplayField; 6] = [
+    DisplayField::Id,
+    DisplayField::URL,
+    DisplayField::Metadata,
+    DisplayField::Desc,
+    DisplayField::Tags,
+    DisplayField::LastUpdateTs,
+];
+
+pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
     // let mut stdout = StandardStream::stdout(ColorChoice::Always);
-        // Check if the output is a TTY
+    // Check if the output is a TTY
     let color_choice = if atty::is(Stream::Stdout) {
         ColorChoice::Auto
     } else {
@@ -32,39 +67,44 @@ pub fn show_bms(bms: &Vec<Bookmark>) {
     let first_col_width = bms.len().to_string().len();
 
     for (i, bm) in bms.iter().enumerate() {
-        stderr
-            .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
-            .unwrap();
-        write!(&mut stderr, "{:first_col_width$}. {}", i + 1, bm.metadata).unwrap();
-        stderr
-            .set_color(ColorSpec::new().set_fg(Some(Color::White)))
-            .unwrap();
-        write!(&mut stderr, " [{}]\n", bm.id).unwrap();
+        if fields.contains(&DisplayField::Metadata) {
+            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Green))).unwrap();
+            write!(&mut stderr, "{:first_col_width$}. {}", i + 1, bm.metadata).unwrap();
+        }
 
-        stderr
-            .set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))
-            .unwrap();
-        writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.URL).unwrap();
+        if fields.contains(&DisplayField::Id) {
+            stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+            write!(&mut stderr, " [{}]\n", bm.id).unwrap();
+        }
 
-        if !bm.desc.is_empty() {
-            stderr
-                .set_color(ColorSpec::new().set_fg(Some(Color::White)))
-                .unwrap();
+        if fields.contains(&DisplayField::URL) {
+            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))).unwrap();
+            writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.URL).unwrap();
+        }
+
+        if fields.contains(&DisplayField::Desc) && !bm.desc.is_empty() {
+            stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
             writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.desc).unwrap();
         }
 
-        let tags = bm.tags.replace(',', " ");
-        if tags.find(|c: char| !c.is_whitespace()).is_some() {
-            stderr
-                .set_color(ColorSpec::new().set_fg(Some(Color::Blue)))
-                .unwrap();
-            writeln!(&mut stderr, "{:first_col_width$}  {}", "", tags.trim()).unwrap();
+        if fields.contains(&DisplayField::Tags) {
+            let tags = bm.tags.replace(',', " ");
+            if tags.find(|c: char| !c.is_whitespace()).is_some() {
+                stderr.set_color(ColorSpec::new().set_fg(Some(Color::Blue))).unwrap();
+                writeln!(&mut stderr, "{:first_col_width$}  {}", "", tags.trim()).unwrap();
+            }
+        }
+
+        if fields.contains(&DisplayField::LastUpdateTs) {
+            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Magenta))).unwrap();
+            writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.last_update_ts).unwrap();
         }
 
         stderr.reset().unwrap();
         eprintln!();
     }
 }
+
 
 pub fn bms_to_json(bms: &Vec<Bookmark>) {
     let json = serde_json::to_string_pretty(bms).expect("Failed to serialize bookmarks to JSON.");
@@ -348,7 +388,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         .with_context(|| format!("({}:{}) Error updating bookmark", function_name!(), line!()))?;
     // Delete the temporary file
     fs::remove_file("temp.txt")?;
-    show_bms(&updated);
+    show_bms(&updated, &[DisplayField::Id, DisplayField::URL, DisplayField::Metadata, DisplayField::Desc]);
     Ok(())
 }
 
@@ -407,7 +447,15 @@ mod test {
 
     #[rstest]
     fn test_show_bms(bms: Vec<Bookmark>) {
-        show_bms(&bms);
+        show_bms(&bms, &[
+            DisplayField::Id,
+            DisplayField::URL,
+            DisplayField::Metadata,
+            // DisplayField::Desc,
+            // DisplayField::Tags,
+            // DisplayField::LastUpdateTs,
+        ]);
+        // show_bms(&bms, &DEFAULT_FIELDS);
     }
 
     #[rstest]

@@ -21,7 +21,7 @@ use bkmr::fzf::fzf_process;
 use bkmr::helper::{ensure_int_vector, init_db};
 use bkmr::load_url_details;
 use bkmr::models::NewBookmark;
-use bkmr::process::{bms_to_json, delete_bms, edit_bms, open_bm, process, show_bms};
+use bkmr::process::{bms_to_json, DEFAULT_FIELDS, delete_bms, edit_bms, open_bm, process, show_bms};
 use bkmr::tag::Tags;
 
 #[derive(Parser)]
@@ -304,7 +304,7 @@ fn search_bookmarks(
         bms_to_json(&bms.bms);
         return None;
     }
-    show_bms(&bms.bms);
+    show_bms(&bms.bms, &DEFAULT_FIELDS);
     eprintln!("Found {} bookmarks", bms.bms.len());
 
     if non_interactive {
@@ -432,7 +432,7 @@ fn add_bookmark(
                 });
             }
             println!("Added bookmark: {:?}", bms[0].id);
-            show_bms(&bms)
+            show_bms(&bms, &DEFAULT_FIELDS)
         }
         Err(e) => {
             if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {
@@ -570,7 +570,7 @@ fn show_bookmarks(ids: String) {
             }
         }
     }
-    show_bms(&bms);
+    show_bms(&bms, &DEFAULT_FIELDS);
 }
 
 fn get_ids(ids: String) -> Option<Vec<i32>> {
