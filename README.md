@@ -10,6 +10,7 @@ Features:
 - can execute URI strings as shell commands via protocol prefix: 'shell::'
   URI-Example: `shell::vim +/"## SqlAlchemy" $HOME/document.md`
 - automatically enriches URLs with title and description from Web
+- manages statistics about bookmark usage
 
 > `bkmr search --fzf` is a great way to quickly find and open bookmarks.
 
@@ -19,7 +20,7 @@ To fully use `bkmr`'s full-text query power see: https://www.sqlite.org/fts5.htm
 ```bash
 bkmr --help
 
-A bookmark manager for the terminal
+A Bookmark Manager and Launcher for the Terminal
 
 Usage: bkmr [OPTIONS] [NAME] [COMMAND]
 
@@ -31,6 +32,7 @@ Commands:
   update     Update bookmarks
   edit       Edit bookmarks
   show       Show Bookmarks (list of ids, separated by comma, no blanks)
+  surprise   Opens n random URLs
   tags       Tag for which related tags should be shown. No input: all tags are printed
   create-db  Initialize bookmark database
   help       Print this message or the help of the given subcommand(s)
@@ -41,8 +43,8 @@ Arguments:
 Options:
   -c, --config <FILE>  Sets a custom config file
   -d, --debug...       Turn debugging information on
-  -h, --help           Print help information
-  -V, --version        Print version information
+  -h, --help           Print help
+  -V, --version        Print version
 ```
 
 <a href="https://asciinema.org/a/ULCDIrw4pG9diaVJb17AjIAa7?autoplay=1&speed=2"><img src="https://asciinema.org/a/ULCDIrw4pG9diaVJb17AjIAa7.png" width="836"/></a>
@@ -64,6 +66,9 @@ bkmr search -e tag1,tag2
 
 # Search by any tag and sort by bookmark age ascending
 bkmr search -T tag1,tag2 -O
+
+# Give me the 10 oldest bookmarks
+bkmr search -O --limit 10
 
 # Adding URI to local files
 bkmr add /home/user/presentation.pptx tag1,tag2 --title 'My super Presentation'

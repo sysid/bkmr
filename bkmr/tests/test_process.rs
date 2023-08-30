@@ -29,6 +29,7 @@ fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
     let bm_after = dal.get_bookmark_by_id(1)?;
     assert!(bm_before.last_update_ts < bm_after.last_update_ts);
     assert_eq!(bm_before.tags, bm_after.tags);
+    assert_eq!(bm_before.flags + 1, bm_after.flags);
     Ok(())
 }
 

@@ -2,7 +2,7 @@
 name = "bkmr"
 version = "0.8.0"
 edition = "2021"
-description = "Ultrafast Bookmark Manager and Launcher"
+description = "A Bookmark Manager and Launcher for the Terminal"
 keywords = ["bookmark", "launcher"]
 repository = "https://github.com/sysid/bkmr"
 readme = "../README.md"

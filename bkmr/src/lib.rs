@@ -27,6 +27,7 @@ pub mod models;
 pub mod process;
 pub mod schema;
 pub mod tag;
+pub mod macros;
 
 /// creates list of normalized tags from "tag1,t2,t3" string
 /// be aware of shell parsing rules, so no blanks or quotes
@@ -118,6 +119,7 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
 
     let bm = dal.update_bookmark(Bookmark {
         tags: format!(",{},", bm_tags.join(",")),
+        flags: bm.flags + 1,
         ..bm
     });
     if let Err(e) = bm {

@@ -46,12 +46,13 @@ pub const DEFAULT_FIELDS: [DisplayField; 5] = [
     DisplayField::Tags,
 ];
 #[allow(dead_code)]
-pub const ALL_FIELDS: [DisplayField; 6] = [
+pub const ALL_FIELDS: [DisplayField; 7] = [
     DisplayField::Id,
     DisplayField::URL,
     DisplayField::Metadata,
     DisplayField::Desc,
     DisplayField::Tags,
+    DisplayField::Flags,
     DisplayField::LastUpdateTs,
 ];
 
@@ -93,6 +94,11 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
                 stderr.set_color(ColorSpec::new().set_fg(Some(Color::Blue))).unwrap();
                 writeln!(&mut stderr, "{:first_col_width$}  {}", "", tags.trim()).unwrap();
             }
+        }
+
+        if fields.contains(&DisplayField::Flags) {
+            stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+            writeln!(&mut stderr, "{:first_col_width$}  Count: {}", "", bm.flags).unwrap();
         }
 
         if fields.contains(&DisplayField::LastUpdateTs) {
@@ -245,6 +251,7 @@ pub fn edit_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
 }
 
 pub fn open_bm(bm: &Bookmark) -> anyhow::Result<()> {
+    do_touch(bm)?;
     _open_bm(&bm.URL)?;
     Ok(())
 }
@@ -294,8 +301,6 @@ pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("({}:{}) {:?}", function_name!(), line!(), ids);
     do_sth_with_bms(ids.clone(), bms.clone(), open_bm)
         .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
-    do_sth_with_bms(ids, bms, do_touch)
-        .with_context(|| format!("({}:{}) Error touching bookmarks", function_name!(), line!()))?;
     Ok(())
 }
 
@@ -337,6 +342,7 @@ fn do_sth_with_bms(
 }
 
 /// update the last_update_ts field of a bookmark
+/// increases flag (counter) by 1 and prints it
 pub fn do_touch(bm: &Bookmark) -> anyhow::Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     update_bm(bm.id, &vec![], &vec![], &mut dal, false);

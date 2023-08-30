@@ -106,7 +106,7 @@ enum Commands {
         long = "limit",
         help = "limit number of results"
         )]
-        limit: i32,
+        limit: Option<i32>,
     },
     /// Open/launch bookmarks
     Open {
@@ -150,6 +150,11 @@ enum Commands {
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
     Show { ids: String },
+    /// Opens n random URLs
+    Surprise {
+        #[arg(short = 'n', help = "number of URLs to open", default_value_t=1)]
+        n: i32
+    },
     /// Tag for which related tags should be shown. No input: all tags are printed
     Tags {
         /// Tag for which related tags should be shown. No input: all tags are shown
@@ -159,11 +164,6 @@ enum Commands {
     CreateDb {
         /// pathname to database file
         path: String,
-    },
-    /// Opens n random URLs
-    Surprise {
-        #[arg(short = 'n', help = "number of URLs to open", default_value_t=1)]
-        n: i32
     },
     #[command(hide = true)]
     Xxx {
@@ -267,7 +267,7 @@ fn search_bookmarks(
     order_asc: bool,
     is_fuzzy: bool,
     is_json: bool,
-    limit: i32,
+    limit: Option<i32>,
     non_interactive: bool,
     mut stderr: StandardStream,
 ) -> Option<()> {
@@ -314,7 +314,7 @@ fn search_bookmarks(
         debug!("({}:{}) order_by_metadata", function_name!(), line!());
         bms.bms.sort_by_key(|bm| bm.metadata.to_lowercase())
     }
-    if limit > 0 {
+    if let Some(limit) = limit {
         debug!("({}:{}) limit: {:?}", function_name!(), line!(), limit);
         bms.bms.truncate(limit as usize);
     }
