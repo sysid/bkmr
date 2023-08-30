@@ -67,8 +67,8 @@ impl Dal {
             WHERE id = ?;
         ",
         )
-        .bind::<Integer, _>(id_)
-        .execute(&mut self.conn);
+            .bind::<Integer, _>(id_)
+            .execute(&mut self.conn);
         debug!("({}:{}) Deleting {:?}", function_name!(), line!(), id_);
 
         // database compaction
@@ -79,8 +79,8 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-        .bind::<Integer, _>(id_)
-        .execute(&mut self.conn)?;
+            .bind::<Integer, _>(id_)
+            .execute(&mut self.conn)?;
         debug!("({}:{}) {:?}", function_name!(), line!(), "Compacting");
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
@@ -213,6 +213,30 @@ impl Dal {
             .bind::<Text, _>(search_tag)
             .get_results(&mut self.conn);
         tags_result
+    }
+
+    pub fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>, DieselError> {
+        let bms = sql_query(
+            "SELECT *
+            FROM bookmarks
+            ORDER BY RANDOM()
+            LIMIT ?;"
+        );
+
+        let bms = bms.bind::<Integer, _>(n).get_results(&mut self.conn);
+        bms
+    }
+
+    pub fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>, DieselError> {
+        let bms = sql_query(
+            "SELECT *
+            FROM bookmarks
+            ORDER BY last_update_ts ASC
+            LIMIT ?;"
+        );
+
+        let bms = bms.bind::<Integer, _>(n).get_results(&mut self.conn);
+        bms
     }
 }
 

@@ -189,3 +189,18 @@ fn test_get_related_tags(mut dal: Dal) {
     let result: HashSet<&str> = tags_str.iter().cloned().collect();
     assert_eq!(result, expected);
 }
+
+#[rstest]
+fn test_get_randomized_bookmarks(mut dal: Dal) {
+    let bms = dal.get_randomized_bookmarks(2);
+    println!("The bookmarks are: {:?}", bms);
+    assert_eq!(bms.unwrap().len() as i32, 2);
+}
+
+#[rstest]
+fn test_get_oldest_bookmarks(mut dal: Dal) {
+    let bms = dal.get_oldest_bookmarks(2);
+    println!("The bookmarks are: {:?}", bms);
+    assert_eq!(bms.unwrap().len() as i32, 2);
+}
+

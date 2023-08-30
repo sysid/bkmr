@@ -153,6 +153,11 @@ enum Commands {
         /// pathname to database file
         path: String,
     },
+    /// Opens n random URLs
+    Surprise {
+        #[arg(short = 'n', help = "number of URLs to open", default_value_t=1)]
+        n: i32
+    },
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks
@@ -227,6 +232,7 @@ fn main() {
         Commands::Show { ids } => show_bookmarks(ids),
         Commands::Tags { tag } => show_tags(tag),
         Commands::CreateDb { path } => create_db(path),
+        Commands::Surprise { n } => randomized(n),
         Commands::Xxx { ids, tags } => {
             eprintln!(
                 "({}:{}) ids: {:?}, tags: {:?}",
@@ -285,7 +291,6 @@ fn search_bookmarks(
         bms.bms.sort_by_key(|bm| bm.last_update_ts);
         bms.bms.reverse();
         fields.push(DisplayField::LastUpdateTs);   // Add the new enum variant
-
     } else if order_asc {
         debug!(
             "({}:{}) order_asc {:?}",
@@ -590,6 +595,29 @@ fn get_ids(ids: String) -> Option<Vec<i32>> {
     }
     ids
 }
+
+fn randomized(n: i32) {
+    let mut dal = Dal::new(CONFIG.db_url.clone());
+    let bms = dal.get_randomized_bookmarks(n);
+    match bms {
+        Ok(bms) => {
+            debug!("({}:{}) Opening {:?}", function_name!(), line!(), bms);
+            for bm in &bms {
+                // opens without updating timestamp on purpose
+                open::that(&bm.URL).unwrap();
+            }
+        }
+        Err(e) => {
+            error!(
+                    "({}:{}) Randomizing error: {:?}",
+                    function_name!(),
+                    line!(),
+                    e
+                );
+        }
+    }
+}
+
 
 fn set_logger(cli: &Cli) {
     // Note, only flags can have multiple occurrences
