@@ -100,6 +100,13 @@ enum Commands {
         help = "non-interactive mode, output as json"
         )]
         is_json: bool,
+
+        #[arg(
+        short = 'l',
+        long = "limit",
+        help = "limit number of results"
+        )]
+        limit: i32,
     },
     /// Open/launch bookmarks
     Open {
@@ -195,6 +202,7 @@ fn main() {
             non_interactive,
             is_fuzzy,
             is_json,
+            limit,
         } => {
             if let Some(_value) = search_bookmarks(
                 tags_prefix,
@@ -208,6 +216,7 @@ fn main() {
                 order_asc,
                 is_fuzzy,
                 is_json,
+                limit,
                 non_interactive,
                 stderr,
             ) {}
@@ -258,6 +267,7 @@ fn search_bookmarks(
     order_asc: bool,
     is_fuzzy: bool,
     is_json: bool,
+    limit: i32,
     non_interactive: bool,
     mut stderr: StandardStream,
 ) -> Option<()> {
@@ -303,6 +313,10 @@ fn search_bookmarks(
     } else {
         debug!("({}:{}) order_by_metadata", function_name!(), line!());
         bms.bms.sort_by_key(|bm| bm.metadata.to_lowercase())
+    }
+    if limit > 0 {
+        debug!("({}:{}) limit: {:?}", function_name!(), line!(), limit);
+        bms.bms.truncate(limit as usize);
     }
     if is_fuzzy {
         fzf_process(&bms.bms);
