@@ -16,7 +16,7 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::dal::Dal;
 use crate::environment::CONFIG;
-use crate::{helper, update_bm};
+use crate::{dlog, helper, update_bm};
 use crate::helper::abspath;
 use crate::models::Bookmark;
 
@@ -237,14 +237,14 @@ pub fn process(bms: &Vec<Bookmark>) {
 }
 
 pub fn touch_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    debug!("({}:{}) {:?}", function_name!(), line!(), ids);
+    dlog!("ids: {:?}", ids);
     do_sth_with_bms(ids, bms, do_touch)
         .with_context(|| format!("({}:{}) Error touching bookmarks", function_name!(), line!()))?;
     Ok(())
 }
 
 pub fn edit_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    debug!("({}:{}) {:?}", function_name!(), line!(), ids);
+    dlog!("ids: {:?}", ids);
     do_sth_with_bms(ids, bms, do_edit)
         .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
     Ok(())
@@ -259,7 +259,7 @@ pub fn open_bm(bm: &Bookmark) -> anyhow::Result<()> {
 fn _open_bm(uri: &str) -> anyhow::Result<()> {
     if uri.starts_with("shell::") {
         let cmd = uri.replace("shell::", "");
-        debug!("({}:{}) Shell Command {:?}", function_name!(), line!(), cmd);
+        dlog!("Shell Command {:?}", cmd);
         let mut child = Command::new("sh")
             .arg("-c")
             .arg(cmd)
@@ -270,20 +270,10 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
             .with_context(|| format!("({}:{}) Error opening {}", function_name!(), line!(), uri))?;
 
         let status = child.wait().expect("Failed to wait on Vim");
-        debug!(
-            "({}:{}) Exit status from command: {:?}",
-            function_name!(),
-            line!(),
-            status
-        );
+        dlog!("Exit status: {:?}", status);
         Ok(())
     } else {
-        debug!(
-            "({}:{}) General OS open {:?}",
-            function_name!(),
-            line!(),
-            uri
-        );
+        dlog!("General OS open {:?}", uri);
         // todo error propagation upstream not working
         match abspath(uri) {
             Some(p) => {
@@ -298,7 +288,7 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
 }
 
 pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    debug!("({}:{}) {:?}", function_name!(), line!(), ids);
+    dlog!("ids: {:?}, bms: {:?}", ids, bms);
     do_sth_with_bms(ids.clone(), bms.clone(), open_bm)
         .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
     Ok(())
@@ -307,7 +297,8 @@ pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
 pub fn delete_bms(mut ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     // reverse sort necessary due to DB compaction (deletion of last entry first)
     ids.reverse();
-    debug!("({}:{}) {:?}", function_name!(), line!(), &ids);
+    dlog!("ids: {:?}, bms: {:?}", ids, bms);
+    // debug!("({}:{}) {:?}", function_name!(), line!(), &ids);
     fn delete_bm(bm: &Bookmark) -> anyhow::Result<()> {
         let _ = Dal::new(CONFIG.db_url.clone()).delete_bookmark2(bm.id)?;
         eprintln!("Deleted: {}", bm.URL);
@@ -328,14 +319,14 @@ fn do_sth_with_bms(
     bms: Vec<Bookmark>,
     do_sth: fn(bm: &Bookmark) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    debug!("({}:{}) {:?}", function_name!(), line!(), ids);
+    dlog!("ids: {:?}, bms: {:?}", ids, bms);
     for id in ids {
         if id as usize > bms.len() {
             eprintln!("Id {} out of range", id);
             continue;
         }
         let bm = &bms[id as usize - 1];
-        debug!("({}:{}) {:?}: bm {:?}", function_name!(), line!(), id, bm);
+        dlog!("id: {:?}, bm: {:?}", id, bm);
         do_sth(bm).with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
     }
     Ok(())
@@ -431,7 +422,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
 }
 
 fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    debug!("({}:{}) ids: {:?}", function_name!(), line!(), ids);
+    dlog!("ids: {:?}, bms: {:?}", ids, bms);
     let selected_bms = if ids.is_empty() {
         bms // print all
     } else {

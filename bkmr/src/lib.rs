@@ -81,13 +81,7 @@ pub fn update_bookmarks(ids: Vec<i32>, tags: Vec<String>, tags_not: Vec<String>,
 pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut Dal, force: bool) {
     let tags: HashSet<String> = tags.iter().cloned().collect();
     let tags_not: HashSet<String> = tags_not.iter().cloned().collect();
-    debug!(
-        "({}:{}) tags {:?}, tags_not {:?}",
-        function_name!(),
-        line!(),
-        tags,
-        tags_not
-    );
+    dlog!("id {}, tags {:?}, tags_not {:?}", id, tags, tags_not);
 
     let bm = dal.get_bookmark_by_id(id);
     if let Err(e) = bm {
@@ -115,7 +109,7 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
     };
 
     let bm_tags: Vec<String> = new_tags.iter().sorted().cloned().collect();
-    debug!("({}:{}) {:?}", function_name!(), line!(), bm_tags);
+    dlog!("bm_tags {:?}", bm_tags);
 
     let bm = dal.update_bookmark(Bookmark {
         tags: format!(",{},", bm_tags.join(",")),
@@ -132,26 +126,21 @@ pub fn update_bm(id: i32, tags: &Vec<String>, tags_not: &Vec<String>, dal: &mut 
     }
 }
 
-// pub fn add_bm(bm: Bookmark) {
-//
-// }
-
-#[cfg(test)]
-#[ctor::ctor]
-fn init() {
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
-}
-
 #[cfg(test)]
 mod test {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
     use rstest::*;
+
+    #[ctor::ctor]
+    fn init() {
+        let _ = env_logger::builder()
+            // Include all events in tests
+            .filter_level(log::LevelFilter::max())
+            // Ensure events are captured by `cargo test`
+            .is_test(true)
+            // Ignore errors initializing the logger if tests race to configure it
+            .try_init();
+    }
 }

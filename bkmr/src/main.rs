@@ -252,7 +252,6 @@ fn main() {
             );
         }
     }
-    // Continued program logic goes here...
 }
 
 fn search_bookmarks(
