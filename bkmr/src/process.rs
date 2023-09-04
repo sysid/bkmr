@@ -220,6 +220,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     open_bms(ids, bms.clone()).unwrap_or_else(|e| {
                         error!("({}:{}) {}", function_name!(), line!(), e);
                     });
+                    break;
                 } else {
                     error!(
                         "({}:{}) Invalid input, only numbers allowed",
