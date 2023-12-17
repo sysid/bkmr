@@ -1,42 +1,39 @@
-use std::{fs, io};
-
-use anyhow::Context;
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
-use atty::Stream;
+use std::{fs, io};
 
+use anyhow::Context;
+use atty::Stream;
 use indoc::formatdoc;
 use log::{debug, error};
 use regex::Regex;
-use stdext::function_name;
 use serde_json;
-
+use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::dal::Dal;
 use crate::environment::CONFIG;
-use crate::{dlog, helper, update_bm};
 use crate::helper::abspath;
 use crate::models::Bookmark;
+use crate::{dlog, helper, update_bm};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {
     Id,
     URL,
-    Metadata,  // title
+    Metadata,
+    // title
     Tags,
     Desc,
     Flags,
     LastUpdateTs,
+    Embedding,
 }
 
 #[allow(dead_code)]
-pub const MINIMUM_FIELDS: [DisplayField; 3] = [
-    DisplayField::Id,
-    DisplayField::URL,
-    DisplayField::Metadata,
-];
+pub const MINIMUM_FIELDS: [DisplayField; 3] =
+    [DisplayField::Id, DisplayField::URL, DisplayField::Metadata];
 #[allow(dead_code)]
 pub const DEFAULT_FIELDS: [DisplayField; 5] = [
     DisplayField::Id,
@@ -46,14 +43,15 @@ pub const DEFAULT_FIELDS: [DisplayField; 5] = [
     DisplayField::Tags,
 ];
 #[allow(dead_code)]
-pub const ALL_FIELDS: [DisplayField; 7] = [
+pub const ALL_FIELDS: [DisplayField; 8] = [
     DisplayField::Id,
     DisplayField::URL,
     DisplayField::Metadata,
     DisplayField::Desc,
     DisplayField::Tags,
-    DisplayField::Flags,
+    DisplayField::Flags, // counter
     DisplayField::LastUpdateTs,
+    DisplayField::Embedding,
 ];
 
 pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
@@ -69,41 +67,90 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
 
     for (i, bm) in bms.iter().enumerate() {
         if fields.contains(&DisplayField::Metadata) {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Green))).unwrap();
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
+                .unwrap();
             write!(&mut stderr, "{:first_col_width$}. {}", i + 1, bm.metadata).unwrap();
         }
 
         if fields.contains(&DisplayField::Id) {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::White)))
+                .unwrap();
             write!(&mut stderr, " [{}]\n", bm.id).unwrap();
         }
 
         if fields.contains(&DisplayField::URL) {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))).unwrap();
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::Yellow)))
+                .unwrap();
             writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.URL).unwrap();
         }
 
         if fields.contains(&DisplayField::Desc) && !bm.desc.is_empty() {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::White)))
+                .unwrap();
             writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.desc).unwrap();
         }
 
         if fields.contains(&DisplayField::Tags) {
             let tags = bm.tags.replace(',', " ");
             if tags.find(|c: char| !c.is_whitespace()).is_some() {
-                stderr.set_color(ColorSpec::new().set_fg(Some(Color::Blue))).unwrap();
+                stderr
+                    .set_color(ColorSpec::new().set_fg(Some(Color::Blue)))
+                    .unwrap();
                 writeln!(&mut stderr, "{:first_col_width$}  {}", "", tags.trim()).unwrap();
             }
         }
 
+        let mut flags_and_embedding_line = String::new();
+
         if fields.contains(&DisplayField::Flags) {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
-            writeln!(&mut stderr, "{:first_col_width$}  Count: {}", "", bm.flags).unwrap();
+            flags_and_embedding_line.push_str(&format!("Count: {}", bm.flags));
         }
 
+        if fields.contains(&DisplayField::Embedding) {
+            let embed_status = if bm.embedding.is_some() {
+                "yes"
+            } else {
+                "null"
+            };
+            if !flags_and_embedding_line.is_empty() {
+                flags_and_embedding_line.push_str(" | ");
+            }
+            flags_and_embedding_line.push_str(&format!("embed: {}", embed_status));
+        }
+
+        if !flags_and_embedding_line.is_empty() {
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::White)))
+                .unwrap();
+            writeln!(
+                &mut stderr,
+                "{:first_col_width$}  {}",
+                "", flags_and_embedding_line
+            )
+            .unwrap();
+        }
+
+        // if fields.contains(&DisplayField::Flags) {
+        //     stderr
+        //         .set_color(ColorSpec::new().set_fg(Some(Color::White)))
+        //         .unwrap();
+        //     writeln!(&mut stderr, "{:first_col_width$}  Count: {}", "", bm.flags).unwrap();
+        // }
+
         if fields.contains(&DisplayField::LastUpdateTs) {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Magenta))).unwrap();
-            writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.last_update_ts).unwrap();
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::Magenta)))
+                .unwrap();
+            writeln!(
+                &mut stderr,
+                "{:first_col_width$}  {}",
+                "", bm.last_update_ts
+            )
+            .unwrap();
         }
 
         stderr.reset().unwrap();
@@ -111,10 +158,11 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
     }
 }
 
-
 pub fn bms_to_json(bms: &Vec<Bookmark>) {
     let json = serde_json::to_string_pretty(bms).expect("Failed to serialize bookmarks to JSON.");
-    io::stdout().write_all(json.as_bytes()).expect("Failed to write JSON to stdout.");
+    io::stdout()
+        .write_all(json.as_bytes())
+        .expect("Failed to write JSON to stdout.");
     println!();
 }
 
@@ -239,8 +287,13 @@ pub fn process(bms: &Vec<Bookmark>) {
 
 pub fn touch_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     dlog!("ids: {:?}", ids);
-    do_sth_with_bms(ids, bms, do_touch)
-        .with_context(|| format!("({}:{}) Error touching bookmarks", function_name!(), line!()))?;
+    do_sth_with_bms(ids, bms, do_touch).with_context(|| {
+        format!(
+            "({}:{}) Error touching bookmarks",
+            function_name!(),
+            line!()
+        )
+    })?;
     Ok(())
 }
 
@@ -275,7 +328,6 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
         Ok(())
     } else {
         dlog!("General OS open {:?}", uri);
-        // todo error propagation upstream not working
         match abspath(uri) {
             Some(p) => {
                 open::that(p)?;
@@ -337,7 +389,7 @@ fn do_sth_with_bms(
 /// increases flag (counter) by 1 and prints it
 pub fn do_touch(bm: &Bookmark) -> anyhow::Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
-    update_bm(bm.id, &vec![], &vec![], &mut dal, false);
+    update_bm(bm.id, &vec![], &vec![], &mut dal, false)?;
     let bm = dal.get_bookmark_by_id(bm.id)?;
     show_bms(&vec![bm], &ALL_FIELDS);
     Ok(())
@@ -401,7 +453,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         .split('\n')
         .filter(|l| !l.starts_with('#'))
         .collect();
-    let new_bm = Bookmark {
+    let mut new_bm = Bookmark {
         id: bm.id,
         URL: lines[0].to_string(),
         metadata: lines[1].to_string(), // title
@@ -409,9 +461,11 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         desc: lines[3].to_string(), // comments
         flags: bm.flags,
         last_update_ts: Default::default(), // will be overwritten by diesel
+        embedding: None,
+        content_hash: None,
     };
-    // println!("Modified content: {}", modified_content);
     debug!("({}:{}) lines: {:?}", function_name!(), line!(), lines);
+    new_bm.update();
 
     let updated = Dal::new(CONFIG.db_url.clone())
         .update_bookmark(new_bm)
@@ -479,14 +533,17 @@ mod test {
     #[ignore = "Manual Test"]
     fn test_show_bms(bms: Vec<Bookmark>) {
         // show individual fields
-        show_bms(&bms, &[
-            DisplayField::Id,
-            DisplayField::URL,
-            DisplayField::Metadata,
-            // DisplayField::Desc,
-            // DisplayField::Tags,
-            // DisplayField::LastUpdateTs,
-        ]);
+        show_bms(
+            &bms,
+            &[
+                DisplayField::Id,
+                DisplayField::URL,
+                DisplayField::Metadata,
+                // DisplayField::Desc,
+                // DisplayField::Tags,
+                // DisplayField::LastUpdateTs,
+            ],
+        );
         // show_bms(&bms, &DEFAULT_FIELDS);
         // show_bms(&bms, &ALL_FIELDS);
     }

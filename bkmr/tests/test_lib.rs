@@ -1,19 +1,13 @@
-#![allow(unused_imports, unused_variables)]
+// #![allow(unused_imports, unused_variables)]
+
+use std::env;
+
+use anyhow::Result;
+use rstest::*;
 
 use bkmr::dal::Dal;
-use diesel::result::Error as DieselError;
-use diesel::sqlite::Sqlite;
-use diesel::SqliteConnection;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use log::{debug, error, info, log_enabled, Level};
-use rstest::*;
-use std::collections::HashSet;
-use std::env;
-use std::error::Error;
-// use bkmr::fzf;
-use bkmr::models::{Bookmark, NewBookmark};
-use bkmr::{helper, load_url_details, update_bm, update_bookmarks};
-use stdext::function_name;
+use bkmr::models::Bookmark;
+use bkmr::{helper, load_url_details, update_bm, update_bookmarks, CTX};
 
 mod test_dal;
 
@@ -70,13 +64,31 @@ fn test_update_bm(
     #[case] tags_not: Vec<String>,
     #[case] force: bool,
     #[case] expected: String,
-) {
-    // let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    update_bm(id, &tags, &tags_not, &mut dal, force);
+) -> Result<()> {
+    update_bm(id, &tags, &tags_not, &mut dal, force)?;
 
     let bm = dal.get_bookmark_by_id(id).unwrap();
     assert_eq!(bm.tags, expected);
     println!("bm: {:?}", bm);
+    Ok(())
+}
+
+#[rstest]
+fn test_upd(mut dal: Dal) -> Result<()> {
+    update_bm(1, &vec![], &vec![], &mut dal, false)?;
+    Ok(())
+}
+
+#[rstest]
+fn test_update_bookmarks_successful() {
+    let (ids, tags, tags_not, force) = (
+        vec![1],
+        vec!["t1".to_string(), "t2".to_string()],
+        vec![],
+        false,
+    );
+    let result = update_bookmarks(ids, tags, tags_not, force);
+    assert!(result.is_ok());
 }
 
 // #[rstest]
@@ -89,3 +101,8 @@ fn test_update_bm(
 //     };
 //     let _ = add_bm();
 // }
+
+#[rstest]
+fn test_ctx() {
+    assert!(CTX.get().is_none())
+}

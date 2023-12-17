@@ -1,10 +1,11 @@
-use std::thread::sleep;
-use std::time::Duration;
 use bkmr::dal::Dal;
-use bkmr::helper;
+use bkmr::embeddings::Context;
 use bkmr::models::Bookmark;
 use bkmr::process::{delete_bms, do_edit, do_touch};
+use bkmr::{helper, CTX};
 use rstest::{fixture, rstest};
+use std::thread::sleep;
+use std::time::Duration;
 
 #[fixture]
 pub fn dal() -> Dal {
@@ -23,6 +24,9 @@ fn bms() -> Vec<Bookmark> {
 }
 #[rstest]
 fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
+    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+        .unwrap();
+
     let bm_before = dal.get_bookmark_by_id(1)?;
     sleep(Duration::from_secs(1));
     do_touch(&bm_before)?;

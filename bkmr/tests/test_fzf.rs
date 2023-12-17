@@ -1,23 +1,14 @@
-#![allow(unused_imports, unused_variables)]
+// #![allow(unused_imports, unused_variables)]
+use rstest::*;
+use std::env;
 
 use bkmr::dal::Dal;
 use bkmr::fzf::fzf_process;
 use bkmr::helper;
-use bkmr::models::{Bookmark, NewBookmark};
-use diesel::result::Error as DieselError;
-use diesel::sqlite::Sqlite;
-use diesel::SqliteConnection;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use log::{debug, error, info, log_enabled, Level};
-use rstest::*;
-use std::collections::HashSet;
-use std::env;
-use std::error::Error;
-use stdext::function_name;
+use bkmr::models::Bookmark;
 
 mod test_dal;
 
-#[cfg(test)]
 #[ctor::ctor]
 fn init() {
     env::set_var("SKIM_LOG", "info");
@@ -53,5 +44,5 @@ fn bms() -> Vec<Bookmark> {
 #[rstest]
 #[ignore = "Interactive via Makefile"]
 fn test_fzf(bms: Vec<Bookmark>) {
-    let ids = fzf_process(&bms);
+    let _ = fzf_process(&bms);
 }

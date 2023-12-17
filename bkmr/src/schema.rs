@@ -9,6 +9,8 @@ diesel::table! {
         desc -> Text,
         flags -> Integer,
         last_update_ts -> Timestamp,
+        embedding -> Nullable<Binary>,
+        content_hash -> Nullable<Binary>,
     }
 }
 

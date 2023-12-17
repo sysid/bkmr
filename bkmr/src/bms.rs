@@ -4,20 +4,23 @@ use log::debug;
 use stdext::function_name;
 
 use crate::dal::Dal;
+use crate::dlog2;
 use crate::environment::CONFIG;
 use crate::models::Bookmark;
 use crate::tag::Tags;
+use anyhow::Result;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Bookmarks {
     dal: Dal,
-    #[allow(dead_code)]
     fts_query: String,
     pub bms: Vec<Bookmark>,
 }
 
-// #[allow(dead_code)]
 impl Bookmarks {
+    /// Creates a new instance of Bookmarks
+    /// if query is empty, all bookmarks are loaded
     pub fn new(fts_query: String) -> Self {
         let mut dal = Dal::new(CONFIG.db_url.clone());
         Bookmarks {
@@ -28,22 +31,15 @@ impl Bookmarks {
             dal,
         }
     }
-    pub fn check_tags(&mut self, tags: Vec<String>) -> Vec<String> {
-        let all_tags: HashSet<String> = HashSet::from_iter(self.dal.get_all_tags_as_vec());
+    pub fn check_tags(&mut self, tags: Vec<String>) -> Result<Vec<String>> {
+        let all_tags: HashSet<String> = HashSet::from_iter(self.dal.get_all_tags_as_vec()?);
         let tags = HashSet::from_iter(tags.into_iter().filter(|s| !s.is_empty()));
-        debug!("({}:{}) {:?}", function_name!(), line!(), all_tags);
-        tags.difference(&all_tags).cloned().collect()
+        dlog2!("{:?}", tags);
+        Ok(tags.difference(&all_tags).cloned().collect())
     }
 
     pub fn match_all(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {
-        debug!(
-            "({}:{}) {:?} {:?} {:?}",
-            function_name!(),
-            line!(),
-            tags,
-            bms,
-            not
-        );
+        dlog2!("{:?} {:?} {:?}", tags, bms, not);
         match not {
             false => bms
                 .into_iter()
@@ -57,14 +53,7 @@ impl Bookmarks {
         }
     }
     pub fn match_any(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {
-        debug!(
-            "({}:{}) {:?} {:?} {:?}",
-            function_name!(),
-            line!(),
-            tags,
-            bms,
-            not
-        );
+        dlog2!("{:?} {:?} {:?}", tags, bms, not);
         match not {
             false => bms
                 .into_iter()
@@ -77,14 +66,7 @@ impl Bookmarks {
         }
     }
     pub fn match_exact(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {
-        debug!(
-            "({}:{}) {:?} {:?} {:?}",
-            function_name!(),
-            line!(),
-            tags,
-            bms,
-            not
-        );
+        dlog2!("{:?} {:?} {:?}", tags, bms, not);
         match not {
             false => bms
                 .into_iter()
@@ -133,9 +115,10 @@ impl Bookmarks {
 #[cfg(test)]
 mod test {
     #[allow(unused_imports)]
-    use super::*;
-    #[allow(unused_imports)]
     use rstest::*;
+
+    #[allow(unused_imports)]
+    use super::*;
 
     #[ctor::ctor]
     fn init() {

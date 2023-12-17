@@ -45,3 +45,6 @@ SELECT distinct tags
 FROM split
 WHERE tags <> ''
 ORDER BY tags;
+
+ SELECT 1 as diesel_exists
+ FROM sqlite_master WHERE type='table' AND name='__diesel_schema_migrations';

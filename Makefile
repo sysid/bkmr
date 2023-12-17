@@ -30,6 +30,17 @@ MAN_BINS = $(filter-out ./tw-extras.md, $(MANS))
 # Admin \
 ADMIN::  ## ##################################################################
 
+.PHONY: init
+init:  ## init
+	rm -vf $(app_root)/db/*.db
+	rm -fr ~/xxx
+	mkdir -p ~/xxx
+	echo "-M- copy full buku db to ~/xxx"
+	cp -v $(VIMWIKI_PATH)/buku/bm.db ~/xxx/bkmr.db
+	cp -vf bkmr/tests/resources/bkmr.v?.db ~/xxx/
+	tree -a ~/xxx
+	tree -a  $(app_root)/db
+
 .PHONY: test-url-details
 test-url-details:  ## test-url-details (charm strang verbose output)
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
@@ -37,67 +48,95 @@ test-url-details:  ## test-url-details (charm strang verbose output)
 .PHONY: test-fzf
 test-fzf:  ## test-fzf
 	# requires to uncomment associated test
-	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
 	#RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
 
 .PHONY: test-open-uri-url
 test-open-uri-url:  ## test-open-uri-url
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib process::test::test_open_bm::case_1 -- --nocapture
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --lib process::test::test_open_bm::case_1 -- --nocapture
 
 .PHONY: test-open-uri-pptx
 test-open-uri-pptx:  ## test-open-uri-pptx
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib process::test::test_open_bm::case_2 -- --nocapture
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --lib process::test::test_open_bm::case_2 -- --nocapture
 
 .PHONY: test-open-uri-vim
 test-open-uri-vim:  ## test-open-uri-vim
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib process::test::test_open_bm::case_3 -- --nocapture
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --lib process::test::test_open_bm::case_3 -- --nocapture
 
 .PHONY: test-open-uri-all
 test-open-uri-all: test-open-uri-vim test-open-uri-pptx test-open-uri-url  ## test-open-uri all
 
+.PHONY: test-env
+test-env:  ## test-env
+	#export BKMR_DB_URL=../db/bkmr.db && pushd $(pkg_src) && cargo test --package bkmr --lib environment::test -- --nocapture
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --lib environment::test -- --nocapture
+
+
+.PHONY: run-check-readiness-openai
+run-check-readiness-openai: init  ## run-check-readiness-openai (has DB been migrated)
+	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d --openai
+
+.PHONY: run-enable-embeddings
+run-enable-embeddings:  ## run-enable-embeddings
+	cp -vf bkmr/tests/resources/bkmr.v1.db db/bkmr.v1.db
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.v1.db cargo run -- -d -d --openai enable-embeddings
+	echo "-M- Second run: should not do requests"
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.v1.db cargo run -- -d -d --openai enable-embeddings
+	echo "-M- check DB: should have embeddings and hashes"
+
+.PHONY: run-backfill
+run-backfill: run-create-db  ## run-backfill
+	#cp -vf bkmr/tests/resources/bkmr.v2.db db/bkmr.v2.db
+	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai backfill
+
+
 .PHONY: run-update
 run-update:  ## run-update
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
 
 .PHONY: run-show
 run-show: init-db  ## run-show
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d show 1,10
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,10
 
-.PHONY: run-init-db
-run-init-db:  ## run-init-db
-	test -f /tmp/bkmr_test.db && rm -v /tmp/bkmr_test.db
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d create-db /tmp/bkmr_test.db
+.PHONY: run-create-db
+run-create-db:  ## run-create-db
+	rm -vf /tmp/bkmr_test.db
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d create-db /tmp/bkmr_test.db
 	open /tmp/bkmr_test.db
 
+.PHONY: run-edit-sem
+run-edit-sem: init  ## run-edit-sem with openai semantic
+	pushd $(pkg_src) && BKMR_DB_URL=~/xxx//bkmr.v2.db cargo run -- -d -d --openai edit 1
+
 .PHONY: run-edit
-run-edit: init-db   ## run-edit
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d edit 1,3
+run-edit: init-db   ## run-edit v1
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d edit 1,3
 
 .PHONY: run-tags
 run-tags: init-db  ## run-tags
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d tags bbb
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d tags bbb
 	@echo "------ all tags -----"
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d tags
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d tags
 
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d delete 1,2,3
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d delete 1,2,3
 
 .PHONY: run-add
 run-add: init-db  ## run-add
 	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d add sysid_new_url t1,t2 --title 'sysid New URL title'  # should add bespoke URI
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should prompt for unknown tags and overwrite title from web
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d add https://www.rust-lang.org t1,t2
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d add https://www.rust-lang.org t1,t2 --edit --title 'RUST'  # should prompt for unknown tags and overwrite title from web
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d add https://www.rust-lang.org t1,t2
 
 .PHONY: run-search
 run-search: init-db  ## run-search interactively for manual tests
 	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d search --np 1>/dev/null  # filter stderr out
 	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- -d -d search
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo run -- search --json  # json output
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- search --json  # json output
 
 .PHONY: init-db
 init-db:  ## init-db
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
 
 .PHONY: install-diesel-cli
 install-diesel-cli:  ## install-diesel-cli
@@ -107,20 +146,20 @@ install-diesel-cli:  ## install-diesel-cli
 .PHONY: test-vim
 test-vim:  ## test-vim: run with EDITOR= make test-vim
 	#pushd $(pkg_src) && cargo test --color=always --package bkmr --lib process::test::test_do_edit -- --nocapture --ignored
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
 
 .PHONY: test-dal
 test-dal:  ## test-dal
-	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test --package bkmr --test test_lib "" -- --test-threads=1
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG cargo test --package bkmr --test test_lib "" -- --test-threads=1
 
 .PHONY: test
 test:  test-dal  ## test (must run DB test before to init ?!?)
 	#BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test --package bkmr -- --test-threads=1  # --nocapture
-	BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test -- --test-threads=1  # --nocapture
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG cargo test -- --test-threads=1  # --nocapture
 
 .PHONY: test-with-data
 test-with-data:  ## test-with-data
-	BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 pushd $(pkg_src) && cargo run -- search --fzf
+	pushd $(pkg_src) && BKMR_DB_URL=/Users/Q187392/dev/s/private/vimwiki/buku/bm.db_20230110_170737 cargo run -- search --fzf
 
 .PHONY: benchmark
 benchmark:  ## benchmark
@@ -192,6 +231,10 @@ format:  ## format
 lint:  ## lint
 	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy
 
+.PHONY: doc
+doc:  ## doc
+	@rustup doc --std
+	pushd $(pkg_src) && cargo doc --open
 
 ################################################################################
 # Clean \

@@ -1,13 +1,15 @@
-use std::{env, process};
+use crate::dlog2;
 use clap::Parser;
 use lazy_static::lazy_static;
+use log::debug;
+use std::{env, process};
 
 // #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Config {
     pub db_url: String,
     pub port: u16,
-    pub fzf_opts: FzfEnvOpts
+    pub fzf_opts: FzfEnvOpts,
 }
 
 #[derive(Parser, Debug)]
@@ -48,16 +50,24 @@ impl Config {
                 let mut args = options_string.split(" ").collect::<Vec<_>>();
                 args.insert(0, "");
                 args
-            },
-            Err(_) => vec![""]
+            }
+            Err(_) => vec![""],
         };
 
         let Ok(fzf_opts) = FzfEnvOpts::try_parse_from(&fzf_opts_args) else {
-            eprintln!("Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.", fzf_opts_args);
+            eprintln!(
+                "Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.",
+                fzf_opts_args
+            );
             process::exit(1)
         };
+        dlog2!("db: {:?}, fzf_opts: {:?}", db_url, fzf_opts);
 
-        Config { db_url, port, fzf_opts }
+        Config {
+            db_url,
+            port,
+            fzf_opts,
+        }
     }
 }
 
