@@ -155,21 +155,21 @@ uninstall:  ## uninstall
 
 .PHONY: bump-major
 bump-major:  ## bump-major, tag and push
-	bumpversion --commit --tag major
+	bump-my-version bump --commit --tag major
 	git push
 	git push --tags
 	@$(MAKE) create-release
 
 .PHONY: bump-minor
 bump-minor:  ## bump-minor, tag and push
-	bumpversion --commit --tag minor
+	bump-my-version bump --commit --tag minor
 	git push
 	git push --tags
 	@$(MAKE) create-release
 
 .PHONY: bump-patch
 bump-patch:  ## bump-patch, tag and push
-	bumpversion --commit --tag patch
+	bump-my-version bump --commit --tag patch
 	git push
 	git push --tags
 	@$(MAKE) create-release
