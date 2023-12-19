@@ -11,41 +11,41 @@ license = "BSD-3-Clause"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.70"
-arboard = "3.2.0"
+anyhow = "1.0.75"
+arboard = "3.3.0"
 atty = "0.2.14"
-camino = "1.1.4"
-chrono = { version = "0.4.24", features = ["serde"] }
-clap = { version = "4.2.1", features = ["unstable-doc"] }
+camino = "1.1.6"
+chrono = { version = "0.4.31", features = ["serde"] }
+clap = { version = "4.4.11", features = ["unstable-doc"] }
 crossterm = "0.26.1"
-diesel = { version = "2.0.3", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
-diesel_migrations = "2.0.0"
-env_logger = "0.10.0"
-indoc = "2.0.1"
-inquire = "0.6.1"
+diesel = { version = "2.1.4", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
+diesel_migrations = "2.1.0"
+env_logger = "0.10.1"
+indoc = "2.0.4"
+inquire = "0.6.2"
 lazy_static = "1.4.0"
-log = "0.4.17"
-open = "4.0.1"
-predicates = "3.0.2"
-regex = "1.7.3"
+log = "0.4.20"
+open = "4.2.0"
+predicates = "3.0.4"
+regex = "1.10.2"
 rusqlite = { version = "0.28.0", features = ["bundled"] }  # https://github.com/sysid/bkmr/issues/6#issuecomment-1435966997
-serde = { version = "1.0.160", features = ["derive"] }
-serde_json = "1.0.96"
+serde = { version = "1.0.193", features = ["derive"] }
+serde_json = "1.0.108"
 serde_with = {version = "2.3.3", features =["chrono"] }
 shellexpand = "3.1.0"
 skim = "0.10.4"
 stdext = "0.3.1"
-tempfile = "3.5.0"
-termcolor = "1.2.0"
+tempfile = "3.8.1"
+termcolor = "1.4.0"
 
-assert_cmd = "2.0.10"
-ctor = "0.2.0"
+assert_cmd = "2.0.12"
+ctor = "0.2.6"
 mockall = "0.11.4"
 rstest = "0.17.0"
-test-log = "0.2.11"
+test-log = "0.2.14"
 tuikit = "0.5.0"
 select = "0.6.0"
-reqwest = {version = "0.11.16", features = ["blocking", "json"] }
+reqwest = {version = "0.11.23", features = ["blocking", "json"] }
 itertools = "0.10.5"
 
 [package.metadata.test]
