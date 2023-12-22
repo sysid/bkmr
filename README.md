@@ -58,8 +58,11 @@ bkmr search '^security'
 bkmr search 'postgres OR sqlite'
 bkmr search 'security NOT keycloak'
 
-# FTS combined with tag filtering
+# FTS combined with tag filtering (optionally with search query)
 bkmr search -t tag1,tag2 -n notag1 <searchquery>
+
+# Return bookmarks with tag1, and not tag2
+bkmr search -t tag1 -N tag2 <searchquery>
 
 # Match exact taglist
 bkmr search -e tag1,tag2
