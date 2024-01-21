@@ -798,11 +798,13 @@ fn find_similar(query: &String, bms: &Bookmarks) -> anyhow::Result<Vec<(i32, f32
     let ndarray_vector = ndarray::Array1::from(embedding);
     let mut results = Vec::new();
     for bm in &bms.bms {
-        let bm_embedding =
-            deserialize_embedding(bm.embedding.clone().expect("Error: embedding is not set"))?;
-        let bm_ndarray_vector = ndarray::Array1::from(bm_embedding);
-        let similarity = cosine_similarity(&ndarray_vector, &bm_ndarray_vector);
-        results.push((bm.id, similarity));
+        if let Some(embedding_data) = &bm.embedding {
+            let bm_embedding = deserialize_embedding(embedding_data.clone())?;
+            let bm_ndarray_vector = ndarray::Array1::from(bm_embedding);
+            let similarity = cosine_similarity(&ndarray_vector, &bm_ndarray_vector);
+            results.push((bm.id, similarity));
+        }
+        // Bookmarks without embeddings are skipped
     }
     // Sorting by similarity
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -865,6 +867,7 @@ mod tests {
             .filter_level(log::LevelFilter::max())
             .filter_module("skim", log::LevelFilter::Info)
             .filter_module("tuikit", log::LevelFilter::Info)
+            .filter_module("reqwest", log::LevelFilter::Info)
             // Ensure events are captured by `cargo test`
             .is_test(true)
             // Ignore errors initializing the logger if tests race to configure it
@@ -876,20 +879,37 @@ mod tests {
         let tempdir = tempdir().unwrap();
         let options = dir::CopyOptions::new().overwrite(true);
         copy_items(
-            &["tests/resources/bkmr.v1.db", "tests/resources/bkmr.v2.db"],
+            &["tests/resources/bkmr.v1.db", "tests/resources/bkmr.v2.db", "tests/resources/bkmr.v2.noembed.db"],
             "../db",
             &options,
         )
             .expect("Failed to copy test project directory");
-        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
 
         tempdir.into_path()
+    }
+
+    #[allow(unused_variables)]
+    #[ignore = "currently only works in isolation"]
+    #[rstest]
+    fn test_find_similar_when_embed_null(temp_dir: Utf8PathBuf) {
+        // Given: v2 database with embeddings and OpenAI context
+        fs::rename("../db/bkmr.v2.noembed.db", "../db/bkmr.db").expect("Failed to rename database");
+        let bms = Bookmarks::new("".to_string());
+        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+            .unwrap();
+
+        // When: find similar for "blub"
+        let results = find_similar(&"blub".to_string(), &bms).unwrap();
+
+        // Then: Expect no findings
+        assert_eq!(results.len(), 0);
     }
 
     #[allow(unused_variables)]
     #[rstest]
     fn test_find_similar(temp_dir: Utf8PathBuf) {
         // Given: v2 database with embeddings and OpenAI context
+        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         let bms = Bookmarks::new("".to_string());
         CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
             .unwrap();
@@ -908,6 +928,7 @@ mod tests {
     #[ignore = "interactive: visual check required"]
     #[rstest]
     fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
+        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         // this is only visible test
         CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
             .unwrap();

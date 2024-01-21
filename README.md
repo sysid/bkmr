@@ -4,6 +4,8 @@
 
 > New Feature: Semantic Search (AI Embeddings)
 
+[Elevating Bookmark Management with AI-Driven Semantic Search](https://sysid.github.io/elevating-bookmark-management-with-ai-driven-semantic-search/)
+
 Features:
 - semantic search using OpenAI embeddings (requires OpenAI API key)
 - full-text search with semantic ranking (FTS5)
@@ -91,7 +93,7 @@ bkmr update -n git $(bkmr search -t gh --np)
 bkmr search --json
 
 # Semantic Search based on OpenAI Embeddings
-bkmr --openai sem-search "lambda security"  # requires OPENAI_API_KEY
+bkmr --openai sem-search "python security"  # requires OPENAI_API_KEY
 ```
 Tags must be separated by comma without blanks.
 
@@ -99,8 +101,9 @@ Tags must be separated by comma without blanks.
 - requires database migration: adds two columns to the bookmarks table for the OpenAI embeddings
 
 ### Semantic Search
-- to use semantic search you need to set the `OPENAI_API_KEY` key: `export OPENAI_API_KEY=<your-key>`
-- will increase DB size significantly (embeddings size: 1536 dimensions)
+- embeddings will increase DB size significantly (embeddings size: 1536 dimensions)
+- to use semantic search API key is required: `export OPENAI_API_KEY=<your-key>`
+- requires the `--openai` flag!
 - best results when adding context to the URLs via COMMENTS:
 ![sem_search](resources/sem_search.png)
 
