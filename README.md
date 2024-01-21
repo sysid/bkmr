@@ -2,7 +2,10 @@
 
 # Ultrafast Bookmark Manager and Launcher
 
+> New Feature: Semantic Search (AI Embeddings)
+
 Features:
+- semantic search using OpenAI embeddings (requires OpenAI API key)
 - full-text search with semantic ranking (FTS5)
 - fuzzy search `--fzf` (CTRL-O: copy to clipboard, CTRL-E: edit, CTRL-D: delete, Enter: open)
 - tags for classification
@@ -25,17 +28,19 @@ A Bookmark Manager and Launcher for the Terminal
 Usage: bkmr [OPTIONS] [NAME] [COMMAND]
 
 Commands:
-  search     Searches Bookmarks
-  open       Open/launch bookmarks
-  add        Add a bookmark
-  delete     Delete bookmarks
-  update     Update bookmarks
-  edit       Edit bookmarks
-  show       Show Bookmarks (list of ids, separated by comma, no blanks)
-  surprise   Opens n random URLs
-  tags       Tag for which related tags should be shown. No input: all tags are printed
-  create-db  Initialize bookmark database
-  help       Print this message or the help of the given subcommand(s)
+  search             Searches Bookmarks
+  sem-search         Semantic Search with OpenAI
+  open               Open/launch bookmarks
+  add                Add a bookmark
+  delete             Delete bookmarks
+  update             Update bookmarks
+  edit               Edit bookmarks
+  show               Show Bookmarks (list of ids, separated by comma, no blanks)
+  surprise           Opens n random URLs
+  tags               Tag for which related tags should be shown. No input: all tags are printed
+  create-db          Initialize bookmark database
+  backfill           Backfill embeddings for bookmarks
+  help               Print this message or the help of the given subcommand(s)
 
 Arguments:
   [NAME]  Optional name to operate on
@@ -43,6 +48,7 @@ Arguments:
 Options:
   -c, --config <FILE>  Sets a custom config file
   -d, --debug...       Turn debugging information on
+      --openai         use OpenAI API to embed bookmarks
   -h, --help           Print help
   -V, --version        Print version
 ```
@@ -83,23 +89,28 @@ bkmr update -n git $(bkmr search -t gh --np)
 
 # JSON dump of entire database
 bkmr search --json
+
+# Semantic Search based on OpenAI Embeddings
+bkmr --openai sem-search "lambda security"  # requires OPENAI_API_KEY
 ```
 Tags must be separated by comma without blanks.
 
+## Upgrade to 1.x.x
+- requires database migration: adds two columns to the bookmarks table for the OpenAI embeddings
+
+### Semantic Search
+- to use semantic search you need to set the `OPENAI_API_KEY` key: `export OPENAI_API_KEY=<your-key>`
+- will increase DB size significantly (embeddings size: 1536 dimensions)
+- best results when adding context to the URLs via COMMENTS:
+![sem_search](resources/sem_search.png)
 
 ## Installation
 1. `cargo install bkmr`
 2. initialize the database: `bkmr create-db db_path`
-3. add URLs
+3. `export "BKMR_DB_URL=db-path"`, location of created sqlite database must be known
+4. add URLs
 
-
-### Configuration
-Location of created sqlite database must be known:
-```bash
-export "BKMR_DB_URL=db-path"
-```
-
-#### FZF Customization
+### FZF Customization
 You can set (not required) this variable to change `--fzf` mode default options:
 ```bash
 export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags"
@@ -108,7 +119,6 @@ Currently available flags:
 - `--reverse` (defaults to false): show input line on top and reverse alphabetical order
 - `--height` (defaults to 50%): screen usage of current terminal
 - ``--show-tags`` (defaults to false): show tags
-
 
 ## Benchmarking
 - ca. 20x faster than the Python original [twbm](https://github.com/sysid/twbm) after warming up Python.

@@ -20,3 +20,6 @@ target/
 *.pdb
 
 # End of https://www.toptal.com/developers/gitignore/api/rust
+db/bkmr.v1.db
+db/bkmr.v2.db
+~$documentation.pptx

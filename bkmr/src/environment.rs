@@ -1,13 +1,14 @@
-use std::{env, process};
+use crate::dlog2;
 use clap::Parser;
 use lazy_static::lazy_static;
+use log::debug;
+use std::{env, process};
 
 // #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Config {
     pub db_url: String,
-    pub port: u16,
-    pub fzf_opts: FzfEnvOpts
+    pub fzf_opts: FzfEnvOpts,
 }
 
 #[derive(Parser, Debug)]
@@ -23,17 +24,6 @@ pub struct FzfEnvOpts {
 impl Config {
     fn new() -> Config {
         let db_url = env::var("BKMR_DB_URL").unwrap_or_else(|_| "../db/bkmr.db".to_string());
-        // test db_url as path exists
-        let path = std::path::Path::new(&db_url);
-        if !path.exists() {
-            eprintln!("Error: db_url path does not exist: {:?}", db_url);
-            process::exit(1);
-        }
-        let port = env::var("BKMR_PORT")
-            .unwrap_or_else(|_| "9999".to_string())
-            .parse()
-            .expect("BKMR_PORT must be a number");
-
         let fzf_opts = env::var("BKMR_FZF_OPTS");
 
         /*
@@ -48,16 +38,23 @@ impl Config {
                 let mut args = options_string.split(" ").collect::<Vec<_>>();
                 args.insert(0, "");
                 args
-            },
-            Err(_) => vec![""]
+            }
+            Err(_) => vec![""],
         };
 
         let Ok(fzf_opts) = FzfEnvOpts::try_parse_from(&fzf_opts_args) else {
-            eprintln!("Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.", fzf_opts_args);
+            eprintln!(
+                "Error: Failed to parse BKMR_FZF_OPTS: {:?} \nPlease check bkmr documentation.",
+                fzf_opts_args
+            );
             process::exit(1)
         };
+        dlog2!("db: {:?}, fzf_opts: {:?}", db_url, fzf_opts);
 
-        Config { db_url, port, fzf_opts }
+        Config {
+            db_url,
+            fzf_opts,
+        }
     }
 }
 
@@ -86,9 +83,7 @@ mod test {
     #[rstest]
     fn test_config() {
         println!("Using database at {}", CONFIG.db_url);
-        println!("Listening on port {}", CONFIG.port);
         println!("Using fzf defaults {:?}", CONFIG.fzf_opts);
-        assert_eq!(CONFIG.port, 9999);
         assert_eq!(CONFIG.fzf_opts.height, String::from("100%"));
         assert_eq!(CONFIG.fzf_opts.reverse, true);
         assert_eq!(CONFIG.fzf_opts.show_tags, true);

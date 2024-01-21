@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Debug;
 
+use anyhow::Context;
 use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
@@ -9,13 +10,11 @@ use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
 use log::debug;
 use stdext::function_name;
 
-use crate::models::{Bookmark, NewBookmark, TagsFrequency};
+use crate::dlog2;
+use crate::models::{Bookmark, IdResult, NewBookmark, TagsFrequency};
 use crate::schema::bookmarks::dsl::bookmarks;
-use crate::schema::bookmarks::{desc, flags, id, metadata, tags, URL};
+use crate::schema::bookmarks::{content_hash, desc, embedding, flags, id, metadata, tags, URL};
 
-// use crate::schema::bookmarks;
-
-// #[derive(Debug)]
 pub struct Dal {
     // #[allow(dead_code)]
     url: String,
@@ -67,8 +66,8 @@ impl Dal {
             WHERE id = ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn);
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn);
         debug!("({}:{}) Deleting {:?}", function_name!(), line!(), id_);
 
         // database compaction
@@ -79,8 +78,8 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn)?;
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn)?;
         debug!("({}:{}) {:?}", function_name!(), line!(), "Compacting");
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
@@ -105,6 +104,8 @@ impl Dal {
                 tags.eq(bm.tags),
                 desc.eq(bm.desc),
                 flags.eq(bm.flags),
+                embedding.eq(bm.embedding),
+                content_hash.eq(bm.content_hash),
             ))
             .get_results(&mut self.conn)
     }
@@ -118,7 +119,7 @@ impl Dal {
     pub fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark, DieselError> {
         // Ok(sql_query("SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks").load::<Bookmark2>(conn)?)
         let bms = sql_query(
-            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks \
+            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
             where id = ?;",
         );
         let bm = bms.bind::<Integer, _>(id_).get_result(&mut self.conn);
@@ -129,23 +130,40 @@ impl Dal {
             // select all
             return bookmarks.load::<Bookmark>(&mut self.conn);
         }
-        self.get_bookmarks_fts(query)
+        let ids = self.get_bookmarks_fts(query)?;
+
+        // Query the bookmarks table for the full Bookmark objects
+        bookmarks
+            .filter(id.eq_any(ids))
+            .load::<Bookmark>(&mut self.conn)
     }
 
-    pub fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<Bookmark>, DieselError> {
-        // Ok(sql_query("SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks").load::<Bookmark2>(conn)?)
-        let bms = sql_query(
-            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks_fts \
-            where bookmarks_fts match ? \
-            order by rank",
-        );
-        let bms = bms.bind::<Text, _>(fts_query).get_results(&mut self.conn);
-        bms
+    pub fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<i32>, DieselError> {
+        let ids = sql_query(
+            "SELECT id FROM bookmarks_fts \
+        WHERE bookmarks_fts MATCH ? \
+        ORDER BY rank",
+        )
+        .bind::<Text, _>(fts_query)
+        .load::<IdResult>(&mut self.conn)?
+        .into_iter()
+        .map(|result| result.id)
+        .collect();
+
+        Ok(ids)
+    }
+
+    pub fn get_bookmarks_without_embedding(&mut self) -> Result<Vec<Bookmark>, DieselError> {
+        let result = bookmarks
+            .filter(embedding.is_null())
+            .load::<Bookmark>(&mut self.conn)?;
+
+        Ok(result)
     }
 
     pub fn bm_exists(&mut self, url: &str) -> Result<bool, DieselError> {
         let bms = sql_query(
-            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks \
+            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
             where URL = ?;",
         );
         let bms = bms
@@ -179,12 +197,12 @@ impl Dal {
     }
 
     /// get ordered vector of tags
-    pub fn get_all_tags_as_vec(&mut self) -> Vec<String> {
-        let all_tags = self.get_all_tags().unwrap(); //todo handle error
+    pub fn get_all_tags_as_vec(&mut self) -> Result<Vec<String>, anyhow::Error> {
+        let all_tags = self.get_all_tags().context("Error getting all tags")?;
         let mut all_tags: Vec<String> = all_tags.into_iter().map(|t| t.tag).collect();
-        debug!("({}:{}) {:?}", function_name!(), line!(), all_tags);
+        dlog2!("{:?}", all_tags);
         all_tags.sort();
-        all_tags
+        Ok(all_tags)
     }
     /// get frequency based ordered list of related tags for a given tag
     pub fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>, DieselError> {
@@ -220,7 +238,7 @@ impl Dal {
             "SELECT *
             FROM bookmarks
             ORDER BY RANDOM()
-            LIMIT ?;"
+            LIMIT ?;",
         );
 
         let bms = bms.bind::<Integer, _>(n).get_results(&mut self.conn);
@@ -232,12 +250,52 @@ impl Dal {
             "SELECT *
             FROM bookmarks
             ORDER BY last_update_ts ASC
-            LIMIT ?;"
+            LIMIT ?;",
         );
 
         let bms = bms.bind::<Integer, _>(n).get_results(&mut self.conn);
         bms
     }
+
+    /// create a column "diesel_exists" in result which is the diesel "target"
+    pub fn check_schema_migrations_exists(&mut self) -> Result<bool, DieselError> {
+        let query = "
+            SELECT 1 as diesel_exists FROM sqlite_master WHERE type='table' AND name='__diesel_schema_migrations';
+        ";
+
+        let result: Vec<ExistenceCheck> = sql_query(query).load(&mut self.conn)?;
+        // Explicitly use the diesel_exists field to placate the compiler warning
+        for item in &result {
+            let _ = item.diesel_exists;
+        }
+
+        Ok(!result.is_empty())
+    }
+
+    pub fn check_embedding_column_exists(&mut self) -> Result<bool, DieselError> {
+        let query = "
+        SELECT COUNT(*) as column_exists
+        FROM pragma_table_info('bookmarks')
+        WHERE name='embedding';
+    ";
+
+        let result: Vec<ColumnCheck> = sql_query(query).load(&mut self.conn)?;
+
+        // Check if any row was returned
+        Ok(result.iter().any(|item| item.column_exists > 0))
+    }
+}
+
+#[derive(QueryableByName, Debug)]
+struct ExistenceCheck {
+    #[diesel(sql_type = Integer)]
+    diesel_exists: i32,
+}
+
+#[derive(QueryableByName, Debug)]
+struct ColumnCheck {
+    #[diesel(sql_type = Integer)]
+    column_exists: i32,
 }
 
 impl Debug for Dal {

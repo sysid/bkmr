@@ -1,30 +1,29 @@
+use arboard::Clipboard;
+use itertools::Itertools;
 use std::borrow::Cow;
 use std::sync::Arc;
-use arboard::Clipboard;
-use itertools::Itertools; // Import the itertools trait
 
-
-use crossterm::{execute, terminal::{Clear, ClearType}};
+use crossterm::{
+    execute,
+    terminal::{Clear, ClearType},
+};
 use log::debug;
+use skim::prelude::*;
 use skim::{
     AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem, SkimItemReceiver,
     SkimItemSender,
 };
-use skim::prelude::*;
 use stdext::function_name;
 use tuikit::prelude::*;
 
-use crate::environment::{CONFIG, FzfEnvOpts};
+use crate::environment::{FzfEnvOpts, CONFIG};
 use crate::models::Bookmark;
 use crate::process::{delete_bms, edit_bms, open_bms};
 use crate::tag::Tags;
 
 impl SkimItem for Bookmark {
     fn text(&self) -> Cow<str> {
-        let FzfEnvOpts {
-            show_tags,
-            ..
-        } = &CONFIG.fzf_opts;
+        let FzfEnvOpts { show_tags, .. } = &CONFIG.fzf_opts;
 
         let _text = match show_tags {
             false => format!("[{}] {}, {}", self.id, self.metadata, self.URL),
@@ -43,10 +42,7 @@ impl SkimItem for Bookmark {
     }
 
     fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
-        let FzfEnvOpts {
-            show_tags,
-            ..
-        } = &CONFIG.fzf_opts;
+        let FzfEnvOpts { show_tags, .. } = &CONFIG.fzf_opts;
 
         let start_idx_tags = self.id.to_string().len() + 2;
         let end_idx_tags = match show_tags {
@@ -63,7 +59,7 @@ impl SkimItem for Bookmark {
 
         let start_idx_metadata = match show_tags {
             false => self.id.to_string().len() + 2,
-            true => end_idx_tags + 1
+            true => end_idx_tags + 1,
         };
         let end_idx_metadata = start_idx_metadata + self.metadata.len() + 1;
         let attr_metadata = Attr {
@@ -100,7 +96,7 @@ impl SkimItem for Bookmark {
                     ),
                     (attr_url, (start_idx_url as u32, end_idx_url as u32)),
                 ],
-            )
+            ),
         }
     }
 
@@ -112,9 +108,7 @@ impl SkimItem for Bookmark {
 
 pub fn fzf_process(bms: &Vec<Bookmark>) {
     let FzfEnvOpts {
-        reverse,
-        height,
-        ..
+        reverse, height, ..
     } = &CONFIG.fzf_opts;
 
     let options = SkimOptionsBuilder::default()
@@ -170,10 +164,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
             let mut clipboard = Clipboard::new().unwrap();
             // TODO: do_touch required here
-            let urls = filtered
-                .iter()
-                .map(|bm| &bm.URL)
-                .join("\n");
+            let urls = filtered.iter().map(|bm| &bm.URL).join("\n");
             clipboard.set_text(urls).unwrap_or_else(|e| {
                 debug!("{}: {}", function_name!(), e);
             });

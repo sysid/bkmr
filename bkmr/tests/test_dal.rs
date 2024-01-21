@@ -1,11 +1,14 @@
+use std::collections::HashSet;
+
+use anyhow::Result;
 use log::{debug, info};
 use rstest::{fixture, rstest};
-use std::collections::HashSet;
 use stdext::function_name;
-// use stdext::function_name;
+
 use bkmr::dal::Dal;
-use bkmr::helper;
-use bkmr::models::NewBookmark;
+use bkmr::embeddings::Context;
+use bkmr::models::BookmarkBuilder;
+use bkmr::{helper, CTX};
 
 #[fixture]
 pub fn dal() -> Dal {
@@ -60,6 +63,16 @@ fn test_get_bookmarks(mut dal: Dal, #[case] input: &str, #[case] expected: i32) 
 }
 
 #[rstest]
+fn test_get_bookmarks_without_embedding(mut dal: Dal) {
+    let bookmarks_without_embedding = dal.get_bookmarks_without_embedding().unwrap();
+    for bookmark in &bookmarks_without_embedding {
+        assert!(bookmark.embedding.is_none());
+    }
+    let expected_count = 11;
+    assert_eq!(bookmarks_without_embedding.len(), expected_count);
+}
+
+#[rstest]
 #[case("https://www.google.com", true)]
 #[case("https://www.doesnotexists.com", false)]
 fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) {
@@ -71,15 +84,17 @@ fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) {
 #[rstest]
 fn test_insert_bm(mut dal: Dal) {
     // init_db(&mut dal.conn).expect("Error DB init");
-    #[allow(non_snake_case)]
-    let new_bm = NewBookmark {
-        URL: String::from("http://www.sysid.de"),
-        metadata: String::from(""),
-        tags: String::from(",xxx,"),
-        desc: String::from("sysid descript"),
-        flags: 0,
-    };
-    let bms = dal.insert_bookmark(new_bm);
+    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+        .unwrap();
+    let mut bm = BookmarkBuilder::new()
+        .URL("www.sysid.de".to_string())
+        .metadata("".to_string())
+        .tags(",xxx,".to_string())
+        .desc("sysid descript".to_string())
+        .flags(0)
+        .build();
+    bm.update();
+    let bms = dal.insert_bookmark(bm.convert_to_new_bookmark());
     println!("The bookmarks are: {:?}", bms);
     assert_eq!(bms.unwrap()[0].id, 12);
 }
@@ -170,9 +185,12 @@ fn test__get_all_tags(mut dal: Dal) {
 }
 
 #[rstest]
-fn test_get_all_tags(mut dal: Dal) {
-    let tags = dal.get_all_tags_as_vec();
+fn test_get_all_tags(mut dal: Dal) -> Result<()> {
+    let tags = dal.get_all_tags_as_vec()?;
     debug!("{:?}", tags);
+    assert_eq!(tags.len(), 5);
+    assert_eq!(tags, vec!["aaa", "bbb", "ccc", "xxx", "yyy"]);
+    Ok(())
 }
 
 #[rstest]
@@ -204,3 +222,18 @@ fn test_get_oldest_bookmarks(mut dal: Dal) {
     assert_eq!(bms.unwrap().len() as i32, 2);
 }
 
+#[rstest]
+fn test_check_schema_migration_exists(mut dal: Dal) {
+    let result = dal.check_schema_migrations_exists();
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), true);
+}
+
+#[rstest]
+fn test_check_embedding_column_exists(mut dal: Dal) {
+    let result = dal.check_embedding_column_exists();
+    println!("Result: {:?}", result);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), true);
+}

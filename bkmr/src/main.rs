@@ -1,28 +1,36 @@
-use camino::Utf8Path;
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process;
 
+use anyhow::anyhow;
+use camino::Utf8Path;
 use clap::{Parser, Subcommand};
+use crossterm::style::Stylize;
+use diesel::connection::SimpleConnection;
 use diesel::result::DatabaseErrorKind;
 use diesel::result::Error::DatabaseError;
+use diesel_migrations::MigrationHarness;
 use inquire::Confirm;
 use itertools::Itertools;
-
 use log::{debug, error, info};
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::bms::Bookmarks;
 use bkmr::dal::Dal;
+use bkmr::embeddings::{cosine_similarity, deserialize_embedding, Context};
 use bkmr::environment::CONFIG;
 use bkmr::fzf::fzf_process;
-use bkmr::helper::{ensure_int_vector, init_db};
-use bkmr::load_url_details;
-use bkmr::models::NewBookmark;
-use bkmr::process::{ALL_FIELDS, bms_to_json, DEFAULT_FIELDS, delete_bms, DisplayField, edit_bms, open_bm, process, show_bms};
+use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
+use bkmr::models::BookmarkBuilder;
+use bkmr::process::{
+    bms_to_json, delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS,
+    DEFAULT_FIELDS,
+};
 use bkmr::tag::Tags;
+use bkmr::CTX;
+use bkmr::{dlog2, load_url_details};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -38,6 +46,9 @@ struct Cli {
     /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     debug: u8,
+
+    #[arg(long = "openai", help = "use OpenAI API to embed bookmarks")]
+    openai: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -95,17 +106,18 @@ enum Commands {
         )]
         is_fuzzy: bool,
 
-        #[arg(
-        long = "json",
-        help = "non-interactive mode, output as json"
-        )]
+        #[arg(long = "json", help = "non-interactive mode, output as json")]
         is_json: bool,
 
-        #[arg(
-        short = 'l',
-        long = "limit",
-        help = "limit number of results"
-        )]
+        #[arg(short = 'l', long = "limit", help = "limit number of results")]
+        limit: Option<i32>,
+    },
+    /// Semantic Search with OpenAI
+    SemSearch {
+        /// Input for similarity search (search terms)
+        query: String,
+
+        #[arg(short = 'l', long = "limit", help = "limit number of results")]
         limit: Option<i32>,
     },
     /// Open/launch bookmarks
@@ -152,8 +164,8 @@ enum Commands {
     Show { ids: String },
     /// Opens n random URLs
     Surprise {
-        #[arg(short = 'n', help = "number of URLs to open", default_value_t=1)]
-        n: i32
+        #[arg(short = 'n', help = "number of URLs to open", default_value_t = 1)]
+        n: i32,
     },
     /// Tag for which related tags should be shown. No input: all tags are printed
     Tags {
@@ -165,6 +177,8 @@ enum Commands {
         /// pathname to database file
         path: String,
     },
+    /// Backfill embeddings for bookmarks
+    Backfill {},
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks
@@ -182,6 +196,32 @@ fn main() {
     let cli = Cli::parse();
 
     set_logger(&cli);
+
+    if let Some(Commands::CreateDb { .. }) = &cli.command {
+        // Skip the path.exists check and create database with correct schema
+    } else {
+        let path = std::path::Path::new(&CONFIG.db_url);
+        if !path.exists() {
+            eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
+            process::exit(1);
+        }
+        enable_embeddings_if_required();  // migrate db
+    }
+
+    if cli.openai {
+        if !is_env_var_set("OPENAI_API_KEY") {
+            println!("Environment variable {} is not set.", "OPENAI_API_KEY");
+            process::exit(1);
+        }
+
+        info!("Using OpenAI API");
+        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+            .unwrap();
+    } else {
+        info!("Using DummyAI");
+        CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+            .unwrap();
+    }
 
     let Some(command) = cli.command else {
         eprintln!("No command given. Usage: bkmr <command> [options]"); // TODO: use clap native
@@ -221,6 +261,7 @@ fn main() {
                 stderr,
             ) {}
         }
+        Commands::SemSearch { query, limit } => sem_search(query, limit),
         Commands::Open { ids } => open_bookmarks(ids),
         Commands::Add {
             url,
@@ -242,6 +283,7 @@ fn main() {
         Commands::Tags { tag } => show_tags(tag),
         Commands::CreateDb { path } => create_db(path),
         Commands::Surprise { n } => randomized(n),
+        Commands::Backfill {} => backfill_embeddings(),
         Commands::Xxx { ids, tags } => {
             eprintln!(
                 "({}:{}) ids: {:?}, tags: {:?}",
@@ -270,7 +312,7 @@ fn search_bookmarks(
     non_interactive: bool,
     mut stderr: StandardStream,
 ) -> Option<()> {
-    let mut fields = DEFAULT_FIELDS.to_vec();  // Convert array to Vec
+    let mut fields = DEFAULT_FIELDS.to_vec(); // Convert array to Vec
     let _tags_all = if let Some(tags_prefix) = tags_prefix {
         if let Some(tags_all) = tags_all {
             format!("{},{}", tags_all, tags_prefix)
@@ -299,7 +341,7 @@ fn search_bookmarks(
         );
         bms.bms.sort_by_key(|bm| bm.last_update_ts);
         bms.bms.reverse();
-        fields.push(DisplayField::LastUpdateTs);   // Add the new enum variant
+        fields.push(DisplayField::LastUpdateTs); // Add the new enum variant
     } else if order_asc {
         debug!(
             "({}:{}) order_asc {:?}",
@@ -308,7 +350,7 @@ fn search_bookmarks(
             order_asc
         );
         bms.bms.sort_by_key(|bm| bm.last_update_ts);
-        fields.push(DisplayField::LastUpdateTs);   // Add the new enum variant
+        fields.push(DisplayField::LastUpdateTs); // Add the new enum variant
     } else {
         debug!("({}:{}) order_by_metadata", function_name!(), line!());
         bms.bms.sort_by_key(|bm| bm.metadata.to_lowercase())
@@ -331,7 +373,13 @@ fn search_bookmarks(
 
     if non_interactive {
         debug!("Non Interactive. Exiting..");
-        let ids: Vec<String> = bms.bms.iter().map(|bm| bm.id).sorted().map(|id| id.to_string()).collect();
+        let ids: Vec<String> = bms
+            .bms
+            .iter()
+            .map(|bm| bm.id)
+            .sorted()
+            .map(|id| id.to_string())
+            .collect();
         println!("{}", ids.join(","));
     } else {
         stderr
@@ -376,27 +424,27 @@ fn add_bookmark(
     edit: bool,
 ) {
     let mut dal = Dal::new(CONFIG.db_url.clone());
-    debug!(
-        "({}:{}) Add {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
-        function_name!(),
-        line!(),
+    dlog2!(
+        "Add {:?}, {:?}, {:?}, {:?}, {:?}, {:?}",
         url,
         tags,
         title,
         desc,
         no_web,
-        edit,
+        edit
     );
 
     let unknown_tags =
-        Bookmarks::new("".to_string()).check_tags(Tags::normalize_tag_string(tags.clone()));
+        match Bookmarks::new("".to_string()).check_tags(Tags::normalize_tag_string(tags.clone())) {
+            Ok(tags) => tags,
+            Err(e) => {
+                eprintln!("Error checking tags: {:?}", e);
+                return;
+            }
+        };
+
     if !unknown_tags.is_empty() {
-        debug!(
-            "({}:{}) unknown_tags: {:?}",
-            function_name!(),
-            line!(),
-            unknown_tags
-        );
+        dlog2!("unknown_tags: {:?}", unknown_tags);
         eprintln!("Unknown tags: {:?}", unknown_tags);
         let ans = Confirm::new(format!("Unknown tags: {:?}, create?", unknown_tags).as_str())
             .with_default(false)
@@ -428,20 +476,19 @@ fn add_bookmark(
     };
     let title = title.unwrap_or(_title);
     let description = desc.unwrap_or(_description);
-    debug!(
-        "({}:{}) title: {:?}, description: {:?}",
-        function_name!(),
-        line!(),
-        title,
-        description
-    );
-    match dal.insert_bookmark(NewBookmark {
-        URL: url.to_string(),
-        metadata: title,
-        tags: Tags::create_normalized_tag_string(tags),
-        desc: description,
-        flags: 0,
-    }) {
+    dlog2!("title: {:?}, description: {:?}", title, description);
+
+    let mut bm = BookmarkBuilder::new()
+        .id(1)
+        .URL(url.to_string())
+        .metadata(title)
+        .tags(Tags::create_normalized_tag_string(tags))
+        .desc(description)
+        .flags(0)
+        .build();
+    bm.update();
+
+    match dal.insert_bookmark(bm.convert_to_new_bookmark()) {
         Ok(bms) => {
             if edit {
                 edit_bms(vec![1], bms.clone()).unwrap_or_else(|e| {
@@ -498,7 +545,15 @@ fn update_bookmarks(force: bool, tags: Option<String>, tags_not: Option<String>,
     let tags = Tags::normalize_tag_string(tags);
     let tags_not = Tags::normalize_tag_string(tags_not);
     println!("Update {:?}, {:?}, {:?}, {:?}", ids, tags, tags_not, force);
-    bkmr::update_bookmarks(ids.unwrap(), tags, tags_not, force);
+    bkmr::update_bookmarks(ids.unwrap(), tags, tags_not, force).unwrap_or_else(|e| {
+        eprintln!(
+            "Error ({}:{}) Updating Bookmarks: {:?}",
+            function_name!(),
+            line!(),
+            e
+        );
+        process::exit(1);
+    });
 }
 
 fn edit_bookmarks(ids: String) {
@@ -622,15 +677,137 @@ fn randomized(n: i32) {
         }
         Err(e) => {
             error!(
-                    "({}:{}) Randomizing error: {:?}",
-                    function_name!(),
-                    line!(),
-                    e
-                );
+                "({}:{}) Randomizing error: {:?}",
+                function_name!(),
+                line!(),
+                e
+            );
         }
     }
 }
 
+fn enable_embeddings_if_required() {
+    eprintln!("Database: {}", CONFIG.db_url);
+    let mut dal = Dal::new(CONFIG.db_url.clone());
+
+    let embedding_column_exists = dal.check_embedding_column_exists().unwrap_or_else(|e| {
+        eprintln!("Error checking existence of embedding column: {:?}", e);
+        process::exit(1);
+    });
+    if embedding_column_exists {
+        dlog2!("Embedding column exists, no migration required.");
+        return;
+    }
+
+    eprintln!("New 'bkmr' version requires an extension of the database schema.");
+    eprintln!("Two new columns will be added to the 'bookmarks' table:");
+    if !confirm("Please backup up your DB before continue! Do you want to continue?") {
+        println!("{}", "Aborting...".red());
+        process::exit(1);
+    }
+
+    if !dal.check_schema_migrations_exists().unwrap_or_else(|e| {
+        eprintln!("Error checking schema migrations: {:?}", e);
+        process::exit(1);
+    }) {
+        eprintln!("__diesel_schema_migrations table does not exist. Creating it...");
+
+        // SQL to create the __diesel_schema_migrations table and insert the initial record
+        let create_table_sql = "
+            BEGIN TRANSACTION;
+            CREATE TABLE IF NOT EXISTS __diesel_schema_migrations (
+                version VARCHAR(50) PRIMARY KEY NOT NULL,
+                run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO __diesel_schema_migrations (version, run_on) VALUES ('20221229110455', '2023-12-23 09:27:06');
+            COMMIT;
+        ";
+
+        if let Err(e) = dal.conn.batch_execute(create_table_sql) {
+            eprintln!("Error creating __diesel_schema_migrations table: {:?}", e);
+            process::exit(1);
+        }
+
+        eprintln!("__diesel_schema_migrations table created.");
+    }
+
+    if let Err(e) = dal.conn.pending_migrations(MIGRATIONS) {
+        eprintln!("Error checking pending Migrations: {:?}", e);
+        process::exit(1);
+    } else {
+        dal.conn
+            .pending_migrations(MIGRATIONS)
+            .unwrap()
+            .iter()
+            .for_each(|m| {
+                dlog2!("Pending Migration: {}", m.name());
+            });
+    }
+    if let Err(e) = dal.conn.run_pending_migrations(MIGRATIONS) {
+        eprintln!("Error running pending migrations: {}", e);
+        process::exit(1);
+    }
+    eprintln!("{}", "Database schema has been extended.".blue());
+}
+
+fn backfill_embeddings() {
+    eprintln!("Database: {}", CONFIG.db_url);
+    let mut dal = Dal::new(CONFIG.db_url.clone());
+    let bms = dal.get_bookmarks_without_embedding().unwrap_or_else(|e| {
+        eprintln!("Error getting bookmarks without embedding: {}", e);
+        process::exit(1);
+    });
+    dlog2!("bms: {:?}", bms);
+    for bm in &bms {
+        println!("Updating: {:?}", bm.metadata);
+        let mut bm = bm.clone();
+        bm.update();
+        dal.update_bookmark(bm).unwrap_or_else(|e| {
+            eprintln!("Error updating bookmark: {}", e);
+            process::exit(1);
+        });
+    }
+}
+
+fn sem_search(query: String, limit: Option<i32>) {
+    let bms = Bookmarks::new("".to_string());
+    let results = match find_similar(&query, &bms) {
+        Ok(value) => value,
+        Err(e) => {
+            eprintln!("Error finding similar: {}", e);
+            process::exit(1);
+        }
+    };
+
+    // Print top 10 entries
+    for (id, similarity) in results.iter().take(limit.unwrap_or(10) as usize) {
+        // println!("ID: {}, Similarity: {}", id, similarity);
+        if let Some(bm) = bms.bms.iter().find(|&bm| bm.id == *id) {
+            println!("{:.3} [{:>5}]: {:?} -- {:?}", similarity, bm.id, bm.metadata, bm.URL);
+        }
+    }
+}
+
+fn find_similar(query: &String, bms: &Bookmarks) -> anyhow::Result<Vec<(i32, f32)>> {
+    let embedding = CTX
+        .get()
+        .ok_or_else(|| anyhow!("Error: CTX is not initialized"))?
+        .execute(query)?
+        .ok_or_else(|| anyhow!("Error: embedding is not set, did you use --openai?"))?;
+
+    let ndarray_vector = ndarray::Array1::from(embedding);
+    let mut results = Vec::new();
+    for bm in &bms.bms {
+        let bm_embedding =
+            deserialize_embedding(bm.embedding.clone().expect("Error: embedding is not set"))?;
+        let bm_ndarray_vector = ndarray::Array1::from(bm_embedding);
+        let similarity = cosine_similarity(&ndarray_vector, &bm_ndarray_vector);
+        results.push((bm.id, similarity));
+    }
+    // Sorting by similarity
+    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    Ok(results)
+}
 
 fn set_logger(cli: &Cli) {
     // Note, only flags can have multiple occurrences
@@ -670,11 +847,85 @@ fn set_logger(cli: &Cli) {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use camino::Utf8PathBuf;
+    use camino_tempfile::tempdir;
+    use fs_extra::{copy_items, dir};
+    use rstest::{fixture, rstest};
+
     use crate::Cli;
+
+    use super::*;
+
+    #[ctor::ctor]
+    fn init() {
+        let _ = env_logger::builder()
+            // Include all events in tests
+            .filter_level(log::LevelFilter::max())
+            .filter_module("skim", log::LevelFilter::Info)
+            .filter_module("tuikit", log::LevelFilter::Info)
+            // Ensure events are captured by `cargo test`
+            .is_test(true)
+            // Ignore errors initializing the logger if tests race to configure it
+            .try_init();
+    }
+
+    #[fixture]
+    fn temp_dir() -> Utf8PathBuf {
+        let tempdir = tempdir().unwrap();
+        let options = dir::CopyOptions::new().overwrite(true);
+        copy_items(
+            &["tests/resources/bkmr.v1.db", "tests/resources/bkmr.v2.db"],
+            "../db",
+            &options,
+        )
+            .expect("Failed to copy test project directory");
+        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
+
+        tempdir.into_path()
+    }
+
+    #[allow(unused_variables)]
+    #[rstest]
+    fn test_find_similar(temp_dir: Utf8PathBuf) {
+        // Given: v2 database with embeddings and OpenAI context
+        let bms = Bookmarks::new("".to_string());
+        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+            .unwrap();
+
+        // When: find similar for "blub"
+        let results = find_similar(&"blub".to_string(), &bms).unwrap();
+
+        // Then: Expect the first three entries to be: blub, blub3, blub2
+        assert_eq!(results.len(), 11);
+        // Extract the first element (id) of the first three tuples
+        let first_three_ids: Vec<_> = results.into_iter().take(3).map(|(id, _)| id).collect();
+        assert_eq!(first_three_ids, vec![4, 6, 5]);
+    }
+
+    #[allow(unused_variables)]
+    #[ignore = "interactive: visual check required"]
+    #[rstest]
+    fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
+        // this is only visible test
+        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+            .unwrap();
+        // Given: v2 database with embeddings
+        // When:
+        sem_search("blub".to_string(), None);
+        // Then: Expect the first three entries to be: blub, blub3, blub2
+    }
 
     #[test]
     fn verify_cli() {
         use clap::CommandFactory;
         Cli::command().debug_assert()
+    }
+
+    #[ignore = "interactive: opens browser link"]
+    #[test]
+    fn test_randomized() {
+        randomized(1);
     }
 }
