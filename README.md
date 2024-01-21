@@ -2,10 +2,10 @@
 
 # Ultrafast Bookmark Manager and Launcher
 
-> New Killer Feature: Semantic Search
+> New Feature: Semantic Search (AI Embeddings)
 
 Features:
-- Optional: semantic search using OpenAI embeddings (requires OpenAI API key)
+- semantic search using OpenAI embeddings (requires OpenAI API key)
 - full-text search with semantic ranking (FTS5)
 - fuzzy search `--fzf` (CTRL-O: copy to clipboard, CTRL-E: edit, CTRL-D: delete, Enter: open)
 - tags for classification
@@ -39,7 +39,6 @@ Commands:
   surprise           Opens n random URLs
   tags               Tag for which related tags should be shown. No input: all tags are printed
   create-db          Initialize bookmark database
-  enable-embeddings  Enable embeddings for bookmarks by extending the database and generate embeddings Can take some time, depending on the number of bookmarks (no multithreading yet)
   backfill           Backfill embeddings for bookmarks
   help               Print this message or the help of the given subcommand(s)
 
@@ -91,20 +90,20 @@ bkmr update -n git $(bkmr search -t gh --np)
 # JSON dump of entire database
 bkmr search --json
 
-# Semantic Search
+# Semantic Search based on OpenAI Embeddings
 bkmr --openai sem-search "lambda security"  # requires OPENAI_API_KEY
 ```
 Tags must be separated by comma without blanks.
+
+## Upgrade to 1.x.x
+- requires database migration: adds two columns to the bookmarks table for the OpenAI embeddings
+- to use semantic search you need to set the `OPENAI_API_KEY` key: `export OPENAI_API_KEY=<your-key>`
 
 ## Installation
 1. `cargo install bkmr`
 2. initialize the database: `bkmr create-db db_path`
 3. `export "BKMR_DB_URL=db-path"`, location of created sqlite database must be known
 4. add URLs
-
-### Migration to version 1.x.x (Semantic Search)
-1. `export OPENAI_API_KEY=<your-key>`
-2. `bkmr enable-embeddings` (this will upgrade the database and create embeddings)
 
 ### FZF Customization
 You can set (not required) this variable to change `--fzf` mode default options:

@@ -41,11 +41,16 @@ init:  ## init
 	tree -a ~/xxx
 	tree -a  $(app_root)/db
 
+.PHONY: run-all
+#run-all: test-url-details test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search ## run-all
+run-all: test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search  ## run-all
+
+
 .PHONY: test-url-details
 test-url-details:  ## test-url-details (charm strang verbose output)
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
 
-.PHONY: test-fzf
+.PHONY: test-fzf  # TODO: fix
 test-fzf:  ## test-fzf
 	# requires to uncomment associated test
 	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
@@ -72,17 +77,12 @@ test-env:  ## test-env
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --lib environment::test -- --nocapture
 
 
-.PHONY: run-check-readiness-openai
-run-check-readiness-openai: init  ## run-check-readiness-openai (has DB been migrated)
+.PHONY: run-migrate-db
+run-migrate-db: init  ## run-migrate-db
+	echo "-M- First run: should do migration"
 	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d --openai
-
-.PHONY: run-enable-embeddings
-run-enable-embeddings:  ## run-enable-embeddings
-	cp -vf bkmr/tests/resources/bkmr.v1.db db/bkmr.v1.db
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.v1.db cargo run -- -d -d --openai enable-embeddings
-	echo "-M- Second run: should not do requests"
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.v1.db cargo run -- -d -d --openai enable-embeddings
-	echo "-M- check DB: should have embeddings and hashes"
+	echo "-M- Second run: should be ok, do nothing"
+	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d --openai
 
 .PHONY: run-backfill
 run-backfill: run-create-db  ## run-backfill
@@ -91,7 +91,7 @@ run-backfill: run-create-db  ## run-backfill
 
 
 .PHONY: run-update
-run-update:  ## run-update
+run-update: init-db  ## run-update
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
 
 .PHONY: run-show
@@ -101,7 +101,7 @@ run-show: init-db  ## run-show
 .PHONY: run-create-db
 run-create-db:  ## run-create-db
 	rm -vf /tmp/bkmr_test.db
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d create-db /tmp/bkmr_test.db
+	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test_db cargo run -- -d -d create-db /tmp/bkmr_test.db
 	open /tmp/bkmr_test.db
 
 .PHONY: run-edit-sem

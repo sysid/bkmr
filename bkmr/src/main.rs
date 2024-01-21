@@ -62,9 +62,9 @@ enum Commands {
         fts_query: Option<String>,
 
         #[arg(
-            short = 'e',
-            long = "exact",
-            help = "match exact, comma separated list"
+        short = 'e',
+        long = "exact",
+        help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
 
@@ -72,9 +72,9 @@ enum Commands {
         tags_all: Option<String>,
 
         #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "not match all, comma separated list"
+        short = 'T',
+        long = "Tags",
+        help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
 
@@ -82,9 +82,9 @@ enum Commands {
         tags_any: Option<String>,
 
         #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "not match any, comma separated list"
+        short = 'N',
+        long = "Ntags",
+        help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
 
@@ -101,8 +101,8 @@ enum Commands {
         non_interactive: bool,
 
         #[arg(
-            long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
+        long = "fzf",
+        help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
         )]
         is_fuzzy: bool,
 
@@ -177,9 +177,6 @@ enum Commands {
         /// pathname to database file
         path: String,
     },
-    /// Enable embeddings for bookmarks by extending the database and generate embeddings
-    /// Can take some time, depending on the number of bookmarks (no multithreading yet)
-    EnableEmbeddings {},
     /// Backfill embeddings for bookmarks
     Backfill {},
     #[command(hide = true)]
@@ -200,25 +197,23 @@ fn main() {
 
     set_logger(&cli);
 
+    if let Some(Commands::CreateDb { .. }) = &cli.command {
+        // Skip the path.exists check and create database with correct schema
+    } else {
+        let path = std::path::Path::new(&CONFIG.db_url);
+        if !path.exists() {
+            eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
+            process::exit(1);
+        }
+        enable_embeddings_if_required();  // migrate db
+    }
+
     if cli.openai {
-        let mut dal = Dal::new(CONFIG.db_url.clone());
         if !is_env_var_set("OPENAI_API_KEY") {
             println!("Environment variable {} is not set.", "OPENAI_API_KEY");
             process::exit(1);
         }
-        let embedding_column_exists = dal.check_embedding_column_exists().unwrap_or_else(|e| {
-            eprintln!("Error checking embedding column: {:?}", e);
-            process::exit(1);
-        });
 
-        if !embedding_column_exists {
-            if let Some(Commands::EnableEmbeddings {}) = cli.command {
-                // Don't exit, as this command is intended to create the embedding column
-            } else {
-                eprintln!("{}", "Your DB does not have the correct schema. Please run `bkmr enable -embeddings` first.".red());
-                process::exit(1);
-            }
-        }
         info!("Using OpenAI API");
         CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
             .unwrap();
@@ -288,7 +283,6 @@ fn main() {
         Commands::Tags { tag } => show_tags(tag),
         Commands::CreateDb { path } => create_db(path),
         Commands::Surprise { n } => randomized(n),
-        Commands::EnableEmbeddings {} => enable_embeddings(),
         Commands::Backfill {} => backfill_embeddings(),
         Commands::Xxx { ids, tags } => {
             eprintln!(
@@ -692,13 +686,25 @@ fn randomized(n: i32) {
     }
 }
 
-fn enable_embeddings() {
+fn enable_embeddings_if_required() {
     eprintln!("Database: {}", CONFIG.db_url);
-    if !confirm("This will perform a DB migration. Backup up your DB before you continue! Do you want to continue?") {
+    let mut dal = Dal::new(CONFIG.db_url.clone());
+
+    let embedding_column_exists = dal.check_embedding_column_exists().unwrap_or_else(|e| {
+        eprintln!("Error checking existence of embedding column: {:?}", e);
+        process::exit(1);
+    });
+    if embedding_column_exists {
+        dlog2!("Embedding column exists, no migration required.");
+        return;
+    }
+
+    eprintln!("New 'bkmr' version requires an extension of the database schema.");
+    eprintln!("Two new columns will be added to the 'bookmarks' table:");
+    if !confirm("Please backup up your DB before continue! Do you want to continue?") {
         println!("{}", "Aborting...".red());
         process::exit(1);
     }
-    let mut dal = Dal::new(CONFIG.db_url.clone());
 
     if !dal.check_schema_migrations_exists().unwrap_or_else(|e| {
         eprintln!("Error checking schema migrations: {:?}", e);
@@ -742,18 +748,6 @@ fn enable_embeddings() {
         process::exit(1);
     }
     eprintln!("{}", "Database schema has been extended.".blue());
-
-    let bms = Bookmarks::new("".to_string());
-    for bm in &bms.bms {
-        println!("Updating: {:?}", bm.metadata);
-        let mut bm = bm.clone();
-        bm.update();
-        dal.update_bookmark(bm).unwrap_or_else(|e| {
-            eprintln!("Error updating bookmark: {}", e);
-            process::exit(1);
-        });
-    }
-    // println!("{:?}", bms.bms);
 }
 
 fn backfill_embeddings() {
@@ -886,7 +880,7 @@ mod tests {
             "../db",
             &options,
         )
-        .expect("Failed to copy test project directory");
+            .expect("Failed to copy test project directory");
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
 
         tempdir.into_path()
