@@ -40,6 +40,8 @@ fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
 #[rstest]
 #[ignore = "Manual Test: make test-vim"]
 fn test_do_edit(mut dal: Dal, bms: Vec<Bookmark>) {
+    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+        .unwrap();
     let bm = bms[0].clone();
     // avoid panic as it would with CLI call
     do_edit(&bm).unwrap_or_else(|e| {

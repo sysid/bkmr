@@ -433,7 +433,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         line!(),
         editor
     );
-    // Open the temporary file with Vim
+    // Open the temporary file with Vim (comment out for rstest)
     Command::new(&editor)
         .arg("temp.txt")
         .status()
@@ -449,16 +449,22 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
     // Read the modified content of the file back into a string
     let modified_content = fs::read_to_string("temp.txt")
         .with_context(|| format!("({}:{}) Error reading temp file", function_name!(), line!()))?;
-    let lines: Vec<&str> = modified_content
-        .split('\n')
-        .filter(|l| !l.starts_with('#'))
-        .collect();
+
+    let mut lines = modified_content.lines().filter(|l| !l.starts_with('#'));
+
+    let url = lines.next().unwrap_or_default().to_string();
+    let title = lines.next().unwrap_or_default().to_string();
+    let tags = lines.next().unwrap_or_default().to_string();
+
+    // Process multiline Description
+    let desc = lines.clone().collect::<Vec<_>>().join("\n");
+
     let mut new_bm = Bookmark {
         id: bm.id,
-        URL: lines[0].to_string(),
-        metadata: lines[1].to_string(), // title
-        tags: lines[2].to_string(),
-        desc: lines[3].to_string(), // comments
+        URL: url,
+        metadata: title, // title
+        tags,
+        desc, // comments
         flags: bm.flags,
         last_update_ts: Default::default(), // will be overwritten by diesel
         embedding: None,

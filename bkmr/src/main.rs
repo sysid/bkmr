@@ -62,9 +62,9 @@ enum Commands {
         fts_query: Option<String>,
 
         #[arg(
-        short = 'e',
-        long = "exact",
-        help = "match exact, comma separated list"
+            short = 'e',
+            long = "exact",
+            help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
 
@@ -72,9 +72,9 @@ enum Commands {
         tags_all: Option<String>,
 
         #[arg(
-        short = 'T',
-        long = "Tags",
-        help = "not match all, comma separated list"
+            short = 'T',
+            long = "Tags",
+            help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
 
@@ -82,9 +82,9 @@ enum Commands {
         tags_any: Option<String>,
 
         #[arg(
-        short = 'N',
-        long = "Ntags",
-        help = "not match any, comma separated list"
+            short = 'N',
+            long = "Ntags",
+            help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
 
@@ -101,8 +101,8 @@ enum Commands {
         non_interactive: bool,
 
         #[arg(
-        long = "fzf",
-        help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
+            long = "fzf",
+            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
         )]
         is_fuzzy: bool,
 
@@ -205,7 +205,7 @@ fn main() {
             eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
             process::exit(1);
         }
-        enable_embeddings_if_required();  // migrate db
+        enable_embeddings_if_required(); // migrate db
     }
 
     if cli.openai {
@@ -783,7 +783,10 @@ fn sem_search(query: String, limit: Option<i32>) {
     for (id, similarity) in results.iter().take(limit.unwrap_or(10) as usize) {
         // println!("ID: {}, Similarity: {}", id, similarity);
         if let Some(bm) = bms.bms.iter().find(|&bm| bm.id == *id) {
-            println!("{:.3} [{:>5}]: {:?} -- {:?}", similarity, bm.id, bm.metadata, bm.URL);
+            println!(
+                "{:.3} [{:>5}]: {:?} -- {:?}",
+                similarity, bm.id, bm.metadata, bm.URL
+            );
         }
     }
 }
@@ -879,11 +882,15 @@ mod tests {
         let tempdir = tempdir().unwrap();
         let options = dir::CopyOptions::new().overwrite(true);
         copy_items(
-            &["tests/resources/bkmr.v1.db", "tests/resources/bkmr.v2.db", "tests/resources/bkmr.v2.noembed.db"],
+            &[
+                "tests/resources/bkmr.v1.db",
+                "tests/resources/bkmr.v2.db",
+                "tests/resources/bkmr.v2.noembed.db",
+            ],
             "../db",
             &options,
         )
-            .expect("Failed to copy test project directory");
+        .expect("Failed to copy test project directory");
 
         tempdir.into_path()
     }

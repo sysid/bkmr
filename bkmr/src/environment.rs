@@ -51,10 +51,7 @@ impl Config {
         };
         dlog2!("db: {:?}, fzf_opts: {:?}", db_url, fzf_opts);
 
-        Config {
-            db_url,
-            fzf_opts,
-        }
+        Config { db_url, fzf_opts }
     }
 }
 
