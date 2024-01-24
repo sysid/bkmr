@@ -49,7 +49,20 @@ impl Tags {
     }
 
     pub fn change_tag_string_delimiter(tag_str: &str, new_delimiter: &str) -> String {
-        tag_str.split(',').collect::<Vec<_>>().join(new_delimiter)
+        /*
+         * tag_str is a normalized string with the following format :
+         * ",tag1,tag2,tag3,"
+         * cf. create_normalized_tag_string function in tag.rs
+         *
+         * We turn this normalized tags string
+         * into a string ready for stdout :
+         * so that, with delimiter e.g " | ",
+         * we get :
+         * "tag1 | tag2 | tag3"
+         */
+        let mut tags = tag_str.split(',').collect::<Vec<_>>();
+        tags.retain(|&x| !x.is_empty());
+        tags.join(new_delimiter)
     }
 
     pub fn match_exact_tags(tags: &Vec<String>, bm_tags: &Vec<String>) -> bool {
