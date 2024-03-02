@@ -3,11 +3,13 @@
 use std::env;
 
 use anyhow::Result;
+use camino::Utf8PathBuf;
+use log::debug;
 use rstest::*;
 
+use bkmr::{CTX, helper, load_url_details, read_ndjson_file, update_bm, update_bookmarks};
 use bkmr::dal::Dal;
 use bkmr::models::Bookmark;
-use bkmr::{helper, load_url_details, update_bm, update_bookmarks, CTX};
 
 mod test_dal;
 
@@ -105,4 +107,25 @@ fn test_update_bookmarks_successful() {
 #[rstest]
 fn test_ctx() {
     assert!(CTX.get().is_none())
+}
+
+#[fixture]
+fn test_data_path() -> Utf8PathBuf {
+    Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/resources/data.ndjson")
+}
+
+#[rstest]
+fn test_read_ndjson_file(test_data_path: Utf8PathBuf) {
+    debug!("Path: {:?}", test_data_path);
+    // let path = test_data_path();
+    let records = read_ndjson_file(test_data_path).expect("Failed to read .ndjson file");
+    debug!("Records: {:?}", records);
+
+    assert_eq!(records.len(), 3);
+    assert_eq!(records[0].id, "/a/b/readme.md:0");
+    assert_eq!(records[0].content, "First record");
+    assert_eq!(records[1].id, "/a/b/readme.md:1");
+    assert_eq!(records[1].content, "Second record");
+    assert_eq!(records[2].id, "/a/b/c/xxx.md:0");
+    assert_eq!(records[2].content, "Third record");
 }

@@ -1,3 +1,8 @@
+use std::{env, io};
+use std::error::Error;
+use std::io::{Write};
+use std::time::{Duration, Instant};
+
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::tempdir;
 use diesel::sqlite::Sqlite;
@@ -5,10 +10,6 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use fs_extra::{copy_items, dir};
 use log::debug;
 use reqwest::blocking;
-use std::error::Error;
-use std::io::Write;
-use std::time::{Duration, Instant};
-use std::{env, io};
 use stdext::function_name;
 
 pub fn init_logger() {
@@ -120,9 +121,10 @@ pub fn is_env_var_set(env_var_name: &str) -> bool {
 
 #[cfg(test)]
 mod test {
-    // use log::debug;
-    use super::*;
     use rstest::*;
+
+    // use log::debug;
+        use super::*;
 
     #[ctor::ctor]
     fn init() {
