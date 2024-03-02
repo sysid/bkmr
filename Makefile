@@ -10,8 +10,8 @@ VERSION       = $(shell cat VERSION)
 SHELL	= bash
 .ONESHELL:
 
-app_root = .
-app_root ?= .
+app_root := $(if $(PROJ_DIR),$(PROJ_DIR),$(CURDIR))
+
 pkg_src =  $(app_root)/bkmr
 tests_src = $(app_root)/bkmr/tests
 BINARY = bkmr
@@ -87,7 +87,8 @@ run-migrate-db: init  ## run-migrate-db
 .PHONY: run-backfill
 run-backfill: run-create-db  ## run-backfill
 	#cp -vf bkmr/tests/resources/bkmr.v2.db db/bkmr.v2.db
-	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai backfill
+	#pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai backfill
+	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai backfill --dry-run  # only shows "Google" entry
 
 
 .PHONY: run-update

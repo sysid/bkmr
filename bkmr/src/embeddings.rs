@@ -2,6 +2,7 @@ use std::io::Cursor;
 use std::{env, fmt};
 
 use anyhow::anyhow;
+use anyhow::Context as anyhowContext;
 pub use anyhow::Result;
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -128,7 +129,8 @@ impl Embedding for OpenAi {
             .header("Authorization", format!("Bearer {}", api_key))
             .json(&payload)
             .send()?
-            .json::<EmbeddingResponse>()?;
+            .json::<EmbeddingResponse>()
+            .with_context(|| format!("OpenAPI request failed: {}", api_key))?;
 
         // Ensure we have data and it contains at least one embedding
         let embedding_data = response

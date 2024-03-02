@@ -178,7 +178,10 @@ enum Commands {
         path: String,
     },
     /// Backfill embeddings for bookmarks
-    Backfill {},
+    Backfill {
+        #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
+        dry_run: bool,
+    },
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks
@@ -283,7 +286,7 @@ fn main() {
         Commands::Tags { tag } => show_tags(tag),
         Commands::CreateDb { path } => create_db(path),
         Commands::Surprise { n } => randomized(n),
-        Commands::Backfill {} => backfill_embeddings(),
+        Commands::Backfill { dry_run } => backfill_embeddings(dry_run),
         Commands::Xxx { ids, tags } => {
             eprintln!(
                 "({}:{}) ids: {:?}, tags: {:?}",
@@ -750,7 +753,7 @@ fn enable_embeddings_if_required() {
     eprintln!("{}", "Database schema has been extended.".blue());
 }
 
-fn backfill_embeddings() {
+fn backfill_embeddings(dry_run: bool) {
     eprintln!("Database: {}", CONFIG.db_url);
     let mut dal = Dal::new(CONFIG.db_url.clone());
     let bms = dal.get_bookmarks_without_embedding().unwrap_or_else(|e| {
@@ -760,6 +763,9 @@ fn backfill_embeddings() {
     dlog2!("bms: {:?}", bms);
     for bm in &bms {
         println!("Updating: {:?}", bm.metadata);
+        if dry_run {
+            continue;
+        }
         let mut bm = bm.clone();
         bm.update();
         dal.update_bookmark(bm).unwrap_or_else(|e| {
