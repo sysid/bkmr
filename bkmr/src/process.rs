@@ -158,14 +158,6 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
     }
 }
 
-pub fn bms_to_json(bms: &Vec<Bookmark>) {
-    let json = serde_json::to_string_pretty(bms).expect("Failed to serialize bookmarks to JSON.");
-    io::stdout()
-        .write_all(json.as_bytes())
-        .expect("Failed to write JSON to stdout.");
-    println!();
-}
-
 fn parse(input: &str) -> Vec<String> {
     let binding = input.trim().replace(',', "").to_lowercase();
     let tokens = binding
@@ -504,6 +496,7 @@ fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
 mod test {
     use anyhow::anyhow;
     use rstest::*;
+    use crate::adapter::json::bms_to_json;
 
     use crate::dal::Dal;
     use crate::helper::init_db;

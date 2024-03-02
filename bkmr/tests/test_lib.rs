@@ -7,11 +7,15 @@ use camino::Utf8PathBuf;
 use log::debug;
 use rstest::*;
 
-use bkmr::{CTX, helper, load_url_details, read_ndjson_file, update_bm, update_bookmarks};
+use bkmr::{CTX, helper, load_url_details, update_bm, update_bookmarks};
+use bkmr::adapter::json::read_ndjson_file;
 use bkmr::dal::Dal;
 use bkmr::models::Bookmark;
 
 mod test_dal;
+mod adapter {
+    mod test_json;
+}
 
 #[cfg(test)]
 #[ctor::ctor]

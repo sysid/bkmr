@@ -25,12 +25,13 @@ use bkmr::fzf::fzf_process;
 use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
 use bkmr::models::BookmarkBuilder;
 use bkmr::process::{
-    bms_to_json, delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS,
+    delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS,
     DEFAULT_FIELDS,
 };
 use bkmr::tag::Tags;
 use bkmr::CTX;
 use bkmr::{dlog2, load_url_details};
+use bkmr::adapter::json::bms_to_json;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

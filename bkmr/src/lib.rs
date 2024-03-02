@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 
 use anyhow::Context as anyhowContext;
 use anyhow::Result;
-use camino::{Utf8Path};
+use camino::Utf8Path;
 use itertools::Itertools;
 use log::{debug, error};
 use reqwest::blocking::Client;
@@ -29,6 +29,9 @@ use crate::environment::CONFIG;
 use crate::models::Bookmark;
 use crate::tag::Tags;
 
+pub mod adapter {
+    pub mod json;
+}
 pub mod bms;
 pub mod dal;
 pub mod embeddings;
@@ -141,29 +144,6 @@ pub fn update_bm(
     bm_updated.update();
     dal.update_bookmark(bm_updated)
         .map_err(|e| anyhow::anyhow!("Error updating bookmark: {:?}", e))
-}
-
-// Define the Record struct to match the .ndjson file structure
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Record {
-    pub id: String,
-    pub content: String,
-}
-
-// Function to read a .ndjson file and return a Vec<Record>
-pub fn read_ndjson_file<P: AsRef<Utf8Path>>(file_path: P) -> anyhow::Result<Vec<Record>> {
-    let file = File::open(file_path.as_ref()).with_context(|| format!("Failed to open file {:?}", file_path.as_ref()))?;
-    let reader = io::BufReader::new(file);
-    let mut records = Vec::new();
-
-    for line in reader.lines() {
-        let line = line.with_context(|| "Failed to read line from file")?;
-        let record: Record = serde_json::from_str(&line)
-            .with_context(|| format!("Failed to deserialize line: {}", line))?;
-        records.push(record);
-    }
-
-    Ok(records)
 }
 
 #[cfg(test)]
