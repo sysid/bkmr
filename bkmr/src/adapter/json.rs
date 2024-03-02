@@ -1,41 +1,74 @@
-use crate::models::Bookmark;
+use crate::models::{Bookmark, BookmarkBuilder, NewBookmark};
 use std::io;
 use std::io::{BufRead, Write};
 use camino::Utf8Path;
 use std::fs::File;
 use serde_derive::{Deserialize, Serialize};
 use anyhow::Context;
+use chrono::NaiveDateTime;
+
+pub fn read_ndjson_file_and_create_bookmarks<P: AsRef<Utf8Path>>(file_path: P) -> anyhow::Result<Vec<NewBookmark>> {
+    let file = File::open(file_path.as_ref()).with_context(|| format!("Failed to open file {:?}", file_path.as_ref()))?;
+    let reader = io::BufReader::new(file);
+    let mut bookmarks = Vec::new();
+
+    for line in reader.lines() {
+        let line = line.with_context(|| "Failed to read line from file")?;
+        let record: serde_json::Value = serde_json::from_str(&line)
+            .with_context(|| format!("Failed to deserialize line: {}", line))?;
+
+        // todo: ensure exists and is uniq
+        let id = record["id"].as_str().ok_or_else(|| anyhow::anyhow!("Invalid ID format"))?.to_string();
+        let mut bookmark = BookmarkBuilder::new()
+            .id(1)
+            .URL(id) // Using the content field as the URL for illustration
+            .metadata(record["content"].as_str().unwrap_or_default().to_string()) // Add this if you have the data
+            .tags(",_imported_,".to_string()) // Add this if you have the data
+            .build();
+        bookmark.update();  // update embeddings
+
+        bookmarks.push(bookmark.convert_to_new_bookmark());
+    }
+
+    Ok(bookmarks)
+}
+
 
 pub fn bms_to_json(bms: &Vec<Bookmark>) {
-    let json = serde_json::to_string_pretty(bms).expect("Failed to serialize bookmarks to JSON.");
+    let bms_view: Vec<BookmarkView> = bms.iter().map(BookmarkView::from).collect();
+    let json = serde_json::to_string_pretty(&bms_view).expect("Failed to serialize bookmarks to JSON.");
     io::stdout()
         .write_all(json.as_bytes())
         .expect("Failed to write JSON to stdout.");
     println!();
 }
 
-// Define the Record struct to match the .ndjson file structure
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Record {
-    pub id: String,
-    pub content: String,
+#[derive(Serialize)]
+pub struct BookmarkView {
+    pub id: i32,
+    pub URL: String,
+    pub metadata: String,
+    pub tags: String,
+    pub desc: String,
+    pub flags: i32,
+    #[serde(with = "serde_with::chrono::NaiveDateTime")]
+    pub last_update_ts: NaiveDateTime,
 }
 
-// Function to read a .ndjson file and return a Vec<Record>
-pub fn read_ndjson_file<P: AsRef<Utf8Path>>(file_path: P) -> anyhow::Result<Vec<Record>> {
-    let file = File::open(file_path.as_ref()).with_context(|| format!("Failed to open file {:?}", file_path.as_ref()))?;
-    let reader = io::BufReader::new(file);
-    let mut records = Vec::new();
-
-    for line in reader.lines() {
-        let line = line.with_context(|| "Failed to read line from file")?;
-        let record: Record = serde_json::from_str(&line)
-            .with_context(|| format!("Failed to deserialize line: {}", line))?;
-        records.push(record);
+impl From<&Bookmark> for BookmarkView {
+    fn from(bm: &Bookmark) -> Self {
+        BookmarkView {
+            id: bm.id,
+            URL: bm.URL.clone(),
+            metadata: bm.metadata.clone(),
+            tags: bm.tags.clone(),
+            desc: bm.desc.clone(),
+            flags: bm.flags,
+            last_update_ts: bm.last_update_ts,
+        }
     }
-
-    Ok(records)
 }
+
 
 #[cfg(test)]
 mod tests {

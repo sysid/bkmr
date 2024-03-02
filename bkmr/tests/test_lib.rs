@@ -8,8 +8,8 @@ use log::debug;
 use rstest::*;
 
 use bkmr::{CTX, helper, load_url_details, update_bm, update_bookmarks};
-use bkmr::adapter::json::read_ndjson_file;
 use bkmr::dal::Dal;
+use bkmr::embeddings::Context;
 use bkmr::models::Bookmark;
 
 mod test_dal;
@@ -20,6 +20,7 @@ mod adapter {
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
+    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
     let _ = env_logger::builder()
@@ -110,26 +111,6 @@ fn test_update_bookmarks_successful() {
 
 #[rstest]
 fn test_ctx() {
-    assert!(CTX.get().is_none())
+    assert!(CTX.get().is_some());
 }
 
-#[fixture]
-fn test_data_path() -> Utf8PathBuf {
-    Utf8PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/resources/data.ndjson")
-}
-
-#[rstest]
-fn test_read_ndjson_file(test_data_path: Utf8PathBuf) {
-    debug!("Path: {:?}", test_data_path);
-    // let path = test_data_path();
-    let records = read_ndjson_file(test_data_path).expect("Failed to read .ndjson file");
-    debug!("Records: {:?}", records);
-
-    assert_eq!(records.len(), 3);
-    assert_eq!(records[0].id, "/a/b/readme.md:0");
-    assert_eq!(records[0].content, "First record");
-    assert_eq!(records[1].id, "/a/b/readme.md:1");
-    assert_eq!(records[1].content, "Second record");
-    assert_eq!(records[2].id, "/a/b/c/xxx.md:0");
-    assert_eq!(records[2].content, "Third record");
-}

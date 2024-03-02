@@ -490,7 +490,7 @@ fn add_bookmark(
         .desc(description)
         .flags(0)
         .build();
-    bm.update();
+    bm.update();  // update embeddings
 
     match dal.insert_bookmark(bm.convert_to_new_bookmark()) {
         Ok(bms) => {

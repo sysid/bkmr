@@ -24,8 +24,7 @@ fn bms() -> Vec<Bookmark> {
 }
 #[rstest]
 fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
-    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
-        .unwrap();
+    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
 
     let bm_before = dal.get_bookmark_by_id(1)?;
     sleep(Duration::from_secs(1));

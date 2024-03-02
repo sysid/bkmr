@@ -66,8 +66,8 @@ impl Dal {
             WHERE id = ?;
         ",
         )
-        .bind::<Integer, _>(id_)
-        .execute(&mut self.conn);
+            .bind::<Integer, _>(id_)
+            .execute(&mut self.conn);
         debug!("({}:{}) Deleting {:?}", function_name!(), line!(), id_);
 
         // database compaction
@@ -78,8 +78,8 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-        .bind::<Integer, _>(id_)
-        .execute(&mut self.conn)?;
+            .bind::<Integer, _>(id_)
+            .execute(&mut self.conn)?;
         debug!("({}:{}) {:?}", function_name!(), line!(), "Compacting");
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
@@ -96,6 +96,7 @@ impl Dal {
         debug!("({}:{}) {:?}", function_name!(), line!(), "Cleaned table.");
         Ok(())
     }
+    //noinspection RsTraitObligations
     pub fn update_bookmark(&mut self, bm: Bookmark) -> Result<Vec<Bookmark>, DieselError> {
         diesel::update(bookmarks.find(bm.id))
             .set((
@@ -110,11 +111,36 @@ impl Dal {
             .get_results(&mut self.conn)
     }
 
+    //noinspection RsTraitObligations
     pub fn insert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>, DieselError> {
         diesel::insert_into(bookmarks)
             .values(bm)
             .get_results(&mut self.conn)
     }
+
+    pub fn upsert_bookmark(&mut self, new_bm: NewBookmark) -> Result<Vec<Bookmark>, DieselError> {
+        let bm = self.get_bookmark_by_url(&new_bm.URL);
+        // if bm exists, update, else insert
+        match bm {
+            // update
+            Ok(bm) => self.update_bookmark(
+                Bookmark {
+                    id: bm.id.clone(),
+                    URL: bm.URL.clone(),
+                    metadata: new_bm.metadata.clone(),
+                    tags: bm.tags.clone(),
+                    desc: bm.desc.clone(),
+                    flags: bm.flags,
+                    last_update_ts: chrono::Utc::now().naive_utc(),
+                    embedding: new_bm.embedding.clone(),
+                    content_hash: new_bm.content_hash.clone(),
+                },
+            ),
+            // insert
+            Err(_) => self.insert_bookmark(new_bm),
+        }
+    }
+
 
     pub fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark, DieselError> {
         // Ok(sql_query("SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks").load::<Bookmark2>(conn)?)
@@ -123,6 +149,14 @@ impl Dal {
             where id = ?;",
         );
         let bm = bms.bind::<Integer, _>(id_).get_result(&mut self.conn);
+        bm
+    }
+    pub fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark, DieselError> {
+        let bms = sql_query(
+            "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
+            where URL = ?;",
+        );
+        let bm = bms.bind::<Text, _>(url).get_result(&mut self.conn);
         bm
     }
     pub fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>, DieselError> {
@@ -144,11 +178,11 @@ impl Dal {
         WHERE bookmarks_fts MATCH ? \
         ORDER BY rank",
         )
-        .bind::<Text, _>(fts_query)
-        .load::<IdResult>(&mut self.conn)?
-        .into_iter()
-        .map(|result| result.id)
-        .collect();
+            .bind::<Text, _>(fts_query)
+            .load::<IdResult>(&mut self.conn)?
+            .into_iter()
+            .map(|result| result.id)
+            .collect();
 
         Ok(ids)
     }

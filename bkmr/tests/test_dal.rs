@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::env;
 
 use anyhow::Result;
 use log::{debug, info};
@@ -84,8 +85,10 @@ fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) {
 #[rstest]
 fn test_insert_bm(mut dal: Dal) {
     // init_db(&mut dal.conn).expect("Error DB init");
-    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
-        .unwrap();
+    if CTX.get().is_none() {
+        CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+            .unwrap();
+    }
     let mut bm = BookmarkBuilder::new()
         .URL("www.sysid.de".to_string())
         .metadata("".to_string())
@@ -108,6 +111,29 @@ fn test_update_bm(mut dal: Dal) {
     let bms = dal.update_bookmark(bm);
     println!("The bookmarks are: {:?}", bms);
     assert_eq!(bms.unwrap()[0].URL, "http://www.sysid.de");
+}
+
+#[rstest]
+fn test_upsert_bookmark(mut dal: Dal) -> Result<()> {
+    // CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
+    let mut bm = BookmarkBuilder::new()
+        .URL("www.sysid.de".to_string())
+        .metadata("".to_string())
+        .tags(",xxx,".to_string())
+        .desc("sysid descript".to_string())
+        .flags(0)
+        .build();
+    bm.update();
+    let bms = dal.insert_bookmark(bm.convert_to_new_bookmark())?;
+    let mut inserted_bm = bms[0].clone();
+    assert_eq!(inserted_bm.id, 12);
+
+    inserted_bm.metadata = "xxx".to_string();
+    let upserted_bm = dal.upsert_bookmark(inserted_bm.convert_to_new_bookmark())?;
+    println!("The bookmarks are: {:?}", upserted_bm);
+    assert_eq!(upserted_bm[0].id, 12);
+    assert_eq!(upserted_bm[0].metadata, "xxx");
+    Ok(())
 }
 
 #[rstest]
