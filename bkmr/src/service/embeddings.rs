@@ -4,6 +4,7 @@ use log::debug;
 use crate::adapter::dal::Dal;
 use crate::adapter::json::read_ndjson_file_and_create_bookmarks;
 use crate::helper::calc_content_hash;
+use crate::model::bookmark::BookmarkUpdater;
 
 pub fn create_embeddings_for_non_bookmarks<P: AsRef<Utf8Path>>(file_path: P) -> anyhow::Result<()> {
     // 1. read_ndjson_file_and_create_bookmarks

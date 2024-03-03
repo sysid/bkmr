@@ -7,7 +7,7 @@ use rstest::*;
 use bkmr::adapter::embeddings::{Context, OpenAi};
 
 use bkmr::helper::calc_content_hash;
-use bkmr::model::bookmark::BookmarkBuilder;
+use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
 
 #[ctor::ctor]
 fn init() {

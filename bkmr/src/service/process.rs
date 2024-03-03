@@ -16,7 +16,7 @@ use crate::adapter::dal::Dal;
 use crate::environment::CONFIG;
 use crate::helper::abspath;
 use crate::{dlog, helper, update_bm};
-use crate::model::bookmark::Bookmark;
+use crate::model::bookmark::{Bookmark, BookmarkUpdater};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {

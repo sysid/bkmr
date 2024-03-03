@@ -9,7 +9,7 @@ use stdext::function_name;
 use bkmr::adapter::dal::Dal;
 use bkmr::{helper, CTX};
 use bkmr::adapter::embeddings::{Context, DummyAi};
-use bkmr::model::bookmark::BookmarkBuilder;
+use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
 
 #[fixture]
 pub fn dal() -> Dal {

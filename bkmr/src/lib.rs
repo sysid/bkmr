@@ -27,6 +27,7 @@ use crate::adapter::embeddings::Context;
 
 use crate::environment::CONFIG;
 use crate::model::bookmark::Bookmark;
+use crate::model::bookmark::BookmarkUpdater;
 use crate::model::tag::Tags;
 
 pub mod adapter {

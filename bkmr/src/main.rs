@@ -30,6 +30,7 @@ use bkmr::{dlog2, load_url_details};
 use bkmr::adapter::embeddings::{Context, cosine_similarity, deserialize_embedding, DummyAi, OpenAi};
 use bkmr::adapter::json::bms_to_json;
 use bkmr::model::bms::Bookmarks;
+use bkmr::model::bookmark::BookmarkUpdater;
 use bkmr::model::bookmark::BookmarkBuilder;
 use bkmr::model::tag::Tags;
 

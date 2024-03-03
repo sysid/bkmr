@@ -29,10 +29,9 @@ pub struct TagsFrequency {
     pub tag: String,
 }
 
-trait BookmarkUpdater {
+pub trait BookmarkUpdater {
     fn update(&mut self);
 }
-
 
 #[derive(Queryable, QueryableByName, PartialOrd, PartialEq, Clone, Default, Serialize)]
 #[diesel(table_name = bookmarks)]
@@ -70,19 +69,19 @@ impl Bookmark {
         self.content_hash != Some(calc_content_hash(self.get_content().as_str()))
     }
 
-    /// Update the embedding and content_hash fields
-    pub fn update(&mut self) {
-        if !self.has_content_changed() && self.embedding.is_some() {
-            dlog2!("Embedding exists and is up-to-date");
-            return;
-        }
-        let embedding = CTX
-            .get()
-            .expect("Error: CTX is not initialized")
-            .get_embedding(self.get_content().as_str());
-        self.embedding = embedding;
-        self.content_hash = Some(calc_content_hash(self.get_content().as_str()));
-    }
+    // /// Update the embedding and content_hash fields
+    // pub fn update(&mut self) {
+    //     if !self.has_content_changed() && self.embedding.is_some() {
+    //         dlog2!("Embedding exists and is up-to-date");
+    //         return;
+    //     }
+    //     let embedding = CTX
+    //         .get()
+    //         .expect("Error: CTX is not initialized")
+    //         .get_embedding(self.get_content().as_str());
+    //     self.embedding = embedding;
+    //     self.content_hash = Some(calc_content_hash(self.get_content().as_str()));
+    // }
     pub fn convert_to_new_bookmark(&self) -> NewBookmark {
         NewBookmark {
             URL: self.URL.clone(),
@@ -95,6 +94,28 @@ impl Bookmark {
         }
     }
 }
+
+impl BookmarkUpdater for Bookmark {
+    fn update(&mut self) {
+        if !self.has_content_changed() && self.embedding.is_some() {
+            // If content hasn't changed and an embedding exists, log and return early.
+            // Assuming `dlog2!` is a macro or function you've defined elsewhere for logging.
+            dlog2!("Embedding exists and is up-to-date");
+            return;
+        }
+
+        // Assuming `CTX` is a globally accessible context that can produce embeddings.
+        // And `calc_content_hash` is a function that calculates the hash of the bookmark content.
+        let embedding = CTX
+            .get()
+            .expect("Error: CTX is not initialized")
+            .get_embedding(self.get_content().as_str());
+
+        self.embedding = embedding;
+        self.content_hash = Some(calc_content_hash(self.get_content().as_str()));
+    }
+}
+
 
 impl fmt::Debug for Bookmark {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
