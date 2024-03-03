@@ -4,8 +4,8 @@ use std::env;
 
 use bkmr::CTX;
 use rstest::*;
+use bkmr::adapter::embeddings::{Context, OpenAi};
 
-use bkmr::embeddings::{Context, OpenAi};
 use bkmr::helper::calc_content_hash;
 use bkmr::models::BookmarkBuilder;
 

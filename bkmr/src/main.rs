@@ -19,7 +19,6 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::bms::Bookmarks;
 use bkmr::dal::Dal;
-use bkmr::embeddings::{cosine_similarity, deserialize_embedding, Context};
 use bkmr::environment::CONFIG;
 use bkmr::fzf::fzf_process;
 use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
@@ -31,6 +30,7 @@ use bkmr::process::{
 use bkmr::tag::Tags;
 use bkmr::CTX;
 use bkmr::{dlog2, load_url_details};
+use bkmr::adapter::embeddings::{Context, cosine_similarity, deserialize_embedding, DummyAi, OpenAi};
 use bkmr::adapter::json::bms_to_json;
 
 #[derive(Parser)]
@@ -219,11 +219,11 @@ fn main() {
         }
 
         info!("Using OpenAI API");
-        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+        CTX.set(Context::new(Box::new(OpenAi::default())))
             .unwrap();
     } else {
         info!("Using DummyAI");
-        CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+        CTX.set(Context::new(Box::new(DummyAi::default())))
             .unwrap();
     }
 
@@ -909,7 +909,7 @@ mod tests {
         // Given: v2 database with embeddings and OpenAI context
         fs::rename("../db/bkmr.v2.noembed.db", "../db/bkmr.db").expect("Failed to rename database");
         let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+        CTX.set(Context::new(Box::new(OpenAi::default())))
             .unwrap();
 
         // When: find similar for "blub"
@@ -922,10 +922,10 @@ mod tests {
     #[allow(unused_variables)]
     #[rstest]
     fn test_find_similar(temp_dir: Utf8PathBuf) {
-        // Given: v2 database with embeddings and OpenAI context
+        // Given: v2 database with embeddings and OpenAi context
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+        CTX.set(Context::new(Box::new(OpenAi::default())))
             .unwrap();
 
         // When: find similar for "blub"
@@ -944,7 +944,7 @@ mod tests {
     fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         // this is only visible test
-        CTX.set(Context::new(Box::new(bkmr::embeddings::OpenAi::default())))
+        CTX.set(Context::new(Box::new(OpenAi::default())))
             .unwrap();
         // Given: v2 database with embeddings
         // When:

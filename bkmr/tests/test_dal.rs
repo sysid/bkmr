@@ -7,9 +7,9 @@ use rstest::{fixture, rstest};
 use stdext::function_name;
 
 use bkmr::dal::Dal;
-use bkmr::embeddings::Context;
 use bkmr::models::BookmarkBuilder;
 use bkmr::{helper, CTX};
+use bkmr::adapter::embeddings::{Context, DummyAi};
 
 #[fixture]
 pub fn dal() -> Dal {
@@ -86,7 +86,7 @@ fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) {
 fn test_insert_bm(mut dal: Dal) {
     // init_db(&mut dal.conn).expect("Error DB init");
     if CTX.get().is_none() {
-        CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default())))
+        CTX.set(Context::new(Box::new(DummyAi::default())))
             .unwrap();
     }
     let mut bm = BookmarkBuilder::new()
@@ -115,7 +115,6 @@ fn test_update_bm(mut dal: Dal) {
 
 #[rstest]
 fn test_upsert_bookmark(mut dal: Dal) -> Result<()> {
-    // CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
     let mut bm = BookmarkBuilder::new()
         .URL("www.sysid.de".to_string())
         .metadata("".to_string())

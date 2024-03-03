@@ -1,13 +1,21 @@
 use crate::models::{Bookmark, BookmarkBuilder, NewBookmark};
 use std::io;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, BufReader, Write};
 use camino::Utf8Path;
 use std::fs::File;
 use serde_derive::{Deserialize, Serialize};
 use anyhow::Context;
 use chrono::NaiveDateTime;
+use crate::helper::extract_filename;
 
-pub fn read_ndjson_file_and_create_bookmarks<P: AsRef<Utf8Path>>(file_path: P) -> anyhow::Result<Vec<NewBookmark>> {
+/// Reads a newline-delimited JSON (NDJSON) file and creates bookmarks from each line.
+/// format: {"id": "/a/b/readme.md:0", "content": "First record"}
+///
+/// Mappings:
+/// - `id` -> `URL`
+/// - `id` -> `metadata` (filename)
+/// - `content` -> `desc`
+pub fn read_ndjson_file_and_create_bookmarks<P: AsRef<Utf8Path>>(file_path: P) -> anyhow::Result<Vec<Bookmark>> {
     let file = File::open(file_path.as_ref()).with_context(|| format!("Failed to open file {:?}", file_path.as_ref()))?;
     let reader = io::BufReader::new(file);
     let mut bookmarks = Vec::new();
@@ -19,17 +27,16 @@ pub fn read_ndjson_file_and_create_bookmarks<P: AsRef<Utf8Path>>(file_path: P) -
 
         // todo: ensure exists and is uniq
         let id = record["id"].as_str().ok_or_else(|| anyhow::anyhow!("Invalid ID format"))?.to_string();
+        let filename = extract_filename(&id);
         let mut bookmark = BookmarkBuilder::new()
             .id(1)
             .URL(id) // Using the content field as the URL for illustration
-            .metadata(record["content"].as_str().unwrap_or_default().to_string()) // Add this if you have the data
+            .metadata(filename) // Add this if you have the data
+            .desc(record["content"].as_str().unwrap_or_default().to_string()) // Add this if you have the data
             .tags(",_imported_,".to_string()) // Add this if you have the data
             .build();
-        bookmark.update();  // update embeddings
-
-        bookmarks.push(bookmark.convert_to_new_bookmark());
+        bookmarks.push(bookmark);
     }
-
     Ok(bookmarks)
 }
 

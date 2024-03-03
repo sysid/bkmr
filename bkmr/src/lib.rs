@@ -21,8 +21,8 @@ use select::predicate::{Attr, Name};
 use serde_derive::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use stdext::function_name;
+use crate::adapter::embeddings::Context;
 
-use embeddings::Context;
 
 use crate::dal::Dal;
 use crate::environment::CONFIG;
@@ -31,10 +31,11 @@ use crate::tag::Tags;
 
 pub mod adapter {
     pub mod json;
+    pub mod embeddings;
 }
+
 pub mod bms;
 pub mod dal;
-pub mod embeddings;
 pub mod environment;
 pub mod fzf;
 pub mod helper;

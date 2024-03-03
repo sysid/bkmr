@@ -1,8 +1,8 @@
-use bkmr::embeddings::{Embedding, OpenAi};
 use log::{debug, info};
 use rstest::rstest;
 use std::env;
 use stdext::function_name;
+use bkmr::adapter::embeddings::{Embedding, OpenAi};
 
 #[ctor::ctor]
 fn init() {

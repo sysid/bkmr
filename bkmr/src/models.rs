@@ -53,6 +53,8 @@ impl Bookmark {
         self.tags = format!(",{},", Tags::clean_tags(tags).join(","));
         debug!("({}:{}) {:?}", function_name!(), line!(), self);
     }
+    /// Returns a formatted string containing the bookmark's tags, metadata, description, and tags again.
+    /// tags are tried to emphasize by using twice
     fn get_content(&self) -> String {
         format!(
             "{}{} -- {}{}",

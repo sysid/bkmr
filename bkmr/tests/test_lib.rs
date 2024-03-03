@@ -8,8 +8,8 @@ use log::debug;
 use rstest::*;
 
 use bkmr::{CTX, helper, load_url_details, update_bm, update_bookmarks};
+use bkmr::adapter::embeddings::{Context, DummyAi};
 use bkmr::dal::Dal;
-use bkmr::embeddings::Context;
 use bkmr::models::Bookmark;
 
 mod test_dal;
@@ -20,7 +20,7 @@ mod adapter {
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
+    CTX.set(Context::new(Box::new(DummyAi::default()))).unwrap();
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
     let _ = env_logger::builder()

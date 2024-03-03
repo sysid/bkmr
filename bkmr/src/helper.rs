@@ -119,6 +119,20 @@ pub fn is_env_var_set(env_var_name: &str) -> bool {
     env::var(env_var_name).is_ok()
 }
 
+/// Extract filename from: $HOME/bla/file.md:0
+pub fn extract_filename(input: &str) -> String {
+    // Attempt to split the input string by ':' to handle potential line indicators
+    let parts: Vec<&str> = input.split(':').collect();
+    let path_str = parts[0]; // The path part of the input
+
+    // Use the Path type to manipulate file paths
+    let path = Utf8Path::new(path_str);
+
+    // Extract the filename, if it exists, and convert it to a String
+    path.file_name()
+        .map_or(input.to_string(), |filename| filename.to_string())
+}
+
 #[cfg(test)]
 mod test {
     use rstest::*;
@@ -136,6 +150,19 @@ mod test {
             // Ignore errors initializing the logger if tests race to configure it
             .try_init();
     }
+
+    #[rstest]
+    fn test_extract_filename() {
+        // Examples
+        let example1 = "$HOME/bla/file.md:0";
+        let example2 = "$HOME/bla/file.md";
+        let example3 = "just_a_string";
+
+        assert_eq!(extract_filename(example1), "file.md");
+        assert_eq!(extract_filename(example2), "file.md");
+        assert_eq!(extract_filename(example3), "just_a_string");
+    }
+
 
     #[rstest]
     #[case(vec ! ["1".to_string(), "2".to_string(), "3".to_string()], Some(vec ! [1, 2, 3]))]

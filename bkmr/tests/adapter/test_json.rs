@@ -5,7 +5,6 @@ use camino::Utf8PathBuf;
 
 use bkmr::adapter::json::{read_ndjson_file_and_create_bookmarks};
 use bkmr::CTX;
-use bkmr::embeddings::Context;
 
 #[fixture]
 fn test_data_path() -> Utf8PathBuf {
@@ -23,9 +22,10 @@ fn test_read_ndjson_file_and_create_bookmarks(test_data_path: Utf8PathBuf) {
     // Update the assertions to check the properties of the Bookmark instances
     // Replace 'id' and 'content' with the actual properties of the Bookmark struct
     assert_eq!(bookmarks[0].URL, "/a/b/readme.md:0");
-    assert_eq!(bookmarks[0].metadata, "First record");
+    assert_eq!(bookmarks[0].metadata, "readme.md");
+    assert_eq!(bookmarks[0].tags, ",_imported_,");
+    assert_eq!(bookmarks[0].desc, "First record");
+
     assert_eq!(bookmarks[1].URL, "/a/b/readme.md:1");
-    assert_eq!(bookmarks[1].metadata, "Second record");
     assert_eq!(bookmarks[2].URL, "/a/b/c/xxx.md:0");
-    assert_eq!(bookmarks[2].metadata, "Third record");
 }
