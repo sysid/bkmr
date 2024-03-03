@@ -24,6 +24,20 @@ pub fn init_logger() {
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
+/// Initializes the database by running all pending migrations.
+///
+/// This function takes a mutable reference to a `MigrationHarness` for a SQLite database.
+/// It first reverts all migrations using the `revert_all_migrations` method.
+/// Then, it retrieves all pending migrations and logs their names.
+/// Finally, it runs all pending migrations using the `run_pending_migrations` method.
+///
+/// # Errors
+///
+/// This function will return an error if any of the following operations fail:
+///
+/// * Reverting all migrations
+/// * Retrieving pending migrations
+/// * Running pending migrations
 #[allow(unused)]
 pub fn init_db(
     connection: &mut impl MigrationHarness<Sqlite>,

@@ -46,11 +46,13 @@ fn test_get_bookmark_by_id(mut dal: Dal) {
 }
 
 #[rstest]
-#[should_panic(expected = "NotFound")]
+// #[should_panic(expected = "NotFound")]
 fn test_get_bookmark_by_id_non_existing(mut dal: Dal) {
     let bm = dal.get_bookmark_by_id(99999);
     println!("The bookmarks are: {:?}", bm);
-    assert_eq!(bm.unwrap().id, 1);
+    // assert_eq!(bm.unwrap().id, 1);
+    assert!(bm.is_err());
+    assert!(matches!(bm, Err(diesel::result::Error::NotFound)));
 }
 
 #[rstest]

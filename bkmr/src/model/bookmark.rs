@@ -13,7 +13,6 @@ use crate::helper::calc_content_hash;
 use crate::{dlog2, CTX};
 use crate::model::tag::Tags;
 
-// todo: fix import
 use crate::adapter::schema::bookmarks;  // ORM mappings
 
 #[derive(QueryableByName)]
@@ -29,6 +28,11 @@ pub struct TagsFrequency {
     #[diesel(sql_type = Text)]
     pub tag: String,
 }
+
+trait BookmarkUpdater {
+    fn update(&mut self);
+}
+
 
 #[derive(Queryable, QueryableByName, PartialOrd, PartialEq, Clone, Default, Serialize)]
 #[diesel(table_name = bookmarks)]
@@ -56,7 +60,7 @@ impl Bookmark {
     }
     /// Returns a formatted string containing the bookmark's tags, metadata, description, and tags again.
     /// tags are tried to emphasize by using twice
-    fn get_content(&self) -> String {
+    pub fn get_content(&self) -> String {
         format!(
             "{}{} -- {}{}",
             self.tags, self.metadata, self.desc, self.tags

@@ -13,14 +13,21 @@ use bkmr::adapter::dal::Dal;
 use bkmr::model::bookmark::Bookmark;
 
 mod test_dal;
+
 mod adapter {
     mod test_json;
+}
+
+mod service {
+    mod test_embeddings;
 }
 
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    CTX.set(Context::new(Box::new(DummyAi::default()))).unwrap();
+    if CTX.get().is_none() {
+        CTX.set(Context::new(Box::new(DummyAi::default()))).unwrap();
+    }
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
     let _ = env_logger::builder()
@@ -61,8 +68,8 @@ fn test_load_url_details() {
 
 #[rstest]
 #[case(1, vec ! [], vec ! [], false, ",ccc,yyy,".to_string())]
-#[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], false, ",ccc,t1,t2,yyy,".to_string())]
-#[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], true, ",t1,t2,".to_string())]
+#[case(1, vec ! ["t1".to_string(), "t2".to_string()], vec ! [], false, ",ccc,t1,t2,yyy,".to_string())]
+#[case(1, vec ! ["t1".to_string(), "t2".to_string()], vec ! [], true, ",t1,t2,".to_string())]
 #[case(1, vec ! [], vec ! ["ccc".to_string()], false, ",yyy,".to_string())]
 fn test_update_bm(
     mut dal: Dal,

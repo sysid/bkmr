@@ -45,6 +45,7 @@ pub mod model {
 pub mod service {
     pub mod fzf;
     pub mod process;
+    pub mod embeddings;
 }
 
 
