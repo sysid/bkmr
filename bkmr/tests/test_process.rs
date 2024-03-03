@@ -1,5 +1,5 @@
 use bkmr::adapter::dal::Dal;
-use bkmr::process::{delete_bms, do_edit, do_touch};
+use bkmr::service::process::{delete_bms, do_edit, do_touch};
 use bkmr::{helper, CTX};
 use rstest::{fixture, rstest};
 use std::thread::sleep;

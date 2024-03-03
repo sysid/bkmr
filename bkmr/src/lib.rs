@@ -42,12 +42,15 @@ pub mod model {
     pub mod bms;
 }
 
+pub mod service {
+    pub mod fzf;
+    pub mod process;
+}
+
 
 pub mod environment;
-pub mod fzf;
 pub mod helper;
 pub mod macros;
-pub mod process;
 
 pub static CTX: OnceLock<Context> = OnceLock::new();
 

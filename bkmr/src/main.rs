@@ -19,9 +19,9 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::adapter::dal::Dal;
 use bkmr::environment::CONFIG;
-use bkmr::fzf::fzf_process;
+use bkmr::service::fzf::fzf_process;
 use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
-use bkmr::process::{
+use bkmr::service::process::{
     delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS,
     DEFAULT_FIELDS,
 };
