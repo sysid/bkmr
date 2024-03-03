@@ -17,21 +17,21 @@ use log::{debug, error, info};
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use bkmr::bms::Bookmarks;
 use bkmr::dal::Dal;
 use bkmr::environment::CONFIG;
 use bkmr::fzf::fzf_process;
 use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
-use bkmr::models::BookmarkBuilder;
 use bkmr::process::{
     delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS,
     DEFAULT_FIELDS,
 };
-use bkmr::tag::Tags;
 use bkmr::CTX;
 use bkmr::{dlog2, load_url_details};
 use bkmr::adapter::embeddings::{Context, cosine_similarity, deserialize_embedding, DummyAi, OpenAi};
 use bkmr::adapter::json::bms_to_json;
+use bkmr::model::bms::Bookmarks;
+use bkmr::model::bookmark::BookmarkBuilder;
+use bkmr::model::tag::Tags;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

@@ -6,9 +6,9 @@ use stdext::function_name;
 use crate::dal::Dal;
 use crate::dlog2;
 use crate::environment::CONFIG;
-use crate::models::Bookmark;
-use crate::tag::Tags;
 use anyhow::Result;
+use crate::model::bookmark::Bookmark;
+use crate::model::tag::Tags;
 
 #[allow(dead_code)]
 #[derive(Debug)]

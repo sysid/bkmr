@@ -17,9 +17,9 @@ use stdext::function_name;
 use tuikit::prelude::*;
 
 use crate::environment::{FzfEnvOpts, CONFIG};
-use crate::models::Bookmark;
+use crate::model::bookmark::Bookmark;
+use crate::model::tag::Tags;
 use crate::process::{delete_bms, edit_bms, open_bms};
-use crate::tag::Tags;
 
 impl SkimItem for Bookmark {
     fn text(&self) -> Cow<str> {

@@ -1,12 +1,12 @@
-use crate::models::{Bookmark, BookmarkBuilder, NewBookmark};
 use std::io;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, Write};
 use camino::Utf8Path;
 use std::fs::File;
-use serde_derive::{Deserialize, Serialize};
+use serde_derive::Serialize;
 use anyhow::Context;
 use chrono::NaiveDateTime;
 use crate::helper::extract_filename;
+use crate::model::bookmark::{Bookmark, BookmarkBuilder};
 
 /// Reads a newline-delimited JSON (NDJSON) file and creates bookmarks from each line.
 /// format: {"id": "/a/b/readme.md:0", "content": "First record"}

@@ -5,7 +5,7 @@ use std::env;
 use bkmr::dal::Dal;
 use bkmr::fzf::fzf_process;
 use bkmr::helper;
-use bkmr::models::Bookmark;
+use bkmr::model::bookmark::Bookmark;
 
 mod test_dal;
 

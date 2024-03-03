@@ -150,8 +150,8 @@ impl OpenAi {
 
 pub fn cosine_similarity(vec1: &ndarray::Array1<f32>, vec2: &ndarray::Array1<f32>) -> f32 {
     let dot_product = vec1.dot(vec2);
-    let magnitude_vec1 = (vec1.dot(vec1)).sqrt();
-    let magnitude_vec2 = (vec2.dot(vec2)).sqrt();
+    let magnitude_vec1 = vec1.dot(vec1).sqrt();
+    let magnitude_vec2 = vec2.dot(vec2).sqrt();
 
     // To prevent division by zero
     if magnitude_vec1 == 0.0 || magnitude_vec2 == 0.0 {

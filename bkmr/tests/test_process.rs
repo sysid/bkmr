@@ -1,11 +1,11 @@
 use bkmr::dal::Dal;
-use bkmr::models::Bookmark;
 use bkmr::process::{delete_bms, do_edit, do_touch};
 use bkmr::{helper, CTX};
 use rstest::{fixture, rstest};
 use std::thread::sleep;
 use std::time::Duration;
 use bkmr::adapter::embeddings::{Context, DummyAi};
+use bkmr::model::bookmark::Bookmark;
 
 #[fixture]
 pub fn dal() -> Dal {

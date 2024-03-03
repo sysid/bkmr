@@ -10,10 +10,11 @@ use std::fmt;
 use stdext::function_name;
 
 use crate::helper::calc_content_hash;
-use crate::tag::Tags;
 use crate::{dlog2, CTX};
+use crate::model::tag::Tags;
 
-use super::schema::bookmarks;
+// todo: fix import
+use super::super::schema::bookmarks;  // ORM mappings
 
 #[derive(QueryableByName)]
 pub struct IdResult {
@@ -206,7 +207,7 @@ mod test {
     use rstest::*;
 
     use crate::helper::calc_content_hash;
-    use crate::models::Bookmark;
+    use crate::model::bookmark::Bookmark;
 
     #[fixture]
     fn bm() -> Bookmark {

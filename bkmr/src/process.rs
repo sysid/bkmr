@@ -15,8 +15,8 @@ use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use crate::dal::Dal;
 use crate::environment::CONFIG;
 use crate::helper::abspath;
-use crate::models::Bookmark;
 use crate::{dlog, helper, update_bm};
+use crate::model::bookmark::Bookmark;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {

@@ -26,24 +26,27 @@ use crate::adapter::embeddings::Context;
 
 use crate::dal::Dal;
 use crate::environment::CONFIG;
-use crate::models::Bookmark;
-use crate::tag::Tags;
+use crate::model::bookmark::Bookmark;
+use crate::model::tag::Tags;
 
 pub mod adapter {
     pub mod json;
     pub mod embeddings;
 }
+pub mod model {
+    pub mod bookmark;
+    pub mod tag;
+    pub mod bms;
+}
 
-pub mod bms;
+
 pub mod dal;
 pub mod environment;
 pub mod fzf;
 pub mod helper;
 pub mod macros;
-pub mod models;
 pub mod process;
 pub mod schema;
-pub mod tag;
 
 pub static CTX: OnceLock<Context> = OnceLock::new();
 

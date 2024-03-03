@@ -7,9 +7,9 @@ use rstest::{fixture, rstest};
 use stdext::function_name;
 
 use bkmr::dal::Dal;
-use bkmr::models::BookmarkBuilder;
 use bkmr::{helper, CTX};
 use bkmr::adapter::embeddings::{Context, DummyAi};
+use bkmr::model::bookmark::BookmarkBuilder;
 
 #[fixture]
 pub fn dal() -> Dal {

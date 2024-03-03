@@ -20,7 +20,7 @@ impl Tags {
     pub fn normalize_tag_string(tag_str: Option<String>) -> Vec<String> {
         match tag_str {
             Some(s) => {
-                let mut _tags = s
+                let _tags = s
                     .replace(" ", "")
                     .split(",")
                     .map(|s| s.trim().to_lowercase().to_owned())
@@ -100,10 +100,10 @@ fn init() {
 
 #[cfg(test)]
 mod test {
-    use crate::tag::Tags;
     use log::debug;
     use rstest::*;
     use stdext::function_name;
+    use crate::model::tag::Tags;
 
     #[rstest]
     fn test_default() {
