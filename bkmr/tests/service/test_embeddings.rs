@@ -1,16 +1,17 @@
-use std::env;
-use std::path::PathBuf;
-use camino::Utf8PathBuf;
-use rstest::*;
 use bkmr::adapter::dal::Dal;
 use bkmr::adapter::embeddings::{Context, DummyAi};
-use bkmr::{CTX, helper};
 use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
+use bkmr::{helper, CTX};
+use camino::Utf8PathBuf;
+
+use rstest::*;
+use std::env;
+
 
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    CTX.set(Context::new(Box::new(DummyAi::default()))).unwrap();
+    CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
     let _ = env_logger::builder()
@@ -38,7 +39,7 @@ fn test_data_path() -> Utf8PathBuf {
 }
 
 #[rstest]
-fn test_create_embeddings_for_non_bookmarks_non_existing(dal: Dal, test_data_path: Utf8PathBuf) {
+fn test_create_embeddings_for_non_bookmarks_non_existing(_dal: Dal, test_data_path: Utf8PathBuf) {
     // Arrange
     // Act
     let result = create_embeddings_for_non_bookmarks(test_data_path);
@@ -48,7 +49,7 @@ fn test_create_embeddings_for_non_bookmarks_non_existing(dal: Dal, test_data_pat
 }
 
 #[rstest]
-fn test_create_embeddings_for_non_bookmarks_existing(dal: Dal, test_data_path: Utf8PathBuf) {
+fn test_create_embeddings_for_non_bookmarks_existing(_dal: Dal, test_data_path: Utf8PathBuf) {
     // Arrange
     let _ = create_embeddings_for_non_bookmarks(&test_data_path);
     // Act
@@ -56,8 +57,4 @@ fn test_create_embeddings_for_non_bookmarks_existing(dal: Dal, test_data_path: U
     println!("Result: {:?}", result);
     // Assert
     assert!(result.is_ok());
-    // Add more assertions based on your expectations
 }
-
-
-

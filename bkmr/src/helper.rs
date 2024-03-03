@@ -1,7 +1,7 @@
-use std::{env, io};
 use std::error::Error;
-use std::io::{Write};
+use std::io::Write;
 use std::time::{Duration, Instant};
+use std::{env, io};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::tempdir;
@@ -89,8 +89,7 @@ pub fn ensure_int_vector(vec: &Vec<String>) -> Option<Vec<i32>> {
 pub fn abspath(p: &str) -> Option<String> {
     let abs_p = shellexpand::full(p)
         .ok()
-        .and_then(|x| Utf8Path::new(x.as_ref()).canonicalize_utf8().ok())
-        .and_then(|p| Some(p.into_string()));
+        .and_then(|x| Utf8Path::new(x.as_ref()).canonicalize_utf8().ok()).map(|p| p.into_string());
     debug!("({}:{}) {:?} -> {:?}", function_name!(), line!(), p, abs_p);
     abs_p
 }
@@ -152,7 +151,7 @@ mod test {
     use rstest::*;
 
     // use log::debug;
-        use super::*;
+    use super::*;
 
     #[ctor::ctor]
     fn init() {
@@ -176,7 +175,6 @@ mod test {
         assert_eq!(extract_filename(example2), "file.md");
         assert_eq!(extract_filename(example3), "just_a_string");
     }
-
 
     #[rstest]
     #[case(vec ! ["1".to_string(), "2".to_string(), "3".to_string()], Some(vec ! [1, 2, 3]))]

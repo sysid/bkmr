@@ -21,8 +21,8 @@ impl Tags {
         match tag_str {
             Some(s) => {
                 let _tags = s
-                    .replace(" ", "")
-                    .split(",")
+                    .replace(' ', "")
+                    .split(',')
                     .map(|s| s.trim().to_lowercase().to_owned())
                     .collect::<Vec<_>>();
                 Self::clean_tags(_tags)
@@ -66,8 +66,8 @@ impl Tags {
     }
 
     pub fn match_exact_tags(tags: &Vec<String>, bm_tags: &Vec<String>) -> bool {
-        let set1: HashSet<String> = tags.into_iter().map(|s| s.to_string()).collect();
-        let set2: HashSet<String> = bm_tags.into_iter().map(|s| s.to_string()).collect();
+        let set1: HashSet<String> = tags.iter().map(|s| s.to_string()).collect();
+        let set2: HashSet<String> = bm_tags.iter().map(|s| s.to_string()).collect();
         set1 == set2
     }
 
@@ -82,7 +82,7 @@ impl Tags {
         let set1: HashSet<_> = tags.iter().collect();
         let set2: HashSet<_> = bm_tags.iter().collect();
         let intersect = set1.intersection(&set2).collect::<HashSet<_>>();
-        intersect.len() > 0
+        !intersect.is_empty()
     }
 }
 
@@ -100,10 +100,10 @@ fn init() {
 
 #[cfg(test)]
 mod test {
+    use crate::model::tag::Tags;
     use log::debug;
     use rstest::*;
     use stdext::function_name;
-    use crate::model::tag::Tags;
 
     #[rstest]
     fn test_default() {
@@ -162,8 +162,8 @@ mod test {
         #[case] bm_tags: &Vec<&str>,
         #[case] expected: bool,
     ) {
-        let tags = &tags.into_iter().map(|s| s.to_string()).collect();
-        let bm_tags = &bm_tags.into_iter().map(|s| s.to_string()).collect();
+        let tags = &tags.iter().map(|s| s.to_string()).collect();
+        let bm_tags = &bm_tags.iter().map(|s| s.to_string()).collect();
         debug!("{:?}, {:?} {:?}", tags, bm_tags, expected);
         assert_eq!(Tags::match_exact_tags(tags, bm_tags), expected)
     }
@@ -178,8 +178,8 @@ mod test {
         #[case] bm_tags: &Vec<&str>,
         #[case] expected: bool,
     ) {
-        let tags = &tags.into_iter().map(|s| s.to_string()).collect();
-        let bm_tags = &bm_tags.into_iter().map(|s| s.to_string()).collect();
+        let tags = &tags.iter().map(|s| s.to_string()).collect();
+        let bm_tags = &bm_tags.iter().map(|s| s.to_string()).collect();
         debug!("{:?}, {:?} {:?}", tags, bm_tags, expected);
         assert_eq!(Tags::match_all_tags(tags, bm_tags), expected)
     }
@@ -194,8 +194,8 @@ mod test {
         #[case] bm_tags: &Vec<&str>,
         #[case] expected: bool,
     ) {
-        let tags = &tags.into_iter().map(|s| s.to_string()).collect();
-        let bm_tags = &bm_tags.into_iter().map(|s| s.to_string()).collect();
+        let tags = &tags.iter().map(|s| s.to_string()).collect();
+        let bm_tags = &bm_tags.iter().map(|s| s.to_string()).collect();
         debug!("{:?}, {:?} {:?}", tags, bm_tags, expected);
         assert_eq!(Tags::match_any_tags(tags, bm_tags), expected)
     }

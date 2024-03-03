@@ -59,7 +59,8 @@ impl Context {
     /// Get the embedding for a text using the correct strategy.
     /// Internal error handling in order to allow for a graceful fallback
     pub fn get_embedding(&self, content: &str) -> Option<Vec<u8>> {
-        let embedding = match self.execute(content) {
+        
+        match self.execute(content) {
             Ok(maybe_embd) => maybe_embd.and_then(|embd| {
                 match serialize_embedding(embd) {
                     Ok(serialized) => Some(serialized),
@@ -73,8 +74,7 @@ impl Context {
                 eprintln!("Error fetching embeddings: {}", e);
                 None // Choose to continue with None in case of an error
             }
-        };
-        embedding
+        }
     }
 }
 

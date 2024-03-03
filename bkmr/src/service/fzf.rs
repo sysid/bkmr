@@ -113,7 +113,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
 
     let options = SkimOptionsBuilder::default()
         .reverse(reverse.to_owned())
-        .height(Some(&height))
+        .height(Some(height))
         .multi(true)
         // For full list of accepted keywords see `parse_event` in `src/event.rs`.
         .bind(vec!["ctrl-o:accept", "ctrl-e:accept", "ctrl-d:accept"])
@@ -227,7 +227,7 @@ fn filter_bms(out: SkimOutput) -> Vec<Bookmark> {
     );
 
     out.selected_items.iter().for_each(|i| {
-        println!("{}{}", i.output(), "\n");
+        println!("{}\n", i.output());
     });
     let selected_bms = out
         .selected_items

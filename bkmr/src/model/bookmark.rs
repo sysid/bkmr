@@ -10,10 +10,10 @@ use std::fmt;
 use stdext::function_name;
 
 use crate::helper::calc_content_hash;
-use crate::{dlog2, CTX};
 use crate::model::tag::Tags;
+use crate::{dlog2, CTX};
 
-use crate::adapter::schema::bookmarks;  // ORM mappings
+use crate::adapter::schema::bookmarks; // ORM mappings
 
 #[derive(QueryableByName)]
 pub struct IdResult {
@@ -49,6 +49,26 @@ pub struct Bookmark {
     pub content_hash: Option<Vec<u8>>,
 }
 
+impl fmt::Display for Bookmark {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "id: {}, URL: {}, metadata: {}, tags: {}, desc: {}, flags: {}, last_update_ts: {}, embedding: {}, content_hash: {}",
+            self.id,
+            self.URL,
+            self.metadata,
+            self.tags,
+            self.desc,
+            self.flags,
+            self.last_update_ts,
+            self.embedding.as_ref()
+                .map_or(String::from("None"), |v| format!("{:X?}", &v.iter().take(3).collect::<Vec<&u8>>())), // Truncate and hex format
+            self.content_hash.as_ref()
+                .map_or(String::from("None"), |v| format!("{:X?}", &v.iter().take(3).collect::<Vec<&u8>>())) // Truncate and hex format
+        )
+    }
+}
+
 impl Bookmark {
     pub fn get_tags(&self) -> Vec<String> {
         Tags::normalize_tag_string(Some(self.tags.clone()))
@@ -60,10 +80,14 @@ impl Bookmark {
     /// Returns a formatted string containing the bookmark's tags, metadata, description, and tags again.
     /// tags are tried to emphasize by using twice
     pub fn get_content(&self) -> String {
-        format!(
-            "{}{} -- {}{}",
-            self.tags, self.metadata, self.desc, self.tags
-        )
+        let tags = self
+            .get_tags()
+            .iter()
+            .filter(|t| !t.starts_with('_') && !t.ends_with('_'))
+            .map(|t| t.to_string())
+            .collect::<Vec<_>>();
+        let tags_str = format!(",{},", tags.join(","));
+        format!("{}{} -- {}{}", tags_str, self.metadata, self.desc, tags_str)
     }
     pub fn has_content_changed(&self) -> bool {
         self.content_hash != Some(calc_content_hash(self.get_content().as_str()))
@@ -115,7 +139,6 @@ impl BookmarkUpdater for Bookmark {
         self.content_hash = Some(calc_content_hash(self.get_content().as_str()));
     }
 }
-
 
 impl fmt::Debug for Bookmark {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -250,6 +273,14 @@ mod test {
             .unwrap();
         // bm.content_hash = Some(bm.calc_content_hash());
         bm
+    }
+
+    #[rstest]
+    fn test_get_content(mut bm: Bookmark) {
+        bm.tags = ",aaa,_imported_,xxx,".to_string();
+        let expected_content = ",aaa,xxx,metadata -- desc,aaa,xxx,";
+        let content = bm.get_content();
+        assert_eq!(content, expected_content);
     }
 
     #[rstest]

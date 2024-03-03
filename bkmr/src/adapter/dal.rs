@@ -10,10 +10,35 @@ use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
 use log::debug;
 use stdext::function_name;
 
+use crate::adapter::schema::bookmarks::dsl::bookmarks;
+use crate::adapter::schema::bookmarks::{
+    content_hash, desc, embedding, flags, id, metadata, tags, URL,
+};
 use crate::dlog2;
 use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
-use crate::adapter::schema::bookmarks::dsl::bookmarks;
-use crate::adapter::schema::bookmarks::{content_hash, desc, embedding, flags, id, metadata, tags, URL};
+
+trait DalTrait {
+    fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>, DieselError>;
+    fn batch_execute(&mut self, id_: i32) -> Result<(), DieselError>;
+    fn delete_bookmark2(&mut self, id_: i32) -> Result<usize, DieselError>;
+    fn clean_table(&mut self) -> Result<(), DieselError>;
+    fn update_bookmark(&mut self, bm: Bookmark) -> Result<Vec<Bookmark>, DieselError>;
+    fn insert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>, DieselError>;
+    fn upsert_bookmark(&mut self, new_bm: NewBookmark) -> Result<Vec<Bookmark>, DieselError>;
+    fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark, DieselError>;
+    fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark, DieselError>;
+    fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>, DieselError>;
+    fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<i32>, DieselError>;
+    fn get_bookmarks_without_embedding(&mut self) -> Result<Vec<Bookmark>, DieselError>;
+    fn bm_exists(&mut self, url: &str) -> Result<bool, DieselError>;
+    fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>, DieselError>;
+    fn get_all_tags_as_vec(&mut self) -> Result<Vec<String>, anyhow::Error>;
+    fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>, DieselError>;
+    fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>, DieselError>;
+    fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>, DieselError>;
+    fn check_schema_migrations_exists(&mut self) -> Result<bool, DieselError>;
+    fn check_embedding_column_exists(&mut self) -> Result<bool, DieselError>;
+}
 
 pub struct Dal {
     // #[allow(dead_code)]
@@ -66,8 +91,8 @@ impl Dal {
             WHERE id = ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn);
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn);
         debug!("({}:{}) Deleting {:?}", function_name!(), line!(), id_);
 
         // database compaction
@@ -78,8 +103,8 @@ impl Dal {
             WHERE id > ?;
         ",
         )
-            .bind::<Integer, _>(id_)
-            .execute(&mut self.conn)?;
+        .bind::<Integer, _>(id_)
+        .execute(&mut self.conn)?;
         debug!("({}:{}) {:?}", function_name!(), line!(), "Compacting");
 
         sql_query("COMMIT;").execute(&mut self.conn)?;
@@ -123,24 +148,21 @@ impl Dal {
         // if bm exists, update, else insert
         match bm {
             // update
-            Ok(bm) => self.update_bookmark(
-                Bookmark {
-                    id: bm.id.clone(),
-                    URL: bm.URL.clone(),
-                    metadata: new_bm.metadata.clone(),
-                    tags: bm.tags.clone(),
-                    desc: bm.desc.clone(),
-                    flags: bm.flags,
-                    last_update_ts: chrono::Utc::now().naive_utc(),
-                    embedding: new_bm.embedding.clone(),
-                    content_hash: new_bm.content_hash.clone(),
-                },
-            ),
+            Ok(bm) => self.update_bookmark(Bookmark {
+                id: bm.id,
+                URL: bm.URL.clone(),
+                metadata: new_bm.metadata.clone(),
+                tags: bm.tags.clone(),
+                desc: bm.desc.clone(),
+                flags: bm.flags,
+                last_update_ts: chrono::Utc::now().naive_utc(),
+                embedding: new_bm.embedding.clone(),
+                content_hash: new_bm.content_hash.clone(),
+            }),
             // insert
             Err(_) => self.insert_bookmark(new_bm),
         }
     }
-
 
     pub fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark, DieselError> {
         // Ok(sql_query("SELECT id, URL, metadata, tags, desc, flags, last_update_ts FROM bookmarks").load::<Bookmark2>(conn)?)
@@ -148,16 +170,16 @@ impl Dal {
             "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
             where id = ?;",
         );
-        let bm = bms.bind::<Integer, _>(id_).get_result(&mut self.conn);
-        bm
+        
+        bms.bind::<Integer, _>(id_).get_result(&mut self.conn)
     }
     pub fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark, DieselError> {
         let bms = sql_query(
             "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
             where URL = ?;",
         );
-        let bm = bms.bind::<Text, _>(url).get_result(&mut self.conn);
-        bm
+        
+        bms.bind::<Text, _>(url).get_result(&mut self.conn)
     }
     pub fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>, DieselError> {
         if query.is_empty() {
@@ -178,11 +200,11 @@ impl Dal {
         WHERE bookmarks_fts MATCH ? \
         ORDER BY rank",
         )
-            .bind::<Text, _>(fts_query)
-            .load::<IdResult>(&mut self.conn)?
-            .into_iter()
-            .map(|result| result.id)
-            .collect();
+        .bind::<Text, _>(fts_query)
+        .load::<IdResult>(&mut self.conn)?
+        .into_iter()
+        .map(|result| result.id)
+        .collect();
 
         Ok(ids)
     }
@@ -226,8 +248,8 @@ impl Dal {
             ORDER BY 2 desc;
         ",
         );
-        let tags_result = tags_query.get_results(&mut self.conn);
-        tags_result
+        
+        tags_query.get_results(&mut self.conn)
     }
 
     /// get ordered vector of tags
@@ -261,10 +283,10 @@ impl Dal {
             ORDER BY 2 desc;
         ",
         );
-        let tags_result = tags_query
+        
+        tags_query
             .bind::<Text, _>(search_tag)
-            .get_results(&mut self.conn);
-        tags_result
+            .get_results(&mut self.conn)
     }
 
     pub fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>, DieselError> {
@@ -275,8 +297,8 @@ impl Dal {
             LIMIT ?;",
         );
 
-        let bms = bms.bind::<Integer, _>(n).get_results(&mut self.conn);
-        bms
+        
+        bms.bind::<Integer, _>(n).get_results(&mut self.conn)
     }
 
     pub fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>, DieselError> {
@@ -287,8 +309,8 @@ impl Dal {
             LIMIT ?;",
         );
 
-        let bms = bms.bind::<Integer, _>(n).get_results(&mut self.conn);
-        bms
+        
+        bms.bind::<Integer, _>(n).get_results(&mut self.conn)
     }
 
     /// create a column "diesel_exists" in result which is the diesel "target"

@@ -9,7 +9,7 @@ use std::fs;
 #[rstest]
 fn test_debug_mode() {
     let mut cmd = Command::cargo_bin("bkmr").unwrap();
-    cmd.args(&["-d", "-d"]).assert().success();
+    cmd.args(["-d", "-d"]).assert().success();
     // cmd.args(&["-d", "-d"])
     //     .assert()
     //     .stderr(predicate::str::contains("Debug mode: debug"));
@@ -20,7 +20,7 @@ fn test_create_db() {
     fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
 
     let mut cmd = Command::cargo_bin("bkmr").unwrap();
-    cmd.args(&["-d", "-d", "create-db", "/tmp/bkmr_test.db"])
+    cmd.args(["-d", "-d", "create-db", "/tmp/bkmr_test.db"])
         .assert()
         .stdout(predicate::str::contains("Database created"));
 }
@@ -30,7 +30,7 @@ fn test_show_bms() {
     fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
 
     let mut cmd = Command::cargo_bin("bkmr").unwrap();
-    cmd.args(&["-d", "-d", "show", "1,2"])
+    cmd.args(["-d", "-d", "show", "1,2"])
         .assert()
         .stderr(predicate::str::contains("Debug mode: debug"))
         .stderr(predicate::str::contains("Google"));

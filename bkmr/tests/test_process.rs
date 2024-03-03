@@ -1,11 +1,11 @@
 use bkmr::adapter::dal::Dal;
+use bkmr::adapter::embeddings::{Context, DummyAi};
+use bkmr::model::bookmark::Bookmark;
 use bkmr::service::process::{delete_bms, do_edit, do_touch};
 use bkmr::{helper, CTX};
 use rstest::{fixture, rstest};
 use std::thread::sleep;
 use std::time::Duration;
-use bkmr::adapter::embeddings::{Context, DummyAi};
-use bkmr::model::bookmark::Bookmark;
 
 #[fixture]
 pub fn dal() -> Dal {
@@ -24,7 +24,7 @@ fn bms() -> Vec<Bookmark> {
 }
 #[rstest]
 fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
-    CTX.set(Context::new(Box::new(DummyAi::default()))).unwrap();
+    CTX.set(Context::new(Box::new(DummyAi))).unwrap();
 
     let bm_before = dal.get_bookmark_by_id(1)?;
     sleep(Duration::from_secs(1));
@@ -39,8 +39,7 @@ fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
 #[rstest]
 #[ignore = "Manual Test: make test-vim"]
 fn test_do_edit(mut dal: Dal, bms: Vec<Bookmark>) {
-    CTX.set(Context::new(Box::new(DummyAi::default())))
-        .unwrap();
+    CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     let bm = bms[0].clone();
     // avoid panic as it would with CLI call
     do_edit(&bm).unwrap_or_else(|e| {

@@ -15,7 +15,7 @@ fn init() {
         // Ignore errors initializing the logger if tests race to configure it
         .try_init();
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    let _ = helper::init_db(&mut dal.conn).expect("Error DB init");
+    helper::init_db(&mut dal.conn).expect("Error DB init");
 }
 
 #[rstest]

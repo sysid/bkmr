@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::env;
+
 
 use anyhow::Result;
 use log::{debug, info};
@@ -7,9 +7,9 @@ use rstest::{fixture, rstest};
 use stdext::function_name;
 
 use bkmr::adapter::dal::Dal;
-use bkmr::{helper, CTX};
 use bkmr::adapter::embeddings::{Context, DummyAi};
 use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
+use bkmr::{helper, CTX};
 
 #[fixture]
 pub fn dal() -> Dal {
@@ -88,8 +88,7 @@ fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) {
 fn test_insert_bm(mut dal: Dal) {
     // init_db(&mut dal.conn).expect("Error DB init");
     if CTX.get().is_none() {
-        CTX.set(Context::new(Box::new(DummyAi::default())))
-            .unwrap();
+        CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     }
     let mut bm = BookmarkBuilder::new()
         .URL("www.sysid.de".to_string())
@@ -254,7 +253,7 @@ fn test_check_schema_migration_exists(mut dal: Dal) {
     let result = dal.check_schema_migrations_exists();
     println!("Result: {:?}", result);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), true);
+    assert!(result.unwrap());
 }
 
 #[rstest]
@@ -262,5 +261,5 @@ fn test_check_embedding_column_exists(mut dal: Dal) {
     let result = dal.check_embedding_column_exists();
     println!("Result: {:?}", result);
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), true);
+    assert!(result.unwrap());
 }

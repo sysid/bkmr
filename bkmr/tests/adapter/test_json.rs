@@ -1,10 +1,10 @@
-use std::env;
+use camino::Utf8PathBuf;
 use log::debug;
 use rstest::*;
-use camino::Utf8PathBuf;
+use std::env;
 
-use bkmr::adapter::json::{read_ndjson_file_and_create_bookmarks};
-use bkmr::CTX;
+use bkmr::adapter::json::read_ndjson_file_and_create_bookmarks;
+
 
 #[fixture]
 fn test_data_path() -> Utf8PathBuf {
@@ -15,7 +15,8 @@ fn test_data_path() -> Utf8PathBuf {
 fn test_read_ndjson_file_and_create_bookmarks(test_data_path: Utf8PathBuf) {
     // CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
     debug!("Path: {:?}", test_data_path);
-    let bookmarks = read_ndjson_file_and_create_bookmarks(test_data_path).expect("Failed to read .ndjson file");
+    let bookmarks =
+        read_ndjson_file_and_create_bookmarks(test_data_path).expect("Failed to read .ndjson file");
     debug!("Bookmarks: {:?}", bookmarks);
 
     assert_eq!(bookmarks.len(), 3);

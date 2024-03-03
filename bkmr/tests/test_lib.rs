@@ -3,14 +3,14 @@
 use std::env;
 
 use anyhow::Result;
-use camino::Utf8PathBuf;
-use log::debug;
+
+
 use rstest::*;
 
-use bkmr::{CTX, helper, load_url_details, update_bm, update_bookmarks};
-use bkmr::adapter::embeddings::{Context, DummyAi};
 use bkmr::adapter::dal::Dal;
+use bkmr::adapter::embeddings::{Context, DummyAi};
 use bkmr::model::bookmark::Bookmark;
+use bkmr::{helper, load_url_details, update_bm, update_bookmarks, CTX};
 
 mod test_dal;
 
@@ -26,7 +26,7 @@ mod service {
 #[ctor::ctor]
 fn init() {
     if CTX.get().is_none() {
-        CTX.set(Context::new(Box::new(DummyAi::default()))).unwrap();
+        CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     }
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
@@ -120,4 +120,3 @@ fn test_update_bookmarks_successful() {
 fn test_ctx() {
     assert!(CTX.get().is_some());
 }
-

@@ -5,25 +5,24 @@
 extern crate skim;
 
 use std::collections::HashSet;
-use std::fs::File;
-use std::io;
-use std::io::BufRead;
+
+
+
 use std::sync::OnceLock;
 
-use anyhow::Context as anyhowContext;
+use crate::adapter::dal::Dal;
+use crate::adapter::embeddings::Context;
+
 use anyhow::Result;
-use camino::Utf8Path;
+
 use itertools::Itertools;
 use log::{debug, error};
 use reqwest::blocking::Client;
 use select::document::Document;
 use select::predicate::{Attr, Name};
-use serde_derive::{Deserialize, Serialize};
+
 #[allow(unused_imports)]
 use stdext::function_name;
-use crate::adapter::dal::Dal;
-use crate::adapter::embeddings::Context;
-
 
 use crate::environment::CONFIG;
 use crate::model::bookmark::Bookmark;
@@ -31,24 +30,23 @@ use crate::model::bookmark::BookmarkUpdater;
 use crate::model::tag::Tags;
 
 pub mod adapter {
-    pub mod json;
-    pub mod embeddings;
     pub mod dal;
+    pub mod embeddings;
+    pub mod json;
     pub mod schema;
 }
 
 pub mod model {
+    pub mod bms;
     pub mod bookmark;
     pub mod tag;
-    pub mod bms;
 }
 
 pub mod service {
+    pub mod embeddings;
     pub mod fzf;
     pub mod process;
-    pub mod embeddings;
 }
-
 
 pub mod environment;
 pub mod helper;
@@ -175,4 +173,3 @@ mod test {
             .try_init();
     }
 }
-

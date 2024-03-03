@@ -35,7 +35,7 @@ impl Config {
         */
         let fzf_opts_args = match &fzf_opts {
             Ok(options_string) => {
-                let mut args = options_string.split(" ").collect::<Vec<_>>();
+                let mut args = options_string.split(' ').collect::<Vec<_>>();
                 args.insert(0, "");
                 args
             }
@@ -82,7 +82,7 @@ mod test {
         println!("Using database at {}", CONFIG.db_url);
         println!("Using fzf defaults {:?}", CONFIG.fzf_opts);
         assert_eq!(CONFIG.fzf_opts.height, String::from("100%"));
-        assert_eq!(CONFIG.fzf_opts.reverse, true);
-        assert_eq!(CONFIG.fzf_opts.show_tags, true);
+        assert!(CONFIG.fzf_opts.reverse);
+        assert!(CONFIG.fzf_opts.show_tags);
     }
 }

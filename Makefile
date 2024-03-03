@@ -76,6 +76,11 @@ test-env:  ## test-env
 	#export BKMR_DB_URL=../db/bkmr.db && pushd $(pkg_src) && cargo test --package bkmr --lib environment::test -- --nocapture
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --lib environment::test -- --nocapture
 
+.PHONY: run-load-texts
+run-load-texts: run-create-db  ## run-load-text
+	#pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai load-texts --dry-run "$(PROJ_DIR)"/bkmr/tests/resources/data.ndjson
+	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai load-texts "$(PROJ_DIR)"/bkmr/tests/resources/data.ndjson
+
 
 .PHONY: run-migrate-db
 run-migrate-db: init  ## run-migrate-db
@@ -230,7 +235,8 @@ format:  ## format
 
 .PHONY: lint
 lint:  ## lint
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy
+	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy --fix
 
 .PHONY: doc
 doc:  ## doc

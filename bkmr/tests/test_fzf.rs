@@ -3,9 +3,9 @@ use rstest::*;
 use std::env;
 
 use bkmr::adapter::dal::Dal;
-use bkmr::service::fzf::fzf_process;
 use bkmr::helper;
 use bkmr::model::bookmark::Bookmark;
+use bkmr::service::fzf::fzf_process;
 
 mod test_dal;
 
@@ -44,5 +44,5 @@ fn bms() -> Vec<Bookmark> {
 #[rstest]
 #[ignore = "Interactive via Makefile"]
 fn test_fzf(bms: Vec<Bookmark>) {
-    let _ = fzf_process(&bms);
+    fzf_process(&bms);
 }

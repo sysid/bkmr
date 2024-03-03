@@ -1,3 +1,4 @@
+
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::PathBuf;
@@ -18,21 +19,23 @@ use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use bkmr::adapter::dal::Dal;
+use bkmr::adapter::embeddings::{
+    cosine_similarity, deserialize_embedding, Context, DummyAi, OpenAi,
+};
+use bkmr::adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks};
 use bkmr::environment::CONFIG;
-use bkmr::service::fzf::fzf_process;
 use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
+use bkmr::model::bms::Bookmarks;
+use bkmr::model::bookmark::BookmarkBuilder;
+use bkmr::model::bookmark::BookmarkUpdater;
+use bkmr::model::tag::Tags;
+use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
+use bkmr::service::fzf::fzf_process;
 use bkmr::service::process::{
-    delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS,
-    DEFAULT_FIELDS,
+    delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS, DEFAULT_FIELDS,
 };
 use bkmr::CTX;
 use bkmr::{dlog2, load_url_details};
-use bkmr::adapter::embeddings::{Context, cosine_similarity, deserialize_embedding, DummyAi, OpenAi};
-use bkmr::adapter::json::bms_to_json;
-use bkmr::model::bms::Bookmarks;
-use bkmr::model::bookmark::BookmarkUpdater;
-use bkmr::model::bookmark::BookmarkBuilder;
-use bkmr::model::tag::Tags;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -184,6 +187,13 @@ enum Commands {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
     },
+    /// Load texts for semantic similarity search
+    LoadTexts {
+        #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
+        dry_run: bool,
+        /// pathname to ndjson file
+        path: String,
+    },
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks
@@ -215,17 +225,15 @@ fn main() {
 
     if cli.openai {
         if !is_env_var_set("OPENAI_API_KEY") {
-            println!("Environment variable {} is not set.", "OPENAI_API_KEY");
+            println!("Environment variable OPENAI_API_KEY is not set.");
             process::exit(1);
         }
 
         info!("Using OpenAI API");
-        CTX.set(Context::new(Box::new(OpenAi::default())))
-            .unwrap();
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
     } else {
         info!("Using DummyAI");
-        CTX.set(Context::new(Box::new(DummyAi::default())))
-            .unwrap();
+        CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     }
 
     let Some(command) = cli.command else {
@@ -289,6 +297,7 @@ fn main() {
         Commands::CreateDb { path } => create_db(path),
         Commands::Surprise { n } => randomized(n),
         Commands::Backfill { dry_run } => backfill_embeddings(dry_run),
+        Commands::LoadTexts { dry_run, path } => load_texts(dry_run, path),
         Commands::Xxx { ids, tags } => {
             eprintln!(
                 "({}:{}) ids: {:?}, tags: {:?}",
@@ -368,7 +377,7 @@ fn search_bookmarks(
         fzf_process(&bms.bms);
         return Some(());
     }
-    debug!("({}:{})\n{:#?}\n", function_name!(), line!(), bms.bms);
+    debug!("({}:{})\n{:?}\n", function_name!(), line!(), bms.bms);
     if is_json {
         bms_to_json(&bms.bms);
         return None;
@@ -491,7 +500,7 @@ fn add_bookmark(
         .desc(description)
         .flags(0)
         .build();
-    bm.update();  // update embeddings
+    bm.update(); // update embeddings
 
     match dal.insert_bookmark(bm.convert_to_new_bookmark()) {
         Ok(bms) => {
@@ -777,6 +786,23 @@ fn backfill_embeddings(dry_run: bool) {
     }
 }
 
+fn load_texts(dry_run: bool, path: String) {
+    eprintln!("Database: {}", CONFIG.db_url);
+    if dry_run {
+        eprintln!("Dry run, no changes will be made.");
+        let bms = read_ndjson_file_and_create_bookmarks(path).unwrap_or_else(|e| {
+            eprintln!("{}", format!("Error reading ndjson file: {}", e).red());
+            process::exit(1);
+        });
+        eprintln!("Would load {} texts for semantic search.", bms.len());
+        process::exit(0);
+    }
+    create_embeddings_for_non_bookmarks(path).unwrap_or_else(|e| {
+        eprintln!("{}", format!("Error creating embeddings: {}", e).red());
+        process::exit(1);
+    });
+}
+
 fn sem_search(query: String, limit: Option<i32>) {
     let bms = Bookmarks::new("".to_string());
     let results = match find_similar(&query, &bms) {
@@ -910,8 +936,7 @@ mod tests {
         // Given: v2 database with embeddings and OpenAI context
         fs::rename("../db/bkmr.v2.noembed.db", "../db/bkmr.db").expect("Failed to rename database");
         let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::new(OpenAi::default())))
-            .unwrap();
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
 
         // When: find similar for "blub"
         let results = find_similar(&"blub".to_string(), &bms).unwrap();
@@ -926,8 +951,7 @@ mod tests {
         // Given: v2 database with embeddings and OpenAi context
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::new(OpenAi::default())))
-            .unwrap();
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
 
         // When: find similar for "blub"
         let results = find_similar(&"blub".to_string(), &bms).unwrap();
@@ -945,8 +969,7 @@ mod tests {
     fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         // this is only visible test
-        CTX.set(Context::new(Box::new(OpenAi::default())))
-            .unwrap();
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
         // Given: v2 database with embeddings
         // When:
         sem_search("blub".to_string(), None);

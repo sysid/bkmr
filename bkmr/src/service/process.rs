@@ -8,15 +8,15 @@ use atty::Stream;
 use indoc::formatdoc;
 use log::{debug, error};
 use regex::Regex;
-use serde_json;
+
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 use crate::adapter::dal::Dal;
 use crate::environment::CONFIG;
 use crate::helper::abspath;
-use crate::{dlog, helper, update_bm};
 use crate::model::bookmark::{Bookmark, BookmarkUpdater};
+use crate::{dlog, helper, update_bm};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {
@@ -77,7 +77,7 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
             stderr
                 .set_color(ColorSpec::new().set_fg(Some(Color::White)))
                 .unwrap();
-            write!(&mut stderr, " [{}]\n", bm.id).unwrap();
+            writeln!(&mut stderr, " [{}]", bm.id).unwrap();
         }
 
         if fields.contains(&DisplayField::URL) {
@@ -494,9 +494,9 @@ fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod test {
+    use crate::adapter::json::bms_to_json;
     use anyhow::anyhow;
     use rstest::*;
-    use crate::adapter::json::bms_to_json;
 
     use crate::adapter::dal::Dal;
     use crate::helper::init_db;
