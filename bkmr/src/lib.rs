@@ -21,10 +21,10 @@ use select::predicate::{Attr, Name};
 use serde_derive::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use stdext::function_name;
+use crate::adapter::dal::Dal;
 use crate::adapter::embeddings::Context;
 
 
-use crate::dal::Dal;
 use crate::environment::CONFIG;
 use crate::model::bookmark::Bookmark;
 use crate::model::tag::Tags;
@@ -32,7 +32,10 @@ use crate::model::tag::Tags;
 pub mod adapter {
     pub mod json;
     pub mod embeddings;
+    pub mod dal;
+    pub mod schema;
 }
+
 pub mod model {
     pub mod bookmark;
     pub mod tag;
@@ -40,13 +43,11 @@ pub mod model {
 }
 
 
-pub mod dal;
 pub mod environment;
 pub mod fzf;
 pub mod helper;
 pub mod macros;
 pub mod process;
-pub mod schema;
 
 pub static CTX: OnceLock<Context> = OnceLock::new();
 

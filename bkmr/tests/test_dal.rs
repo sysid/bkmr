@@ -6,7 +6,7 @@ use log::{debug, info};
 use rstest::{fixture, rstest};
 use stdext::function_name;
 
-use bkmr::dal::Dal;
+use bkmr::adapter::dal::Dal;
 use bkmr::{helper, CTX};
 use bkmr::adapter::embeddings::{Context, DummyAi};
 use bkmr::model::bookmark::BookmarkBuilder;

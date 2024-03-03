@@ -83,7 +83,7 @@ mod tests {
     use rstest::*;
     use crate::adapter::json::bms_to_json;
 
-    use crate::dal::Dal;
+    use crate::adapter::dal::Dal;
     use crate::helper::init_db;
 
     use super::*;

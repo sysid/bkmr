@@ -9,7 +9,7 @@ use rstest::*;
 
 use bkmr::{CTX, helper, load_url_details, update_bm, update_bookmarks};
 use bkmr::adapter::embeddings::{Context, DummyAi};
-use bkmr::dal::Dal;
+use bkmr::adapter::dal::Dal;
 use bkmr::model::bookmark::Bookmark;
 
 mod test_dal;

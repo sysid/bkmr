@@ -14,7 +14,7 @@ use crate::{dlog2, CTX};
 use crate::model::tag::Tags;
 
 // todo: fix import
-use super::super::schema::bookmarks;  // ORM mappings
+use crate::adapter::schema::bookmarks;  // ORM mappings
 
 #[derive(QueryableByName)]
 pub struct IdResult {

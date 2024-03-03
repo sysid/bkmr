@@ -3,10 +3,10 @@ use std::collections::HashSet;
 use log::debug;
 use stdext::function_name;
 
-use crate::dal::Dal;
 use crate::dlog2;
 use crate::environment::CONFIG;
 use anyhow::Result;
+use crate::adapter::dal::Dal;
 use crate::model::bookmark::Bookmark;
 use crate::model::tag::Tags;
 

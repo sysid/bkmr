@@ -12,8 +12,8 @@ use stdext::function_name;
 
 use crate::dlog2;
 use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
-use crate::schema::bookmarks::dsl::bookmarks;
-use crate::schema::bookmarks::{content_hash, desc, embedding, flags, id, metadata, tags, URL};
+use crate::adapter::schema::bookmarks::dsl::bookmarks;
+use crate::adapter::schema::bookmarks::{content_hash, desc, embedding, flags, id, metadata, tags, URL};
 
 pub struct Dal {
     // #[allow(dead_code)]

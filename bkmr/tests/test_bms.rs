@@ -1,7 +1,7 @@
 use log::debug;
 use rstest::*;
 
-use bkmr::dal::Dal;
+use bkmr::adapter::dal::Dal;
 use bkmr::helper;
 use bkmr::model::bms::Bookmarks;
 

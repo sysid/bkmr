@@ -12,7 +12,7 @@ use serde_json;
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
-use crate::dal::Dal;
+use crate::adapter::dal::Dal;
 use crate::environment::CONFIG;
 use crate::helper::abspath;
 use crate::{dlog, helper, update_bm};
@@ -498,7 +498,7 @@ mod test {
     use rstest::*;
     use crate::adapter::json::bms_to_json;
 
-    use crate::dal::Dal;
+    use crate::adapter::dal::Dal;
     use crate::helper::init_db;
 
     use super::*;

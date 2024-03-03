@@ -2,7 +2,7 @@
 use rstest::*;
 use std::env;
 
-use bkmr::dal::Dal;
+use bkmr::adapter::dal::Dal;
 use bkmr::fzf::fzf_process;
 use bkmr::helper;
 use bkmr::model::bookmark::Bookmark;
