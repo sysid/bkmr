@@ -29,22 +29,22 @@ where
                         "Hashes differ, updating...: {:?} {:?}",
                         existing_bm.content_hash, new_hash
                     );
-                    println!("Hash different, updating text embedding: {:?}", bm.URL);
+                    eprintln!("Hash different, updating text embedding: {:?}", bm.URL);
                     bm.update(); // create embeddings
                                  // todo:  changing this parameter type in method `update_bookmark` to borrow instead if owning the value
                     dal.update_bookmark(bm.clone())
                         .with_context(|| format!("Updating {:?}", bm))?;
                 } else if existing_bm.content_hash.is_none() {
-                    println!("No hash found, create text embedding: {:?}", bm.URL);
+                    eprintln!("No hash found, create text embedding: {:?}", bm.URL);
                     bm.update(); // create embeddings
                     dal.update_bookmark(bm)?;
                 } else {
                     // hashes are the same
-                    debug!("Hashes are the same, skipping...");
+                    eprintln!("No change for: {:?}", bm.URL);
                 }
             }
             Err(diesel::result::Error::NotFound) => {
-                println!("Create text embedding:  {:?}", bm.URL);
+                eprintln!("Create text embedding:  {:?}", bm.URL);
                 bm.update(); // create embeddings
                 bm.desc = "".to_string(); // we do not want the raw content in the db
                 dal.insert_bookmark(bm.convert_to_new_bookmark())?;

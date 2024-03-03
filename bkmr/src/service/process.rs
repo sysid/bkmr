@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
@@ -5,6 +6,7 @@ use std::{fs, io};
 
 use anyhow::Context;
 use atty::Stream;
+use chrono::NaiveDateTime;
 use indoc::formatdoc;
 use log::{debug, error};
 use regex::Regex;
@@ -29,21 +31,23 @@ pub enum DisplayField {
     Flags,
     LastUpdateTs,
     Embedding,
+    Similarity,
 }
 
 #[allow(dead_code)]
 pub const MINIMUM_FIELDS: [DisplayField; 3] =
     [DisplayField::Id, DisplayField::URL, DisplayField::Metadata];
 #[allow(dead_code)]
-pub const DEFAULT_FIELDS: [DisplayField; 5] = [
+pub const DEFAULT_FIELDS: [DisplayField; 6] = [
     DisplayField::Id,
     DisplayField::URL,
     DisplayField::Metadata,
     DisplayField::Desc,
     DisplayField::Tags,
+    DisplayField::Similarity,
 ];
 #[allow(dead_code)]
-pub const ALL_FIELDS: [DisplayField; 8] = [
+pub const ALL_FIELDS: [DisplayField; 9] = [
     DisplayField::Id,
     DisplayField::URL,
     DisplayField::Metadata,
@@ -52,9 +56,42 @@ pub const ALL_FIELDS: [DisplayField; 8] = [
     DisplayField::Flags, // counter
     DisplayField::LastUpdateTs,
     DisplayField::Embedding,
+    DisplayField::Similarity,
 ];
 
-pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
+#[derive(Debug, PartialEq, Clone)]
+pub struct DisplayBookmark {
+    pub id: i32,
+    pub URL: String,
+    pub metadata: String,
+    pub desc: String,
+    pub tags: String,
+    pub flags: i32,
+    pub last_update_ts: NaiveDateTime,
+    pub embedding: String,
+    pub content_hash: String,
+    pub similarity: Option<f32>,
+}
+
+// method for creating DisplayBookmark from Bookmark
+impl From<&Bookmark> for DisplayBookmark {
+    fn from(bm: &Bookmark) -> Self {
+        DisplayBookmark {
+            id: bm.id,
+            URL: bm.URL.clone(),
+            metadata: bm.metadata.clone(),
+            desc: bm.desc.clone(),
+            tags: bm.tags.clone(),
+            flags: bm.flags,
+            last_update_ts: bm.last_update_ts,
+            embedding: format!("{:?}", bm.embedding),
+            content_hash: format!("{:?}", bm.content_hash),
+            similarity: None,
+        }
+    }
+}
+
+pub fn show_bms(bms: &Vec<DisplayBookmark>, fields: &[DisplayField]) {
     // let mut stdout = StandardStream::stdout(ColorChoice::Always);
     // Check if the output is a TTY
     let color_choice = if atty::is(Stream::Stdout) {
@@ -71,6 +108,13 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
                 .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
                 .unwrap();
             write!(&mut stderr, "{:first_col_width$}. {}", i + 1, bm.metadata).unwrap();
+        }
+
+        if fields.contains(&DisplayField::Similarity) {
+            if let Some(similarity) = bm.similarity {
+                stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+                write!(&mut stderr, " [{:.3}]", similarity).unwrap();
+            }
         }
 
         if fields.contains(&DisplayField::Id) {
@@ -111,10 +155,10 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
         }
 
         if fields.contains(&DisplayField::Embedding) {
-            let embed_status = if bm.embedding.is_some() {
-                "yes"
-            } else {
+            let embed_status = if bm.embedding.is_empty() {
                 "null"
+            } else {
+                "yes"
             };
             if !flags_and_embedding_line.is_empty() {
                 flags_and_embedding_line.push_str(" | ");
@@ -131,7 +175,7 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
                 "{:first_col_width$}  {}",
                 "", flags_and_embedding_line
             )
-            .unwrap();
+                .unwrap();
         }
 
         // if fields.contains(&DisplayField::Flags) {
@@ -150,7 +194,7 @@ pub fn show_bms(bms: &Vec<Bookmark>, fields: &[DisplayField]) {
                 "{:first_col_width$}  {}",
                 "", bm.last_update_ts
             )
-            .unwrap();
+                .unwrap();
         }
 
         stderr.reset().unwrap();
@@ -333,7 +377,7 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
 }
 
 pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    dlog!("ids: {:?}, bms: {:?}", ids, bms);
+    // dlog!("ids: {:?}, bms: {:?}", ids, bms);
     do_sth_with_bms(ids.clone(), bms.clone(), open_bm)
         .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
     Ok(())
@@ -364,7 +408,7 @@ fn do_sth_with_bms(
     bms: Vec<Bookmark>,
     do_sth: fn(bm: &Bookmark) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    dlog!("ids: {:?}, bms: {:?}", ids, bms);
+    // dlog!("ids: {:?}, bms: {:?}", ids, bms);
     for id in ids {
         if id as usize > bms.len() {
             eprintln!("Id {} out of range", id);
@@ -383,7 +427,8 @@ pub fn do_touch(bm: &Bookmark) -> anyhow::Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     update_bm(bm.id, &vec![], &vec![], &mut dal, false)?;
     let bm = dal.get_bookmark_by_id(bm.id)?;
-    show_bms(&vec![bm], &ALL_FIELDS);
+
+    show_bms(&vec![DisplayBookmark::from(&bm)], &ALL_FIELDS);
     Ok(())
 }
 
@@ -470,7 +515,10 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         .with_context(|| format!("({}:{}) Error updating bookmark", function_name!(), line!()))?;
     // Delete the temporary file
     fs::remove_file("temp.txt")?;
-    show_bms(&updated, &ALL_FIELDS);
+
+    let d_bms: Vec<DisplayBookmark> = updated.iter()
+        .map(DisplayBookmark::from).collect();
+    show_bms(&d_bms, &ALL_FIELDS);
     Ok(())
 }
 
@@ -531,9 +579,11 @@ mod test {
     #[rstest]
     #[ignore = "Manual Test"]
     fn test_show_bms(bms: Vec<Bookmark>) {
+        let d_bms: Vec<DisplayBookmark> = bms.iter()
+            .map(DisplayBookmark::from).collect();
         // show individual fields
         show_bms(
-            &bms,
+            &d_bms,
             &[
                 DisplayField::Id,
                 DisplayField::URL,

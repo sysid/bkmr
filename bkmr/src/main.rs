@@ -1,4 +1,3 @@
-
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::PathBuf;
@@ -18,24 +17,22 @@ use log::{debug, error, info};
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+use bkmr::{dlog2, load_url_details};
 use bkmr::adapter::dal::Dal;
 use bkmr::adapter::embeddings::{
-    cosine_similarity, deserialize_embedding, Context, DummyAi, OpenAi,
+    Context, cosine_similarity, deserialize_embedding, DummyAi, OpenAi,
 };
 use bkmr::adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks};
+use bkmr::CTX;
 use bkmr::environment::CONFIG;
 use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
 use bkmr::model::bms::Bookmarks;
-use bkmr::model::bookmark::BookmarkBuilder;
+use bkmr::model::bookmark::{Bookmark, BookmarkBuilder};
 use bkmr::model::bookmark::BookmarkUpdater;
 use bkmr::model::tag::Tags;
 use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
 use bkmr::service::fzf::fzf_process;
-use bkmr::service::process::{
-    delete_bms, edit_bms, open_bm, process, show_bms, DisplayField, ALL_FIELDS, DEFAULT_FIELDS,
-};
-use bkmr::CTX;
-use bkmr::{dlog2, load_url_details};
+use bkmr::service::process::{ALL_FIELDS, DEFAULT_FIELDS, delete_bms, DisplayBookmark, DisplayField, edit_bms, open_bm, process, show_bms};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -67,9 +64,9 @@ enum Commands {
         fts_query: Option<String>,
 
         #[arg(
-            short = 'e',
-            long = "exact",
-            help = "match exact, comma separated list"
+        short = 'e',
+        long = "exact",
+        help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
 
@@ -77,9 +74,9 @@ enum Commands {
         tags_all: Option<String>,
 
         #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "not match all, comma separated list"
+        short = 'T',
+        long = "Tags",
+        help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
 
@@ -87,9 +84,9 @@ enum Commands {
         tags_any: Option<String>,
 
         #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "not match any, comma separated list"
+        short = 'N',
+        long = "Ntags",
+        help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
 
@@ -106,8 +103,8 @@ enum Commands {
         non_interactive: bool,
 
         #[arg(
-            long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
+        long = "fzf",
+        help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
         )]
         is_fuzzy: bool,
 
@@ -124,6 +121,9 @@ enum Commands {
 
         #[arg(short = 'l', long = "limit", help = "limit number of results")]
         limit: Option<i32>,
+
+        #[arg(long = "np", help = "no prompt")]
+        non_interactive: bool,
     },
     /// Open/launch bookmarks
     Open {
@@ -274,7 +274,11 @@ fn main() {
                 stderr,
             ) {}
         }
-        Commands::SemSearch { query, limit } => sem_search(query, limit),
+        Commands::SemSearch {
+            query,
+            limit,
+            non_interactive,
+        } => sem_search(query, limit, non_interactive, stderr),
         Commands::Open { ids } => open_bookmarks(ids),
         Commands::Add {
             url,
@@ -382,7 +386,9 @@ fn search_bookmarks(
         bms_to_json(&bms.bms);
         return None;
     }
-    show_bms(&bms.bms, &fields);
+    let d_bms: Vec<DisplayBookmark> = bms.bms.iter()
+        .map(DisplayBookmark::from).collect();
+    show_bms(&d_bms, &fields);
     eprintln!("Found {} bookmarks", bms.bms.len());
 
     if non_interactive {
@@ -515,7 +521,9 @@ fn add_bookmark(
                 });
             }
             println!("Added bookmark: {:?}", bms[0].id);
-            show_bms(&bms, &DEFAULT_FIELDS)
+            let d_bms: Vec<DisplayBookmark> = bms.iter()
+                .map(DisplayBookmark::from).collect();
+            show_bms(&d_bms, &DEFAULT_FIELDS);
         }
         Err(e) => {
             if let DatabaseError(DatabaseErrorKind::UniqueViolation, _) = e {
@@ -661,7 +669,9 @@ fn show_bookmarks(ids: String) {
             }
         }
     }
-    show_bms(&bms, &ALL_FIELDS);
+    let d_bms: Vec<DisplayBookmark> = bms.iter()
+        .map(DisplayBookmark::from).collect();
+    show_bms(&d_bms, &ALL_FIELDS);
 }
 
 fn get_ids(ids: String) -> Option<Vec<i32>> {
@@ -803,7 +813,12 @@ fn load_texts(dry_run: bool, path: String) {
     });
 }
 
-fn sem_search(query: String, limit: Option<i32>) {
+fn sem_search(
+    query: String,
+    limit: Option<i32>,
+    non_interactive: bool,
+    mut stderr: StandardStream,
+) {
     let bms = Bookmarks::new("".to_string());
     let results = match find_similar(&query, &bms) {
         Ok(value) => value,
@@ -813,15 +828,47 @@ fn sem_search(query: String, limit: Option<i32>) {
         }
     };
 
-    // Print top 10 entries
-    for (id, similarity) in results.iter().take(limit.unwrap_or(10) as usize) {
-        // println!("ID: {}, Similarity: {}", id, similarity);
-        if let Some(bm) = bms.bms.iter().find(|&bm| bm.id == *id) {
-            println!(
-                "{:.3} [{:>5}]: {:?} -- {:?}",
-                similarity, bm.id, bm.metadata, bm.URL
-            );
-        }
+    // Calculate limit once
+    let limit = limit.unwrap_or(10) as usize;
+
+    // todo: simplify this redundant vector generation
+    let filtered_bms: Vec<Bookmark> = results.iter()
+        .filter_map(|(id, _similarity)| {
+            bms.bms.iter().find(|bm| bm.id == *id).cloned()
+        })
+        .take(limit)
+        .collect();
+
+    let display_bookmarks: Vec<DisplayBookmark> = results.iter()
+        .filter_map(|(id, similarity)| {
+            bms.bms.iter().find(|bm| bm.id == *id).map(|bm| {
+                let mut dbm = DisplayBookmark::from(bm);
+                dbm.similarity = Some(*similarity);
+                dbm
+            })
+        })
+        .take(limit)
+        .collect();
+    // debug!("display_bookmarks: {:?}", display_bookmarks);
+
+    show_bms(&display_bookmarks, &DEFAULT_FIELDS);
+
+    if non_interactive {
+        debug!("Non Interactive. Exiting..");
+        let ids: Vec<String> = filtered_bms
+            .iter()
+            .map(|bm| bm.id)
+            .sorted()
+            .map(|id| id.to_string())
+            .collect();
+        println!("{}", ids.join(","));
+    } else {
+        stderr
+            .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
+            .unwrap();
+        writeln!(&mut stderr, "Selection: ").unwrap();
+        stderr.reset().unwrap();
+        process(&filtered_bms);
     }
 }
 
@@ -924,7 +971,7 @@ mod tests {
             "../db",
             &options,
         )
-        .expect("Failed to copy test project directory");
+            .expect("Failed to copy test project directory");
 
         tempdir.into_path()
     }
@@ -972,7 +1019,7 @@ mod tests {
         CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
         // Given: v2 database with embeddings
         // When:
-        sem_search("blub".to_string(), None);
+        sem_search("blub".to_string(), None, false);
         // Then: Expect the first three entries to be: blub, blub3, blub2
     }
 
