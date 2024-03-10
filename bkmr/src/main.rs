@@ -711,7 +711,7 @@ fn randomized(n: i32) {
 }
 
 fn enable_embeddings_if_required() {
-    eprintln!("Database: {}", CONFIG.db_url);
+    dlog2!("Database: {}", CONFIG.db_url);
     let mut dal = Dal::new(CONFIG.db_url.clone());
 
     let embedding_column_exists = dal.check_embedding_column_exists().unwrap_or_else(|e| {
@@ -1014,12 +1014,13 @@ mod tests {
     #[ignore = "interactive: visual check required"]
     #[rstest]
     fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
+        let stderr = StandardStream::stderr(ColorChoice::Always);
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         // this is only visible test
         CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
         // Given: v2 database with embeddings
         // When:
-        sem_search("blub".to_string(), None, false);
+        sem_search("blub".to_string(), None, false, stderr);
         // Then: Expect the first three entries to be: blub, blub3, blub2
     }
 

@@ -7,8 +7,8 @@ use camino::Utf8Path;
 use log::debug;
 
 pub fn create_embeddings_for_non_bookmarks<P>(file_path: P) -> anyhow::Result<()>
-where
-    P: AsRef<Utf8Path> + std::fmt::Display,
+    where
+        P: AsRef<Utf8Path> + std::fmt::Display,
 {
     // 1. read_ndjson_file_and_create_bookmarks
     let bms = read_ndjson_file_and_create_bookmarks(file_path)?;
@@ -31,13 +31,16 @@ where
                     );
                     eprintln!("Hash different, updating text embedding: {:?}", bm.URL);
                     bm.update(); // create embeddings
-                                 // todo:  changing this parameter type in method `update_bookmark` to borrow instead if owning the value
+                    bm.desc = "".to_string(); // we do not want the raw content in the db
+                    // todo:  changing this parameter type in method `update_bookmark` to borrow instead if owning the value
                     dal.update_bookmark(bm.clone())
                         .with_context(|| format!("Updating {:?}", bm))?;
                 } else if existing_bm.content_hash.is_none() {
                     eprintln!("No hash found, create text embedding: {:?}", bm.URL);
                     bm.update(); // create embeddings
-                    dal.update_bookmark(bm)?;
+                    bm.desc = "".to_string(); // we do not want the raw content in the db
+                    dal.update_bookmark(bm.clone())
+                        .with_context(|| format!("Updating {:?}", bm))?;
                 } else {
                     // hashes are the same
                     eprintln!("No change for: {:?}", bm.URL);
