@@ -366,10 +366,10 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
         dlog!("General OS open {:?}", uri);
         match abspath(uri) {
             Some(p) => {
-                open::that(p)?;
+                open::that(&p).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), p))?;
             }
             None => {
-                open::that(uri)?;
+                open::that(&uri).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), uri))?;
             }
         }
         Ok(())

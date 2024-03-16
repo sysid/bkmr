@@ -9,6 +9,7 @@ use diesel::sqlite::Sqlite;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use fs_extra::{copy_items, dir};
 use log::debug;
+use regex::Regex;
 use reqwest::blocking;
 use stdext::function_name;
 
@@ -68,7 +69,7 @@ pub fn temp_dir() -> Utf8PathBuf {
         &tempdir,
         &options,
     )
-    .expect("Failed to copy test project directory");
+        .expect("Failed to copy test project directory");
 
     tempdir.into_path()
 }
@@ -86,10 +87,19 @@ pub fn ensure_int_vector(vec: &Vec<String>) -> Option<Vec<i32>> {
 }
 
 /// resolves existing path and follows symlinks, returns None if path does not exist
+/// also removes suffix like ":1" or ":0" from the path if present
 pub fn abspath(p: &str) -> Option<String> {
-    let abs_p = shellexpand::full(p)
+    // Compile a regex to find a suffix pattern like ":<integer>"
+    let regex = Regex::new(":\\d+$").unwrap();
+
+    // Remove the suffix if present
+    let p_without_suffix = regex.replace(p, "");
+
+    let abs_p = shellexpand::full(&p_without_suffix)
         .ok()
-        .and_then(|x| Utf8Path::new(x.as_ref()).canonicalize_utf8().ok()).map(|p| p.into_string());
+        .and_then(|x| Utf8Path::new(x.as_ref()).canonicalize_utf8().ok())
+        .map(|p| p.into_string());
+
     debug!("({}:{}) {:?} -> {:?}", function_name!(), line!(), p, abs_p);
     abs_p
 }
@@ -197,6 +207,32 @@ mod test {
     #[case("./tests/resources/bkmr.pptx", Some("/Users/Q187392/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx".to_string()))] // link resolved
     fn test_abspath(#[case] x: &str, #[case] expected: Option<String>) {
         assert_eq!(abspath(x), expected);
+    }
+
+    #[rstest]
+    fn abspath_returns_none_if_path_does_not_exist() {
+        let input = "/non/existent/path";
+        assert_eq!(abspath(input), None);
+    }
+
+    #[rstest]
+    fn abspath_removes_suffix_from_path() {
+        let input = "/tmp/file:1";
+        let expected = Some("/private/tmp/file".to_string());  // macos gotcha: /private
+
+        // Create the file
+        std::fs::File::create("/tmp/file").unwrap();
+
+        assert_eq!(abspath(input), expected);
+
+        // Delete the file
+        std::fs::remove_file("/tmp/file").unwrap();
+    }
+
+    #[rstest]
+    fn abspath_returns_none_if_input_is_empty() {
+        let input = "";
+        assert_eq!(abspath(input), None);
     }
 
     #[rstest]
