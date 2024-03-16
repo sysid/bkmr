@@ -1,24 +1,25 @@
 #![allow(non_snake_case)]
+
+use std::{fs, io};
 use std::fs::File;
 use std::io::Write;
 use std::process::{Command, Stdio};
-use std::{fs, io};
 
 use anyhow::Context;
 use atty::Stream;
+use camino::Utf8Path;
 use chrono::NaiveDateTime;
 use indoc::formatdoc;
 use log::{debug, error};
 use regex::Regex;
-
 use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
+use crate::{dlog, dlog2, helper, update_bm};
 use crate::adapter::dal::Dal;
 use crate::environment::CONFIG;
 use crate::helper::abspath;
 use crate::model::bookmark::{Bookmark, BookmarkUpdater};
-use crate::{dlog, helper, update_bm};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {
@@ -366,9 +367,29 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
         dlog!("General OS open {:?}", uri);
         match abspath(uri) {
             Some(p) => {
-                open::that(&p).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), p))?;
+                if Utf8Path::new(&p).extension() == Some("md") {
+                    dlog!("Opening markdown file with editor {:?}", p);
+                    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+                    dlog2!("Using editor: {:?}",editor);
+                    Command::new(&editor)
+                        .arg(&p)
+                        .status()
+                        .with_context(|| {
+                            format!(
+                                "({}:{}) Error opening {} with [{}], check your EDITOR variable.",
+                                p,
+                                function_name!(),
+                                line!(),
+                                &editor
+                            )
+                        })?;
+                } else {
+                    dlog!("Opening file with default OS application {:?}", p);
+                    open::that(&p).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), p))?;
+                }
             }
             None => {
+                dlog!("Opening URI with default OS command {:?}", uri);
                 open::that(&uri).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), uri))?;
             }
         }
@@ -542,11 +563,11 @@ fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
 
 #[cfg(test)]
 mod test {
-    use crate::adapter::json::bms_to_json;
     use anyhow::anyhow;
     use rstest::*;
 
     use crate::adapter::dal::Dal;
+    use crate::adapter::json::bms_to_json;
     use crate::helper::init_db;
 
     use super::*;
