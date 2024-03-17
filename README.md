@@ -1,5 +1,7 @@
 # bkmr
 
+### [Generalized Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)
+
 # Ultrafast Bookmark Manager and Launcher
 
 > New Feature: Semantic Search (AI Embeddings)
