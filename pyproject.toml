@@ -5,31 +5,42 @@ description = "Super fast bookmark manager with semantic full text search'"
 authors = [
     {name = "sysid", email = "sysid@gmx.de"},
 ]
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
 dependencies = [
     "openai>=1.13.3",
 ]
-requires-python = ">=3.12"
-readme = "README.md"
 license = {text = "BSD-3-Clause"}
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+requires = ["maturin>=1,<2"]
+build-backend = "maturin"
 
-
-[tool.pdm]
-distribution = true
-
-[[tool.pdm.source]]
-url = "https://pypi.org/simple"
-verify_ssl = true
-name = "pypi"
-
-[tool.pdm.dev-dependencies]
-dev = [
-    "maturin",
+[tool.uv]
+managed = true
+dev-dependencies = [
+    "maturin-import-hook>=1.1.1",
+    "pip>=24.2",
+    "pytest>=8.3.2",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.6.1",
+    "isort>=5.13.2",
+    "mypy>=1.11.1",
 ]
 
+[tool.maturin]
+bindings = "bin"
+strip = true
+
+#[tool.hatch.metadata]
+#allow-direct-references = true
+
+#[tool.hatch.build.targets.wheel]
+#packages = ["py"]
 
 [tool.bumpversion]
 current_version = "2.0.1"
