@@ -1,0 +1,42 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="test_clean_tags" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="test --package bkmr --test test_lib test_clean_tags -- --nocapture " />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
+    <option name="channel" value="DEFAULT" />
+    <option name="requiredFeatures" value="true" />
+    <option name="allFeatures" value="false" />
+    <option name="emulateTerminal" value="false" />
+    <option name="withSudo" value="false" />
+    <option name="buildTarget" value="REMOTE" />
+    <option name="backtrace" value="SHORT" />
+    <envs>
+      <env name="DATABASE_URL" value="../db/bkmr.db" />
+      <env name="RUST_LOG" value="DEBUG" />
+    </envs>
+    <option name="isRedirectInput" value="false" />
+    <option name="redirectInputPath" value="" />
+    <method v="2">
+      <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+    </method>
+  </configuration>
+  <configuration default="false" name="test_clean_tags" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="test --package bkmr --lib test::test_clean_tags -- --nocapture" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
+    <option name="channel" value="DEFAULT" />
+    <option name="requiredFeatures" value="true" />
+    <option name="allFeatures" value="false" />
+    <option name="emulateTerminal" value="false" />
+    <option name="withSudo" value="false" />
+    <option name="buildTarget" value="REMOTE" />
+    <option name="backtrace" value="SHORT" />
+    <envs>
+      <env name="BKMR_DB_URL" value="../db/bkmr.db" />
+      <env name="RUST_LOG" value="DEBUG" />
+    </envs>
+    <option name="isRedirectInput" value="false" />
+    <option name="redirectInputPath" value="" />
+    <method v="2">
+      <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+    </method>
+  </configuration>
+</component>

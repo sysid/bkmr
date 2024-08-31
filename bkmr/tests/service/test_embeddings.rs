@@ -11,7 +11,13 @@ use std::env;
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    CTX.set(Context::new(Box::new(DummyAi))).unwrap();
+    // CTX.set(Context::new(Box::new(DummyAi))).expect("Failed to set context");
+    if CTX.get().is_none() {
+        println!("Setting context: DummyAi");
+        CTX.set(Context::new(Box::new(DummyAi)))
+            .expect("Failed to set context in test initialization");
+    }
+
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
     let _ = env_logger::builder()
