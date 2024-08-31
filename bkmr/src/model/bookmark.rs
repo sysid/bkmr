@@ -123,7 +123,6 @@ impl BookmarkUpdater for Bookmark {
     fn update(&mut self) {
         if !self.has_content_changed() && self.embedding.is_some() {
             // If content hasn't changed and an embedding exists, log and return early.
-            // Assuming `dlog2!` is a macro or function you've defined elsewhere for logging.
             dlog2!("Embedding exists and is up-to-date");
             return;
         }

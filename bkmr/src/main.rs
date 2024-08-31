@@ -927,7 +927,19 @@ fn set_logger(cli: &Cli) {
                 .try_init();
             debug!("Debug mode: debug");
         }
-        _ => eprintln!("Don't be crazy"),
+        _ => {
+            eprintln!("Don't be crazy, max is -d -d");
+            let _ = env_logger::builder()
+                .filter_level(log::LevelFilter::max())
+                .filter_module("skim", log::LevelFilter::Info)
+                .filter_module("tuikit", log::LevelFilter::Info)
+                .filter_module("html5ever", log::LevelFilter::Info)
+                .filter_module("reqwest", log::LevelFilter::Info)
+                .filter_module("mio", log::LevelFilter::Info)
+                .filter_module("want", log::LevelFilter::Info)
+                .try_init();
+            debug!("Debug mode: debug");
+        }
     }
 }
 
