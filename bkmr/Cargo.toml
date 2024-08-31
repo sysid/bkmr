@@ -55,6 +55,9 @@ md5 = "0.7.0"
 bincode = "1.3.3"
 camino-tempfile = "1.1.1"
 fs_extra = "1.3.0"
+pyo3 = { version = "0.22.2", features = ["extension-module", "anyhow"] }
+# https://github.com/sfackler/rust-openssl/issues/763#issuecomment-1150213102
+#openssl = { version = "0.10.66", features = ["vendored"] }
 
 [package.metadata.test]
 parallel = false

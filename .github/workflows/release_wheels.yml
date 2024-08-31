@@ -1,0 +1,76 @@
+name: Build and publish Rust binaries
+
+on:
+  #push:
+  #  branches:
+  #    - main
+  #pull_request:
+  #  branches:
+  #    - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        #os: [ ubuntu-latest, macos-latest ]
+        os: [ ubuntu-latest ]
+        # python-version: [ "3.10", "3.11", "3.12" ]
+        python-version: [ "3.12" ]
+        # architecture: [ x86_64, arm64 ]
+        architecture: [ x86_64 ]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install maturin
+
+      - name: Add rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
+
+      - name: Display directory tree (3 levels)
+        run: |
+          pwd
+          tree -L 3
+
+      - name: Build Rust binary as a Python package
+        run: maturin build -m bkmr/Cargo.toml --release --target ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
+
+      - name: Upload Python package with Rust binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}-${{ matrix.python-version }}-${{ matrix.architecture }}
+          path: ./target/wheels/*.whl
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./target/wheels
+          merge-multiple: true
+
+      - name: Display structure of downloaded files
+        run: ls -R ./target/wheels
+
+      - name: Install dependencies
+        run: pip install twine
+
+      - name: Upload to PyPI
+        run: twine upload --skip-existing ./target/wheels/*.whl
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}

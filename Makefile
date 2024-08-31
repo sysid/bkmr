@@ -186,6 +186,10 @@ all: clean build install  ## all
 upload:  ## upload
 	pushd $(pkg_src) && cargo release publish --execute
 
+.PHONY: build-wheel
+build-wheel:  ## build-wheel
+	maturin build --release -m bkmr/Cargo.toml
+
 .PHONY: build
 build:  ## build
 	pushd $(pkg_src) && cargo build --release
