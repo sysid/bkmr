@@ -182,12 +182,14 @@ enum Commands {
         /// pathname to database file
         path: String,
     },
-    /// Backfill embeddings for bookmarks
+    /// Backfill embeddings for bookmarks, which have been added without embeddings.
+    /// E.g. when OpenAI API was not available.
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
     },
-    /// Load texts for semantic similarity search
+    /// Load texts for semantic similarity search as bookmarks.
+    /// The actual content of the file is not stored in the database, only the embeddings.
     LoadTexts {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
