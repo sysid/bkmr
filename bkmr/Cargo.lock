@@ -257,7 +257,6 @@ dependencies = [
  "anyhow",
  "arboard",
  "assert_cmd",
- "atty",
  "bincode",
  "byteorder",
  "camino",

@@ -2,11 +2,10 @@
 
 use std::{fs, io};
 use std::fs::File;
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::process::{Command, Stdio};
 
 use anyhow::Context;
-use atty::Stream;
 use camino::Utf8Path;
 use chrono::NaiveDateTime;
 use indoc::formatdoc;
@@ -95,7 +94,7 @@ impl From<&Bookmark> for DisplayBookmark {
 pub fn show_bms(bms: &Vec<DisplayBookmark>, fields: &[DisplayField]) {
     // let mut stdout = StandardStream::stdout(ColorChoice::Always);
     // Check if the output is a TTY
-    let color_choice = if atty::is(Stream::Stdout) {
+    let color_choice = if io::stdout().is_terminal() {
         ColorChoice::Auto
     } else {
         ColorChoice::Never
@@ -630,7 +629,8 @@ mod test {
     #[ignore = "Manual Test with Makefile"]
     #[case("./tests/resources/bkmr.pptx")]
     #[ignore = "Manual Test with Makefile"]
-    #[case(r#####"shell::vim +/"## SqlAlchemy" $HOME/dev/s/private/bkmr/bkmr/tests/resources/sample_docu.md"#####)]
+    #[case(r#####"shell::vim +/"## SqlAlchemy" $HOME/dev/s/private/bkmr/bkmr/tests/resources/sample_docu.md"#####
+    )]
     fn test_open_bm(#[case] bm: &str) {
         _open_bm(bm).unwrap();
     }
