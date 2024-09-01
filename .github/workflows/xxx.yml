@@ -6,14 +6,14 @@
 name: CI
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - '*'
-  pull_request:
-    branches:
-      - main
+  #push:
+  #  branches:
+  #    - main
+  #  tags:
+  #    - '*'
+  #pull_request:
+  #  branches:
+  #    - main
   workflow_dispatch:
 
 permissions:
@@ -55,12 +55,17 @@ jobs:
             cmake \
             libffi-dev
 
+      - name: Set up OpenSSL environment variables
+        run: |
+          echo "OPENSSL_DIR=/usr/lib/ssl" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH is set to: $PKG_CONFIG_PATH"
+
       - name: Verify OpenSSL installation
         run: |
           openssl version
           pkg-config --modversion openssl
           ls -l /usr/lib/x86_64-linux-gnu/pkgconfig/openssl.pc
-          export PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
 
       - name: Check pkg-config paths
         run: |
@@ -105,24 +110,24 @@ jobs:
   #          name: wheels
   #          path: dist
 
-  release:
-    name: Release
-    runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
-    #    needs: [ linux, macos ]
-    needs: [ linux ]
-    steps:
-      - uses: actions/download-artifact@v3
-        with:
-          name: wheels
-
-      - name: Display structure of downloaded files
-        run: ls -R ./target/wheels
-
-      - name: Publish to PyPI
-        uses: PyO3/maturin-action@v1
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        with:
-          command: upload
-          args: --non-interactive --skip-existing *
+#  release:
+#    name: Release
+#    runs-on: ubuntu-latest
+#    if: "startsWith(github.ref, 'refs/tags/')"
+#    #    needs: [ linux, macos ]
+#    needs: [ linux ]
+#    steps:
+#      - uses: actions/download-artifact@v3
+#        with:
+#          name: wheels
+#
+#      - name: Display structure of downloaded files
+#        run: ls -R ./target/wheels
+#
+#      - name: Publish to PyPI
+#        uses: PyO3/maturin-action@v1
+#        env:
+#          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+#        with:
+#          command: upload
+#          args: --non-interactive --skip-existing *
