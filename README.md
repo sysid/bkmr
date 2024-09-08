@@ -95,6 +95,8 @@ Tags must be separated by comma without blanks.
 3. `export "BKMR_DB_URL=db-path"`, location of created sqlite database must be known
 4. add URLs
 
+If you do not have Rust on your machine you can use: `pip install bkmr`
+
 More configuration options can be found at [documentation page](https://github.com/sysid/bkmr/wiki/configuration).
 
 ### Upgrade to 1.x.x
@@ -109,6 +111,7 @@ You can find more information on the [documentation page](https://github.com/sys
 
 ## Benchmarking
 - ca. 20x faster than the Python original [twbm](https://github.com/sysid/twbm) after warming up Python.
+- same for [buku](https://github.com/jarun/buku).
 ```bash
 time twbm search 'zzz*' --np
 0. zzzeek : Asynchronous Python and Databases [343]

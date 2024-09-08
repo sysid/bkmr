@@ -33,6 +33,7 @@ dev-dependencies = [
 bindings = "bin"
 strip = true
 cargo-manifest-path = "bkmr/Cargo.toml"
+scripts = { bkmr = "bkmr" }
 
 [tool.hatch.metadata]
 allow-direct-references = true
