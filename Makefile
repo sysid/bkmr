@@ -182,6 +182,10 @@ BUILDING:  ## ##################################################################
 all: clean build install  ## all
 	:
 
+.PHONY: generate-ci
+generate-ci:  ## generate-ci
+	maturin generate-ci github --platform macos --platform linux -m bkmr/Cargo.toml
+
 .PHONY: upload
 upload:  ## upload
 	pushd $(pkg_src) && cargo release publish --execute

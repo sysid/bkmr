@@ -4,6 +4,9 @@
 ![Crates.io](https://img.shields.io/crates/d/bkmr)
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 
+[![PyPI Version][pypi-image]][pypi-url]
+[![Downloads](https://static.pepy.tech/badge/bkmr/month)](https://pepy.tech/project/bkmr)
+[![Build Status][build-image]][build-url]
 
 
 ### [Generalized Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)
@@ -136,11 +139,13 @@ sys     0m0.016s
 
 
 <!-- Badges -->
-[pypi-image]: https://img.shields.io/pypi/v/bkmr?color=blue
 [pypi-url]: https://pypi.org/project/bkmr/
-[build-image]: https://github.com/sysid/bkmr/actions/workflows/build.yml/badge.svg
-[build-url]: https://github.com/sysid/bkmr/actions/workflows/build.yml
-[coverage-image]: https://codecov.io/gh/sysid/bkmr/branch/main/graph/badge.svg
-[coverage-url]: https://codecov.io/gh/sysid/bkmr
+
+[build-image]: https://github.com/sysid/bkmr/actions/workflows/release_wheels.yml/badge.svg
+[build-url]: https://github.com/sysid/bkmr/actions/workflows/release_wheels.yml
+
 [quality-image]: https://api.codeclimate.com/v1/badges/3130fa0ba3b7993fbf0a/maintainability
 [quality-url]: https://codeclimate.com/github/nalgeon/podsearch-py
+
+[pypi-image]: https://badge.fury.io/py/bkmr.svg
+[pypi-url]: https://pypi.org/project/bkmr/
