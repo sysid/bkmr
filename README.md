@@ -1,5 +1,11 @@
 # bkmr
 
+![Crates.io](https://img.shields.io/crates/v/bkmr)
+![Crates.io](https://img.shields.io/crates/d/bkmr)
+[![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
+
+
+
 ### [Generalized Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)
 
 # Ultrafast Bookmark Manager and Launcher
