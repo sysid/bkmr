@@ -51,6 +51,7 @@ pub mod service {
 pub mod environment;
 pub mod helper;
 pub mod macros;
+pub mod cli;
 
 pub static CTX: OnceLock<Context> = OnceLock::new();
 
