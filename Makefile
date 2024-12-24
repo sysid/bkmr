@@ -47,7 +47,7 @@ run-all: test-env run-migrate-db run-backfill run-update run-show run-create-db 
 
 
 .PHONY: test-url-details
-test-url-details:  ## test-url-details (charm strang verbose output)
+test-url-details:  ## test-url-details (charm strang verbose output), expect: "Rust Programming Language", "A language empowering everyone to build reliable and efficient software."
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
 
 .PHONY: test-fzf  # TODO: fix

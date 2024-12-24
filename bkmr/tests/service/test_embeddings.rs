@@ -49,6 +49,7 @@ fn test_create_embeddings_for_non_bookmarks_non_existing(_dal: Dal, test_data_pa
     // Arrange
     // Act
     let result = create_embeddings_for_non_bookmarks(test_data_path);
+    println!("Result: {:?}", result);
     // Assert
     assert!(result.is_ok());
     // Add more assertions based on your expectations

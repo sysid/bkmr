@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io::Write;
 use std::time::{Duration, Instant};
 use std::{env, io};
-
+use anyhow::{Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::tempdir;
 use diesel::sqlite::Sqlite;
@@ -40,25 +40,34 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 /// * Retrieving pending migrations
 /// * Running pending migrations
 #[allow(unused)]
+// In helper.rs
 pub fn init_db(
     connection: &mut impl MigrationHarness<Sqlite>,
-) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
+) -> anyhow::Result<()> {
     debug!("({}:{}) {:?}", function_name!(), line!(), "--> initdb <--");
-    connection.revert_all_migrations(MIGRATIONS)?;
-    connection
-        .pending_migrations(MIGRATIONS)?
-        .iter()
-        .for_each(|m| {
-            debug!(
-                "({}:{}) Pending Migration: {}",
-                function_name!(),
-                line!(),
-                m.name()
-            );
-        });
-    connection.run_pending_migrations(MIGRATIONS)?;
+
+    connection.revert_all_migrations(MIGRATIONS)
+        .map_err(|e| anyhow::anyhow!("Failed to revert migrations: {}", e))?;
+
+    let pending = connection
+        .pending_migrations(MIGRATIONS)
+        .map_err(|e| anyhow::anyhow!("Failed to get pending migrations: {}", e))?;
+
+    pending.iter().for_each(|m| {
+        debug!(
+            "({}:{}) Pending Migration: {}",
+            function_name!(),
+            line!(),
+            m.name()
+        );
+    });
+
+    connection.run_pending_migrations(MIGRATIONS)
+        .map_err(|e| anyhow::anyhow!("Failed to run pending migrations: {}", e))?;
+
     Ok(())
 }
+
 
 /// Prepare test directory with test data and return path
 pub fn temp_dir() -> Utf8PathBuf {
@@ -69,7 +78,7 @@ pub fn temp_dir() -> Utf8PathBuf {
         &tempdir,
         &options,
     )
-        .expect("Failed to copy test project directory");
+    .expect("Failed to copy test project directory");
 
     tempdir.into_path()
 }
@@ -218,7 +227,7 @@ mod test {
     #[rstest]
     fn abspath_removes_suffix_from_path() {
         let input = "/tmp/file:1";
-        let expected = Some("/private/tmp/file".to_string());  // macos gotcha: /private
+        let expected = Some("/private/tmp/file".to_string()); // macos gotcha: /private
 
         // Create the file
         std::fs::File::create("/tmp/file").unwrap();

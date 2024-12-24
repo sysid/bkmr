@@ -1,4 +1,5 @@
 // bkmr/src/main.rs
+use anyhow::Result;
 use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::PathBuf;
@@ -33,7 +34,10 @@ use bkmr::model::bookmark::{Bookmark, BookmarkBuilder};
 use bkmr::model::tag::Tags;
 use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
 use bkmr::service::fzf::fzf_process;
-use bkmr::service::process::{delete_bms, edit_bms, open_bm, process, show_bms, DisplayBookmark, DisplayField, ALL_FIELDS, DEFAULT_FIELDS};
+use bkmr::service::process::{
+    delete_bms, edit_bms, open_bm, process, show_bms, DisplayBookmark, DisplayField, ALL_FIELDS,
+    DEFAULT_FIELDS,
+};
 use bkmr::CTX;
 use bkmr::{dlog2, load_url_details};
 
@@ -70,13 +74,15 @@ fn main() {
         CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     }
 
-    let Some(command) = cli.command else {
-        eprintln!("No command given. Usage: bkmr <command> [options]"); // TODO: use clap native
-        return;
-    };
+    if let Err(e) = execute_command(stderr, cli) {
+        eprintln!("{}", format!("Error: {}", e).red());
+        std::process::exit(1);
+    }
+}
 
-    match command {
-        Commands::Search {
+fn execute_command(stderr: StandardStream, cli: Cli) -> Result<()> {
+    match cli.command {
+        Some(Commands::Search {
             fts_query,
             tags_exact,
             tags_all,
@@ -90,8 +96,8 @@ fn main() {
             is_fuzzy,
             is_json,
             limit,
-        } => {
-            if let Some(_value) = commands::search_bookmarks(
+        }) => {
+            commands::search_bookmarks(
                 tags_prefix,
                 tags_all,
                 fts_query,
@@ -106,37 +112,37 @@ fn main() {
                 limit,
                 non_interactive,
                 stderr,
-            ) {}
+            )
         }
-        Commands::SemSearch {
+        Some(Commands::SemSearch {
             query,
             limit,
             non_interactive,
-        } => commands::sem_search(query, limit, non_interactive, stderr),
-        Commands::Open { ids } => commands::open_bookmarks(ids),
-        Commands::Add {
+        }) => commands::sem_search(query, limit, non_interactive, stderr),
+        Some(Commands::Open { ids }) => commands::open_bookmarks(ids),
+        Some(Commands::Add {
             url,
             tags,
             title,
             desc,
             no_web,
             edit,
-        } => commands::add_bookmark(url, tags, title, desc, no_web, edit),
-        Commands::Delete { ids } => commands::delete_bookmarks(ids),
-        Commands::Update {
+        }) => commands::add_bookmark(url, tags, title, desc, no_web, edit),
+        Some(Commands::Delete { ids }) => commands::delete_bookmarks(ids),
+        Some(Commands::Update {
             ids,
             tags,
             tags_not,
             force,
-        } => commands::update_bookmarks(force, tags, tags_not, ids),
-        Commands::Edit { ids } => commands::edit_bookmarks(ids),
-        Commands::Show { ids } => commands::show_bookmarks(ids),
-        Commands::Tags { tag } => commands::show_tags(tag),
-        Commands::CreateDb { path } => commands::create_db(path),
-        Commands::Surprise { n } => commands::randomized(n),
-        Commands::Backfill { dry_run } => commands::backfill_embeddings(dry_run),
-        Commands::LoadTexts { dry_run, path } => commands::load_texts(dry_run, path),
-        Commands::Xxx { ids, tags } => {
+        }) => commands::update_bookmarks(force, tags, tags_not, ids),
+        Some(Commands::Edit { ids }) => commands::edit_bookmarks(ids),
+        Some(Commands::Show { ids }) => commands::show_bookmarks(ids),
+        Some(Commands::Tags { tag }) => commands::show_tags(tag),
+        Some(Commands::CreateDb { path }) => commands::create_db(path),
+        Some(Commands::Surprise { n }) => commands::randomized(n),
+        Some(Commands::Backfill { dry_run }) => commands::backfill_embeddings(dry_run),
+        Some(Commands::LoadTexts { dry_run, path }) => commands::load_texts(dry_run, path),
+        Some(Commands::Xxx { ids, tags }) => {
             eprintln!(
                 "({}:{}) ids: {:?}, tags: {:?}",
                 function_name!(),
@@ -144,7 +150,9 @@ fn main() {
                 ids,
                 tags
             );
+            Ok(())
         }
+        None => Ok(()),
     }
 }
 
@@ -236,7 +244,7 @@ mod tests {
             "../db",
             &options,
         )
-            .expect("Failed to copy test project directory");
+        .expect("Failed to copy test project directory");
 
         tempdir.into_path()
     }
