@@ -1,5 +1,12 @@
 // bkmr/src/main.rs
 
+use std::sync::RwLock;
+use bkmr::{
+    cli::{args::Cli, commands},
+    adapter::embeddings::{DummyEmbedding, OpenAiEmbedding},
+};
+use bkmr::context::{Context, CTX};
+use bkmr::environment::CONFIG;
 use clap::Parser;
 use crossterm::style::Stylize;
 use termcolor::{ColorChoice, StandardStream};
@@ -9,13 +16,7 @@ use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     prelude::*,
 };
-
-use bkmr::adapter::embeddings::{Context, DummyAi, OpenAi};
-use bkmr::cli::args::{Cli, Commands};
-use bkmr::cli::commands;
-use bkmr::environment::CONFIG;
-use bkmr::helper::is_env_var_set;
-use bkmr::CTX;
+use bkmr::cli::args::Commands;
 
 fn main() {
     // let stdout = StandardStream::stdout(ColorChoice::Always);
@@ -37,17 +38,16 @@ fn main() {
         let _ = commands::enable_embeddings_if_required(); // migrate db
     }
 
-    if cli.openai {
-        if !is_env_var_set("OPENAI_API_KEY") {
-            println!("Environment variable OPENAI_API_KEY is not set.");
-            std::process::exit(1);
-        }
-
-        info!("Using OpenAI API");
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+    let context = if cli.openai {
+        Context::new(Box::new(OpenAiEmbedding::default()))
     } else {
-        info!("Using DummyAI");
-        CTX.set(Context::new(Box::new(DummyAi))).unwrap();
+        Context::new(Box::new(DummyEmbedding))
+    };
+
+    // Set the global context
+    if CTX.set(RwLock::from(context)).is_err() {
+        eprintln!("{}", "Failed to initialize context".red());
+        std::process::exit(1);
     }
 
     if let Err(e) = commands::execute_command(stderr, cli) {
@@ -57,6 +57,8 @@ fn main() {
 }
 
 fn setup_logging(verbosity: u8) {
+    eprintln!("INIT: Attempting logger init from main.rs");
+
     let filter = match verbosity {
         0 => LevelFilter::WARN,
         1 => LevelFilter::INFO,
@@ -77,19 +79,15 @@ fn setup_logging(verbosity: u8) {
 
     // Create a subscriber with formatted output directed to stderr
     let fmt_layer = fmt::layer()
-        .with_writer(std::io::stderr)  // Set writer first
+        .with_writer(std::io::stderr) // Set writer first
         .with_target(true)
         .with_thread_names(false)
         .with_span_events(FmtSpan::CLOSE);
 
     // Apply filters to the layer
-    let filtered_layer = fmt_layer
-        .with_filter(filter)
-        .with_filter(module_filter);
+    let filtered_layer = fmt_layer.with_filter(filter).with_filter(module_filter);
 
-    tracing_subscriber::registry()
-        .with(filtered_layer)
-        .init();
+    tracing_subscriber::registry().with(filtered_layer).init();
 
     // Log initial debug level
     match filter {

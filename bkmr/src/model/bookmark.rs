@@ -11,9 +11,10 @@ use stdext::function_name;
 
 use crate::helper::calc_content_hash;
 use crate::model::tag::Tags;
-use crate::{dlog2, CTX};
 
-use crate::adapter::schema::bookmarks; // ORM mappings
+use crate::adapter::schema::bookmarks;
+use crate::context::Context;
+// ORM mappings
 
 #[derive(QueryableByName)]
 pub struct IdResult {
@@ -123,15 +124,13 @@ impl BookmarkUpdater for Bookmark {
     fn update(&mut self) {
         if !self.has_content_changed() && self.embedding.is_some() {
             // If content hasn't changed and an embedding exists, log and return early.
-            dlog2!("Embedding exists and is up-to-date");
+            debug!("Embedding exists and is up-to-date");
             return;
         }
 
         // Assuming `CTX` is a globally accessible context that can produce embeddings.
         // And `calc_content_hash` is a function that calculates the hash of the bookmark content.
-        let embedding = CTX
-            .get()
-            .expect("Error: CTX is not initialized")
+        let embedding = Context::read_global()
             .get_embedding(self.get_content().as_str());
 
         self.embedding = embedding;

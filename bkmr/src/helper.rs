@@ -12,16 +12,6 @@ use regex::Regex;
 use reqwest::blocking;
 use stdext::function_name;
 
-pub fn init_logger() {
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
-}
-
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 /// Initializes the database by running all pending migrations.

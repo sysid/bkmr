@@ -1,11 +1,12 @@
 use std::fs::create_dir_all;
 use std::io::Write;
 
+use crate::adapter::embeddings::{cosine_similarity, deserialize_embedding, OpenAiEmbedding};
 use crate::cli::args::{Cli, Commands};
+use crate::context::Context;
 use crate::service::process::DisplayField;
 use crate::{
     adapter::dal::Dal,
-    adapter::embeddings::{cosine_similarity, deserialize_embedding},
     adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks},
     environment::CONFIG,
     helper::{confirm, ensure_int_vector, init_db, MIGRATIONS},
@@ -23,7 +24,6 @@ use crate::{
             delete_bms, edit_bms, open_bm, show_bms, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS,
         },
     },
-    CTX,
 };
 use anyhow::{anyhow, Context as _};
 use camino::Utf8Path;
@@ -457,7 +457,7 @@ pub fn sem_search(
         .take(limit)
         .collect();
 
-    // Display bookmarks
+    // Display results
     let display_bookmarks: Vec<_> = filtered_results
         .iter()
         .map(|(_, dbm)| dbm)
@@ -488,18 +488,15 @@ pub fn sem_search(
 }
 
 pub fn find_similar(query: &str, bms: &Bookmarks) -> Result<Vec<(i32, f32)>> {
-    let ctx = CTX
-        .get()
-        .ok_or_else(|| anyhow!("Error: CTX is not initialized"))?;
+    Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
 
-    let embedding = ctx
+    let embedding = Context::read_global()
         .execute(query)?
-        .ok_or_else(|| anyhow!("Error: embedding is not set, did you use --openai?"))?;
+        .ok_or_else(|| anyhow!("No embedding generated. OpenAI flag set?"))?;
 
     let query_vector = ndarray::Array1::from(embedding);
     let mut results = Vec::with_capacity(bms.bms.len());
 
-    // Process bookmarks with embeddings
     for bm in &bms.bms {
         if let Some(embedding_data) = &bm.embedding {
             let bm_embedding = deserialize_embedding(embedding_data.clone())?;
@@ -518,29 +515,20 @@ mod tests {
     use std::fs;
 
     use super::*;
-    use crate::adapter::embeddings::{Context, OpenAi};
-    
+
     use crate::cli::commands::{find_similar, randomized, sem_search};
     use crate::model::bms::Bookmarks;
+    
     use camino::Utf8PathBuf;
     use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};
     use rstest::{fixture, rstest};
     use termcolor::ColorChoice;
 
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            .filter_module("skim", log::LevelFilter::Info)
-            .filter_module("tuikit", log::LevelFilter::Info)
-            .filter_module("reqwest", log::LevelFilter::Info)
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
+    // #[ctor::ctor]
+    // fn init() {
+    //     init_test_setup();
+    // }
 
     #[fixture]
     fn temp_dir() -> Utf8PathBuf {
@@ -563,49 +551,69 @@ mod tests {
     #[allow(unused_variables)]
     #[ignore = "currently only works in isolation"]
     #[rstest]
-    fn test_find_similar_when_embed_null(temp_dir: Utf8PathBuf) {
+    fn test_find_similar_when_embed_null(temp_dir: Utf8PathBuf) -> Result<()> {
         // Given: v2 database with embeddings and OpenAI context
         fs::rename("../db/bkmr.v2.noembed.db", "../db/bkmr.db").expect("Failed to rename database");
         let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+        Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
 
         // When: find similar for "blub"
         let results = find_similar("blub", &bms).unwrap();
 
         // Then: Expect no findings
         assert_eq!(results.len(), 0);
+        Ok(())
     }
 
     #[allow(unused_variables)]
     #[rstest]
-    fn test_find_similar(temp_dir: Utf8PathBuf) {
-        // Given: v2 database with embeddings and OpenAi context
-        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
+    fn test_find_similar(temp_dir: Utf8PathBuf) -> Result<()> {
+        // Given: Set up test environment
+        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db")?;
         let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+
+        // Initialize CTX with proper error handling and verification
+        Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
 
         // When: find similar for "blub"
-        let results = find_similar("blub", &bms).unwrap();
+        let results = find_similar("blub", &bms)?;
 
-        // Then: Expect the first three entries to be: blub, blub3, blub2
-        assert_eq!(results.len(), 11);
-        // Extract the first element (id) of the first three tuples
-        let first_three_ids: Vec<_> = results.into_iter().take(3).map(|(id, _)| id).collect();
-        assert_eq!(first_three_ids, vec![4, 6, 5]);
+        // Then: Verify results
+        assert!(!results.is_empty(), "Expected non-empty results");
+        assert_eq!(results.len(), 11, "Expected 11 results");
+
+        // Verify top 3 results by ID
+        let top_three_ids: Vec<_> = results.iter().take(3).map(|(id, _)| *id).collect();
+        assert_eq!(
+            top_three_ids,
+            vec![4, 6, 5],
+            "Expected top results to be IDs [4, 6, 5] in order, got {:?}",
+            top_three_ids
+        );
+
+        // Verify similarities are properly ordered
+        let similarities: Vec<_> = results.iter().take(3).map(|(_, sim)| *sim).collect();
+        assert!(
+            similarities.windows(2).all(|w| w[0] >= w[1]),
+            "Expected similarities to be in descending order"
+        );
+
+        Ok(())
     }
 
     #[allow(unused_variables)]
     #[ignore = "interactive: visual check required"]
     #[rstest]
-    fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
+    fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) -> Result<()> {
         let stderr = StandardStream::stderr(ColorChoice::Always);
         fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
         // this is only visible test
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+        Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
         // Given: v2 database with embeddings
         // When:
         sem_search("blub".to_string(), None, false, stderr);
         // Then: Expect the first three entries to be: blub, blub3, blub2
+        Ok(())
     }
 
     #[ignore = "interactive: opens browser link"]

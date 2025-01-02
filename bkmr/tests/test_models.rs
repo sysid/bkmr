@@ -2,32 +2,15 @@
 
 use std::env;
 
-use bkmr::adapter::embeddings::{Context, OpenAi};
-use bkmr::CTX;
 use rstest::*;
-
+use bkmr::adapter::embeddings::{OpenAiEmbedding};
+use bkmr::context::Context;
 use bkmr::helper::calc_content_hash;
 use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
-
-#[ctor::ctor]
-fn init() {
-    env::set_var("SKIM_LOG", "info");
-    env::set_var("TUIKIT_LOG", "info");
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        .filter_module("skim", log::LevelFilter::Info)
-        .filter_module("tuikit", log::LevelFilter::Info)
-        .filter_module("mio", log::LevelFilter::Info)
-        .filter_module("reqwest", log::LevelFilter::Info)
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
-}
+use anyhow::Result;
 
 #[rstest]
-fn test_bm_update() {
+fn test_bm_update() -> Result<()> {
     // Given: Request a new server from the pool
     let mut server = mockito::Server::new();
     let url = server.url();
@@ -40,8 +23,7 @@ fn test_bm_update() {
         .expect(2)
         .create();
     // Given: OpenAi strategy/context with mocked url/server
-    let open_ai = OpenAi::new(url);
-    CTX.set(Context::new(Box::new(open_ai))).unwrap();
+    Context::update_global(Context::new(Box::new(OpenAiEmbedding::new(url))))?;
 
     // When: new bm created without update()
     let mut bm = BookmarkBuilder::new()
@@ -83,5 +65,6 @@ fn test_bm_update() {
     mock.assert();
 
     // Cleanup
-    env::remove_var("OPENAI_API_KEY")
+    env::remove_var("OPENAI_API_KEY");
+    Ok(())
 }

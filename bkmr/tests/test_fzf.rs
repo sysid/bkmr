@@ -26,7 +26,6 @@ fn init() {
 
 #[fixture]
 pub fn dal() -> Dal {
-    helper::init_logger();
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
     helper::init_db(&mut dal.conn).expect("Error DB init");
     dal

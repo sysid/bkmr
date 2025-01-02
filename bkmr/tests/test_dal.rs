@@ -7,13 +7,13 @@ use rstest::{fixture, rstest};
 use stdext::function_name;
 
 use bkmr::adapter::dal::Dal;
-use bkmr::adapter::embeddings::{Context, DummyAi};
+use bkmr::adapter::embeddings::DummyEmbedding;
+use bkmr::context::Context;
 use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
-use bkmr::{helper, CTX};
+use bkmr::helper;
 
 #[fixture]
 pub fn dal() -> Dal {
-    helper::init_logger();
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
     helper::init_db(&mut dal.conn).expect("Error DB init");
     dal
@@ -76,9 +76,7 @@ fn test_bm_exists(mut dal: Dal, #[case] input: &str, #[case] expected: bool) -> 
 
 #[rstest]
 fn test_insert_bm(mut dal: Dal) -> Result<()> {
-    if CTX.get().is_none() {
-        CTX.set(Context::new(Box::new(DummyAi))).unwrap();
-    }
+    Context::update_global(Context::new(Box::new(DummyEmbedding)))?;
     let mut bm = BookmarkBuilder::new()
         .URL("www.sysid.de".to_string())
         .metadata("".to_string())

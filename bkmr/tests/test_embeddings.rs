@@ -1,8 +1,8 @@
-use bkmr::adapter::embeddings::{Embedding, OpenAi};
 use log::{debug, info};
 use rstest::rstest;
 use std::env;
 use stdext::function_name;
+use bkmr::adapter::embeddings::{Embedding, OpenAiEmbedding};
 
 #[ctor::ctor]
 fn init() {
@@ -41,11 +41,11 @@ fn test_get_openai_embedding() {
         .create();
     debug!("({}:{}) {:?}", function_name!(), line!(), url);
 
-    let open_ai = OpenAi::new(url);
+    let open_ai = OpenAiEmbedding::new(url);
     let input_text = "example text";
 
     // When: Get the embedding
-    let embedding = open_ai.get_openai_embedding(input_text).unwrap().unwrap();
+    let embedding = open_ai.embed(input_text).unwrap().unwrap();
     // Then: Ensure the embedding is correct
     assert_eq!(embedding, vec![0.1, 0.2, 0.3]);
 

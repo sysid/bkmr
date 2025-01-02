@@ -1,33 +1,25 @@
 #![crate_type = "lib"]
 #![crate_name = "bkmr"]
-// #![allow(unused_variables, unused_imports)]
 
 extern crate skim;
 
 use std::collections::HashSet;
 
 
-
-use std::sync::OnceLock;
-
 use crate::adapter::dal::Dal;
-use crate::adapter::embeddings::Context;
 
 use anyhow::Result;
 
+use crate::environment::CONFIG;
+use crate::model::bookmark::Bookmark;
+use crate::model::bookmark::BookmarkUpdater;
+use crate::model::tag::Tags;
 use itertools::Itertools;
 use log::{debug, error};
 use reqwest::blocking::Client;
 use select::document::Document;
 use select::predicate::{Attr, Name};
 
-#[allow(unused_imports)]
-use stdext::function_name;
-
-use crate::environment::CONFIG;
-use crate::model::bookmark::Bookmark;
-use crate::model::bookmark::BookmarkUpdater;
-use crate::model::tag::Tags;
 
 pub mod adapter {
     pub mod dal;
@@ -48,12 +40,12 @@ pub mod service {
     pub mod process;
 }
 
+pub mod cli;
+pub mod context;
 pub mod environment;
 pub mod helper;
 pub mod macros;
-pub mod cli;
-
-pub static CTX: OnceLock<Context> = OnceLock::new();
+pub mod util;
 
 /// creates list of normalized tags from "tag1,t2,t3" string
 /// be aware of shell parsing rules, so no blanks or quotes
@@ -70,19 +62,11 @@ pub fn load_url_details(url: &str) -> Result<(String, String, String)> {
         .map(|n| n.text().trim().to_owned())
         .unwrap_or_default();
 
-    debug!("({}:{}) Title {:?}", function_name!(), line!(), title);
-
     let description = document
         .find(Attr("name", "description"))
         .next()
         .and_then(|n| n.attr("content"))
         .unwrap_or_default();
-    debug!(
-        "({}:{}) Description {:?}",
-        function_name!(),
-        line!(),
-        description
-    );
 
     let keywords = document
         .find(Attr("name", "keywords"))
@@ -90,7 +74,7 @@ pub fn load_url_details(url: &str) -> Result<(String, String, String)> {
         .and_then(|node| node.attr("content"))
         .unwrap_or_default();
 
-    debug!("({}:{}) Keywords {:?}", function_name!(), line!(), keywords);
+    debug!("Keywords {:?}", keywords);
 
     Ok((title, description.to_owned(), keywords.to_owned()))
 }
@@ -125,7 +109,7 @@ pub fn update_bm(
 ) -> Result<Vec<Bookmark>> {
     let tags: HashSet<String> = tags.iter().cloned().collect();
     let tags_not: HashSet<String> = tags_not.iter().cloned().collect();
-    dlog!("id {}, tags {:?}, tags_not {:?}", id, tags, tags_not);
+    debug!("id {}, tags {:?}, tags_not {:?}", id, tags, tags_not);
 
     let bm = dal.get_bookmark_by_id(id)?;
 
@@ -143,7 +127,7 @@ pub fn update_bm(
     };
 
     let bm_tags: Vec<String> = new_tags.iter().sorted().cloned().collect();
-    dlog!("bm_tags {:?}", bm_tags);
+    debug!("bm_tags {:?}", bm_tags);
 
     let mut bm_updated = Bookmark {
         tags: format!(",{},", bm_tags.join(",")),
