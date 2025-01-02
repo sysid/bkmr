@@ -1,17 +1,7 @@
 use std::fs::create_dir_all;
 use std::io::Write;
 
-use anyhow::{anyhow, Context as _};
-use camino::Utf8Path;
-use crossterm::style::Stylize;
-use diesel::connection::SimpleConnection;
-use diesel::result::DatabaseErrorKind;
-use diesel::result::Error::DatabaseError;
-use diesel_migrations::MigrationHarness;
-use itertools::Itertools;
-use log::debug;
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-
+use crate::cli::args::{Cli, Commands};
 use crate::service::process::DisplayField;
 use crate::{
     adapter::dal::Dal,
@@ -35,10 +25,94 @@ use crate::{
     },
     CTX,
 };
+use anyhow::{anyhow, Context as _};
+use camino::Utf8Path;
+use crossterm::style::Stylize;
+use diesel::connection::SimpleConnection;
+use diesel::result::DatabaseErrorKind;
+use diesel::result::Error::DatabaseError;
+use diesel_migrations::MigrationHarness;
+use itertools::Itertools;
+use log::debug;
+use stdext::function_name;
+use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 
 // Type alias for commonly used Result type
 type Result<T> = anyhow::Result<T>;
 
+pub fn execute_command(stderr: StandardStream, cli: Cli) -> anyhow::Result<()> {
+    match cli.command {
+        Some(Commands::Search {
+            fts_query,
+            tags_exact,
+            tags_all,
+            tags_all_not,
+            tags_any,
+            tags_any_not,
+            tags_prefix,
+            order_desc,
+            order_asc,
+            non_interactive,
+            is_fuzzy,
+            is_json,
+            limit,
+        }) => search_bookmarks(
+            tags_prefix,
+            tags_all,
+            fts_query,
+            tags_any,
+            tags_all_not,
+            tags_any_not,
+            tags_exact,
+            order_desc,
+            order_asc,
+            is_fuzzy,
+            is_json,
+            limit,
+            non_interactive,
+            stderr,
+        ),
+        Some(Commands::SemSearch {
+            query,
+            limit,
+            non_interactive,
+        }) => sem_search(query, limit, non_interactive, stderr),
+        Some(Commands::Open { ids }) => open_bookmarks(ids),
+        Some(Commands::Add {
+            url,
+            tags,
+            title,
+            desc,
+            no_web,
+            edit,
+        }) => add_bookmark(url, tags, title, desc, no_web, edit),
+        Some(Commands::Delete { ids }) => delete_bookmarks(ids),
+        Some(Commands::Update {
+            ids,
+            tags,
+            tags_not,
+            force,
+        }) => update_bookmarks(force, tags, tags_not, ids),
+        Some(Commands::Edit { ids }) => edit_bookmarks(ids),
+        Some(Commands::Show { ids }) => show_bookmarks(ids),
+        Some(Commands::Tags { tag }) => show_tags(tag),
+        Some(Commands::CreateDb { path }) => create_db(path),
+        Some(Commands::Surprise { n }) => randomized(n),
+        Some(Commands::Backfill { dry_run }) => backfill_embeddings(dry_run),
+        Some(Commands::LoadTexts { dry_run, path }) => load_texts(dry_run, path),
+        Some(Commands::Xxx { ids, tags }) => {
+            eprintln!(
+                "({}:{}) ids: {:?}, tags: {:?}",
+                function_name!(),
+                line!(),
+                ids,
+                tags
+            );
+            Ok(())
+        }
+        None => Ok(()),
+    }
+}
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> Result<Vec<i32>> {
     ensure_int_vector(&ids.split(',').map(String::from).collect())
@@ -202,8 +276,7 @@ pub fn add_bookmark(
 
 pub fn delete_bookmarks(ids: String) -> Result<()> {
     let ids = get_ids(ids)?;
-    delete_bms(ids, Bookmarks::new(String::new()).bms)
-        .context("Failed to delete bookmarks")
+    delete_bms(ids, Bookmarks::new(String::new()).bms).context("Failed to delete bookmarks")
 }
 
 pub fn update_bookmarks(
@@ -320,12 +393,13 @@ pub fn enable_embeddings_if_required() -> Result<()> {
             .context("Failed to create migrations table")?;
     }
 
-    let pending = dal.conn
+    let pending = dal
+        .conn
         .pending_migrations(MIGRATIONS)
         .map_err(|e| anyhow::anyhow!("Failed to get pending migrations: {}", e))?;
 
     pending.iter().for_each(|m| {
-        debug!("Pending Migration: {}",m.name());
+        debug!("Pending Migration: {}", m.name());
     });
 
     dal.conn
@@ -437,4 +511,106 @@ pub fn find_similar(query: &str, bms: &Bookmarks) -> Result<Vec<(i32, f32)>> {
 
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     Ok(results)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::adapter::embeddings::{Context, OpenAi};
+    use crate::cli::args::Cli;
+    use crate::cli::commands::{find_similar, randomized, sem_search};
+    use crate::model::bms::Bookmarks;
+    use camino::Utf8PathBuf;
+    use camino_tempfile::tempdir;
+    use fs_extra::{copy_items, dir};
+    use rstest::{fixture, rstest};
+    use termcolor::ColorChoice;
+
+    #[ctor::ctor]
+    fn init() {
+        let _ = env_logger::builder()
+            // Include all events in tests
+            .filter_level(log::LevelFilter::max())
+            .filter_module("skim", log::LevelFilter::Info)
+            .filter_module("tuikit", log::LevelFilter::Info)
+            .filter_module("reqwest", log::LevelFilter::Info)
+            // Ensure events are captured by `cargo test`
+            .is_test(true)
+            // Ignore errors initializing the logger if tests race to configure it
+            .try_init();
+    }
+
+    #[fixture]
+    fn temp_dir() -> Utf8PathBuf {
+        let tempdir = tempdir().unwrap();
+        let options = dir::CopyOptions::new().overwrite(true);
+        copy_items(
+            &[
+                "tests/resources/bkmr.v1.db",
+                "tests/resources/bkmr.v2.db",
+                "tests/resources/bkmr.v2.noembed.db",
+            ],
+            "../db",
+            &options,
+        )
+        .expect("Failed to copy test project directory");
+
+        tempdir.into_path()
+    }
+
+    #[allow(unused_variables)]
+    #[ignore = "currently only works in isolation"]
+    #[rstest]
+    fn test_find_similar_when_embed_null(temp_dir: Utf8PathBuf) {
+        // Given: v2 database with embeddings and OpenAI context
+        fs::rename("../db/bkmr.v2.noembed.db", "../db/bkmr.db").expect("Failed to rename database");
+        let bms = Bookmarks::new("".to_string());
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+
+        // When: find similar for "blub"
+        let results = find_similar("blub", &bms).unwrap();
+
+        // Then: Expect no findings
+        assert_eq!(results.len(), 0);
+    }
+
+    #[allow(unused_variables)]
+    #[rstest]
+    fn test_find_similar(temp_dir: Utf8PathBuf) {
+        // Given: v2 database with embeddings and OpenAi context
+        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
+        let bms = Bookmarks::new("".to_string());
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+
+        // When: find similar for "blub"
+        let results = find_similar("blub", &bms).unwrap();
+
+        // Then: Expect the first three entries to be: blub, blub3, blub2
+        assert_eq!(results.len(), 11);
+        // Extract the first element (id) of the first three tuples
+        let first_three_ids: Vec<_> = results.into_iter().take(3).map(|(id, _)| id).collect();
+        assert_eq!(first_three_ids, vec![4, 6, 5]);
+    }
+
+    #[allow(unused_variables)]
+    #[ignore = "interactive: visual check required"]
+    #[rstest]
+    fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
+        let stderr = StandardStream::stderr(ColorChoice::Always);
+        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
+        // this is only visible test
+        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
+        // Given: v2 database with embeddings
+        // When:
+        sem_search("blub".to_string(), None, false, stderr);
+        // Then: Expect the first three entries to be: blub, blub3, blub2
+    }
+
+    #[ignore = "interactive: opens browser link"]
+    #[test]
+    fn test_randomized() {
+        randomized(1);
+    }
 }

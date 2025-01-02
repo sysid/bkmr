@@ -8,9 +8,7 @@ use log::{debug, info};
 use stdext::function_name;
 use termcolor::{ColorChoice, StandardStream};
 
-use bkmr::adapter::embeddings::{
-    Context, DummyAi, OpenAi,
-};
+use bkmr::adapter::embeddings::{Context, DummyAi, OpenAi};
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::commands;
 use bkmr::environment::CONFIG;
@@ -50,85 +48,9 @@ fn main() {
         CTX.set(Context::new(Box::new(DummyAi))).unwrap();
     }
 
-    if let Err(e) = execute_command(stderr, cli) {
+    if let Err(e) = commands::execute_command(stderr, cli) {
         eprintln!("{}", format!("Error: {}", e).red());
         std::process::exit(1);
-    }
-}
-
-fn execute_command(stderr: StandardStream, cli: Cli) -> Result<()> {
-    match cli.command {
-        Some(Commands::Search {
-            fts_query,
-            tags_exact,
-            tags_all,
-            tags_all_not,
-            tags_any,
-            tags_any_not,
-            tags_prefix,
-            order_desc,
-            order_asc,
-            non_interactive,
-            is_fuzzy,
-            is_json,
-            limit,
-        }) => {
-            commands::search_bookmarks(
-                tags_prefix,
-                tags_all,
-                fts_query,
-                tags_any,
-                tags_all_not,
-                tags_any_not,
-                tags_exact,
-                order_desc,
-                order_asc,
-                is_fuzzy,
-                is_json,
-                limit,
-                non_interactive,
-                stderr,
-            )
-        }
-        Some(Commands::SemSearch {
-            query,
-            limit,
-            non_interactive,
-        }) => commands::sem_search(query, limit, non_interactive, stderr),
-        Some(Commands::Open { ids }) => commands::open_bookmarks(ids),
-        Some(Commands::Add {
-            url,
-            tags,
-            title,
-            desc,
-            no_web,
-            edit,
-        }) => commands::add_bookmark(url, tags, title, desc, no_web, edit),
-        Some(Commands::Delete { ids }) => commands::delete_bookmarks(ids),
-        Some(Commands::Update {
-            ids,
-            tags,
-            tags_not,
-            force,
-        }) => commands::update_bookmarks(force, tags, tags_not, ids),
-        Some(Commands::Edit { ids }) => commands::edit_bookmarks(ids),
-        Some(Commands::Show { ids }) => commands::show_bookmarks(ids),
-        Some(Commands::Tags { tag }) => commands::show_tags(tag),
-        Some(Commands::CreateDb { path }) => commands::create_db(path),
-        Some(Commands::Surprise { n }) => commands::randomized(n),
-        Some(Commands::Backfill { dry_run }) => commands::backfill_embeddings(dry_run),
-        Some(Commands::LoadTexts { dry_run, path }) => commands::load_texts(dry_run, path),
-        Some(Commands::Xxx { ids, tags }) => {
-            eprintln!(
-                "({}:{}) ids: {:?}, tags: {:?}",
-                function_name!(),
-                line!(),
-                ids,
-                tags
-            );
-            Ok(())
-        }
-        None => Ok(()),
     }
 }
 
@@ -226,63 +148,10 @@ mod tests {
         tempdir.into_path()
     }
 
-    #[allow(unused_variables)]
-    #[ignore = "currently only works in isolation"]
-    #[rstest]
-    fn test_find_similar_when_embed_null(temp_dir: Utf8PathBuf) {
-        // Given: v2 database with embeddings and OpenAI context
-        fs::rename("../db/bkmr.v2.noembed.db", "../db/bkmr.db").expect("Failed to rename database");
-        let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
-
-        // When: find similar for "blub"
-        let results = find_similar("blub", &bms).unwrap();
-
-        // Then: Expect no findings
-        assert_eq!(results.len(), 0);
-    }
-
-    #[allow(unused_variables)]
-    #[rstest]
-    fn test_find_similar(temp_dir: Utf8PathBuf) {
-        // Given: v2 database with embeddings and OpenAi context
-        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
-        let bms = Bookmarks::new("".to_string());
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
-
-        // When: find similar for "blub"
-        let results = find_similar("blub", &bms).unwrap();
-
-        // Then: Expect the first three entries to be: blub, blub3, blub2
-        assert_eq!(results.len(), 11);
-        // Extract the first element (id) of the first three tuples
-        let first_three_ids: Vec<_> = results.into_iter().take(3).map(|(id, _)| id).collect();
-        assert_eq!(first_three_ids, vec![4, 6, 5]);
-    }
-
-    #[allow(unused_variables)]
-    #[ignore = "interactive: visual check required"]
-    #[rstest]
-    fn test_sem_search_via_visual_check(temp_dir: Utf8PathBuf) {
-        let stderr = StandardStream::stderr(ColorChoice::Always);
-        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
-        // this is only visible test
-        CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
-        // Given: v2 database with embeddings
-        // When:
-        sem_search("blub".to_string(), None, false, stderr);
-        // Then: Expect the first three entries to be: blub, blub3, blub2
-    }
-
     #[test]
     fn verify_cli() {
         use clap::CommandFactory;
         Cli::command().debug_assert()
     }
 
-    #[ignore = "interactive: opens browser link"]
-    #[test]
-    fn test_randomized() {
-        randomized(1);
-    }
 }
