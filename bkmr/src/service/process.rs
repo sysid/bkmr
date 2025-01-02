@@ -389,7 +389,7 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
             }
             None => {
                 dlog!("Opening URI with default OS command {:?}", uri);
-                open::that(&uri).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), uri))?;
+                open::that(uri).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), uri))?;
             }
         }
         Ok(())

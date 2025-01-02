@@ -134,8 +134,7 @@ impl Embedding for OpenAi {
 
         // Ensure we have data and it contains at least one embedding
         let embedding_data = response
-            .data
-            .get(0)
+            .data.first()
             .ok_or_else(|| anyhow!("No embeddings found"))?;
         Ok(Some(embedding_data.embedding.clone()))
     }

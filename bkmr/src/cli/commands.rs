@@ -17,13 +17,12 @@ use crate::{
     adapter::dal::Dal,
     adapter::embeddings::{cosine_similarity, deserialize_embedding},
     adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks},
-    dlog2,
     environment::CONFIG,
     helper::{confirm, ensure_int_vector, init_db, MIGRATIONS},
     load_url_details,
     model::{
         bms::Bookmarks,
-        bookmark::{Bookmark, BookmarkBuilder, BookmarkUpdater},
+        bookmark::{BookmarkBuilder, BookmarkUpdater},
         tag::Tags,
     },
     service::{

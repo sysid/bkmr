@@ -1,45 +1,21 @@
 // bkmr/src/main.rs
 use anyhow::Result;
-use std::fs::create_dir_all;
-use std::io::Write;
-use std::path::PathBuf;
 use std::process;
 
-use anyhow::anyhow;
-use camino::Utf8Path;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use crossterm::style::Stylize;
-use diesel::connection::SimpleConnection;
-use diesel::result::DatabaseErrorKind;
-use diesel::result::Error::DatabaseError;
-use diesel_migrations::MigrationHarness;
-use inquire::Confirm;
-use itertools::Itertools;
-use log::{debug, error, info};
+use log::{debug, info};
 use stdext::function_name;
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use termcolor::{ColorChoice, StandardStream};
 
-use bkmr::adapter::dal::Dal;
 use bkmr::adapter::embeddings::{
-    cosine_similarity, deserialize_embedding, Context, DummyAi, OpenAi,
+    Context, DummyAi, OpenAi,
 };
-use bkmr::adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks};
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::commands;
 use bkmr::environment::CONFIG;
-use bkmr::helper::{confirm, ensure_int_vector, init_db, is_env_var_set, MIGRATIONS};
-use bkmr::model::bms::Bookmarks;
-use bkmr::model::bookmark::BookmarkUpdater;
-use bkmr::model::bookmark::{Bookmark, BookmarkBuilder};
-use bkmr::model::tag::Tags;
-use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
-use bkmr::service::fzf::fzf_process;
-use bkmr::service::process::{
-    delete_bms, edit_bms, open_bm, process, show_bms, DisplayBookmark, DisplayField, ALL_FIELDS,
-    DEFAULT_FIELDS,
-};
+use bkmr::helper::is_env_var_set;
 use bkmr::CTX;
-use bkmr::{dlog2, load_url_details};
 
 fn main() {
     // let stdout = StandardStream::stdout(ColorChoice::Always);
@@ -216,6 +192,7 @@ mod tests {
     use super::*;
     use bkmr::cli::args::Cli;
     use bkmr::cli::commands::{find_similar, randomized, sem_search};
+    use bkmr::model::bms::Bookmarks;
 
     #[ctor::ctor]
     fn init() {
@@ -259,7 +236,7 @@ mod tests {
         CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
 
         // When: find similar for "blub"
-        let results = find_similar(&"blub".to_string(), &bms).unwrap();
+        let results = find_similar("blub", &bms).unwrap();
 
         // Then: Expect no findings
         assert_eq!(results.len(), 0);
@@ -274,7 +251,7 @@ mod tests {
         CTX.set(Context::new(Box::<OpenAi>::default())).unwrap();
 
         // When: find similar for "blub"
-        let results = find_similar(&"blub".to_string(), &bms).unwrap();
+        let results = find_similar("blub", &bms).unwrap();
 
         // Then: Expect the first three entries to be: blub, blub3, blub2
         assert_eq!(results.len(), 11);

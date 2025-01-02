@@ -198,9 +198,14 @@ build-wheel:  ## build-wheel
 build:  ## build
 	pushd $(pkg_src) && cargo build --release
 
+#.PHONY: install
+#install: uninstall  ## install
+	#@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
 .PHONY: install
 install: uninstall  ## install
-	@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
+	@VERSION=$(cat VERSION) && \
+	cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
+	ln -sf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
 
 .PHONY: uninstall
 uninstall:  ## uninstall

@@ -1,8 +1,7 @@
-use std::error::Error;
 use std::io::Write;
 use std::time::{Duration, Instant};
 use std::{env, io};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::tempdir;
 use diesel::sqlite::Sqlite;

@@ -163,7 +163,7 @@ impl fmt::Debug for Bookmark {
 
 struct LastEntries<'a, T>(&'a [T]);
 
-impl<'a, T: fmt::Debug> fmt::Debug for LastEntries<'a, T> {
+impl<T: fmt::Debug> fmt::Debug for LastEntries<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list()
             .entries(self.0.iter().rev().take(10).rev()) // Reverse, take 10, then reverse again to maintain order

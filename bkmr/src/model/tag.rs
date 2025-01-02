@@ -36,7 +36,7 @@ impl Tags {
             .iter()
             .flat_map(|s| s.split(','))
             .map(|s| s.trim().to_lowercase().to_owned())
-            .filter(|s| s.ne(""))
+            .filter(|s| !s.is_empty())
             .collect();
         _tags.sort();
         _tags.dedup();
