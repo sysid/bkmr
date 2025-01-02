@@ -1,13 +1,14 @@
 use std::env;
 use anyhow::{anyhow, Result, Context as _};
-use log::debug;
 use serde_derive::{Deserialize, Serialize};
+use tracing::{debug, instrument};
 use super::Embedding;
 
 #[derive(Debug, Clone, Default)]
 pub struct DummyEmbedding;
 
 impl Embedding for DummyEmbedding {
+    #[instrument]
     fn embed(&self, text: &str) -> Result<Option<Vec<f32>>> {
         debug!("DummyEmbedding::embed({})", text);
         Ok(None)
@@ -44,6 +45,7 @@ struct EmbeddingData {
 }
 
 impl Embedding for OpenAiEmbedding {
+    #[instrument]
     fn embed(&self, text: &str) -> Result<Option<Vec<f32>>> {
         debug!("OpenAI embedding request for: {}", text);
         let client = reqwest::blocking::Client::new();

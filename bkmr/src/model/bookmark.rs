@@ -4,11 +4,9 @@ use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
 use diesel::sql_types::Text;
-use log::debug;
 use serde::Serialize;
 use std::fmt;
-use stdext::function_name;
-
+use tracing::debug;
 use crate::helper::calc_content_hash;
 use crate::model::tag::Tags;
 
@@ -76,7 +74,7 @@ impl Bookmark {
     }
     pub fn set_tags(&mut self, tags: Vec<String>) {
         self.tags = format!(",{},", Tags::clean_tags(tags).join(","));
-        debug!("({}:{}) {:?}", function_name!(), line!(), self);
+        debug!("{:?}", self);
     }
     /// Returns a formatted string containing the bookmark's tags, metadata, description, and tags again.
     /// tags are tried to emphasize by using twice
@@ -97,7 +95,7 @@ impl Bookmark {
     // /// Update the embedding and content_hash fields
     // pub fn update(&mut self) {
     //     if !self.has_content_changed() && self.embedding.is_some() {
-    //         dlog2!("Embedding exists and is up-to-date");
+    //         debug!("Embedding exists and is up-to-date");
     //         return;
     //     }
     //     let embedding = CTX

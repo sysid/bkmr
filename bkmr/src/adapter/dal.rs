@@ -7,14 +7,11 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::sql_types::{Integer, Text};
 use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
-use log::debug;
-use stdext::function_name;
-
+use tracing::{debug, instrument};
 use crate::adapter::schema::bookmarks::dsl::bookmarks;
 use crate::adapter::schema::bookmarks::{
     content_hash, desc, embedding, flags, id, metadata, tags, URL,
 };
-use crate::dlog2;
 use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
 
 trait DalTrait {
@@ -47,7 +44,7 @@ pub struct Dal {
 
 impl Dal {
     pub fn new(url: String) -> Self {
-        debug!("({}:{}) {:?}", function_name!(), line!(), url);
+        debug!("{:?}", url);
         Self {
             conn: Dal::establish_connection(&url),
             url,
@@ -59,12 +56,14 @@ impl Dal {
             .unwrap_or_else(|e| panic!("Error connecting to {}: {:?}", database_url, e))
     }
 
+    #[instrument]
     pub fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>> {
         diesel::delete(bookmarks.filter(id.eq(id_)))
             .get_results(&mut self.conn)
             .with_context(|| format!("Failed to delete bookmark with id {}", id_))
     }
 
+    #[instrument]
     pub fn batch_execute(&mut self, id_: i32) -> Result<()> {
         let query = "
             BEGIN TRANSACTION;
@@ -75,15 +74,11 @@ impl Dal {
         self.conn
             .batch_execute(query)
             .with_context(|| format!("Failed to execute batch operation for id {}", id_))?;
-        debug!(
-            "({}:{}) Deleted and Compacted {:?}",
-            function_name!(),
-            line!(),
-            id_
-        );
+        debug!("Deleted and Compacted {:?}",id_);
         Ok(())
     }
 
+    #[instrument]
     pub fn delete_bookmark2(&mut self, id_: i32) -> Result<usize> {
         sql_query("BEGIN TRANSACTION;")
             .execute(&mut self.conn)
@@ -116,23 +111,20 @@ impl Dal {
             .execute(&mut self.conn)
             .with_context(|| "Failed to commit transaction")?;
 
-        debug!(
-            "({}:{}) Deleted and Compacted, n: {:?}",
-            function_name!(),
-            line!(),
-            n
-        );
+        debug!("Deleted and Compacted, n: {:?}",n);
         Ok(n)
     }
 
+    #[instrument]
     pub fn clean_table(&mut self) -> Result<()> {
         sql_query("DELETE FROM bookmarks WHERE id != 1;")
             .execute(&mut self.conn)
             .with_context(|| "Failed to clean table")?;
-        debug!("({}:{}) {:?}", function_name!(), line!(), "Cleaned table.");
+        debug!("{:?}", "Cleaned table.");
         Ok(())
     }
 
+    #[instrument]
     pub fn update_bookmark(&mut self, bm: Bookmark) -> Result<Vec<Bookmark>> {
         diesel::update(bookmarks.find(bm.id))
             .set((
@@ -148,6 +140,7 @@ impl Dal {
             .with_context(|| format!("Failed to update bookmark with id {}", bm.id))
     }
 
+    #[instrument]
     pub fn insert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>> {
         diesel::insert_into(bookmarks)
             .values(bm)
@@ -155,6 +148,7 @@ impl Dal {
             .with_context(|| "Failed to insert bookmark")
     }
 
+    #[instrument]
     pub fn upsert_bookmark(&mut self, new_bm: NewBookmark) -> Result<Vec<Bookmark>> {
         match self.get_bookmark_by_url(&new_bm.URL) {
             Ok(bm) => self.update_bookmark(Bookmark {
@@ -172,6 +166,7 @@ impl Dal {
         }
     }
 
+    #[instrument]
     pub fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark> {
         sql_query(
             "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
@@ -186,6 +181,7 @@ impl Dal {
     }
 
     // In dal.rs
+    #[instrument]
     pub fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark> {
         // Escape special characters in URL for SQLite query
         let escaped_url = url.replace('\'', "''");
@@ -203,6 +199,7 @@ impl Dal {
         })
     }
 
+    #[instrument]
     pub fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>> {
         if query.is_empty() {
             bookmarks
@@ -217,6 +214,7 @@ impl Dal {
         }
     }
 
+    #[instrument]
     pub fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<i32>> {
         sql_query(
             "SELECT id FROM bookmarks_fts \
@@ -234,6 +232,7 @@ impl Dal {
         })
     }
 
+    #[instrument]
     pub fn get_bookmarks_without_embedding(&mut self) -> Result<Vec<Bookmark>> {
         bookmarks
             .filter(embedding.is_null())
@@ -253,6 +252,7 @@ impl Dal {
     }
 
     /// get frequency based ordered list of all tags
+    #[instrument]
     pub fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>> {
         sql_query(
             "
@@ -275,14 +275,16 @@ impl Dal {
         .with_context(|| "Failed to get all tags")
     }
 
+    #[instrument]
     pub fn get_all_tags_as_vec(&mut self) -> Result<Vec<String>> {
         let all_tags = self.get_all_tags()?;
         let mut all_tags: Vec<String> = all_tags.into_iter().map(|t| t.tag).collect();
-        dlog2!("{:?}", all_tags);
+        debug!("{:?}", all_tags);
         all_tags.sort();
         Ok(all_tags)
     }
 
+    #[instrument]
     pub fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>> {
         let search_tag = format!("%,{},%", tag);
         sql_query(
@@ -308,6 +310,7 @@ impl Dal {
         .with_context(|| format!("Failed to get related tags for tag '{}'", tag))
     }
 
+    #[instrument]
     pub fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>> {
         sql_query(
             "SELECT *
@@ -320,6 +323,7 @@ impl Dal {
         .with_context(|| format!("Failed to get {} random bookmarks", n))
     }
 
+    #[instrument]
     pub fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>> {
         sql_query(
             "SELECT *

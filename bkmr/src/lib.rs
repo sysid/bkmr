@@ -15,11 +15,10 @@ use crate::model::bookmark::Bookmark;
 use crate::model::bookmark::BookmarkUpdater;
 use crate::model::tag::Tags;
 use itertools::Itertools;
-use log::{debug, error};
 use reqwest::blocking::Client;
 use select::document::Document;
 use select::predicate::{Attr, Name};
-
+use tracing::{debug, error};
 
 pub mod adapter {
     pub mod dal;
@@ -139,22 +138,3 @@ pub fn update_bm(
         .map_err(|e| anyhow::anyhow!("Error updating bookmark: {:?}", e))
 }
 
-#[cfg(test)]
-mod test {
-    #[allow(unused_imports)]
-    use rstest::*;
-
-    #[allow(unused_imports)]
-    use super::*;
-
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
-}

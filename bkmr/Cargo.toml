@@ -19,9 +19,7 @@ clap = { version = "4.5.23", features = ["unstable-doc"] }
 crossterm = "0.26.1"
 diesel = { version = "2.2.6", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35"] }
 diesel_migrations = "2.2.0"
-env_logger = "0.11.6"
 indoc = "2.0.5"
-inquire = "0.7.5"
 lazy_static = "1.5.0"
 log = "0.4.22"
 open = "5.3.1"
@@ -36,7 +34,6 @@ skim = "0.10.4"
 stdext = "0.3.3"
 tempfile = "3.14.0"
 termcolor = "1.4.1"
-
 assert_cmd = "2.0.16"
 ctor = "0.2.9"
 mockall = "0.13.1"
@@ -53,13 +50,13 @@ mockito = "1.6.1"
 md5 = "0.7.0"
 bincode = "1.3.3"
 camino-tempfile = "1.1.1"
-fs_extra = "1.3.0"
 pyo3 = { version = "0.22.6", features = ["extension-module", "anyhow"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 once_cell = "1.20.2"
 float-cmp = "0.10.0"
 serial_test = "3.2.0"
+fs_extra = "1.3.0"
 # https://github.com/sfackler/rust-openssl/issues/763#issuecomment-1150213102
 #openssl = { version = "0.10.66", features = ["vendored"] }
 

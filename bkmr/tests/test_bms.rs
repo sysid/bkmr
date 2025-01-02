@@ -1,19 +1,13 @@
-use log::debug;
 use rstest::*;
-
+use tracing::debug;
 use bkmr::adapter::dal::Dal;
 use bkmr::helper;
 use bkmr::model::bms::Bookmarks;
+use bkmr::util::testing::init_test_setup;
 
 #[ctor::ctor]
 fn init() {
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
+    init_test_setup().expect("Failed to initialize test setup");
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
     helper::init_db(&mut dal.conn).expect("Error DB init");
 }

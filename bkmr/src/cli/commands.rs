@@ -33,9 +33,8 @@ use diesel::result::DatabaseErrorKind;
 use diesel::result::Error::DatabaseError;
 use diesel_migrations::MigrationHarness;
 use itertools::Itertools;
-use log::debug;
-use stdext::function_name;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use tracing::{debug, instrument};
 
 // Type alias for commonly used Result type
 type Result<T> = anyhow::Result<T>;
@@ -102,9 +101,7 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> anyhow::Result<()> {
         Some(Commands::LoadTexts { dry_run, path }) => load_texts(dry_run, path),
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!(
-                "({}:{}) ids: {:?}, tags: {:?}",
-                function_name!(),
-                line!(),
+                "ids: {:?}, tags: {:?}",
                 ids,
                 tags
             );
@@ -119,6 +116,7 @@ fn get_ids(ids: String) -> Result<Vec<i32>> {
         .ok_or_else(|| anyhow!("Invalid input, only numbers allowed"))
 }
 
+#[instrument]
 pub fn search_bookmarks(
     tags_prefix: Option<String>,
     tags_all: Option<String>,
@@ -205,6 +203,7 @@ pub fn search_bookmarks(
     Ok(())
 }
 
+#[instrument]
 pub fn open_bookmarks(ids: String) -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     for id in get_ids(ids)? {
@@ -213,6 +212,7 @@ pub fn open_bookmarks(ids: String) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn add_bookmark(
     url: String,
     tags: Option<String>,
@@ -274,11 +274,13 @@ pub fn add_bookmark(
     }
 }
 
+#[instrument]
 pub fn delete_bookmarks(ids: String) -> Result<()> {
     let ids = get_ids(ids)?;
     delete_bms(ids, Bookmarks::new(String::new()).bms).context("Failed to delete bookmarks")
 }
 
+#[instrument]
 pub fn update_bookmarks(
     force: bool,
     tags: Option<String>,
@@ -297,10 +299,12 @@ pub fn update_bookmarks(
     crate::update_bookmarks(ids, tags, tags_not, force).context("Failed to update bookmarks")
 }
 
+#[instrument]
 pub fn edit_bookmarks(ids: String) -> Result<()> {
     edit_bms(get_ids(ids)?, Bookmarks::new(String::new()).bms).context("Failed to edit bookmarks")
 }
 
+#[instrument]
 pub fn show_bookmarks(ids: String) -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     let mut bms = Vec::new();
@@ -320,6 +324,7 @@ pub fn show_bookmarks(ids: String) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn show_tags(tag: Option<String>) -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     let tags = match tag {
@@ -333,6 +338,7 @@ pub fn show_tags(tag: Option<String>) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn create_db(path: String) -> Result<()> {
     let path = Utf8Path::new(&path);
     if path.exists() {
@@ -351,6 +357,7 @@ pub fn create_db(path: String) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn randomized(n: i32) -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     let bms = dal.get_randomized_bookmarks(n)?;
@@ -361,6 +368,7 @@ pub fn randomized(n: i32) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn enable_embeddings_if_required() -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
 
@@ -410,6 +418,7 @@ pub fn enable_embeddings_if_required() -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn backfill_embeddings(dry_run: bool) -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
     let bms = dal.get_bookmarks_without_embedding()?;
@@ -425,6 +434,7 @@ pub fn backfill_embeddings(dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+#[instrument]
 pub fn load_texts(dry_run: bool, path: String) -> Result<()> {
     if dry_run {
         let bms = read_ndjson_file_and_create_bookmarks(&path)?;
@@ -435,6 +445,7 @@ pub fn load_texts(dry_run: bool, path: String) -> Result<()> {
     }
 }
 
+#[instrument]
 pub fn sem_search(
     query: String,
     limit: Option<i32>,
@@ -487,6 +498,7 @@ pub fn sem_search(
     Ok(())
 }
 
+#[instrument]
 pub fn find_similar(query: &str, bms: &Bookmarks) -> Result<Vec<(i32, f32)>> {
     Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
 
@@ -524,11 +536,6 @@ mod tests {
     use fs_extra::{copy_items, dir};
     use rstest::{fixture, rstest};
     use termcolor::ColorChoice;
-
-    // #[ctor::ctor]
-    // fn init() {
-    //     init_test_setup();
-    // }
 
     #[fixture]
     fn temp_dir() -> Utf8PathBuf {

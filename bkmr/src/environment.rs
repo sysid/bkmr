@@ -3,7 +3,7 @@ use once_cell::sync::{Lazy, OnceCell};
 use serde::Deserialize;
 use std::sync::RwLock;
 use std::{env, process};
-use log::debug;
+use tracing::debug;
 
 // Default height for FZF window
 const DEFAULT_HEIGHT: &str = "50%";
@@ -122,14 +122,6 @@ impl Default for FzfEnvOpts {
 mod test {
     use super::*;
     use rstest::*;
-
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            .filter_level(log::LevelFilter::max())
-            .is_test(true)
-            .try_init();
-    }
 
     #[rstest]
     fn test_config() {

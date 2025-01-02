@@ -20,7 +20,7 @@ mod service {
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    init_test_setup();
+    init_test_setup().expect("Failed to initialize test setup");
 }
 
 #[fixture]

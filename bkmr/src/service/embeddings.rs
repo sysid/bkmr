@@ -4,7 +4,7 @@ use crate::helper::calc_content_hash;
 use crate::model::bookmark::BookmarkUpdater;
 use anyhow::Context;
 use camino::Utf8Path;
-use log::debug;
+use tracing::debug;
 
 pub fn create_embeddings_for_non_bookmarks<P>(file_path: P) -> anyhow::Result<()>
 where

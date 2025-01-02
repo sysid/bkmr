@@ -10,7 +10,6 @@ use fs_extra::{copy_items, dir};
 use log::debug;
 use regex::Regex;
 use reqwest::blocking;
-use stdext::function_name;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
@@ -33,7 +32,7 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 pub fn init_db(
     connection: &mut impl MigrationHarness<Sqlite>,
 ) -> anyhow::Result<()> {
-    debug!("({}:{}) {:?}", function_name!(), line!(), "--> initdb <--");
+    debug!("{:?}", "--> initdb <--");
 
     connection.revert_all_migrations(MIGRATIONS)
         .map_err(|e| anyhow::anyhow!("Failed to revert migrations: {}", e))?;
@@ -44,9 +43,7 @@ pub fn init_db(
 
     pending.iter().for_each(|m| {
         debug!(
-            "({}:{}) Pending Migration: {}",
-            function_name!(),
-            line!(),
+            "Pending Migration: {}",
             m.name()
         );
     });
@@ -98,7 +95,7 @@ pub fn abspath(p: &str) -> Option<String> {
         .and_then(|x| Utf8Path::new(x.as_ref()).canonicalize_utf8().ok())
         .map(|p| p.into_string());
 
-    debug!("({}:{}) {:?} -> {:?}", function_name!(), line!(), p, abs_p);
+    debug!("{:?} -> {:?}", p, abs_p);
     abs_p
 }
 
@@ -160,17 +157,6 @@ mod test {
 
     // use log::debug;
     use super::*;
-
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
 
     #[rstest]
     fn test_extract_filename() {

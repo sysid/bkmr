@@ -10,7 +10,7 @@ use bkmr::environment::CONFIG;
 use clap::Parser;
 use crossterm::style::Stylize;
 use termcolor::{ColorChoice, StandardStream};
-use tracing::{debug, info};
+use tracing::{debug, info, instrument};
 use tracing_subscriber::{
     filter::{filter_fn, LevelFilter},
     fmt::{self, format::FmtSpan},
@@ -18,6 +18,7 @@ use tracing_subscriber::{
 };
 use bkmr::cli::args::Commands;
 
+#[instrument]
 fn main() {
     // let stdout = StandardStream::stdout(ColorChoice::Always);
     // use stderr as human output in order to make stdout output passable to downstream processes

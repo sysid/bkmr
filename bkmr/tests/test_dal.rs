@@ -2,10 +2,8 @@ use std::collections::HashSet;
 
 
 use anyhow::Result;
-use log::{debug, info};
 use rstest::{fixture, rstest};
-use stdext::function_name;
-
+use tracing::{debug, info};
 use bkmr::adapter::dal::Dal;
 use bkmr::adapter::embeddings::DummyEmbedding;
 use bkmr::context::Context;
@@ -176,7 +174,7 @@ fn test_delete_bm(mut dal: Dal) -> Result<()> {
 #[allow(non_snake_case)]
 fn test__get_all_tags(mut dal: Dal) -> Result<()> {
     let tags = dal.get_all_tags()?;
-    debug!("({}:{}) {:?}", function_name!(), line!(), tags);
+    debug!("{:?}", tags);
 
     let tags_str: Vec<&str> = tags.iter().map(|t| t.tag.as_str()).collect();
     println!("The bookmarks are: {:?}", tags_str);

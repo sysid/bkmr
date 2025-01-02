@@ -1,28 +1,7 @@
-use log::{debug, info};
 use rstest::rstest;
 use std::env;
-use stdext::function_name;
+use tracing::debug;
 use bkmr::adapter::embeddings::{Embedding, OpenAiEmbedding};
-
-#[ctor::ctor]
-fn init() {
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        .filter_module("mio", log::LevelFilter::Info)
-        .filter_module("reqwest", log::LevelFilter::Info)
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
-}
-
-#[rstest]
-fn test_xxx() {
-    info!("xxx");
-    debug!("xxx");
-    assert_eq!(1, 1);
-}
 
 #[rstest]
 fn test_get_openai_embedding() {
@@ -39,7 +18,7 @@ fn test_get_openai_embedding() {
         .with_header("content-type", "application/json")
         .with_body(r#"{"data": [{"embedding": [0.1, 0.2, 0.3]}]}"#)
         .create();
-    debug!("({}:{}) {:?}", function_name!(), line!(), url);
+    debug!("{:?}", url);
 
     let open_ai = OpenAiEmbedding::new(url);
     let input_text = "example text";

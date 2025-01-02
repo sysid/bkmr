@@ -3,8 +3,10 @@ use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use ndarray::Array1;
 use std::io::Cursor;
+use tracing::instrument;
 
 /// Calculate cosine similarity between two vectors
+#[instrument]
 pub fn cosine_similarity(vec1: &Array1<f32>, vec2: &Array1<f32>) -> f32 {
     let dot_product = vec1.dot(vec2);
     let magnitude_vec1 = vec1.dot(vec1).sqrt();
@@ -18,16 +20,19 @@ pub fn cosine_similarity(vec1: &Array1<f32>, vec2: &Array1<f32>) -> f32 {
 }
 
 /// Deserialize bytes into float vector
+#[instrument]
 pub fn deserialize_embedding(bytes: Vec<u8>) -> Result<Vec<f32>> {
     deserialize(&bytes).map_err(|e| anyhow!("Failed to deserialize embedding: {}", e))
 }
 
 /// Serialize float vector into bytes
+#[instrument]
 pub fn serialize_embedding(embedding: Vec<f32>) -> Result<Vec<u8>> {
     serialize(&embedding).map_err(|e| anyhow!("Failed to serialize embedding: {}", e))
 }
 
 /// Convert byte array to ndarray
+#[instrument]
 pub fn bytes_to_array(bytes: &[u8]) -> Array1<f32> {
     let mut cursor = Cursor::new(bytes);
     let num_floats = bytes.len() / 4;
@@ -41,6 +46,7 @@ pub fn bytes_to_array(bytes: &[u8]) -> Array1<f32> {
 }
 
 /// Convert ndarray to byte array
+#[instrument]
 pub fn array_to_bytes(array: &Array1<f32>) -> Vec<u8> {
     let mut buffer = Vec::with_capacity(array.len() * 4);
     for &value in array.iter() {

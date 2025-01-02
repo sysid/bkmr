@@ -1,8 +1,7 @@
 use camino::Utf8PathBuf;
-use log::debug;
 use rstest::*;
 use std::env;
-
+use tracing::debug;
 use bkmr::adapter::json::read_ndjson_file_and_create_bookmarks;
 
 
