@@ -124,6 +124,10 @@ run-tags: init-db  ## run-tags
 	@echo "------ all tags -----"
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d tags
 
+.PHONY: run-show
+run-show: init-db  ## run-show
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,2
+
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d delete 1,2,3

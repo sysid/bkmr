@@ -1,12 +1,14 @@
 // bkmr/src/main.rs
-use anyhow::Result;
-use std::process;
 
 use clap::Parser;
 use crossterm::style::Stylize;
-use log::{debug, info};
-use stdext::function_name;
 use termcolor::{ColorChoice, StandardStream};
+use tracing::{debug, info};
+use tracing_subscriber::{
+    filter::{filter_fn, LevelFilter},
+    fmt::{self, format::FmtSpan},
+    prelude::*,
+};
 
 use bkmr::adapter::embeddings::{Context, DummyAi, OpenAi};
 use bkmr::cli::args::{Cli, Commands};
@@ -22,7 +24,7 @@ fn main() {
 
     let cli = Cli::parse();
 
-    set_logger(&cli);
+    setup_logging(cli.debug);
 
     if let Some(Commands::CreateDb { .. }) = &cli.command {
         // Skip the path.exists check and create database with correct schema
@@ -30,15 +32,15 @@ fn main() {
         let path = std::path::Path::new(&CONFIG.db_url);
         if !path.exists() {
             eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
-            process::exit(1);
+            std::process::exit(1);
         }
-        commands::enable_embeddings_if_required(); // migrate db
+        let _ = commands::enable_embeddings_if_required(); // migrate db
     }
 
     if cli.openai {
         if !is_env_var_set("OPENAI_API_KEY") {
             println!("Environment variable OPENAI_API_KEY is not set.");
-            process::exit(1);
+            std::process::exit(1);
         }
 
         info!("Using OpenAI API");
@@ -54,80 +56,61 @@ fn main() {
     }
 }
 
-fn set_logger(cli: &Cli) {
-    // Note, only flags can have multiple occurrences
-    match cli.debug {
-        0 => {
-            let _ = env_logger::builder()
-                .filter_level(log::LevelFilter::Warn)
-                .try_init();
-        }
-        1 => {
-            let _ = env_logger::builder()
-                .filter_level(log::LevelFilter::Info)
-                .filter_module("skim", log::LevelFilter::Info)
-                .filter_module("tuikit", log::LevelFilter::Info)
-                .filter_module("html5ever", log::LevelFilter::Info)
-                .filter_module("reqwest", log::LevelFilter::Info)
-                .filter_module("mio", log::LevelFilter::Info)
-                .filter_module("want", log::LevelFilter::Info)
-                .try_init();
-            info!("Debug mode: info");
-        }
-        2 => {
-            let _ = env_logger::builder()
-                .filter_level(log::LevelFilter::max())
-                .filter_module("skim", log::LevelFilter::Info)
-                .filter_module("tuikit", log::LevelFilter::Info)
-                .filter_module("html5ever", log::LevelFilter::Info)
-                .filter_module("reqwest", log::LevelFilter::Info)
-                .filter_module("mio", log::LevelFilter::Info)
-                .filter_module("want", log::LevelFilter::Info)
-                .try_init();
-            debug!("Debug mode: debug");
-        }
+fn setup_logging(verbosity: u8) {
+    let filter = match verbosity {
+        0 => LevelFilter::WARN,
+        1 => LevelFilter::INFO,
+        2 => LevelFilter::DEBUG,
         _ => {
             eprintln!("Don't be crazy, max is -d -d");
-            let _ = env_logger::builder()
-                .filter_level(log::LevelFilter::max())
-                .filter_module("skim", log::LevelFilter::Info)
-                .filter_module("tuikit", log::LevelFilter::Info)
-                .filter_module("html5ever", log::LevelFilter::Info)
-                .filter_module("reqwest", log::LevelFilter::Info)
-                .filter_module("mio", log::LevelFilter::Info)
-                .filter_module("want", log::LevelFilter::Info)
-                .try_init();
-            debug!("Debug mode: debug");
+            LevelFilter::TRACE
         }
+    };
+
+    // Create a noisy module filter
+    let noisy_modules = ["skim", "html5ever", "reqwest", "mio", "want", "tuikit"];
+    let module_filter = filter_fn(move |metadata| {
+        !noisy_modules
+            .iter()
+            .any(|name| metadata.target().starts_with(name))
+    });
+
+    // Create a subscriber with formatted output directed to stderr
+    let fmt_layer = fmt::layer()
+        .with_writer(std::io::stderr)  // Set writer first
+        .with_target(true)
+        .with_thread_names(false)
+        .with_span_events(FmtSpan::CLOSE);
+
+    // Apply filters to the layer
+    let filtered_layer = fmt_layer
+        .with_filter(filter)
+        .with_filter(module_filter);
+
+    tracing_subscriber::registry()
+        .with(filtered_layer)
+        .init();
+
+    // Log initial debug level
+    match filter {
+        LevelFilter::INFO => info!("Debug mode: info"),
+        LevelFilter::DEBUG => debug!("Debug mode: debug"),
+        LevelFilter::TRACE => debug!("Debug mode: trace"),
+        _ => {}
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
+    use super::*;
     use camino::Utf8PathBuf;
     use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};
-    use rstest::{fixture, rstest};
-
-    use super::*;
-    use bkmr::cli::args::Cli;
-    use bkmr::cli::commands::{find_similar, randomized, sem_search};
-    use bkmr::model::bms::Bookmarks;
+    use rstest::fixture;
 
     #[ctor::ctor]
     fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            .filter_module("skim", log::LevelFilter::Info)
-            .filter_module("tuikit", log::LevelFilter::Info)
-            .filter_module("reqwest", log::LevelFilter::Info)
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
+        setup_logging(2); // Set maximum debug level for tests
     }
 
     #[fixture]
@@ -153,5 +136,4 @@ mod tests {
         use clap::CommandFactory;
         Cli::command().debug_assert()
     }
-
 }

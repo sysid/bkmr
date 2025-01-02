@@ -519,7 +519,7 @@ mod tests {
 
     use super::*;
     use crate::adapter::embeddings::{Context, OpenAi};
-    use crate::cli::args::Cli;
+    
     use crate::cli::commands::{find_similar, randomized, sem_search};
     use crate::model::bms::Bookmarks;
     use camino::Utf8PathBuf;

@@ -32,6 +32,7 @@ fn test_show_bms() {
     let mut cmd = Command::cargo_bin("bkmr").unwrap();
     cmd.args(["-d", "-d", "show", "1,2"])
         .assert()
+        .success()
         .stderr(predicate::str::contains("Debug mode: debug"))
         .stderr(predicate::str::contains("Google"));
 }
