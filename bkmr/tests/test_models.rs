@@ -5,7 +5,7 @@ use std::env;
 use rstest::*;
 use bkmr::adapter::embeddings::{OpenAiEmbedding};
 use bkmr::context::Context;
-use bkmr::helper::calc_content_hash;
+use bkmr::util::helper::calc_content_hash;
 use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
 use anyhow::Result;
 

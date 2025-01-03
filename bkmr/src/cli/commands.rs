@@ -9,7 +9,6 @@ use crate::{
     adapter::dal::Dal,
     adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks},
     environment::CONFIG,
-    helper::{confirm, ensure_int_vector},
     load_url_details,
     model::{
         bms::Bookmarks,
@@ -36,6 +35,7 @@ use itertools::Itertools;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::{debug, instrument};
 use crate::adapter::dal::migration::{init_db, MIGRATIONS};
+use crate::util::helper::{confirm, ensure_int_vector};
 
 // Type alias for commonly used Result type
 type Result<T> = anyhow::Result<T>;

@@ -12,11 +12,12 @@ use indoc::formatdoc;
 use regex::Regex;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use tracing::{debug, error};
-use crate::{helper, update_bm};
+use crate::update_bm;
 use crate::adapter::dal::Dal;
 use crate::environment::CONFIG;
-use crate::helper::abspath;
+use crate::util::helper::abspath;
 use crate::model::bookmark::{Bookmark, BookmarkUpdater};
+use crate::util::helper;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {

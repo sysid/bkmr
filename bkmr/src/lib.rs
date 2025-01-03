@@ -41,7 +41,6 @@ pub mod service {
 pub mod cli;
 pub mod context;
 pub mod environment;
-pub mod helper;
 pub mod util;
 
 /// creates list of normalized tags from "tag1,t2,t3" string

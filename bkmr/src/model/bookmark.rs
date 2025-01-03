@@ -7,7 +7,7 @@ use diesel::sql_types::Text;
 use serde::Serialize;
 use std::fmt;
 use tracing::debug;
-use crate::helper::calc_content_hash;
+use crate::util::helper::calc_content_hash;
 use crate::model::tag::Tags;
 
 use crate::adapter::dal::schema::bookmarks;
@@ -250,7 +250,7 @@ mod test {
     use chrono::{NaiveDate, NaiveDateTime};
     use rstest::*;
 
-    use crate::helper::calc_content_hash;
+    use crate::util::helper::calc_content_hash;
     use crate::model::bookmark::Bookmark;
 
     #[fixture]

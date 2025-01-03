@@ -1,7 +1,7 @@
 use bkmr::adapter::dal::{migration, Dal};
 use bkmr::model::bookmark::Bookmark;
 use bkmr::service::process::{delete_bms, do_edit, do_touch};
-use bkmr::helper;
+use bkmr::util::helper;
 use rstest::{fixture, rstest};
 use std::thread::sleep;
 use std::time::Duration;

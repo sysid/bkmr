@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::helper::extract_filename;
+use crate::util::helper::extract_filename;
 use crate::model::bookmark::{Bookmark, BookmarkBuilder};
 use anyhow::Context;
 use camino::Utf8Path;
