@@ -4,22 +4,21 @@ use std::collections::HashSet;
 use anyhow::Result;
 use rstest::{fixture, rstest};
 use tracing::{debug, info};
-use bkmr::adapter::dal::Dal;
+use bkmr::adapter::dal::{migration, Dal};
 use bkmr::adapter::embeddings::DummyEmbedding;
 use bkmr::context::Context;
 use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
-use bkmr::helper;
 
 #[fixture]
 pub fn dal() -> Dal {
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    helper::init_db(&mut dal.conn).expect("Error DB init");
+    migration::init_db(&mut dal.conn).expect("Error DB init");
     dal
 }
 
 #[rstest]
 fn test_init_db(mut dal: Dal) {
-    helper::init_db(&mut dal.conn).expect("Error DB init");
+    migration::init_db(&mut dal.conn).expect("Error DB init");
     info!("Init DB");
     assert!(true);
 }

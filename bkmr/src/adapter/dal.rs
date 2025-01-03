@@ -8,11 +8,14 @@ use diesel::result::Error as DieselError;
 use diesel::sql_types::{Integer, Text};
 use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
 use tracing::{debug, instrument};
-use crate::adapter::schema::bookmarks::dsl::bookmarks;
-use crate::adapter::schema::bookmarks::{
+use schema::bookmarks::dsl::bookmarks;
+use schema::bookmarks::{
     content_hash, desc, embedding, flags, id, metadata, tags, URL,
 };
 use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
+
+pub mod schema;
+pub mod migration;
 
 trait DalTrait {
     fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>>;

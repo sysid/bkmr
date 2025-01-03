@@ -6,14 +6,14 @@ use bkmr::adapter::{
     dal::Dal
     ,  // Updated imports
 };
+use bkmr::adapter::dal::migration;
 use bkmr::context::CTX;
 use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
-use bkmr::helper;
 
 #[fixture]
 pub fn dal() -> Dal {
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    helper::init_db(&mut dal.conn).expect("Error DB init");
+    migration::init_db(&mut dal.conn).expect("Error DB init");
     dal
 }
 

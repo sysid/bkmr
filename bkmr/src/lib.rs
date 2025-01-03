@@ -24,7 +24,6 @@ pub mod adapter {
     pub mod dal;
     pub mod embeddings;
     pub mod json;
-    pub mod schema;
 }
 
 pub mod model {
@@ -43,7 +42,6 @@ pub mod cli;
 pub mod context;
 pub mod environment;
 pub mod helper;
-pub mod macros;
 pub mod util;
 
 /// creates list of normalized tags from "tag1,t2,t3" string

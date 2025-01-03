@@ -1,7 +1,7 @@
-use bkmr::adapter::dal::Dal;
+use bkmr::adapter::dal::{migration, Dal};
 use bkmr::model::bookmark::Bookmark;
 use bkmr::service::process::{delete_bms, do_edit, do_touch};
-use bkmr::{helper};
+use bkmr::helper;
 use rstest::{fixture, rstest};
 use std::thread::sleep;
 use std::time::Duration;
@@ -9,7 +9,7 @@ use std::time::Duration;
 #[fixture]
 pub fn dal() -> Dal {
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    helper::init_db(&mut dal.conn).expect("Error DB init");
+    migration::init_db(&mut dal.conn).expect("Error DB init");
     dal
 }
 

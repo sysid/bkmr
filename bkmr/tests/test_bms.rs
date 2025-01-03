@@ -1,7 +1,6 @@
 use rstest::*;
 use tracing::debug;
-use bkmr::adapter::dal::Dal;
-use bkmr::helper;
+use bkmr::adapter::dal::{migration, Dal};
 use bkmr::model::bms::Bookmarks;
 use bkmr::util::testing::init_test_setup;
 
@@ -9,7 +8,7 @@ use bkmr::util::testing::init_test_setup;
 fn init() {
     init_test_setup().expect("Failed to initialize test setup");
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    helper::init_db(&mut dal.conn).expect("Error DB init");
+    migration::init_db(&mut dal.conn).expect("Error DB init");
 }
 
 #[rstest]

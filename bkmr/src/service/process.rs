@@ -537,7 +537,7 @@ mod test {
 
     use crate::adapter::dal::Dal;
     use crate::adapter::json::bms_to_json;
-    use crate::helper::init_db;
+    use crate::adapter::dal::migration::init_db;
 
     use super::*;
 

@@ -120,7 +120,7 @@ mod tests {
     use rstest::*;
 
     use crate::adapter::dal::Dal;
-    use crate::helper::init_db;
+    use crate::adapter::dal::migration::init_db;
 
     use super::*;
 

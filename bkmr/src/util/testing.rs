@@ -16,10 +16,9 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use crate::adapter::dal::Dal;
-use crate::adapter::embeddings::{DummyEmbedding};
+use crate::adapter::dal::{migration, Dal};
+use crate::adapter::embeddings::DummyEmbedding;
 use crate::context::Context;
-use crate::helper;
 
 // Constants
 pub const TEST_ENV_VARS: &[&str] = &["BKMR_DB_URL", "RUST_LOG", "NO_CLEANUP"];
@@ -95,7 +94,7 @@ fn set_test_env_vars() {
 
 pub fn setup_test_db() -> Result<Dal> {
     let mut dal = Dal::new(TEST_DB_PATH.to_string_lossy().to_string());
-    helper::init_db(&mut dal.conn).context("Failed to initialize test database")?;
+    migration::init_db(&mut dal.conn).context("Failed to initialize test database")?;
     Ok(dal)
 }
 

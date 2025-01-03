@@ -10,7 +10,7 @@ use tracing::debug;
 use crate::helper::calc_content_hash;
 use crate::model::tag::Tags;
 
-use crate::adapter::schema::bookmarks;
+use crate::adapter::dal::schema::bookmarks;
 use crate::context::Context;
 // ORM mappings
 

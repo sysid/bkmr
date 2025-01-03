@@ -1,8 +1,7 @@
 // #![allow(unused_imports, unused_variables)]
 use rstest::*;
 
-use bkmr::adapter::dal::Dal;
-use bkmr::helper;
+use bkmr::adapter::dal::{migration, Dal};
 use bkmr::model::bookmark::Bookmark;
 use bkmr::service::fzf::fzf_process;
 
@@ -11,7 +10,7 @@ mod test_dal;
 #[fixture]
 pub fn dal() -> Dal {
     let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    helper::init_db(&mut dal.conn).expect("Error DB init");
+    migration::init_db(&mut dal.conn).expect("Error DB init");
     dal
 }
 
