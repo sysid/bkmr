@@ -102,10 +102,6 @@ run-backfill: run-create-db  ## run-backfill
 run-update: init-db  ## run-update
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
 
-.PHONY: run-show
-run-show: init-db  ## run-show
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,10
-
 .PHONY: run-create-db
 run-create-db:  ## run-create-db: opens new /tmp/bkmr_test.db
 	rm -vf /tmp/bkmr_test.db
@@ -128,7 +124,8 @@ run-tags: init-db  ## run-tags
 
 .PHONY: run-show
 run-show: init-db  ## run-show
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,2
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,10
+
 
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
@@ -209,9 +206,10 @@ build:  ## build
 	#@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
 .PHONY: install
 install: uninstall  ## install
-	@VERSION=$(cat VERSION) && \
-	cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
-	ln -sf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
+	@VERSION=$(shell cat VERSION) && \
+		echo "-M- Installagin $$VERSION" && \
+		cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
+		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
 
 .PHONY: uninstall
 uninstall:  ## uninstall
