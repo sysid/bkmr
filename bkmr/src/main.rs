@@ -36,7 +36,7 @@ fn main() {
             eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
             std::process::exit(1);
         }
-        let _ = commands::enable_embeddings_if_required(); // migrate db
+        commands::enable_embeddings_if_required().expect("Failed to enable embeddings");
     }
 
     let context = if cli.openai {
@@ -58,14 +58,15 @@ fn main() {
 }
 
 fn setup_logging(verbosity: u8) {
-    eprintln!("INIT: Attempting logger init from main.rs");
+    debug!("INIT: Attempting logger init from main.rs");
 
     let filter = match verbosity {
         0 => LevelFilter::WARN,
         1 => LevelFilter::INFO,
         2 => LevelFilter::DEBUG,
+        3 => LevelFilter::TRACE,
         _ => {
-            eprintln!("Don't be crazy, max is -d -d");
+            eprintln!("Don't be crazy, max is -d -d -d");
             LevelFilter::TRACE
         }
     };
@@ -83,6 +84,7 @@ fn setup_logging(verbosity: u8) {
         .with_writer(std::io::stderr) // Set writer first
         .with_target(true)
         .with_thread_names(false)
+        .with_span_events(FmtSpan::ENTER)
         .with_span_events(FmtSpan::CLOSE);
 
     // Apply filters to the layer

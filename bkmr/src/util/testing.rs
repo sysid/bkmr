@@ -47,9 +47,9 @@ pub fn init_test_setup() -> Result<()> {
 }
 
 fn setup_test_logging() {
-    eprintln!("INIT: Attempting logger init from testing.rs");
+    debug!("INIT: Attempting logger init from testing.rs");
     if env::var("RUST_LOG").is_err() {
-        env::set_var("RUST_LOG", "debug");
+        env::set_var("RUST_LOG", "trace");
     }
 
     env::set_var("SKIM_LOG", "info");
@@ -72,6 +72,7 @@ fn setup_test_logging() {
             .with_writer(std::io::stderr)
             .with_target(true)
             .with_thread_names(false)
+            .with_span_events(FmtSpan::ENTER)
             .with_span_events(FmtSpan::CLOSE)
             .with_filter(module_filter)
             .with_filter(env_filter),

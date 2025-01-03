@@ -56,7 +56,7 @@ impl Context {
             .expect("Failed to acquire context read lock")
     }
 
-    pub fn update_global(new_context: Context) -> anyhow::Result<()> {
+    pub fn update_global(new_context: Context) -> Result<()> {
         let mut context = Self::global()
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire context write lock: {}", e))?;
@@ -168,7 +168,7 @@ mod tests {
         // Verify we can access the default DummyEmbedding context
         let result = ctx.execute("test text");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), None); // DummyEmbedding returns None
+        assert_eq!(result?, None); // DummyEmbedding returns None
         Ok(())
     }
 

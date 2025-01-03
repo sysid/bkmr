@@ -247,7 +247,7 @@ impl BookmarkBuilder {
 
 #[cfg(test)]
 mod test {
-    use chrono::{NaiveDate, NaiveDateTime};
+    use chrono::{DateTime, NaiveDate};
     use rstest::*;
 
     use crate::util::helper::calc_content_hash;
@@ -330,7 +330,7 @@ mod test {
             tags: "tag1, tag2".to_string(),
             desc: "description".to_string(),
             flags: 0,
-            last_update_ts: NaiveDateTime::from_timestamp_opt(60, 0).unwrap(),
+            last_update_ts: DateTime::from_timestamp(60, 0).unwrap().naive_utc(),
             embedding: None,
             content_hash: None,
         };

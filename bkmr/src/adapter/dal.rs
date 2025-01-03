@@ -7,7 +7,7 @@ use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::sql_types::{Integer, Text};
 use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, trace};
 use schema::bookmarks::dsl::bookmarks;
 use schema::bookmarks::{
     content_hash, desc, embedding, flags, id, metadata, tags, URL,
@@ -17,28 +17,28 @@ use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
 pub mod schema;
 pub mod migration;
 
-trait DalTrait {
-    fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>>;
-    fn batch_execute(&mut self, id_: i32) -> Result<()>;
-    fn delete_bookmark2(&mut self, id_: i32) -> Result<usize>;
-    fn clean_table(&mut self) -> Result<()>;
-    fn update_bookmark(&mut self, bm: Bookmark) -> Result<Vec<Bookmark>>;
-    fn insert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>>;
-    fn upsert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>>;
-    fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark>;
-    fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark>;
-    fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>>;
-    fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<i32>>;
-    fn get_bookmarks_without_embedding(&mut self) -> Result<Vec<Bookmark>>;
-    fn bm_exists(&mut self, url: &str) -> Result<bool>;
-    fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>>;
-    fn get_all_tags_as_vec(&mut self) -> Result<Vec<String>>;
-    fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>>;
-    fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>>;
-    fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>>;
-    fn check_schema_migrations_exists(&mut self) -> Result<bool>;
-    fn check_embedding_column_exists(&mut self) -> Result<bool>;
-}
+// trait DalTrait {
+//     fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>>;
+//     fn batch_execute(&mut self, id_: i32) -> Result<()>;
+//     fn delete_bookmark2(&mut self, id_: i32) -> Result<usize>;
+//     fn clean_table(&mut self) -> Result<()>;
+//     fn update_bookmark(&mut self, bm: Bookmark) -> Result<Vec<Bookmark>>;
+//     fn insert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>>;
+//     fn upsert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>>;
+//     fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark>;
+//     fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark>;
+//     fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>>;
+//     fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<i32>>;
+//     fn get_bookmarks_without_embedding(&mut self) -> Result<Vec<Bookmark>>;
+//     fn bm_exists(&mut self, url: &str) -> Result<bool>;
+//     fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>>;
+//     fn get_all_tags_as_vec(&mut self) -> Result<Vec<String>>;
+//     fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>>;
+//     fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>>;
+//     fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>>;
+//     fn check_schema_migrations_exists(&mut self) -> Result<bool>;
+//     fn check_embedding_column_exists(&mut self) -> Result<bool>;
+// }
 
 pub struct Dal {
     url: String,
@@ -59,14 +59,14 @@ impl Dal {
             .unwrap_or_else(|e| panic!("Error connecting to {}: {:?}", database_url, e))
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>> {
         diesel::delete(bookmarks.filter(id.eq(id_)))
             .get_results(&mut self.conn)
             .with_context(|| format!("Failed to delete bookmark with id {}", id_))
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn batch_execute(&mut self, id_: i32) -> Result<()> {
         let query = "
             BEGIN TRANSACTION;
@@ -81,7 +81,7 @@ impl Dal {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn delete_bookmark2(&mut self, id_: i32) -> Result<usize> {
         sql_query("BEGIN TRANSACTION;")
             .execute(&mut self.conn)
@@ -118,7 +118,7 @@ impl Dal {
         Ok(n)
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn clean_table(&mut self) -> Result<()> {
         sql_query("DELETE FROM bookmarks WHERE id != 1;")
             .execute(&mut self.conn)
@@ -127,7 +127,7 @@ impl Dal {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn update_bookmark(&mut self, bm: Bookmark) -> Result<Vec<Bookmark>> {
         diesel::update(bookmarks.find(bm.id))
             .set((
@@ -143,7 +143,7 @@ impl Dal {
             .with_context(|| format!("Failed to update bookmark with id {}", bm.id))
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn insert_bookmark(&mut self, bm: NewBookmark) -> Result<Vec<Bookmark>> {
         diesel::insert_into(bookmarks)
             .values(bm)
@@ -151,7 +151,7 @@ impl Dal {
             .with_context(|| "Failed to insert bookmark")
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn upsert_bookmark(&mut self, new_bm: NewBookmark) -> Result<Vec<Bookmark>> {
         match self.get_bookmark_by_url(&new_bm.URL) {
             Ok(bm) => self.update_bookmark(Bookmark {
@@ -169,7 +169,7 @@ impl Dal {
         }
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_bookmark_by_id(&mut self, id_: i32) -> Result<Bookmark> {
         sql_query(
             "SELECT id, URL, metadata, tags, desc, flags, last_update_ts, embedding, content_hash FROM bookmarks \
@@ -184,7 +184,7 @@ impl Dal {
     }
 
     // In dal.rs
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_bookmark_by_url(&mut self, url: &str) -> Result<Bookmark> {
         // Escape special characters in URL for SQLite query
         let escaped_url = url.replace('\'', "''");
@@ -202,7 +202,7 @@ impl Dal {
         })
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_bookmarks(&mut self, query: &str) -> Result<Vec<Bookmark>> {
         if query.is_empty() {
             bookmarks
@@ -217,7 +217,7 @@ impl Dal {
         }
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_bookmarks_fts(&mut self, fts_query: &str) -> Result<Vec<i32>> {
         sql_query(
             "SELECT id FROM bookmarks_fts \
@@ -235,7 +235,7 @@ impl Dal {
         })
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_bookmarks_without_embedding(&mut self) -> Result<Vec<Bookmark>> {
         bookmarks
             .filter(embedding.is_null())
@@ -255,7 +255,7 @@ impl Dal {
     }
 
     /// get frequency based ordered list of all tags
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_all_tags(&mut self) -> Result<Vec<TagsFrequency>> {
         sql_query(
             "
@@ -278,7 +278,7 @@ impl Dal {
         .with_context(|| "Failed to get all tags")
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_all_tags_as_vec(&mut self) -> Result<Vec<String>> {
         let all_tags = self.get_all_tags()?;
         let mut all_tags: Vec<String> = all_tags.into_iter().map(|t| t.tag).collect();
@@ -287,7 +287,7 @@ impl Dal {
         Ok(all_tags)
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_related_tags(&mut self, tag: &str) -> Result<Vec<TagsFrequency>> {
         let search_tag = format!("%,{},%", tag);
         sql_query(
@@ -313,7 +313,7 @@ impl Dal {
         .with_context(|| format!("Failed to get related tags for tag '{}'", tag))
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_randomized_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>> {
         sql_query(
             "SELECT *
@@ -326,7 +326,7 @@ impl Dal {
         .with_context(|| format!("Failed to get {} random bookmarks", n))
     }
 
-    #[instrument]
+    #[instrument(level = "debug")]
     pub fn get_oldest_bookmarks(&mut self, n: i32) -> Result<Vec<Bookmark>> {
         sql_query(
             "SELECT *
@@ -339,6 +339,7 @@ impl Dal {
         .with_context(|| format!("Failed to get {} oldest bookmarks", n))
     }
 
+    #[instrument(level = "trace")]
     pub fn check_schema_migrations_exists(&mut self) -> Result<bool> {
         let query = "
             SELECT 1 as diesel_exists FROM sqlite_master WHERE type='table' AND name='__diesel_schema_migrations';
@@ -348,9 +349,11 @@ impl Dal {
             .load(&mut self.conn)
             .with_context(|| "Failed to check schema migrations existence")?;
 
+        trace!("ExistenceCheck: {:?}", result);
         Ok(!result.is_empty())
     }
 
+    #[instrument(level = "trace")]
     pub fn check_embedding_column_exists(&mut self) -> Result<bool> {
         let query = "
         SELECT COUNT(*) as column_exists
@@ -362,12 +365,14 @@ impl Dal {
             .load(&mut self.conn)
             .with_context(|| "Failed to check embedding column existence")?;
 
+        trace!("Embedding ColumnCheck: {:?}", result);
         Ok(result.iter().any(|item| item.column_exists > 0))
     }
 }
 
 #[derive(QueryableByName, Debug)]
 struct ExistenceCheck {
+    #[allow(dead_code)]
     #[diesel(sql_type = Integer)]
     diesel_exists: i32,
 }

@@ -33,7 +33,7 @@ use diesel::result::Error::DatabaseError;
 use diesel_migrations::MigrationHarness;
 use itertools::Itertools;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 use crate::adapter::dal::migration::{init_db, MIGRATIONS};
 use crate::util::helper::{confirm, ensure_int_vector};
 
@@ -369,11 +369,12 @@ pub fn randomized(n: i32) -> Result<()> {
     Ok(())
 }
 
-#[instrument]
+#[instrument(level = "debug")]
 pub fn enable_embeddings_if_required() -> Result<()> {
     let mut dal = Dal::new(CONFIG.db_url.clone());
 
     if dal.check_embedding_column_exists()? {
+        info!("Embedding column already exists, no action required.");
         return Ok(());
     }
 
@@ -397,6 +398,7 @@ pub fn enable_embeddings_if_required() -> Result<()> {
             COMMIT;
         "#;
 
+        info!("Creating migration table... {:?}", dal);
         dal.conn
             .batch_execute(MIGRATION_TABLE_SQL)
             .context("Failed to create migrations table")?;
@@ -566,7 +568,7 @@ mod tests {
         Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
 
         // When: find similar for "blub"
-        let results = find_similar("blub", &bms).unwrap();
+        let results = find_similar("blub", &bms)?;
 
         // Then: Expect no findings
         assert_eq!(results.len(), 0);
@@ -619,14 +621,15 @@ mod tests {
         Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))?;
         // Given: v2 database with embeddings
         // When:
-        sem_search("blub".to_string(), None, false, stderr);
+        sem_search("blub".to_string(), None, false, stderr)?;
         // Then: Expect the first three entries to be: blub, blub3, blub2
         Ok(())
     }
 
     #[ignore = "interactive: opens browser link"]
     #[test]
-    fn test_randomized() {
-        randomized(1);
+    fn test_randomized() -> Result<()> {
+        randomized(1)?;
+        Ok(())
     }
 }

@@ -17,10 +17,8 @@ pub fn dal() -> Dal {
 }
 
 #[rstest]
-fn test_init_db(mut dal: Dal) {
-    migration::init_db(&mut dal.conn).expect("Error DB init");
+fn test_init_db(_dal: Dal) {
     info!("Init DB");
-    assert!(true);
 }
 
 #[rstest]

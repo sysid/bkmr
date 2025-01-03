@@ -2,7 +2,7 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use diesel::sqlite::Sqlite;
 use tracing::debug;
 
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 /// Initializes the database by running all pending migrations.
 ///
