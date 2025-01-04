@@ -10,7 +10,7 @@ use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
 use anyhow::Result;
 
 #[rstest]
-fn test_bm_update() -> Result<()> {
+fn given_bookmark_when_updating_then_manages_embedding_correctly() -> Result<()> {
     // Given: Request a new server from the pool
     let mut server = mockito::Server::new();
     let url = server.url();

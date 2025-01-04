@@ -1,12 +1,9 @@
 // src/util/testing.rs
+
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-
 use anyhow::{Context as _, Result};
-use camino::{Utf8Path, Utf8PathBuf};
-use camino_tempfile::tempdir;
-use fs_extra::{copy_items, dir};
 use lazy_static::lazy_static;
 use tracing::{debug, info};
 use tracing_subscriber::{
@@ -19,8 +16,9 @@ use tracing_subscriber::{
 use crate::adapter::dal::{migration, Dal};
 use crate::adapter::embeddings::DummyEmbedding;
 use crate::context::Context;
+use crate::model::bookmark::Bookmark;
 
-// Constants
+// Common test environment variables
 pub const TEST_ENV_VARS: &[&str] = &["BKMR_DB_URL", "RUST_LOG", "NO_CLEANUP"];
 
 lazy_static! {
@@ -72,7 +70,6 @@ fn setup_test_logging() {
             .with_writer(std::io::stderr)
             .with_target(true)
             .with_thread_names(false)
-            .with_span_events(FmtSpan::ENTER)
             .with_span_events(FmtSpan::CLOSE)
             .with_filter(module_filter)
             .with_filter(env_filter),
@@ -88,8 +85,8 @@ fn setup_test_logging() {
     }
 }
 
+/// Sets up common test environment variables
 fn set_test_env_vars() {
-    // Set default environment variables for testing
     env::set_var("BKMR_DB_URL", TEST_DB_PATH.to_str().unwrap());
 }
 
@@ -99,13 +96,11 @@ pub fn setup_test_db() -> Result<Dal> {
     Ok(dal)
 }
 
-pub fn setup_temp_dir() -> Result<Utf8PathBuf> {
-    let tempdir = tempdir().context("Failed to create temp directory")?;
-    let options = dir::CopyOptions::new().overwrite(true);
-
-    copy_items(&TEST_RESOURCES, "../db", &options).context("Failed to copy test resources")?;
-
-    Ok(tempdir.into_path())
+/// Gets test bookmarks from the database
+pub fn get_test_bookmarks() -> Result<Vec<Bookmark>> {
+    let mut dal = setup_test_db()?;
+    dal.get_bookmarks("")
+        .context("Failed to get test bookmarks")
 }
 
 pub fn print_active_env_vars() {
@@ -118,11 +113,27 @@ pub fn print_active_env_vars() {
     }
 }
 
-pub fn teardown_temp_dir(temp_dir: &Utf8Path) {
+/// Creates a temporary test directory with test resources
+pub fn setup_temp_dir() -> Result<PathBuf> {
+    use fs_extra::dir::CopyOptions;
+    use tempfile::tempdir;
+
+    let tempdir = tempdir()
+        .context("Failed to create temp directory")?;
+    let options = CopyOptions::new().overwrite(true);
+
+    fs_extra::copy_items(&TEST_RESOURCES, "../db", &options)
+        .context("Failed to copy test resources")?;
+
+    Ok(tempdir.into_path())
+}
+
+/// Cleans up test directory unless NO_CLEANUP is set
+pub fn teardown_temp_dir(temp_dir: &PathBuf) {
     if env::var("NO_CLEANUP").is_err() && temp_dir.exists() {
         let _ = fs::remove_dir_all(temp_dir);
     } else {
-        debug!("Test artifacts left at: {}", temp_dir);
+        debug!("Test artifacts left at: {}", temp_dir.display());
     }
 }
 

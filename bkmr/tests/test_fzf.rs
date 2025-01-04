@@ -25,6 +25,6 @@ fn bms() -> Vec<Bookmark> {
 /// uses interactive console
 #[rstest]
 #[ignore = "Interactive via Makefile"]
-fn test_fzf(bms: Vec<Bookmark>) {
+fn given_bookmark_list_when_running_fzf_then_processes_interactively(bms: Vec<Bookmark>) {
     fzf_process(&bms);
 }

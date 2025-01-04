@@ -12,7 +12,7 @@ fn init() {
 }
 
 #[rstest]
-fn test_init_bms() {
+fn given_empty_query_when_creating_bookmarks_then_returns_all_bookmarks() {
     let bms = Bookmarks::new("".to_string());
     assert_eq!(bms.bms.len(), 11);
 }
@@ -29,7 +29,7 @@ fn test_init_bms() {
 #[case(vec ! [String::from("xyz")], 1)]
 #[case(vec ! [String::from("")], 0)]
 #[case(vec ! [], 0)]
-fn test_check_tags(#[case] tags: Vec<String>, #[case] expected: usize) {
+fn given_tag_list_when_checking_unknown_tags_then_returns_expected_count(#[case] tags: Vec<String>, #[case] expected: usize) {
     let mut bms = Bookmarks::new("".to_string());
     let unknown_tags = bms.check_tags(tags).unwrap();
     debug!("{:?}", unknown_tags);
@@ -37,7 +37,7 @@ fn test_check_tags(#[case] tags: Vec<String>, #[case] expected: usize) {
 }
 
 #[rstest]
-fn test_match_all() {
+fn given_tag_set_when_filtering_all_match_then_returns_single_bookmark() {
     let mut bms = Bookmarks::new("".to_string());
     bms.filter(Some(",xxx,yyy,".to_string()), None, None, None, None);
     assert_eq!(bms.bms.len(), 1);
@@ -45,7 +45,7 @@ fn test_match_all() {
 }
 
 #[rstest]
-fn test_match_all_not() {
+fn given_tag_set_when_filtering_all_not_match_then_excludes_matching_bookmark() {
     let mut bms = Bookmarks::new("".to_string());
     bms.filter(None, None, Some(",xxx,yyy,".to_string()), None, None);
     assert_eq!(bms.bms.len(), 10);
@@ -53,21 +53,21 @@ fn test_match_all_not() {
 }
 
 #[rstest]
-fn test_match_any() {
+fn given_multiple_tags_when_filtering_any_match_then_returns_matching_bookmarks() {
     let mut bms = Bookmarks::new("".to_string());
     bms.filter(None, Some(",xxx,ccc,".to_string()), None, None, None);
     assert_eq!(bms.bms.len(), 4);
 }
 
 #[rstest]
-fn test_match_any_not() {
+fn given_multiple_tags_when_filtering_any_not_match_then_excludes_matching_bookmarks() {
     let mut bms = Bookmarks::new("".to_string());
     bms.filter(None, None, None, Some(",xxx,ccc,".to_string()), None);
     assert_eq!(bms.bms.len(), 7);
 }
 
 #[rstest]
-fn test_match_exact() {
+fn given_tag_set_when_filtering_exact_match_then_returns_exact_matches() {
     let mut bms = Bookmarks::new("".to_string());
     bms.filter(None, None, None, None, Some(",aaa,bbb,".to_string()));
     assert_eq!(bms.bms.len(), 2);

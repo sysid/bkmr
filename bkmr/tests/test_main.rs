@@ -7,7 +7,7 @@ use rstest::*;
 use std::fs;
 
 #[rstest]
-fn test_debug_mode() {
+fn given_debug_flag_when_running_then_enables_debug_mode() {
     let mut cmd = Command::cargo_bin("bkmr").unwrap();
     cmd.args(["-d", "-d"]).assert().success();
     // cmd.args(&["-d", "-d"])
@@ -16,7 +16,7 @@ fn test_debug_mode() {
 }
 
 #[rstest]
-fn test_create_db() {
+fn given_path_when_creating_database_then_creates_successfully() {
     fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
 
     let mut cmd = Command::cargo_bin("bkmr").unwrap();
@@ -26,7 +26,7 @@ fn test_create_db() {
 }
 
 #[rstest]
-fn test_show_bms() {
+fn given_bookmark_ids_when_showing_then_displays_correct_entries() {
     fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
 
     let mut cmd = Command::cargo_bin("bkmr").unwrap();

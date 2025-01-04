@@ -21,7 +21,7 @@ fn bms() -> Vec<Bookmark> {
     bms.unwrap()
 }
 #[rstest]
-fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
+fn given_bookmark_when_touching_then_updates_timestamp_and_flags(mut dal: Dal) -> anyhow::Result<()> {
 
     let bm_before = dal.get_bookmark_by_id(1)?;
     sleep(Duration::from_secs(1));
@@ -35,7 +35,7 @@ fn test_do_touch(mut dal: Dal) -> anyhow::Result<()> {
 
 #[rstest]
 #[ignore = "Manual Test: make test-vim"]
-fn test_do_edit(mut dal: Dal, bms: Vec<Bookmark>) {
+fn given_bookmark_when_editing_then_updates_content(mut dal: Dal, bms: Vec<Bookmark>) {
     let bm = bms[0].clone();
     // avoid panic as it would with CLI call
     do_edit(&bm).unwrap_or_else(|e| {
@@ -48,7 +48,7 @@ fn test_do_edit(mut dal: Dal, bms: Vec<Bookmark>) {
 
 // #[allow(unused_variables)]
 #[rstest]
-fn test_delete_bms(mut dal: Dal, bms: Vec<Bookmark>) {
+fn given_bookmark_list_when_deleting_multiple_then_removes_correctly(mut dal: Dal, bms: Vec<Bookmark>) {
     let _ = bms[0].clone();
     // make sure input is sorted as it would be using the helper
     let ids = helper::ensure_int_vector(&vec!["6".to_string(), "2".to_string(), "3".to_string()]);

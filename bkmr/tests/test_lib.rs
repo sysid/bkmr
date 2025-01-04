@@ -36,7 +36,7 @@ fn bms() -> Vec<Bookmark> {
 
 #[rstest]
 // #[ignore = "seems to hang in Pycharm, but not Makefile"]
-fn test_load_url_details() {
+fn given_valid_url_when_loading_details_then_returns_correct_metadata() {
     let result = load_url_details("https://www.rust-lang.org/");
     println!("Result: {:?}", result);
     assert!(result.is_ok());
@@ -48,7 +48,7 @@ fn test_load_url_details() {
 #[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], false, ",ccc,t1,t2,yyy,".to_string())]
 #[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], true, ",t1,t2,".to_string())]
 #[case(1, vec![], vec!["ccc".to_string()], false, ",yyy,".to_string())]
-fn test_update_bm(
+fn given_bookmark_id_when_updating_with_tags_then_modifies_correctly(
     mut dal: Dal,
     #[case] id: i32,
     #[case] tags: Vec<String>,
@@ -65,13 +65,13 @@ fn test_update_bm(
 }
 
 #[rstest]
-fn test_upd(mut dal: Dal) -> Result<()> {
+fn given_bookmark_when_updating_then_succeeds(mut dal: Dal) -> Result<()> {
     update_bm(1, &vec![], &vec![], &mut dal, false)?;
     Ok(())
 }
 
 #[rstest]
-fn test_update_bookmarks_successful() {
+fn given_bookmark_list_when_updating_multiple_then_succeeds() {
     let (ids, tags, tags_not, force) = (
         vec![1],
         vec!["t1".to_string(), "t2".to_string()],
@@ -94,6 +94,6 @@ fn test_update_bookmarks_successful() {
 // }
 
 #[rstest]
-fn test_ctx() {
+fn given_context_when_initializing_then_exists() {
     assert!(CTX.get().is_some());
 }

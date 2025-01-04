@@ -11,7 +11,7 @@ fn test_data_path() -> Utf8PathBuf {
 }
 
 #[rstest]
-fn test_read_ndjson_file_and_create_bookmarks(test_data_path: Utf8PathBuf) {
+fn given_ndjson_file_when_reading_then_creates_correct_bookmarks(test_data_path: Utf8PathBuf) {
     // CTX.set(Context::new(Box::new(bkmr::embeddings::DummyAi::default()))).unwrap();
     debug!("Path: {:?}", test_data_path);
     let bookmarks =
