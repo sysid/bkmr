@@ -5,6 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use anyhow::{Context as _, Result};
 use lazy_static::lazy_static;
+use rstest::fixture;
 use tracing::{debug, info};
 use tracing_subscriber::{
     filter::filter_fn,
@@ -94,6 +95,16 @@ pub fn setup_test_db() -> Result<Dal> {
     let mut dal = Dal::new(TEST_DB_PATH.to_string_lossy().to_string());
     migration::init_db(&mut dal.conn).context("Failed to initialize test database")?;
     Ok(dal)
+}
+#[fixture]
+pub fn test_dal() -> Dal {
+    setup_test_db()
+        .expect("Failed to set up test database")
+}
+#[fixture]
+pub fn bms(mut test_dal: Dal) -> Vec<Bookmark> {
+    let bms = test_dal.get_bookmarks("");
+    bms.unwrap()
 }
 
 /// Gets test bookmarks from the database

@@ -119,18 +119,8 @@ mod tests {
     use camino::Utf8PathBuf;
     use rstest::*;
 
-    use crate::adapter::dal::Dal;
-    use crate::adapter::dal::migration::init_db;
-
+    use crate::util::testing::bms;
     use super::*;
-
-    #[fixture]
-    fn bms() -> Vec<Bookmark> {
-        let mut dal = Dal::new(String::from("../db/bkmr.db"));
-        init_db(&mut dal.conn).expect("Error DB init");
-        let bms = dal.get_bookmarks("");
-        bms.unwrap()
-    }
 
     #[fixture]
     fn test_data_path() -> Utf8PathBuf {

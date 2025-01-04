@@ -43,17 +43,17 @@ init:  ## init
 
 .PHONY: run-all
 #run-all: test-url-details test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search ## run-all
-run-all: test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search  ## run-all
+run-all: run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search  ## run-all
 
 
 .PHONY: test-url-details
 test-url-details:  ## test-url-details (charm strang verbose output), expect: "Rust Programming Language", "A language empowering everyone to build reliable and efficient software."
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib given_valid_url_when_loading_details_then_returns_correct_metadata -- --exact --nocapture
 
 .PHONY: test-fzf  # TODO: fix
 test-fzf:  ## test-fzf
 	# requires to uncomment associated test
-	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_fzf given_bookmark_list_when_running_fzf_then_processes_interactively -- --exact --nocapture --ignored
 	#RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
 
 .PHONY: test-open-uri-url
@@ -145,7 +145,7 @@ run-search: init-db  ## run-search interactively for manual tests
 
 .PHONY: init-db
 init-db:  ## init-db: initializes test DB
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_dal given_database_when_initializing_then_succeeds -- --exact
 
 .PHONY: install-diesel-cli
 install-diesel-cli:  ## install-diesel-cli
@@ -154,16 +154,14 @@ install-diesel-cli:  ## install-diesel-cli
 
 .PHONY: test-vim
 test-vim:  ## test-vim: run with EDITOR= make test-vim
-	#pushd $(pkg_src) && cargo test --color=always --package bkmr --lib process::test::test_do_edit -- --nocapture --ignored
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --color=always --test test_process test_do_edit -- --nocapture --ignored
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --color=always --package bkmr --test test_process given_bookmark_when_editing_then_updates_content -- --ignored --exact --nocapture
 
 .PHONY: test-dal
 test-dal:  ## test-dal
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG cargo test --package bkmr --test test_lib "" -- --test-threads=1
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG cargo test --package bkmr --test test_dal "" -- --test-threads=1   # --nocapture
 
 .PHONY: test
 test:  test-dal  ## test (must run DB test before to init ?!?)
-	#BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG pushd $(pkg_src) && cargo test --package bkmr -- --test-threads=1  # --nocapture
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG cargo test -- --test-threads=1  # --nocapture
 
 .PHONY: test-with-data

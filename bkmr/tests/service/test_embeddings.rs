@@ -2,22 +2,13 @@ use camino::Utf8PathBuf;
 use rstest::*;
 use std::env;
 
-use bkmr::adapter::{
-    dal::Dal
-    ,  // Updated imports
-};
 use bkmr::adapter::dal::migration;
+use bkmr::adapter::dal::Dal;
+use bkmr::adapter::embeddings::{Embedding, OpenAiEmbedding};
 use bkmr::context::CTX;
 use bkmr::service::embeddings::create_embeddings_for_non_bookmarks;
+use bkmr::util::testing::test_dal;
 use tracing::debug;
-use bkmr::adapter::embeddings::{Embedding, OpenAiEmbedding};
-
-#[fixture]
-pub fn dal() -> Dal {
-    let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    migration::init_db(&mut dal.conn).expect("Error DB init");
-    dal
-}
 
 #[fixture]
 fn test_data_path() -> Utf8PathBuf {
@@ -25,9 +16,11 @@ fn test_data_path() -> Utf8PathBuf {
 }
 
 #[rstest]
-fn given_ndjson_file_when_creating_embeddings_for_new_bookmarks_then_succeeds(dal: Dal, test_data_path: Utf8PathBuf) {
+fn given_ndjson_file_when_creating_embeddings_for_new_bookmarks_then_succeeds(
+    _test_dal: Dal,
+    test_data_path: Utf8PathBuf,
+) {
     // Arrange
-    let _ = dal; // Explicitly show we need the DAL fixture
 
     // Act
     let result = create_embeddings_for_non_bookmarks(&test_data_path);
@@ -37,9 +30,11 @@ fn given_ndjson_file_when_creating_embeddings_for_new_bookmarks_then_succeeds(da
 }
 
 #[rstest]
-fn given_existing_embeddings_when_creating_again_then_succeeds(dal: Dal, test_data_path: Utf8PathBuf) {
+fn given_existing_embeddings_when_creating_again_then_succeeds(
+    _test_dal: Dal,
+    test_data_path: Utf8PathBuf,
+) {
     // Arrange
-    let _ = dal; // Explicitly show we need the DAL fixture
     let first_run = create_embeddings_for_non_bookmarks(&test_data_path);
     assert!(first_run.is_ok(), "First run failed: {:?}", first_run);
 

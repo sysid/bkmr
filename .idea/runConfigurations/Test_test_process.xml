@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="test_dal" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="test --package bkmr --test test_lib test_dal -- --test-threads=1" />
+  <configuration default="false" name="Test test_process" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="test --package bkmr --test test_process &quot;&quot; -- --test-threads=1" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
     <envs>
       <env name="BKMR_DB_URL" value="../db/bkmr.db" />

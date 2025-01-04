@@ -536,19 +536,11 @@ mod test {
     use anyhow::anyhow;
     use rstest::*;
 
-    use crate::adapter::dal::Dal;
+    
     use crate::adapter::json::bms_to_json;
-    use crate::adapter::dal::migration::init_db;
-
+    
+    use crate::util::testing::bms;
     use super::*;
-
-    #[fixture]
-    fn bms() -> Vec<Bookmark> {
-        let mut dal = Dal::new(String::from("../db/bkmr.db"));
-        init_db(&mut dal.conn).expect("Error DB init");
-        let bms = dal.get_bookmarks("");
-        bms.unwrap()
-    }
 
     #[rstest]
     #[ignore = "Manual Test"]

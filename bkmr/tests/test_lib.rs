@@ -2,36 +2,14 @@ use anyhow::Result;
 use rstest::*;
 
 use bkmr::adapter::dal::Dal;
-use bkmr::model::bookmark::Bookmark;
-use bkmr::util::testing::{init_test_setup, setup_test_db};
-use bkmr::{load_url_details, update_bm, update_bookmarks};
 use bkmr::context::CTX;
+use bkmr::util::testing::init_test_setup;
+use bkmr::util::testing::test_dal;
+use bkmr::{load_url_details, update_bm, update_bookmarks};
 
-mod test_dal;
-
-mod adapter {
-    mod test_json;
-}
-
-mod service {
-    mod test_embeddings;
-}
-
-#[cfg(test)]
 #[ctor::ctor]
 fn init() {
     init_test_setup().expect("Failed to initialize test setup");
-}
-
-#[fixture]
-pub fn dal() -> Dal {
-    setup_test_db().expect("Failed to set up test database")
-}
-
-#[fixture]
-fn bms() -> Vec<Bookmark> {
-    let mut dal = setup_test_db().expect("Failed to set up test database");
-    dal.get_bookmarks("").expect("Failed to get bookmarks")
 }
 
 #[rstest]
@@ -49,24 +27,24 @@ fn given_valid_url_when_loading_details_then_returns_correct_metadata() {
 #[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], true, ",t1,t2,".to_string())]
 #[case(1, vec![], vec!["ccc".to_string()], false, ",yyy,".to_string())]
 fn given_bookmark_id_when_updating_with_tags_then_modifies_correctly(
-    mut dal: Dal,
+    mut test_dal: Dal,
     #[case] id: i32,
     #[case] tags: Vec<String>,
     #[case] tags_not: Vec<String>,
     #[case] force: bool,
     #[case] expected: String,
 ) -> Result<()> {
-    update_bm(id, &tags, &tags_not, &mut dal, force)?;
+    update_bm(id, &tags, &tags_not, &mut test_dal, force)?;
 
-    let bm = dal.get_bookmark_by_id(id)?;
+    let bm = test_dal.get_bookmark_by_id(id)?;
     assert_eq!(bm.tags, expected);
     println!("bm: {:?}", bm);
     Ok(())
 }
 
 #[rstest]
-fn given_bookmark_when_updating_then_succeeds(mut dal: Dal) -> Result<()> {
-    update_bm(1, &vec![], &vec![], &mut dal, false)?;
+fn given_bookmark_when_updating_then_succeeds(mut test_dal: Dal) -> Result<()> {
+    update_bm(1, &vec![], &vec![], &mut test_dal, false)?;
     Ok(())
 }
 
