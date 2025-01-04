@@ -112,10 +112,14 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
 
     let options = SkimOptionsBuilder::default()
         .reverse(reverse.to_owned())
-        .height(Some(height))
+        .height(height.to_string())
         .multi(true)
         // For full list of accepted keywords see `parse_event` in `src/event.rs`.
-        .bind(vec!["ctrl-o:accept", "ctrl-e:accept", "ctrl-d:accept"])
+        .bind(vec![
+            "ctrl-o:accept".to_string(),
+            "ctrl-e:accept".to_string(),
+            "ctrl-d:accept".to_string()
+        ])
         .build()
         .unwrap();
 

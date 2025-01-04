@@ -70,8 +70,8 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use rstest::*;
+    use super::Context;
     use serial_test::serial;
-    
 
     // Mock embedder that always succeeds
     struct SuccessEmbedding;
@@ -203,5 +203,4 @@ mod tests {
         assert!(debug_output.contains("Context"));
         assert!(debug_output.contains("embedder"));
     }
-
 }
