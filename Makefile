@@ -191,6 +191,11 @@ generate-ci:  ## generate-ci
 
 .PHONY: upload
 upload:  ## upload
+	@if [ -z "$$CARGO_REGISTRY_TOKEN" ]; then \
+		echo "Error: CARGO_REGISTRY_TOKEN is not set"; \
+		exit 1; \
+	fi
+	@echo "CARGO_REGISTRY_TOKEN is set"
 	pushd $(pkg_src) && cargo release publish --execute
 
 .PHONY: build-wheel
