@@ -4,16 +4,15 @@ use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
 use diesel::sql_types::Text;
-use log::debug;
 use serde::Serialize;
 use std::fmt;
-use stdext::function_name;
-
-use crate::helper::calc_content_hash;
+use tracing::debug;
+use crate::util::helper::calc_content_hash;
 use crate::model::tag::Tags;
-use crate::{dlog2, CTX};
 
-use crate::adapter::schema::bookmarks; // ORM mappings
+use crate::adapter::dal::schema::bookmarks;
+use crate::context::Context;
+// ORM mappings
 
 #[derive(QueryableByName)]
 pub struct IdResult {
@@ -75,7 +74,7 @@ impl Bookmark {
     }
     pub fn set_tags(&mut self, tags: Vec<String>) {
         self.tags = format!(",{},", Tags::clean_tags(tags).join(","));
-        debug!("({}:{}) {:?}", function_name!(), line!(), self);
+        debug!("{:?}", self);
     }
     /// Returns a formatted string containing the bookmark's tags, metadata, description, and tags again.
     /// tags are tried to emphasize by using twice
@@ -96,7 +95,7 @@ impl Bookmark {
     // /// Update the embedding and content_hash fields
     // pub fn update(&mut self) {
     //     if !self.has_content_changed() && self.embedding.is_some() {
-    //         dlog2!("Embedding exists and is up-to-date");
+    //         debug!("Embedding exists and is up-to-date");
     //         return;
     //     }
     //     let embedding = CTX
@@ -123,15 +122,13 @@ impl BookmarkUpdater for Bookmark {
     fn update(&mut self) {
         if !self.has_content_changed() && self.embedding.is_some() {
             // If content hasn't changed and an embedding exists, log and return early.
-            dlog2!("Embedding exists and is up-to-date");
+            debug!("Embedding exists and is up-to-date");
             return;
         }
 
         // Assuming `CTX` is a globally accessible context that can produce embeddings.
         // And `calc_content_hash` is a function that calculates the hash of the bookmark content.
-        let embedding = CTX
-            .get()
-            .expect("Error: CTX is not initialized")
+        let embedding = Context::read_global()
             .get_embedding(self.get_content().as_str());
 
         self.embedding = embedding;
@@ -163,7 +160,7 @@ impl fmt::Debug for Bookmark {
 
 struct LastEntries<'a, T>(&'a [T]);
 
-impl<'a, T: fmt::Debug> fmt::Debug for LastEntries<'a, T> {
+impl<T: fmt::Debug> fmt::Debug for LastEntries<'_, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list()
             .entries(self.0.iter().rev().take(10).rev()) // Reverse, take 10, then reverse again to maintain order
@@ -250,10 +247,10 @@ impl BookmarkBuilder {
 
 #[cfg(test)]
 mod test {
-    use chrono::{NaiveDate, NaiveDateTime};
+    use chrono::{DateTime, NaiveDate};
     use rstest::*;
 
-    use crate::helper::calc_content_hash;
+    use crate::util::helper::calc_content_hash;
     use crate::model::bookmark::Bookmark;
 
     #[fixture]
@@ -333,7 +330,7 @@ mod test {
             tags: "tag1, tag2".to_string(),
             desc: "description".to_string(),
             flags: 0,
-            last_update_ts: NaiveDateTime::from_timestamp_opt(60, 0).unwrap(),
+            last_update_ts: DateTime::from_timestamp(60, 0).unwrap().naive_utc(),
             embedding: None,
             content_hash: None,
         };

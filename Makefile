@@ -32,14 +32,14 @@ ADMIN::  ## ##################################################################
 
 .PHONY: init
 init:  ## init
-	rm -vf $(app_root)/db/*.db
-	rm -fr ~/xxx
+	@rm -vf $(app_root)/db/*.db
+	@rm -fr ~/xxx
 	mkdir -p ~/xxx
-	echo "-M- copy full buku db to ~/xxx"
-	cp -v $(VIMWIKI_PATH)/buku/bm.db ~/xxx/bkmr.db
-	cp -vf bkmr/tests/resources/bkmr.v?.db ~/xxx/
-	tree -a ~/xxx
-	tree -a  $(app_root)/db
+	@echo "-M- copy full buku db to ~/xxx"
+	@cp -v $(VIMWIKI_PATH)/buku/bm.db ~/xxx/bkmr.db
+	@cp -vf bkmr/tests/resources/bkmr.v?.db ~/xxx/
+	@tree -a ~/xxx
+	@tree -a  $(app_root)/db
 
 .PHONY: run-all
 #run-all: test-url-details test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search ## run-all
@@ -47,7 +47,7 @@ run-all: test-env run-migrate-db run-backfill run-update run-show run-create-db 
 
 
 .PHONY: test-url-details
-test-url-details:  ## test-url-details (charm strang verbose output)
+test-url-details:  ## test-url-details (charm strang verbose output), expect: "Rust Programming Language", "A language empowering everyone to build reliable and efficient software."
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib test_load_url_details -- --exact --nocapture
 
 .PHONY: test-fzf  # TODO: fix
@@ -84,10 +84,12 @@ run-load-texts: run-create-db  ## run-load-text
 
 .PHONY: run-migrate-db
 run-migrate-db: init  ## run-migrate-db
-	echo "-M- First run: should do migration"
-	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d --openai
-	echo "-M- Second run: should be ok, do nothing"
-	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d --openai
+	@echo "--------------------------------------------------------------------------------"
+	@echo "-M- First run: should do migration"
+	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d -d --openai
+	@echo "--------------------------------------------------------------------------------"
+	@echo "-M- Second run: should be ok, do nothing"
+	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d -d --openai
 
 .PHONY: run-backfill
 run-backfill: run-create-db  ## run-backfill
@@ -100,12 +102,8 @@ run-backfill: run-create-db  ## run-backfill
 run-update: init-db  ## run-update
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d update 1 --tags t1,t2 --ntags xxx
 
-.PHONY: run-show
-run-show: init-db  ## run-show
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,10
-
 .PHONY: run-create-db
-run-create-db:  ## run-create-db
+run-create-db:  ## run-create-db: opens new /tmp/bkmr_test.db
 	rm -vf /tmp/bkmr_test.db
 	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test_db cargo run -- -d -d create-db /tmp/bkmr_test.db
 	open /tmp/bkmr_test.db
@@ -124,6 +122,11 @@ run-tags: init-db  ## run-tags
 	@echo "------ all tags -----"
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d tags
 
+.PHONY: run-show
+run-show: init-db  ## run-show
+	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d show 1,10
+
+
 .PHONY: run-delete
 run-delete: init-db  ## run-delete
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d delete 1,2,3
@@ -141,7 +144,7 @@ run-search: init-db  ## run-search interactively for manual tests
 	#pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- search --json  # json output
 
 .PHONY: init-db
-init-db:  ## init-db
+init-db:  ## init-db: initializes test DB
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_lib test_dal::test_init_db -- --exact
 
 .PHONY: install-diesel-cli
@@ -198,9 +201,15 @@ build-wheel:  ## build-wheel
 build:  ## build
 	pushd $(pkg_src) && cargo build --release
 
+#.PHONY: install
+#install: uninstall  ## install
+	#@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
 .PHONY: install
 install: uninstall  ## install
-	@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
+	@VERSION=$(shell cat VERSION) && \
+		echo "-M- Installagin $$VERSION" && \
+		cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
+		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
 
 .PHONY: uninstall
 uninstall:  ## uninstall

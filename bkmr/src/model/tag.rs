@@ -1,6 +1,5 @@
-use log::debug;
 use std::collections::HashSet;
-use stdext::function_name;
+use tracing::debug;
 
 #[derive(Debug, PartialOrd, PartialEq, Clone, Default)]
 pub struct Tags {
@@ -36,11 +35,11 @@ impl Tags {
             .iter()
             .flat_map(|s| s.split(','))
             .map(|s| s.trim().to_lowercase().to_owned())
-            .filter(|s| s.ne(""))
+            .filter(|s| !s.is_empty())
             .collect();
         _tags.sort();
         _tags.dedup();
-        debug!("({}:{}) {:?}", function_name!(), line!(), _tags);
+        debug!("{:?}", _tags);
         _tags
     }
 
@@ -87,29 +86,16 @@ impl Tags {
 }
 
 #[cfg(test)]
-#[ctor::ctor]
-fn init() {
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
-}
-
-#[cfg(test)]
 mod test {
     use crate::model::tag::Tags;
-    use log::debug;
     use rstest::*;
-    use stdext::function_name;
+    use tracing::debug;
 
     #[rstest]
     fn test_default() {
         let tags = Tags::default();
         assert_eq!(tags.tags.len(), 0);
-        debug!("({}:{}) {:?}", function_name!(), line!(), tags);
+        debug!("{:?}", tags);
     }
 
     #[rstest]
@@ -124,7 +110,7 @@ mod test {
         let tags = Tags::new(tag.clone());
         assert_eq!(tags.tag, expected);
         assert_eq!(tags.tags, expected_vec);
-        debug!("({}:{}) {:?}", function_name!(), line!(), tags);
+        debug!("{:?}", tags);
     }
 
     #[rstest]

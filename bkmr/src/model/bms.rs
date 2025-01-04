@@ -1,14 +1,11 @@
 use std::collections::HashSet;
 
-use log::debug;
-use stdext::function_name;
-
 use crate::adapter::dal::Dal;
-use crate::dlog2;
 use crate::environment::CONFIG;
 use crate::model::bookmark::Bookmark;
 use crate::model::tag::Tags;
 use anyhow::Result;
+use tracing::debug;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -34,12 +31,12 @@ impl Bookmarks {
     pub fn check_tags(&mut self, tags: Vec<String>) -> Result<Vec<String>> {
         let all_tags: HashSet<String> = HashSet::from_iter(self.dal.get_all_tags_as_vec()?);
         let tags = HashSet::from_iter(tags.into_iter().filter(|s| !s.is_empty()));
-        dlog2!("{:?}", tags);
+        debug!("{:?}", tags);
         Ok(tags.difference(&all_tags).cloned().collect())
     }
 
     pub fn match_all(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {
-        dlog2!("{:?} {:?} {:?}", tags, bms, not);
+        debug!("{:?} {:?} {:?}", tags, bms, not);
         match not {
             false => bms
                 .into_iter()
@@ -53,7 +50,7 @@ impl Bookmarks {
         }
     }
     pub fn match_any(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {
-        dlog2!("{:?} {:?} {:?}", tags, bms, not);
+        debug!("{:?} {:?} {:?}", tags, bms, not);
         match not {
             false => bms
                 .into_iter()
@@ -66,7 +63,7 @@ impl Bookmarks {
         }
     }
     pub fn match_exact(tags: Vec<String>, bms: Vec<Bookmark>, not: bool) -> Vec<Bookmark> {
-        dlog2!("{:?} {:?} {:?}", tags, bms, not);
+        debug!("{:?} {:?} {:?}", tags, bms, not);
         match not {
             false => bms
                 .into_iter()
@@ -108,26 +105,7 @@ impl Bookmarks {
                 self.bms = Bookmarks::match_all(tags_all_not_, self.bms.clone(), true);
             }
         }
-        debug!("({}:{}) {:?}", function_name!(), line!(), self.bms);
+        debug!("{:?}", self.bms);
     }
 }
 
-#[cfg(test)]
-mod test {
-    #[allow(unused_imports)]
-    use rstest::*;
-
-    #[allow(unused_imports)]
-    use super::*;
-
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
-}

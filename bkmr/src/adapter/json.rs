@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use crate::helper::extract_filename;
+use crate::util::helper::extract_filename;
 use crate::model::bookmark::{Bookmark, BookmarkBuilder};
 use anyhow::Context;
 use camino::Utf8Path;
@@ -120,20 +120,9 @@ mod tests {
     use rstest::*;
 
     use crate::adapter::dal::Dal;
-    use crate::helper::init_db;
+    use crate::adapter::dal::migration::init_db;
 
     use super::*;
-
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
 
     #[fixture]
     fn bms() -> Vec<Bookmark> {

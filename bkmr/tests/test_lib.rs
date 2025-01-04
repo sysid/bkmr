@@ -1,16 +1,11 @@
-// #![allow(unused_imports, unused_variables)]
-
-use std::env;
-
 use anyhow::Result;
-
-
 use rstest::*;
 
 use bkmr::adapter::dal::Dal;
-use bkmr::adapter::embeddings::{Context, DummyAi};
 use bkmr::model::bookmark::Bookmark;
-use bkmr::{helper, load_url_details, update_bm, update_bookmarks, CTX};
+use bkmr::util::testing::{init_test_setup, setup_test_db};
+use bkmr::{load_url_details, update_bm, update_bookmarks};
+use bkmr::context::CTX;
 
 mod test_dal;
 
@@ -25,36 +20,18 @@ mod service {
 #[cfg(test)]
 #[ctor::ctor]
 fn init() {
-    if CTX.get().is_none() {
-        CTX.set(Context::new(Box::new(DummyAi))).unwrap();
-    }
-    env::set_var("SKIM_LOG", "info");
-    env::set_var("TUIKIT_LOG", "info");
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        .filter_module("skim", log::LevelFilter::Info)
-        .filter_module("tuikit", log::LevelFilter::Info)
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
+    init_test_setup().expect("Failed to initialize test setup");
 }
 
 #[fixture]
 pub fn dal() -> Dal {
-    helper::init_logger();
-    let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    helper::init_db(&mut dal.conn).expect("Error DB init");
-    dal
+    setup_test_db().expect("Failed to set up test database")
 }
 
 #[fixture]
 fn bms() -> Vec<Bookmark> {
-    let mut dal = Dal::new(String::from("../db/bkmr.db"));
-    // init_db(&mut dal.conn).expect("Error DB init");
-    let bms = dal.get_bookmarks("");
-    bms.unwrap()
+    let mut dal = setup_test_db().expect("Failed to set up test database");
+    dal.get_bookmarks("").expect("Failed to get bookmarks")
 }
 
 #[rstest]
@@ -67,10 +44,10 @@ fn test_load_url_details() {
 }
 
 #[rstest]
-#[case(1, vec ! [], vec ! [], false, ",ccc,yyy,".to_string())]
-#[case(1, vec ! ["t1".to_string(), "t2".to_string()], vec ! [], false, ",ccc,t1,t2,yyy,".to_string())]
-#[case(1, vec ! ["t1".to_string(), "t2".to_string()], vec ! [], true, ",t1,t2,".to_string())]
-#[case(1, vec ! [], vec ! ["ccc".to_string()], false, ",yyy,".to_string())]
+#[case(1, vec![], vec![], false, ",ccc,yyy,".to_string())]
+#[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], false, ",ccc,t1,t2,yyy,".to_string())]
+#[case(1, vec!["t1".to_string(), "t2".to_string()], vec![], true, ",t1,t2,".to_string())]
+#[case(1, vec![], vec!["ccc".to_string()], false, ",yyy,".to_string())]
 fn test_update_bm(
     mut dal: Dal,
     #[case] id: i32,
@@ -81,7 +58,7 @@ fn test_update_bm(
 ) -> Result<()> {
     update_bm(id, &tags, &tags_not, &mut dal, force)?;
 
-    let bm = dal.get_bookmark_by_id(id).unwrap();
+    let bm = dal.get_bookmark_by_id(id)?;
     assert_eq!(bm.tags, expected);
     println!("bm: {:?}", bm);
     Ok(())

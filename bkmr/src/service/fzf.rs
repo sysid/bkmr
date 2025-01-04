@@ -7,13 +7,12 @@ use crossterm::{
     execute,
     terminal::{Clear, ClearType},
 };
-use log::debug;
 use skim::prelude::*;
 use skim::{
     AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem, SkimItemReceiver,
     SkimItemSender,
 };
-use stdext::function_name;
+use tracing::debug;
 use tuikit::prelude::*;
 
 use crate::environment::{FzfEnvOpts, CONFIG};
@@ -134,14 +133,12 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // id selection not necessary since all bms are filtered, just open all bms
             let ids = (1..=filtered.len()).map(|i| i as i32).collect();
             debug!(
-                "({}:{}) {:?}, {:?}",
-                function_name!(),
-                line!(),
+                "{:?}, {:?}",
                 ids,
                 filtered
             );
             edit_bms(ids, filtered).unwrap_or_else(|e| {
-                debug!("{}: {}", function_name!(), e);
+                debug!("{}", e);
             });
             // clear screen
             // let mut stdout = std::io::stdout();
@@ -152,21 +149,16 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // id selection not necessary since all bms are filtered, just open all bms
             let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
             debug!(
-                "({}:{}) {:?}, {:?}",
-                function_name!(),
-                line!(),
+                "{:?}, {:?}",
                 ids,
                 filtered
             );
-            // open_bms(ids, filtered).unwrap_or_else(|e| {
-            //     debug!("{}: {}", function_name!(), e);
-            // });
             // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
             let mut clipboard = Clipboard::new().unwrap();
             // TODO: do_touch required here
             let urls = filtered.iter().map(|bm| &bm.URL).join("\n");
             clipboard.set_text(urls).unwrap_or_else(|e| {
-                debug!("{}: {}", function_name!(), e);
+                debug!("{}", e);
             });
             println!("Copied URLs to clipboard");
             // let mut stdout = std::io::stdout();
@@ -177,15 +169,13 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // id selection not necessary since all bms are filtered, just open all bms
             let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
             debug!(
-                "({}:{}) {:?}, {:?}",
-                function_name!(),
-                line!(),
+                "{:?}, {:?}",
                 ids,
                 filtered
             );
             // Delete the bookmarks
             delete_bms(ids.clone(), filtered.clone()).unwrap_or_else(|e| {
-                debug!("{}: {}", function_name!(), e);
+                debug!("{}", e);
             });
             println!("Deleted Bookmark: {:?}", filtered[0].URL);
             // let mut stdout = std::io::stdout();
@@ -196,20 +186,18 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // id selection not necessary since all bms are filtered, just open all bms
             let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
             debug!(
-                "({}:{}) {:?}, {:?}",
-                function_name!(),
-                line!(),
+                "{:?}, {:?}",
                 ids,
                 filtered
             );
             open_bms(ids, filtered).unwrap_or_else(|e| {
-                debug!("{}: {}", function_name!(), e);
+                debug!("{}", e);
             });
             // let mut stdout = std::io::stdout();
             execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
         Key::ESC => {
-            debug!("({}:{}) Esc", function_name!(), line!());
+            debug!("Esc");
             // let mut stdout = std::io::stdout();
             execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
@@ -219,9 +207,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
 
 fn filter_bms(out: SkimOutput) -> Vec<Bookmark> {
     debug!(
-        "({}:{}) query: {:?} cmd: {:?}",
-        function_name!(),
-        line!(),
+        "query: {:?} cmd: {:?}",
         out.query,
         out.cmd
     );
@@ -241,9 +227,7 @@ fn filter_bms(out: SkimOutput) -> Vec<Bookmark> {
         })
         .collect::<Vec<Bookmark>>();
     debug!(
-        "({}:{}) selected_bms: {:?}",
-        function_name!(),
-        line!(),
+        "selected_bms: {:?}",
         selected_bms
     );
     selected_bms

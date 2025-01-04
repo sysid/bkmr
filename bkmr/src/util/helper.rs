@@ -1,64 +1,14 @@
-use std::error::Error;
 use std::io::Write;
 use std::time::{Duration, Instant};
 use std::{env, io};
-
+use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::tempdir;
-use diesel::sqlite::Sqlite;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use fs_extra::{copy_items, dir};
-use log::debug;
 use regex::Regex;
 use reqwest::blocking;
-use stdext::function_name;
+use tracing::debug;
 
-pub fn init_logger() {
-    let _ = env_logger::builder()
-        // Include all events in tests
-        .filter_level(log::LevelFilter::max())
-        // Ensure events are captured by `cargo test`
-        .is_test(true)
-        // Ignore errors initializing the logger if tests race to configure it
-        .try_init();
-}
-
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
-
-/// Initializes the database by running all pending migrations.
-///
-/// This function takes a mutable reference to a `MigrationHarness` for a SQLite database.
-/// It first reverts all migrations using the `revert_all_migrations` method.
-/// Then, it retrieves all pending migrations and logs their names.
-/// Finally, it runs all pending migrations using the `run_pending_migrations` method.
-///
-/// # Errors
-///
-/// This function will return an error if any of the following operations fail:
-///
-/// * Reverting all migrations
-/// * Retrieving pending migrations
-/// * Running pending migrations
-#[allow(unused)]
-pub fn init_db(
-    connection: &mut impl MigrationHarness<Sqlite>,
-) -> Result<(), Box<dyn Error + Send + Sync + 'static>> {
-    debug!("({}:{}) {:?}", function_name!(), line!(), "--> initdb <--");
-    connection.revert_all_migrations(MIGRATIONS)?;
-    connection
-        .pending_migrations(MIGRATIONS)?
-        .iter()
-        .for_each(|m| {
-            debug!(
-                "({}:{}) Pending Migration: {}",
-                function_name!(),
-                line!(),
-                m.name()
-            );
-        });
-    connection.run_pending_migrations(MIGRATIONS)?;
-    Ok(())
-}
 
 /// Prepare test directory with test data and return path
 pub fn temp_dir() -> Utf8PathBuf {
@@ -69,7 +19,7 @@ pub fn temp_dir() -> Utf8PathBuf {
         &tempdir,
         &options,
     )
-        .expect("Failed to copy test project directory");
+    .expect("Failed to copy test project directory");
 
     tempdir.into_path()
 }
@@ -100,7 +50,7 @@ pub fn abspath(p: &str) -> Option<String> {
         .and_then(|x| Utf8Path::new(x.as_ref()).canonicalize_utf8().ok())
         .map(|p| p.into_string());
 
-    debug!("({}:{}) {:?} -> {:?}", function_name!(), line!(), p, abs_p);
+    debug!("{:?} -> {:?}", p, abs_p);
     abs_p
 }
 
@@ -163,17 +113,6 @@ mod test {
     // use log::debug;
     use super::*;
 
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
-
     #[rstest]
     fn test_extract_filename() {
         // Examples
@@ -218,7 +157,7 @@ mod test {
     #[rstest]
     fn abspath_removes_suffix_from_path() {
         let input = "/tmp/file:1";
-        let expected = Some("/private/tmp/file".to_string());  // macos gotcha: /private
+        let expected = Some("/private/tmp/file".to_string()); // macos gotcha: /private
 
         // Create the file
         std::fs::File::create("/tmp/file").unwrap();

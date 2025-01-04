@@ -9,16 +9,15 @@ use anyhow::Context;
 use camino::Utf8Path;
 use chrono::NaiveDateTime;
 use indoc::formatdoc;
-use log::{debug, error};
 use regex::Regex;
-use stdext::function_name;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
-
-use crate::{dlog, dlog2, helper, update_bm};
+use tracing::{debug, error};
+use crate::update_bm;
 use crate::adapter::dal::Dal;
 use crate::environment::CONFIG;
-use crate::helper::abspath;
+use crate::util::helper::abspath;
 use crate::model::bookmark::{Bookmark, BookmarkUpdater};
+use crate::util::helper;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {
@@ -209,12 +208,12 @@ fn parse(input: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .collect();
-    debug!("({}:{}) {:?}", function_name!(), line!(), tokens);
+    debug!("{:?}", tokens);
     tokens
 }
 
 pub fn process(bms: &Vec<Bookmark>) {
-    // debug!("({}:{}) {:?}", function_name!(), line!(), bms);
+    // debug!("{:?}", bms);
     let help_text = r#"
         <n1> <n2>:      opens selection in browser
         p <n1> <n2>:    print id-list of selection
@@ -243,56 +242,48 @@ pub fn process(bms: &Vec<Bookmark>) {
             "p" => {
                 if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
                     print_ids(ids, bms.clone()).unwrap_or_else(|e| {
-                        error!("({}:{}) {}", function_name!(), line!(), e);
+                        error!("{}", e);
                     });
                     break;
                 } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed",
-                        function_name!(),
-                        line!()
+                        "Invalid input, only numbers allowed",
                     );
                 }
             }
             "d" => {
                 if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
                     delete_bms(ids, bms.clone()).unwrap_or_else(|e| {
-                        error!("({}:{}) {}", function_name!(), line!(), e);
+                        error!("{}", e);
                     });
                     break;
                 } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed",
-                        function_name!(),
-                        line!(),
+                        "Invalid input, only numbers allowed",
                     );
                 }
             }
             "e" => {
                 if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
                     edit_bms(ids, bms.clone()).unwrap_or_else(|e| {
-                        error!("({}:{}) {}", function_name!(), line!(), e);
+                        error!("{}", e);
                     });
                     break;
                 } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed",
-                        function_name!(),
-                        line!(),
+                        "Invalid input, only numbers allowed",
                     );
                 }
             }
             "t" => {
                 if let Some(ids) = helper::ensure_int_vector(&tokens.split_off(1)) {
                     touch_bms(ids, bms.clone()).unwrap_or_else(|e| {
-                        error!("({}:{}) {}", function_name!(), line!(), e);
+                        error!("{}", e);
                     });
                     break;
                 } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed",
-                        function_name!(),
-                        line!(),
+                        "Invalid input, only numbers allowed",
                     );
                 }
             }
@@ -302,14 +293,12 @@ pub fn process(bms: &Vec<Bookmark>) {
             s if regex.is_match(s) => {
                 if let Some(ids) = helper::ensure_int_vector(&tokens) {
                     open_bms(ids, bms.clone()).unwrap_or_else(|e| {
-                        error!("({}:{}) {}", function_name!(), line!(), e);
+                        error!("{}", e);
                     });
                     break;
                 } else {
                     error!(
-                        "({}:{}) Invalid input, only numbers allowed",
-                        function_name!(),
-                        line!(),
+                        "Invalid input, only numbers allowed",
                     );
                 }
             }
@@ -322,21 +311,17 @@ pub fn process(bms: &Vec<Bookmark>) {
 }
 
 pub fn touch_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    dlog!("ids: {:?}", ids);
+    debug!("ids: {:?}", ids);
     do_sth_with_bms(ids, bms, do_touch).with_context(|| {
-        format!(
-            "({}:{}) Error touching bookmarks",
-            function_name!(),
-            line!()
-        )
+        "Error touching bookmarks".to_string()
     })?;
     Ok(())
 }
 
 pub fn edit_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    dlog!("ids: {:?}", ids);
+    debug!("ids: {:?}", ids);
     do_sth_with_bms(ids, bms, do_edit)
-        .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
+        .with_context(|| "Error opening bookmarks".to_string())?;
     Ok(())
 }
 
@@ -349,7 +334,7 @@ pub fn open_bm(bm: &Bookmark) -> anyhow::Result<()> {
 fn _open_bm(uri: &str) -> anyhow::Result<()> {
     if uri.starts_with("shell::") {
         let cmd = uri.replace("shell::", "");
-        dlog!("Shell Command {:?}", cmd);
+        debug!("Shell Command {:?}", cmd);
         let mut child = Command::new("sh")
             .arg("-c")
             .arg(cmd)
@@ -357,39 +342,37 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .with_context(|| format!("({}:{}) Error opening {}", function_name!(), line!(), uri))?;
+            .with_context(|| format!("Error opening {}", uri))?;
 
         let status = child.wait().expect("Failed to wait on Vim");
-        dlog!("Exit status: {:?}", status);
+        debug!("Exit status: {:?}", status);
         Ok(())
     } else {
-        dlog!("General OS open {:?}", uri);
+        debug!("General OS open {:?}", uri);
         match abspath(uri) {
             Some(p) => {
                 if Utf8Path::new(&p).extension() == Some("md") {
-                    dlog!("Opening markdown file with editor {:?}", p);
+                    debug!("Opening markdown file with editor {:?}", p);
                     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-                    dlog2!("Using editor: {:?}",editor);
+                    debug!("Using editor: {:?}",editor);
                     Command::new(&editor)
                         .arg(&p)
                         .status()
                         .with_context(|| {
                             format!(
-                                "({}:{}) Error opening {} with [{}], check your EDITOR variable.",
+                                "Error opening {} with [{}], check your EDITOR variable.",
                                 p,
-                                function_name!(),
-                                line!(),
                                 &editor
                             )
                         })?;
                 } else {
-                    dlog!("Opening file with default OS application {:?}", p);
-                    open::that(&p).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), p))?;
+                    debug!("Opening file with default OS application {:?}", p);
+                    open::that(&p).with_context(|| format!("Error OS opening {}", p))?;
                 }
             }
             None => {
-                dlog!("Opening URI with default OS command {:?}", uri);
-                open::that(&uri).with_context(|| format!("({}:{}) Error OS opening {}", function_name!(), line!(), uri))?;
+                debug!("Opening URI with default OS command {:?}", uri);
+                open::that(uri).with_context(|| format!("Error OS opening {}", uri))?;
             }
         }
         Ok(())
@@ -397,28 +380,24 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
 }
 
 pub fn open_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    // dlog!("ids: {:?}, bms: {:?}", ids, bms);
+    // debug!("ids: {:?}, bms: {:?}", ids, bms);
     do_sth_with_bms(ids.clone(), bms.clone(), open_bm)
-        .with_context(|| format!("({}:{}) Error opening bookmarks", function_name!(), line!()))?;
+        .with_context(|| "Error opening bookmarks".to_string())?;
     Ok(())
 }
 
 pub fn delete_bms(mut ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     // reverse sort necessary due to DB compaction (deletion of last entry first)
     ids.reverse();
-    dlog!("ids: {:?}, bms: {:?}", ids, bms);
-    // debug!("({}:{}) {:?}", function_name!(), line!(), &ids);
+    debug!("ids: {:?}, bms: {:?}", ids, bms);
+    // debug!("{:?}", &ids);
     fn delete_bm(bm: &Bookmark) -> anyhow::Result<()> {
         let _ = Dal::new(CONFIG.db_url.clone()).delete_bookmark2(bm.id)?;
         eprintln!("Deleted: {}", bm.URL);
         Ok(())
     }
     do_sth_with_bms(ids, bms, delete_bm).with_context(|| {
-        format!(
-            "({}:{}) Error deleting bookmarks",
-            function_name!(),
-            line!()
-        )
+        "Error deleting bookmarks".to_string()
     })?;
     Ok(())
 }
@@ -428,15 +407,15 @@ fn do_sth_with_bms(
     bms: Vec<Bookmark>,
     do_sth: fn(bm: &Bookmark) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-    // dlog!("ids: {:?}, bms: {:?}", ids, bms);
+    // debug!("ids: {:?}, bms: {:?}", ids, bms);
     for id in ids {
         if id as usize > bms.len() {
             eprintln!("Id {} out of range", id);
             continue;
         }
         let bm = &bms[id as usize - 1];
-        dlog!("id: {:?}, bm: {:?}", id, bm);
-        do_sth(bm).with_context(|| format!("({}:{}): bm {:?}", function_name!(), line!(), bm))?;
+        debug!("id: {:?}, bm: {:?}", id, bm);
+        do_sth(bm).with_context(|| format!("bm {:?}", bm))?;
     }
     Ok(())
 }
@@ -475,19 +454,13 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
     };
 
     temp_file.write_all(template.as_bytes()).with_context(|| {
-        format!(
-            "({}:{}) Error writing to temp file",
-            function_name!(),
-            line!()
-        )
+        "Error writing to temp file".to_string()
     })?;
 
-    // get default OS editor in varialbe to use in Command::new
+    // get default OS editor in variable to use in Command::new
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
     debug!(
-        "({}:{}) Using editor: {:?}",
-        function_name!(),
-        line!(),
+        "Using editor: {:?}",
         editor
     );
     // Open the temporary file with Vim (comment out for rstest)
@@ -496,16 +469,14 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         .status()
         .with_context(|| {
             format!(
-                "({}:{}) Error opening temp file with [{}], check your EDITOR variable.",
-                function_name!(),
-                line!(),
+                "Error opening temp file with [{}], check your EDITOR variable.",
                 &editor
             )
         })?;
 
     // Read the modified content of the file back into a string
     let modified_content = fs::read_to_string("temp.txt")
-        .with_context(|| format!("({}:{}) Error reading temp file", function_name!(), line!()))?;
+        .with_context(|| "Error reading temp file".to_string())?;
 
     let mut lines = modified_content.lines().filter(|l| !l.starts_with('#'));
 
@@ -527,12 +498,12 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         embedding: None,
         content_hash: None,
     };
-    debug!("({}:{}) lines: {:?}", function_name!(), line!(), lines);
+    debug!("lines: {:?}", lines);
     new_bm.update();
 
     let updated = Dal::new(CONFIG.db_url.clone())
         .update_bookmark(new_bm)
-        .with_context(|| format!("({}:{}) Error updating bookmark", function_name!(), line!()))?;
+        .with_context(|| "Error updating bookmark".to_string())?;
     // Delete the temporary file
     fs::remove_file("temp.txt")?;
 
@@ -543,7 +514,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
 }
 
 fn print_ids(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
-    dlog!("ids: {:?}, bms: {:?}", ids, bms);
+    debug!("ids: {:?}, bms: {:?}", ids, bms);
     let selected_bms = if ids.is_empty() {
         bms // print all
     } else {
@@ -567,20 +538,9 @@ mod test {
 
     use crate::adapter::dal::Dal;
     use crate::adapter::json::bms_to_json;
-    use crate::helper::init_db;
+    use crate::adapter::dal::migration::init_db;
 
     use super::*;
-
-    #[ctor::ctor]
-    fn init() {
-        let _ = env_logger::builder()
-            // Include all events in tests
-            .filter_level(log::LevelFilter::max())
-            // Ensure events are captured by `cargo test`
-            .is_test(true)
-            // Ignore errors initializing the logger if tests race to configure it
-            .try_init();
-    }
 
     #[fixture]
     fn bms() -> Vec<Bookmark> {

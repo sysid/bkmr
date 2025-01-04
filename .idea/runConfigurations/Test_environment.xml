@@ -1,11 +1,12 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Test main::tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="Test environment" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
     <option name="buildProfileId" value="test" />
-    <option name="command" value="test --package bkmr --bin bkmr tests -- --test-threads=1" />
+    <option name="command" value="test --package bkmr --lib environment -- --test-threads=1" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
     <envs>
       <env name="BKMR_DB_URL" value="../db/bkmr.db" />
       <env name="RUST_LOG" value="DEBUG" />
+      <env name="BKMR_FZF_OPTS" value="" />
     </envs>
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
