@@ -114,11 +114,14 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
         .reverse(reverse.to_owned())
         .height(height.to_string())
         .multi(true)
+        // Turn on actual filtering so unmatched items are dropped:
+        .filter(Some("".to_string()))
+        .ansi(true)
         // For full list of accepted keywords see `parse_event` in `src/event.rs`.
         .bind(vec![
             "ctrl-o:accept".to_string(),
             "ctrl-e:accept".to_string(),
-            "ctrl-d:accept".to_string()
+            "ctrl-d:accept".to_string(),
         ])
         .build()
         .unwrap();
@@ -136,11 +139,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             let filtered = filter_bms(out);
             // id selection not necessary since all bms are filtered, just open all bms
             let ids = (1..=filtered.len()).map(|i| i as i32).collect();
-            debug!(
-                "{:?}, {:?}",
-                ids,
-                filtered
-            );
+            debug!("{:?}, {:?}", ids, filtered);
             edit_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}", e);
             });
@@ -148,15 +147,11 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             // let mut stdout = std::io::stdout();
             execute!(stdout, Clear(ClearType::FromCursorDown)).unwrap();
         }
-        Key::Ctrl('o') => {
+        Key::Ctrl('o') | Key::Ctrl('y') => {
             let filtered = filter_bms(out);
             // id selection not necessary since all bms are filtered, just open all bms
             let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
-            debug!(
-                "{:?}, {:?}",
-                ids,
-                filtered
-            );
+            debug!("{:?}, {:?}", ids, filtered);
             // Change this part to copy the bookmark URLs to the clipboard using the arboard crate
             let mut clipboard = Clipboard::new().unwrap();
             // TODO: do_touch required here
@@ -172,11 +167,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             let filtered = filter_bms(out);
             // id selection not necessary since all bms are filtered, just open all bms
             let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
-            debug!(
-                "{:?}, {:?}",
-                ids,
-                filtered
-            );
+            debug!("{:?}, {:?}", ids, filtered);
             // Delete the bookmarks
             delete_bms(ids.clone(), filtered.clone()).unwrap_or_else(|e| {
                 debug!("{}", e);
@@ -189,11 +180,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             let filtered = filter_bms(out);
             // id selection not necessary since all bms are filtered, just open all bms
             let ids: Vec<i32> = (1..=filtered.len()).map(|i| i as i32).collect();
-            debug!(
-                "{:?}, {:?}",
-                ids,
-                filtered
-            );
+            debug!("{:?}, {:?}", ids, filtered);
             open_bms(ids, filtered).unwrap_or_else(|e| {
                 debug!("{}", e);
             });
@@ -210,11 +197,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
 }
 
 fn filter_bms(out: SkimOutput) -> Vec<Bookmark> {
-    debug!(
-        "query: {:?} cmd: {:?}",
-        out.query,
-        out.cmd
-    );
+    debug!("query: {:?} cmd: {:?}", out.query, out.cmd);
 
     out.selected_items.iter().for_each(|i| {
         println!("{}\n", i.output());
@@ -230,9 +213,6 @@ fn filter_bms(out: SkimOutput) -> Vec<Bookmark> {
                 .to_owned()
         })
         .collect::<Vec<Bookmark>>();
-    debug!(
-        "selected_bms: {:?}",
-        selected_bms
-    );
+    debug!("selected_bms: {:?}", selected_bms);
     selected_bms
 }
