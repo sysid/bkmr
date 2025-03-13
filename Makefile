@@ -215,7 +215,7 @@ build:  ## build
 .PHONY: install
 install: uninstall  ## install
 	@VERSION=$(shell cat VERSION) && \
-		echo "-M- Installagin $$VERSION" && \
+		echo "-M- Installing $$VERSION" && \
 		cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
 		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
 

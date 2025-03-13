@@ -122,6 +122,7 @@ pub fn fzf_process(bms: &Vec<Bookmark>) {
             "ctrl-o:accept".to_string(),
             "ctrl-e:accept".to_string(),
             "ctrl-d:accept".to_string(),
+            "ctrl-y:accept".to_string(),
         ])
         .build()
         .unwrap();
