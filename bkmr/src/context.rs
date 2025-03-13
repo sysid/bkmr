@@ -71,7 +71,6 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use rstest::*;
-    use serial_test::serial;
 
     // Mock embedder that always succeeds
     struct SuccessEmbedding;
@@ -161,7 +160,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_read_global() -> Result<()> {
         Context::update_global(Context::new(Box::new(DummyEmbedding)))?;
         let ctx = Context::read_global();
@@ -173,7 +171,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_update_global() {
         // Reset context at start to ensure clean state
         {
