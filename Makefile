@@ -162,6 +162,11 @@ test-dal:  ## test-dal
 
 .PHONY: test
 test:  test-dal  ## test (must run DB test before to init ?!?)
+	@if [ -z "$$OPENAI_API_KEY" ]; then \
+		echo "Error: OPENAI_API_KEY environment variable is not set"; \
+		echo "Please set OPENAI_API_KEY before running tests"; \
+		exit 1; \
+	fi
 	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db RUST_LOG=DEBUG cargo test -- --test-threads=1  # --nocapture
 
 .PHONY: test-with-data
