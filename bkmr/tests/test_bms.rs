@@ -1,8 +1,8 @@
-use rstest::*;
-use tracing::debug;
 use bkmr::adapter::dal::{migration, Dal};
 use bkmr::model::bms::Bookmarks;
 use bkmr::util::testing::init_test_setup;
+use rstest::*;
+use tracing::debug;
 
 #[ctor::ctor]
 fn init() {
@@ -29,7 +29,10 @@ fn given_empty_query_when_creating_bookmarks_then_returns_all_bookmarks() {
 #[case(vec ! [String::from("xyz")], 1)]
 #[case(vec ! [String::from("")], 0)]
 #[case(vec ! [], 0)]
-fn given_tag_list_when_checking_unknown_tags_then_returns_expected_count(#[case] tags: Vec<String>, #[case] expected: usize) {
+fn given_tag_list_when_checking_unknown_tags_then_returns_expected_count(
+    #[case] tags: Vec<String>,
+    #[case] expected: usize,
+) {
     let mut bms = Bookmarks::new("".to_string());
     let unknown_tags = bms.check_tags(tags).unwrap();
     debug!("{:?}", unknown_tags);

@@ -1,11 +1,11 @@
 // src/util/testing.rs
 
-use std::env;
-use std::fs;
-use std::path::PathBuf;
 use anyhow::{Context as _, Result};
 use lazy_static::lazy_static;
 use rstest::fixture;
+use std::env;
+use std::fs;
+use std::path::PathBuf;
 use tracing::{debug, info};
 use tracing_subscriber::{
     filter::filter_fn,
@@ -98,8 +98,7 @@ pub fn setup_test_db() -> Result<Dal> {
 }
 #[fixture]
 pub fn test_dal() -> Dal {
-    setup_test_db()
-        .expect("Failed to set up test database")
+    setup_test_db().expect("Failed to set up test database")
 }
 #[fixture]
 pub fn bms(mut test_dal: Dal) -> Vec<Bookmark> {
@@ -129,8 +128,7 @@ pub fn setup_temp_dir() -> Result<PathBuf> {
     use fs_extra::dir::CopyOptions;
     use tempfile::tempdir;
 
-    let tempdir = tempdir()
-        .context("Failed to create temp directory")?;
+    let tempdir = tempdir().context("Failed to create temp directory")?;
     let options = CopyOptions::new().overwrite(true);
 
     fs_extra::copy_items(&TEST_RESOURCES, "../db", &options)
@@ -150,9 +148,8 @@ pub fn teardown_temp_dir(temp_dir: &PathBuf) {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::{Context, CTX};
     use super::*;
-    
+    use crate::context::{Context, CTX};
 
     #[ctor::ctor]
     fn init() {

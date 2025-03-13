@@ -5,7 +5,6 @@ extern crate skim;
 
 use std::collections::HashSet;
 
-
 use crate::adapter::dal::Dal;
 
 use anyhow::Result;
@@ -134,4 +133,3 @@ pub fn update_bm(
     dal.update_bookmark(bm_updated)
         .map_err(|e| anyhow::anyhow!("Error updating bookmark: {:?}", e))
 }
-

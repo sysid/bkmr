@@ -1,14 +1,15 @@
 // bkmr/src/main.rs
 
-use std::sync::RwLock;
-use bkmr::{
-    cli::{args::Cli, commands},
-    adapter::embeddings::{DummyEmbedding, OpenAiEmbedding},
-};
+use bkmr::cli::args::Commands;
 use bkmr::context::{Context, CTX};
 use bkmr::environment::CONFIG;
+use bkmr::{
+    adapter::embeddings::{DummyEmbedding, OpenAiEmbedding},
+    cli::{args::Cli, commands},
+};
 use clap::Parser;
 use crossterm::style::Stylize;
+use std::sync::RwLock;
 use termcolor::{ColorChoice, StandardStream};
 use tracing::{debug, info, instrument};
 use tracing_subscriber::{
@@ -16,7 +17,6 @@ use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     prelude::*,
 };
-use bkmr::cli::args::Commands;
 
 #[instrument]
 fn main() {

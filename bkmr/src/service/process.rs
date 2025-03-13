@@ -1,10 +1,16 @@
 #![allow(non_snake_case)]
 
-use std::{fs, io};
 use std::fs::File;
 use std::io::{IsTerminal, Write};
 use std::process::{Command, Stdio};
+use std::{fs, io};
 
+use crate::adapter::dal::Dal;
+use crate::environment::CONFIG;
+use crate::model::bookmark::{Bookmark, BookmarkUpdater};
+use crate::update_bm;
+use crate::util::helper;
+use crate::util::helper::abspath;
 use anyhow::Context;
 use camino::Utf8Path;
 use chrono::NaiveDateTime;
@@ -12,12 +18,6 @@ use indoc::formatdoc;
 use regex::Regex;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use tracing::{debug, error};
-use crate::update_bm;
-use crate::adapter::dal::Dal;
-use crate::environment::CONFIG;
-use crate::util::helper::abspath;
-use crate::model::bookmark::{Bookmark, BookmarkUpdater};
-use crate::util::helper;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DisplayField {
@@ -111,7 +111,9 @@ pub fn show_bms(bms: &Vec<DisplayBookmark>, fields: &[DisplayField]) {
 
         if fields.contains(&DisplayField::Similarity) {
             if let Some(similarity) = bm.similarity {
-                stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))).unwrap();
+                stderr
+                    .set_color(ColorSpec::new().set_fg(Some(Color::White)))
+                    .unwrap();
                 write!(&mut stderr, " [{:.3}]", similarity).unwrap();
             }
         }
@@ -174,7 +176,7 @@ pub fn show_bms(bms: &Vec<DisplayBookmark>, fields: &[DisplayField]) {
                 "{:first_col_width$}  {}",
                 "", flags_and_embedding_line
             )
-                .unwrap();
+            .unwrap();
         }
 
         // if fields.contains(&DisplayField::Flags) {
@@ -193,7 +195,7 @@ pub fn show_bms(bms: &Vec<DisplayBookmark>, fields: &[DisplayField]) {
                 "{:first_col_width$}  {}",
                 "", bm.last_update_ts
             )
-                .unwrap();
+            .unwrap();
         }
 
         stderr.reset().unwrap();
@@ -246,9 +248,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     });
                     break;
                 } else {
-                    error!(
-                        "Invalid input, only numbers allowed",
-                    );
+                    error!("Invalid input, only numbers allowed",);
                 }
             }
             "d" => {
@@ -258,9 +258,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     });
                     break;
                 } else {
-                    error!(
-                        "Invalid input, only numbers allowed",
-                    );
+                    error!("Invalid input, only numbers allowed",);
                 }
             }
             "e" => {
@@ -270,9 +268,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     });
                     break;
                 } else {
-                    error!(
-                        "Invalid input, only numbers allowed",
-                    );
+                    error!("Invalid input, only numbers allowed",);
                 }
             }
             "t" => {
@@ -282,9 +278,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     });
                     break;
                 } else {
-                    error!(
-                        "Invalid input, only numbers allowed",
-                    );
+                    error!("Invalid input, only numbers allowed",);
                 }
             }
             "h" => println!("{}", help_text),
@@ -297,9 +291,7 @@ pub fn process(bms: &Vec<Bookmark>) {
                     });
                     break;
                 } else {
-                    error!(
-                        "Invalid input, only numbers allowed",
-                    );
+                    error!("Invalid input, only numbers allowed",);
                 }
             }
             _ => {
@@ -312,16 +304,13 @@ pub fn process(bms: &Vec<Bookmark>) {
 
 pub fn touch_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("ids: {:?}", ids);
-    do_sth_with_bms(ids, bms, do_touch).with_context(|| {
-        "Error touching bookmarks".to_string()
-    })?;
+    do_sth_with_bms(ids, bms, do_touch).with_context(|| "Error touching bookmarks".to_string())?;
     Ok(())
 }
 
 pub fn edit_bms(ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
     debug!("ids: {:?}", ids);
-    do_sth_with_bms(ids, bms, do_edit)
-        .with_context(|| "Error opening bookmarks".to_string())?;
+    do_sth_with_bms(ids, bms, do_edit).with_context(|| "Error opening bookmarks".to_string())?;
     Ok(())
 }
 
@@ -354,17 +343,13 @@ fn _open_bm(uri: &str) -> anyhow::Result<()> {
                 if Utf8Path::new(&p).extension() == Some("md") {
                     debug!("Opening markdown file with editor {:?}", p);
                     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-                    debug!("Using editor: {:?}",editor);
-                    Command::new(&editor)
-                        .arg(&p)
-                        .status()
-                        .with_context(|| {
-                            format!(
-                                "Error opening {} with [{}], check your EDITOR variable.",
-                                p,
-                                &editor
-                            )
-                        })?;
+                    debug!("Using editor: {:?}", editor);
+                    Command::new(&editor).arg(&p).status().with_context(|| {
+                        format!(
+                            "Error opening {} with [{}], check your EDITOR variable.",
+                            p, &editor
+                        )
+                    })?;
                 } else {
                     debug!("Opening file with default OS application {:?}", p);
                     open::that(&p).with_context(|| format!("Error OS opening {}", p))?;
@@ -396,9 +381,7 @@ pub fn delete_bms(mut ids: Vec<i32>, bms: Vec<Bookmark>) -> anyhow::Result<()> {
         eprintln!("Deleted: {}", bm.URL);
         Ok(())
     }
-    do_sth_with_bms(ids, bms, delete_bm).with_context(|| {
-        "Error deleting bookmarks".to_string()
-    })?;
+    do_sth_with_bms(ids, bms, delete_bm).with_context(|| "Error deleting bookmarks".to_string())?;
     Ok(())
 }
 
@@ -453,16 +436,13 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         comments=bm.desc.clone(),
     };
 
-    temp_file.write_all(template.as_bytes()).with_context(|| {
-        "Error writing to temp file".to_string()
-    })?;
+    temp_file
+        .write_all(template.as_bytes())
+        .with_context(|| "Error writing to temp file".to_string())?;
 
     // get default OS editor in variable to use in Command::new
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-    debug!(
-        "Using editor: {:?}",
-        editor
-    );
+    debug!("Using editor: {:?}", editor);
     // Open the temporary file with Vim (comment out for rstest)
     Command::new(&editor)
         .arg("temp.txt")
@@ -475,8 +455,8 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
         })?;
 
     // Read the modified content of the file back into a string
-    let modified_content = fs::read_to_string("temp.txt")
-        .with_context(|| "Error reading temp file".to_string())?;
+    let modified_content =
+        fs::read_to_string("temp.txt").with_context(|| "Error reading temp file".to_string())?;
 
     let mut lines = modified_content.lines().filter(|l| !l.starts_with('#'));
 
@@ -507,8 +487,7 @@ pub fn do_edit(bm: &Bookmark) -> anyhow::Result<()> {
     // Delete the temporary file
     fs::remove_file("temp.txt")?;
 
-    let d_bms: Vec<DisplayBookmark> = updated.iter()
-        .map(DisplayBookmark::from).collect();
+    let d_bms: Vec<DisplayBookmark> = updated.iter().map(DisplayBookmark::from).collect();
     show_bms(&d_bms, &ALL_FIELDS);
     Ok(())
 }
@@ -536,11 +515,10 @@ mod test {
     use anyhow::anyhow;
     use rstest::*;
 
-    
     use crate::adapter::json::bms_to_json;
-    
-    use crate::util::testing::bms;
+
     use super::*;
+    use crate::util::testing::bms;
 
     #[rstest]
     #[ignore = "Manual Test"]
@@ -551,8 +529,7 @@ mod test {
     #[rstest]
     #[ignore = "Manual Test"]
     fn test_show_bms(bms: Vec<Bookmark>) {
-        let d_bms: Vec<DisplayBookmark> = bms.iter()
-            .map(DisplayBookmark::from).collect();
+        let d_bms: Vec<DisplayBookmark> = bms.iter().map(DisplayBookmark::from).collect();
         // show individual fields
         show_bms(
             &d_bms,

@@ -1,8 +1,8 @@
-use std::env;
-use anyhow::{anyhow, Result, Context as _};
-use serde_derive::{Deserialize, Serialize};
-use tracing::{debug, instrument};
 use super::Embedding;
+use anyhow::{anyhow, Context as _, Result};
+use serde_derive::{Deserialize, Serialize};
+use std::env;
+use tracing::{debug, instrument};
 
 #[derive(Debug, Clone, Default)]
 pub struct DummyEmbedding;
@@ -64,7 +64,9 @@ impl Embedding for OpenAiEmbedding {
             .json::<EmbeddingResponse>()
             .context("Failed to parse OpenAI response")?;
 
-        response.data.first()
+        response
+            .data
+            .first()
             .map(|data| data.embedding.clone())
             .ok_or_else(|| anyhow!("No embeddings in response"))
             .map(Some)

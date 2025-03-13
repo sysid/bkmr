@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+use crate::model::tag::Tags;
+use crate::util::helper::calc_content_hash;
 use chrono::{NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_types::Integer;
@@ -7,8 +9,6 @@ use diesel::sql_types::Text;
 use serde::Serialize;
 use std::fmt;
 use tracing::debug;
-use crate::util::helper::calc_content_hash;
-use crate::model::tag::Tags;
 
 use crate::adapter::dal::schema::bookmarks;
 use crate::context::Context;
@@ -128,8 +128,7 @@ impl BookmarkUpdater for Bookmark {
 
         // Assuming `CTX` is a globally accessible context that can produce embeddings.
         // And `calc_content_hash` is a function that calculates the hash of the bookmark content.
-        let embedding = Context::read_global()
-            .get_embedding(self.get_content().as_str());
+        let embedding = Context::read_global().get_embedding(self.get_content().as_str());
 
         self.embedding = embedding;
         self.content_hash = Some(calc_content_hash(self.get_content().as_str()));
@@ -250,8 +249,8 @@ mod test {
     use chrono::{DateTime, NaiveDate};
     use rstest::*;
 
-    use crate::util::helper::calc_content_hash;
     use crate::model::bookmark::Bookmark;
+    use crate::util::helper::calc_content_hash;
 
     #[fixture]
     fn bm() -> Bookmark {

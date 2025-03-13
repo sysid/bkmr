@@ -20,7 +20,7 @@
 Features:
 - semantic search using OpenAI embeddings (requires OpenAI API key)
 - full-text search with semantic ranking (FTS5)
-- fuzzy search `--fzf` (CTRL-O: copy to clipboard, CTRL-E: edit, CTRL-D: delete, Enter: open)
+- fuzzy search `--fzf` (CTRL-O/Y: copy to clipboard, CTRL-E: edit, CTRL-D: delete, Enter: open)
 - tags for classification
 - can handle HTTP URLs, directories, files (e.g. Office, Images, ....)
 - can execute URI strings as shell commands via protocol prefix: 'shell::'

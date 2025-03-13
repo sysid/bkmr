@@ -1,14 +1,13 @@
-use std::io::Write;
-use std::time::{Duration, Instant};
-use std::{env, io};
 use anyhow::Result;
 use camino::{Utf8Path, Utf8PathBuf};
 use camino_tempfile::tempdir;
 use fs_extra::{copy_items, dir};
 use regex::Regex;
 use reqwest::blocking;
+use std::io::Write;
+use std::time::{Duration, Instant};
+use std::{env, io};
 use tracing::debug;
-
 
 /// Prepare test directory with test data and return path
 pub fn temp_dir() -> Utf8PathBuf {

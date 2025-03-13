@@ -1,14 +1,13 @@
 use std::collections::HashSet;
 
-
 use anyhow::Result;
-use rstest::rstest;
-use tracing::{debug, info};
 use bkmr::adapter::dal::Dal;
 use bkmr::adapter::embeddings::DummyEmbedding;
 use bkmr::context::Context;
 use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
-use bkmr::util::testing::{test_dal};
+use bkmr::util::testing::test_dal;
+use rstest::rstest;
+use tracing::{debug, info};
 
 #[rstest]
 fn given_database_when_initializing_then_succeeds(_test_dal: Dal) {
@@ -16,7 +15,9 @@ fn given_database_when_initializing_then_succeeds(_test_dal: Dal) {
 }
 
 #[rstest]
-fn given_valid_id_when_getting_bookmark_then_returns_correct_bookmark(mut test_dal: Dal) -> Result<()> {
+fn given_valid_id_when_getting_bookmark_then_returns_correct_bookmark(
+    mut test_dal: Dal,
+) -> Result<()> {
     let bm = test_dal.get_bookmark_by_id(1)?;
     println!("The bookmarks are: {:?}", bm);
     assert_eq!(bm.id, 1);
@@ -36,7 +37,11 @@ fn given_invalid_id_when_getting_bookmark_then_returns_error(mut test_dal: Dal) 
 #[case("xxx", 1)]
 #[case("", 11)]
 #[case("xxxxxxxxxxxxxxxxx", 0)]
-fn given_search_query_when_getting_bookmarks_then_returns_matching_results(mut test_dal: Dal, #[case] input: &str, #[case] expected: i32) -> Result<()> {
+fn given_search_query_when_getting_bookmarks_then_returns_matching_results(
+    mut test_dal: Dal,
+    #[case] input: &str,
+    #[case] expected: i32,
+) -> Result<()> {
     let bms = test_dal.get_bookmarks(input)?;
     println!("The bookmarks are: {:?}", bms);
     assert_eq!(bms.len() as i32, expected);
@@ -44,7 +49,9 @@ fn given_search_query_when_getting_bookmarks_then_returns_matching_results(mut t
 }
 
 #[rstest]
-fn given_database_when_getting_bookmarks_without_embedding_then_returns_only_empty_embeddings(mut test_dal: Dal) -> Result<()> {
+fn given_database_when_getting_bookmarks_without_embedding_then_returns_only_empty_embeddings(
+    mut test_dal: Dal,
+) -> Result<()> {
     let bookmarks_without_embedding = test_dal.get_bookmarks_without_embedding()?;
     for bookmark in &bookmarks_without_embedding {
         assert!(bookmark.embedding.is_none());
@@ -57,7 +64,11 @@ fn given_database_when_getting_bookmarks_without_embedding_then_returns_only_emp
 #[rstest]
 #[case("https://www.google.com", true)]
 #[case("https://www.doesnotexists.com", false)]
-fn given_url_when_checking_existence_then_returns_correct_status(mut test_dal: Dal, #[case] input: &str, #[case] expected: bool) -> Result<()> {
+fn given_url_when_checking_existence_then_returns_correct_status(
+    mut test_dal: Dal,
+    #[case] input: &str,
+    #[case] expected: bool,
+) -> Result<()> {
     let exists = test_dal.bm_exists(input)?;
     assert_eq!(exists, expected);
     Ok(())
@@ -92,7 +103,9 @@ fn given_existing_bookmark_when_updating_then_modifies_correctly(mut test_dal: D
 }
 
 #[rstest]
-fn given_bookmark_when_upserting_then_updates_or_inserts_correctly(mut test_dal: Dal) -> Result<()> {
+fn given_bookmark_when_upserting_then_updates_or_inserts_correctly(
+    mut test_dal: Dal,
+) -> Result<()> {
     let mut bm = BookmarkBuilder::new()
         .URL("www.sysid.de".to_string())
         .metadata("".to_string())
@@ -125,7 +138,9 @@ fn given_database_when_cleaning_then_keeps_only_first_entry(mut test_dal: Dal) -
 }
 
 #[rstest]
-fn given_bookmark_id_when_batch_executing_then_updates_database_correctly(mut test_dal: Dal) -> Result<()> {
+fn given_bookmark_id_when_batch_executing_then_updates_database_correctly(
+    mut test_dal: Dal,
+) -> Result<()> {
     test_dal.batch_execute(4)?;
     let bms = test_dal.get_bookmarks("")?;
     let ids: Vec<i32> = bms.iter().map(|bm| bm.id).collect();
@@ -137,7 +152,9 @@ fn given_bookmark_id_when_batch_executing_then_updates_database_correctly(mut te
 }
 
 #[rstest]
-fn given_bookmark_id_when_deleting_then_removes_and_updates_indices(mut test_dal: Dal) -> Result<()> {
+fn given_bookmark_id_when_deleting_then_removes_and_updates_indices(
+    mut test_dal: Dal,
+) -> Result<()> {
     let n = test_dal.delete_bookmark2(4)?;
     assert_eq!(n, 1);
 
@@ -151,7 +168,9 @@ fn given_bookmark_id_when_deleting_then_removes_and_updates_indices(mut test_dal
 }
 
 #[rstest]
-fn given_bookmark_id_when_deleting_directly_then_removes_from_database(mut test_dal: Dal) -> Result<()> {
+fn given_bookmark_id_when_deleting_directly_then_removes_from_database(
+    mut test_dal: Dal,
+) -> Result<()> {
     test_dal.delete_bookmark(1)?;
     let bms = test_dal.get_bookmarks("")?;
     let ids: Vec<i32> = bms.iter().map(|bm| bm.id).collect();
@@ -163,7 +182,9 @@ fn given_bookmark_id_when_deleting_directly_then_removes_from_database(mut test_
 
 #[rstest]
 #[allow(non_snake_case)]
-fn given_database_when_getting_all_tags_then_returns_complete_tag_set(mut test_dal: Dal) -> Result<()> {
+fn given_database_when_getting_all_tags_then_returns_complete_tag_set(
+    mut test_dal: Dal,
+) -> Result<()> {
     let tags = test_dal.get_all_tags()?;
     debug!("{:?}", tags);
 
@@ -180,7 +201,9 @@ fn given_database_when_getting_all_tags_then_returns_complete_tag_set(mut test_d
 }
 
 #[rstest]
-fn given_database_when_getting_all_tags_as_vector_then_returns_sorted_list(mut test_dal: Dal) -> Result<()> {
+fn given_database_when_getting_all_tags_as_vector_then_returns_sorted_list(
+    mut test_dal: Dal,
+) -> Result<()> {
     let tags = test_dal.get_all_tags_as_vec()?;
     debug!("{:?}", tags);
     assert_eq!(tags.len(), 5);
@@ -189,7 +212,9 @@ fn given_database_when_getting_all_tags_as_vector_then_returns_sorted_list(mut t
 }
 
 #[rstest]
-fn given_tag_when_getting_related_tags_then_returns_associated_tags(mut test_dal: Dal) -> Result<()> {
+fn given_tag_when_getting_related_tags_then_returns_associated_tags(
+    mut test_dal: Dal,
+) -> Result<()> {
     let tags = test_dal.get_related_tags("ccc")?;
     let tags_str: Vec<&str> = tags.iter().map(|t| t.tag.as_str()).collect();
 
@@ -203,7 +228,9 @@ fn given_tag_when_getting_related_tags_then_returns_associated_tags(mut test_dal
 }
 
 #[rstest]
-fn given_count_when_getting_random_bookmarks_then_returns_requested_number(mut test_dal: Dal) -> Result<()> {
+fn given_count_when_getting_random_bookmarks_then_returns_requested_number(
+    mut test_dal: Dal,
+) -> Result<()> {
     let bms = test_dal.get_randomized_bookmarks(2)?;
     println!("The bookmarks are: {:?}", bms);
     assert_eq!(bms.len() as i32, 2);
@@ -211,7 +238,9 @@ fn given_count_when_getting_random_bookmarks_then_returns_requested_number(mut t
 }
 
 #[rstest]
-fn given_count_when_getting_oldest_bookmarks_then_returns_oldest_entries(mut test_dal: Dal) -> Result<()> {
+fn given_count_when_getting_oldest_bookmarks_then_returns_oldest_entries(
+    mut test_dal: Dal,
+) -> Result<()> {
     let bms = test_dal.get_oldest_bookmarks(2)?;
     println!("The bookmarks are: {:?}", bms);
     assert_eq!(bms.len() as i32, 2);
@@ -219,7 +248,9 @@ fn given_count_when_getting_oldest_bookmarks_then_returns_oldest_entries(mut tes
 }
 
 #[rstest]
-fn given_database_when_checking_schema_migrations_then_confirms_existence(mut test_dal: Dal) -> Result<()> {
+fn given_database_when_checking_schema_migrations_then_confirms_existence(
+    mut test_dal: Dal,
+) -> Result<()> {
     let exists = test_dal.check_schema_migrations_exists()?;
     println!("Result: {:?}", exists);
     assert!(exists);
@@ -227,7 +258,9 @@ fn given_database_when_checking_schema_migrations_then_confirms_existence(mut te
 }
 
 #[rstest]
-fn given_database_when_checking_embedding_column_then_confirms_existence(mut test_dal: Dal) -> Result<()> {
+fn given_database_when_checking_embedding_column_then_confirms_existence(
+    mut test_dal: Dal,
+) -> Result<()> {
     let exists = test_dal.check_embedding_column_exists()?;
     println!("Result: {:?}", exists);
     assert!(exists);

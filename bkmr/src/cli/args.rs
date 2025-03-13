@@ -32,9 +32,9 @@ pub enum Commands {
         fts_query: Option<String>,
 
         #[arg(
-        short = 'e',
-        long = "exact",
-        help = "match exact, comma separated list"
+            short = 'e',
+            long = "exact",
+            help = "match exact, comma separated list"
         )]
         tags_exact: Option<String>,
 
@@ -42,9 +42,9 @@ pub enum Commands {
         tags_all: Option<String>,
 
         #[arg(
-        short = 'T',
-        long = "Tags",
-        help = "not match all, comma separated list"
+            short = 'T',
+            long = "Tags",
+            help = "not match all, comma separated list"
         )]
         tags_all_not: Option<String>,
 
@@ -52,9 +52,9 @@ pub enum Commands {
         tags_any: Option<String>,
 
         #[arg(
-        short = 'N',
-        long = "Ntags",
-        help = "not match any, comma separated list"
+            short = 'N',
+            long = "Ntags",
+            help = "not match any, comma separated list"
         )]
         tags_any_not: Option<String>,
 
@@ -71,8 +71,8 @@ pub enum Commands {
         non_interactive: bool,
 
         #[arg(
-        long = "fzf",
-        help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
+            long = "fzf",
+            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, ENTER: open]"
         )]
         is_fuzzy: bool,
 

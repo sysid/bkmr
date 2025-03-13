@@ -11,10 +11,7 @@ const DEFAULT_HEIGHT: &str = "50%";
 static SETTINGS: OnceCell<RwLock<Settings>> = OnceCell::new();
 
 // For backwards compatibility
-pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
-    Settings::read_global()
-        .clone()
-});
+pub static CONFIG: Lazy<Settings> = Lazy::new(|| Settings::read_global().clone());
 
 #[derive(Parser, Debug, Clone, Deserialize)]
 pub struct FzfEnvOpts {
@@ -148,7 +145,11 @@ mod test {
         // Create settings and capture stderr
         {
             let _settings = Settings::new();
-            writeln!(stderr, "Warning: BKMR_DB_URL not set, using default: ../db/bkmr.db").unwrap();
+            writeln!(
+                stderr,
+                "Warning: BKMR_DB_URL not set, using default: ../db/bkmr.db"
+            )
+            .unwrap();
         }
 
         // Convert captured stderr to string

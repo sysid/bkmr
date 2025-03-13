@@ -108,4 +108,3 @@ impl Bookmarks {
         debug!("{:?}", self.bms);
     }
 }
-

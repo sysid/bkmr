@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
-use crate::util::helper::extract_filename;
 use crate::model::bookmark::{Bookmark, BookmarkBuilder};
+use crate::util::helper::extract_filename;
 use anyhow::Context;
 use camino::Utf8Path;
 use chrono::NaiveDateTime;
@@ -115,12 +115,12 @@ impl From<&Bookmark> for BookmarkView {
 #[cfg(test)]
 mod tests {
     use crate::adapter::json::bms_to_json;
-    
+
     use camino::Utf8PathBuf;
     use rstest::*;
 
-    use crate::util::testing::bms;
     use super::*;
+    use crate::util::testing::bms;
 
     #[fixture]
     fn test_data_path() -> Utf8PathBuf {

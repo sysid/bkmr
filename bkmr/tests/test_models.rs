@@ -2,12 +2,12 @@
 
 use std::env;
 
-use rstest::*;
-use bkmr::adapter::embeddings::{OpenAiEmbedding};
-use bkmr::context::Context;
-use bkmr::util::helper::calc_content_hash;
-use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
 use anyhow::Result;
+use bkmr::adapter::embeddings::OpenAiEmbedding;
+use bkmr::context::Context;
+use bkmr::model::bookmark::{BookmarkBuilder, BookmarkUpdater};
+use bkmr::util::helper::calc_content_hash;
+use rstest::*;
 
 #[rstest]
 fn given_bookmark_when_updating_then_manages_embedding_correctly() -> Result<()> {

@@ -1,7 +1,7 @@
 use crate::adapter::dal::Dal;
 use crate::adapter::json::read_ndjson_file_and_create_bookmarks;
-use crate::util::helper::calc_content_hash;
 use crate::model::bookmark::BookmarkUpdater;
+use crate::util::helper::calc_content_hash;
 use anyhow::Context;
 use camino::Utf8Path;
 use tracing::debug;

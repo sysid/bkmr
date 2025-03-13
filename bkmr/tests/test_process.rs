@@ -2,14 +2,15 @@ use bkmr::adapter::dal::Dal;
 use bkmr::model::bookmark::Bookmark;
 use bkmr::service::process::{delete_bms, do_edit, do_touch};
 use bkmr::util::helper;
+use bkmr::util::testing::{bms, test_dal};
 use rstest::rstest;
 use std::thread::sleep;
 use std::time::Duration;
-use bkmr::util::testing::{test_dal, bms};
 
 #[rstest]
-fn given_bookmark_when_touching_then_updates_timestamp_and_flags(mut test_dal: Dal) -> anyhow::Result<()> {
-
+fn given_bookmark_when_touching_then_updates_timestamp_and_flags(
+    mut test_dal: Dal,
+) -> anyhow::Result<()> {
     let bm_before = test_dal.get_bookmark_by_id(1)?;
     sleep(Duration::from_secs(1));
     do_touch(&bm_before)?;
@@ -35,7 +36,10 @@ fn given_bookmark_when_editing_then_updates_content(mut test_dal: Dal, bms: Vec<
 
 // #[allow(unused_variables)]
 #[rstest]
-fn given_bookmark_list_when_deleting_multiple_then_removes_correctly(mut test_dal: Dal, bms: Vec<Bookmark>) {
+fn given_bookmark_list_when_deleting_multiple_then_removes_correctly(
+    mut test_dal: Dal,
+    bms: Vec<Bookmark>,
+) {
     let _ = bms[0].clone();
     // make sure input is sorted as it would be using the helper
     let ids = helper::ensure_int_vector(&vec!["6".to_string(), "2".to_string(), "3".to_string()]);

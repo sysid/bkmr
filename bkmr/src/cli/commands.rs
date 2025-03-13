@@ -1,10 +1,12 @@
 use std::fs::create_dir_all;
 use std::io::Write;
 
+use crate::adapter::dal::migration::{init_db, MIGRATIONS};
 use crate::adapter::embeddings::{cosine_similarity, deserialize_embedding, OpenAiEmbedding};
 use crate::cli::args::{Cli, Commands};
 use crate::context::Context;
 use crate::service::process::DisplayField;
+use crate::util::helper::{confirm, ensure_int_vector};
 use crate::{
     adapter::dal::Dal,
     adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks},
@@ -34,8 +36,6 @@ use diesel_migrations::MigrationHarness;
 use itertools::Itertools;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::{debug, info, instrument};
-use crate::adapter::dal::migration::{init_db, MIGRATIONS};
-use crate::util::helper::{confirm, ensure_int_vector};
 
 // Type alias for commonly used Result type
 type Result<T> = anyhow::Result<T>;
@@ -101,11 +101,7 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> anyhow::Result<()> {
         Some(Commands::Backfill { dry_run }) => backfill_embeddings(dry_run),
         Some(Commands::LoadTexts { dry_run, path }) => load_texts(dry_run, path),
         Some(Commands::Xxx { ids, tags }) => {
-            eprintln!(
-                "ids: {:?}, tags: {:?}",
-                ids,
-                tags
-            );
+            eprintln!("ids: {:?}, tags: {:?}", ids, tags);
             Ok(())
         }
         None => Ok(()),
@@ -533,7 +529,7 @@ mod tests {
 
     use crate::cli::commands::{find_similar, randomized, sem_search};
     use crate::model::bms::Bookmarks;
-    
+
     use camino::Utf8PathBuf;
     use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};

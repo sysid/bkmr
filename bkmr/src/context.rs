@@ -67,10 +67,10 @@ impl Context {
 
 #[cfg(test)]
 mod tests {
+    use super::Context;
     use super::*;
     use anyhow::Result;
     use rstest::*;
-    use super::Context;
     use serial_test::serial;
 
     // Mock embedder that always succeeds

@@ -1,21 +1,19 @@
 use std::fmt;
 use std::fmt::Debug;
 
+use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
 use anyhow::{Context, Result};
 use diesel::connection::SimpleConnection;
 use diesel::prelude::*;
 use diesel::result::Error as DieselError;
 use diesel::sql_types::{Integer, Text};
 use diesel::{sql_query, Connection, RunQueryDsl, SqliteConnection};
-use tracing::{debug, instrument, trace};
 use schema::bookmarks::dsl::bookmarks;
-use schema::bookmarks::{
-    content_hash, desc, embedding, flags, id, metadata, tags, URL,
-};
-use crate::model::bookmark::{Bookmark, IdResult, NewBookmark, TagsFrequency};
+use schema::bookmarks::{content_hash, desc, embedding, flags, id, metadata, tags, URL};
+use tracing::{debug, instrument, trace};
 
-pub mod schema;
 pub mod migration;
+pub mod schema;
 
 // trait DalTrait {
 //     fn delete_bookmark(&mut self, id_: i32) -> Result<Vec<Bookmark>>;
@@ -77,7 +75,7 @@ impl Dal {
         self.conn
             .batch_execute(query)
             .with_context(|| format!("Failed to execute batch operation for id {}", id_))?;
-        debug!("Deleted and Compacted {:?}",id_);
+        debug!("Deleted and Compacted {:?}", id_);
         Ok(())
     }
 
@@ -114,7 +112,7 @@ impl Dal {
             .execute(&mut self.conn)
             .with_context(|| "Failed to commit transaction")?;
 
-        debug!("Deleted and Compacted, n: {:?}",n);
+        debug!("Deleted and Compacted, n: {:?}", n);
         Ok(n)
     }
 
