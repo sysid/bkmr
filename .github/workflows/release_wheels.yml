@@ -44,7 +44,7 @@ jobs:
             yum install -y openssl-devel
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: dist
@@ -68,7 +68,7 @@ jobs:
           sccache: 'true'
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: dist
@@ -83,7 +83,7 @@ jobs:
           command: sdist
           args: --out dist --manifest-path bkmr/Cargo.toml
       - name: Upload sdist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wheels
           path: dist
@@ -94,7 +94,7 @@ jobs:
     #    if: "startsWith(github.ref, 'refs/tags/')"
     needs: [ linux, macos, sdist ]
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: wheels
 
