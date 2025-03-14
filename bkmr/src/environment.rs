@@ -23,6 +23,9 @@ pub struct FzfEnvOpts {
 
     #[clap(long, default_value_t = false)]
     pub show_tags: bool,
+
+    #[clap(long, default_value_t = false)]
+    pub no_url: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -31,9 +34,14 @@ pub struct Settings {
     pub fzf_opts: FzfEnvOpts,
 }
 
-impl Default for Settings {
+impl Default for FzfEnvOpts {
     fn default() -> Self {
-        Self::new()
+        Self {
+            height: DEFAULT_HEIGHT.to_string(),
+            reverse: false,
+            show_tags: false,
+            no_url: false, // Default to showing URLs
+        }
     }
 }
 
@@ -102,16 +110,6 @@ impl Settings {
             *settings = Self::new();
         }
         Ok(())
-    }
-}
-
-impl Default for FzfEnvOpts {
-    fn default() -> Self {
-        Self {
-            height: DEFAULT_HEIGHT.to_string(),
-            reverse: false,
-            show_tags: false,
-        }
     }
 }
 

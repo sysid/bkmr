@@ -22,11 +22,13 @@ use crate::service::process::{delete_bms, edit_bms, open_bms};
 
 impl SkimItem for Bookmark {
     fn text(&self) -> Cow<str> {
-        let FzfEnvOpts { show_tags, .. } = &CONFIG.fzf_opts;
+        let FzfEnvOpts {
+            show_tags, no_url, ..
+        } = &CONFIG.fzf_opts;
 
-        let _text = match show_tags {
-            false => format!("[{}] {}, {}", self.id, self.metadata, self.URL),
-            true => {
+        let _text = match (show_tags, no_url) {
+            (false, false) => format!("[{}] {}, {}", self.id, self.metadata, self.URL),
+            (true, false) => {
                 format!(
                     "[{}] {}, {}, {}",
                     self.id,
@@ -35,15 +37,28 @@ impl SkimItem for Bookmark {
                     self.URL
                 )
             }
+            (false, true) => format!("[{}] {}", self.id, self.metadata),
+            (true, true) => {
+                format!(
+                    "[{}] {}, {}",
+                    self.id,
+                    Tags::change_tag_string_delimiter(&(self.tags), " | "),
+                    self.metadata
+                )
+            }
         };
         Cow::Owned(_text)
-        // Cow::Borrowed(_text.as_str())
     }
 
     fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
-        let FzfEnvOpts { show_tags, .. } = &CONFIG.fzf_opts;
+        let FzfEnvOpts {
+            show_tags, no_url, ..
+        } = &CONFIG.fzf_opts;
 
+        // Starting index for tags
         let start_idx_tags = self.id.to_string().len() + 2;
+
+        // Calculate end index for tags if they're shown
         let end_idx_tags = match show_tags {
             false => 0,
             true => {
@@ -56,49 +71,49 @@ impl SkimItem for Bookmark {
             ..Attr::default()
         };
 
+        // Calculate starting index for metadata based on whether tags are shown
         let start_idx_metadata = match show_tags {
             false => self.id.to_string().len() + 2,
             true => end_idx_tags + 1,
         };
-        let end_idx_metadata = start_idx_metadata + self.metadata.len() + 1;
+
+        // End index of metadata
+        let end_idx_metadata = start_idx_metadata + self.metadata.len();
         let attr_metadata = Attr {
             fg: Color::GREEN,
             // bg: Color::Rgb(5, 10, 15),
             ..Attr::default()
         };
 
-        let start_idx_url = end_idx_metadata + 1;
-        let end_idx_url = start_idx_url + self.URL.len() + 1;
-        let attr_url = Attr {
-            fg: Color::YELLOW,
-            ..Attr::default()
-        };
+        // Only calculate URL indices if we're showing the URL
+        let mut attr_segments = vec![];
 
-        match show_tags {
-            false => AnsiString::new_str(
-                context.text,
-                vec![
-                    (
-                        attr_metadata,
-                        (start_idx_metadata as u32, end_idx_metadata as u32),
-                    ),
-                    (attr_url, (start_idx_url as u32, end_idx_url as u32)),
-                ],
-            ),
-            true => AnsiString::new_str(
-                context.text,
-                vec![
-                    (attr_tags, (start_idx_tags as u32, end_idx_tags as u32)),
-                    (
-                        attr_metadata,
-                        (start_idx_metadata as u32, end_idx_metadata as u32),
-                    ),
-                    (attr_url, (start_idx_url as u32, end_idx_url as u32)),
-                ],
-            ),
+        // Always add the tag attributes if tags are shown
+        if *show_tags {
+            attr_segments.push((attr_tags, (start_idx_tags as u32, end_idx_tags as u32)));
         }
+
+        // Always add the metadata attributes
+        attr_segments.push((
+            attr_metadata,
+            (start_idx_metadata as u32, end_idx_metadata as u32),
+        ));
+
+        // Only add URL attributes if URLs are being shown
+        if !no_url {
+            let start_idx_url = end_idx_metadata + 2; // +2 for ", "
+            let end_idx_url = start_idx_url + self.URL.len();
+            let attr_url = Attr {
+                fg: Color::YELLOW,
+                ..Attr::default()
+            };
+            attr_segments.push((attr_url, (start_idx_url as u32, end_idx_url as u32)));
+        }
+
+        AnsiString::new_str(context.text, attr_segments)
     }
 
+    // The preview method can remain unchanged
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
         let text = format!("[{}] {}, {}", &self.id, &self.metadata, &self.URL);
         ItemPreview::AnsiText(format!("\x1b[31mhello:\x1b[m\n{}", text))

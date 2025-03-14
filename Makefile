@@ -54,7 +54,7 @@ test-url-details:  ## test-url-details (charm strang verbose output), expect: "R
 test-fzf:  ## test-fzf
 	# requires to uncomment associated test
 	export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags" && RUST_LOG=skim=info pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_fzf given_bookmark_list_when_running_fzf_then_processes_interactively -- --exact --nocapture --ignored
-	#RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_fzf test_fzf -- --exact --nocapture --ignored
+	#export "BKMR_FZF_OPTS=--reverse --height 20% --show-tags --no-url" && RUST_LOG=skim=info pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo test --package bkmr --test test_fzf given_bookmark_list_when_running_fzf_then_processes_interactively -- --exact --nocapture --ignored
 
 .PHONY: test-open-uri-url
 test-open-uri-url:  ## test-open-uri-url
