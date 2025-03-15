@@ -45,6 +45,12 @@ impl Default for FzfEnvOpts {
     }
 }
 
+impl Default for Settings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Settings {
     pub fn new() -> Self {
         let db_url = env::var("BKMR_DB_URL").unwrap_or_else(|_| {
