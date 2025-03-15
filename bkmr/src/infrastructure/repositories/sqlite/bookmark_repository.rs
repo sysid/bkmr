@@ -4,10 +4,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::sql_types::{Integer, Text};
-use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use tracing::{debug, error, trace};
+use tracing::error;
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
@@ -44,7 +41,7 @@ impl SqliteBookmarkRepository {
     /// Convert a database model to a domain entity
     fn to_domain_model(&self, db_bookmark: DbBookmark) -> SqliteResult<Bookmark> {
         // Parse tags from the stored format
-        let tags = Tag::parse_tags(&db_bookmark.tags)
+        let _tags = Tag::parse_tags(&db_bookmark.tags)
             .map_err(|e| SqliteRepositoryError::ConversionError(format!("Failed to parse tags for bookmark ID {}: {}", db_bookmark.id, e)))?;
 
         // Convert stored timestamp to DateTime<Utc>
@@ -87,7 +84,7 @@ impl SqliteBookmarkRepository {
         let mut conn = self.get_connection()?;
 
         // Build the query with a dynamic approach for parameters
-        let mut query_builder = diesel::sql_query(query);
+        let query_builder = diesel::sql_query(query);
 
         // Since we can't reassign query_builder due to changing types,
         // we need to handle parameter binding differently
@@ -112,8 +109,8 @@ impl SqliteBookmarkRepository {
 
     /// Build SQL condition from specifications
     fn build_sql_conditions(&self, query: &BookmarkQuery) -> (String, Vec<String>) {
-        let mut conditions: Vec<String> = Vec::new();
-        let mut params = Vec::new();
+        let conditions: Vec<String> = Vec::new();
+        let params = Vec::new();
 
         // If no specification, return empty conditions
         if query.specification.is_none() {
@@ -224,7 +221,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             if let Some(sort_direction) = query.sort_by_date {
                 match sort_direction {
                     SortDirection::Ascending => {
-                        sorted.sort_by(|a, b| a.updated_at().cmp(&b.updated_at()));
+                        sorted.sort_by_key(|a| a.updated_at());
                     },
                     SortDirection::Descending => {
                         sorted.sort_by(|a, b| b.updated_at().cmp(&a.updated_at()));
@@ -580,6 +577,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 struct DbBookmark {
     #[diesel(sql_type = Integer)]
     pub id: i32,
+    #[allow(non_snake_case)]
     #[diesel(sql_type = Text)]
     pub URL: String,
     #[diesel(sql_type = Text)]
@@ -602,6 +600,7 @@ struct DbBookmark {
 #[derive(AsChangeset, Debug)]
 #[diesel(table_name = bookmarks)]
 struct DbBookmarkChanges {
+    #[allow(non_snake_case)]
     pub URL: String,
     pub metadata: String,
     pub tags: String,
@@ -615,6 +614,7 @@ struct DbBookmarkChanges {
 #[derive(Insertable, Debug)]
 #[diesel(table_name = bookmarks)]
 struct NewBookmark {
+    #[allow(non_snake_case)]
     pub URL: String,
     pub metadata: String,
     pub tags: String,
@@ -647,7 +647,7 @@ mod tests {
     use crate::domain::repositories::query::TextSearchSpecification;
     use crate::infrastructure::repositories::sqlite::connection::init_db;
     use std::collections::HashSet;
-    use tempfile::tempdir;
+    
 
     fn setup_test_db() -> Result<(SqliteBookmarkRepository, String), DomainError> {
         // Create a temporary file instead of a path in a temporary directory
@@ -680,10 +680,10 @@ mod tests {
 
     fn create_test_bookmark(title: &str, url: &str, tags: Vec<&str>) -> Result<Bookmark, DomainError> {
         let tag_set: HashSet<Tag> = tags.into_iter()
-            .map(|t| Tag::new(t))
+            .map(Tag::new)
             .collect::<std::result::Result<HashSet<_>, _>>()?;
 
-        Ok(Bookmark::new(url, title, "Test description", tag_set)?)
+        Bookmark::new(url, title, "Test description", tag_set)
     }
 
     #[test]

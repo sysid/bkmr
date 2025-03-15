@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 
 use chrono::{DateTime, Utc};
 use rand::seq::IteratorRandom;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainError;
@@ -34,7 +34,7 @@ struct DbBookmark {
 impl DbBookmark {
     fn to_domain(&self) -> Result<Bookmark, DomainError> {
         // Parse tags from stored format
-        let parsed_tags = Tag::parse_tags(&self.tags)
+        let _parsed_tags = Tag::parse_tags(&self.tags)
             .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to parse tags: {e}")))?;
 
         // Construct domain bookmark
@@ -198,7 +198,7 @@ impl BookmarkRepository for InMemoryBookmarkRepository {
         if let Some(sort_direction) = query.sort_by_date {
             match sort_direction {
                 SortDirection::Ascending => {
-                    bookmarks.sort_by(|a, b| a.updated_at().cmp(&b.updated_at()));
+                    bookmarks.sort_by_key(|a| a.updated_at());
                 }
                 SortDirection::Descending => {
                     bookmarks.sort_by(|a, b| b.updated_at().cmp(&a.updated_at()));
@@ -310,9 +310,9 @@ impl BookmarkRepository for InMemoryBookmarkRepository {
     }
 
     fn get_random(&self, count: usize) -> Result<Vec<Bookmark>, DomainError> {
-        use rand::thread_rng;
+        use rand::rng;
         let bookmarks = self.all_domain_bookmarks();
-        let mut rng = thread_rng();
+        let mut rng = rng();
         let chosen = bookmarks.into_iter().choose_multiple(&mut rng, count);
         Ok(chosen)
     }
@@ -335,7 +335,7 @@ mod tests {
 
     use crate::domain::bookmark::Bookmark;
     use crate::domain::tag::Tag;
-    use crate::domain::repositories::query::{BookmarkQuery, TextSearchSpecification, AllTagsSpecification};
+    use crate::domain::repositories::query::{BookmarkQuery, TextSearchSpecification};
 
     fn create_test_bookmark(id: Option<i32>, url: &str, title: &str, tags: Vec<&str>) -> Bookmark {
         let tag_set: HashSet<Tag> = tags.into_iter().map(|t| Tag::new(t).unwrap()).collect();

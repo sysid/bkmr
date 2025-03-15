@@ -1,3 +1,5 @@
+mod application;
+
 use anyhow::Result;
 use rstest::*;
 

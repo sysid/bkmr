@@ -86,6 +86,3 @@ pub trait BookmarkRepository {
     }
 }
 
-use crate::domain::repositories::query::{
-    AllTagsSpecification, AnyTagSpecification, TextSearchSpecification
-};

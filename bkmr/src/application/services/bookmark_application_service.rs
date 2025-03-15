@@ -18,7 +18,7 @@ use crate::domain::tag::Tag;
 
 /// Application service for bookmark operations
 pub struct BookmarkApplicationService<R> {
-    repository: R,
+    pub(crate) repository: R,
     domain_service: BookmarkServiceImpl,
 }
 
@@ -62,7 +62,7 @@ where
         let bookmark = self
             .repository
             .get_by_id(request.id)?
-            .ok_or_else(|| ApplicationError::BookmarkNotFound(request.id))?;
+            .ok_or(ApplicationError::BookmarkNotFound(request.id))?;
 
         let mut updated_bookmark = bookmark.clone();
 
@@ -223,7 +223,7 @@ where
         let mut bookmark = self
             .repository
             .get_by_id(id)?
-            .ok_or_else(|| ApplicationError::BookmarkNotFound(id))?;
+            .ok_or(ApplicationError::BookmarkNotFound(id))?;
 
         // Update domain logic
         self.domain_service.record_access(&mut bookmark)?;

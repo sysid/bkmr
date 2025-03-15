@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::application::dto::tag_dto::{
     TagInfoResponse, TagMergeRequest, TagOperationRequest, TagRenameRequest, TagSuggestionResponse
 };
-use crate::application::error::{ApplicationError, ApplicationResult};
+use crate::application::error::ApplicationResult;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
 use crate::domain::services::tag_service::{TagService, TagServiceImpl};
 use crate::domain::tag::Tag;
