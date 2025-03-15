@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::domain::bookmark::Bookmark;
-use crate::domain::tag::Tag;
 use std::collections::HashSet;
+
+use crate::domain::bookmark::Bookmark;
+use crate::domain::error::DomainResult;  // domain error alias
+use crate::domain::tag::Tag;
 
 /// Request object for creating a new bookmark
 #[derive(Debug, Clone, Deserialize)]
@@ -70,34 +72,30 @@ pub struct BookmarkSearchResponse {
     pub has_more: bool,
 }
 
-/// Mapping functions for bookmark DTOs
+// --------------------- DTO to Domain Conversions ---------------------
+
 impl BookmarkCreateRequest {
-    /// Convert to domain entities
-    pub fn to_domain_objects(&self) -> anyhow::Result<(String, String, String, HashSet<Tag>)> {
-        let tags = if let Some(tag_strings) = &self.tags {
-            let mut tag_set = HashSet::new();
+    pub fn to_domain_objects(&self) -> DomainResult<(String, String, String, HashSet<Tag>)> {
+        let mut tag_set = HashSet::new();
+        if let Some(ref tag_strings) = self.tags {
             for tag_str in tag_strings {
                 let parsed_tags = Tag::parse_tags(tag_str)?;
                 tag_set.extend(parsed_tags);
             }
-            tag_set
-        } else {
-            HashSet::new()
-        };
-
+        }
         Ok((
             self.url.clone(),
             self.title.clone().unwrap_or_default(),
             self.description.clone().unwrap_or_default(),
-            tags,
+            tag_set,
         ))
     }
 }
 
 impl BookmarkUpdateRequest {
-    /// Convert to domain objects
-    pub fn to_domain_tags(&self) -> anyhow::Result<Option<HashSet<Tag>>> {
-        if let Some(tag_strings) = &self.tags {
+    /// If tags exist, parse them into domain `Tag` objects.
+    pub fn to_domain_tags(&self) -> DomainResult<Option<HashSet<Tag>>> {
+        if let Some(ref tag_strings) = self.tags {
             let mut tag_set = HashSet::new();
             for tag_str in tag_strings {
                 let parsed_tags = Tag::parse_tags(tag_str)?;
@@ -111,7 +109,7 @@ impl BookmarkUpdateRequest {
 }
 
 impl BookmarkResponse {
-    /// Create from domain entity
+    /// Create a response DTO from a domain Bookmark
     pub fn from_domain(bookmark: &Bookmark) -> Self {
         Self {
             id: bookmark.id(),
@@ -125,14 +123,14 @@ impl BookmarkResponse {
         }
     }
 
-    /// Convert collection of bookmarks to responses
+    /// Convert an entire collection of Bookmarks into response DTOs
     pub fn from_domain_collection(bookmarks: &[Bookmark]) -> Vec<Self> {
         bookmarks.iter().map(Self::from_domain).collect()
     }
 }
 
 impl BookmarkListItem {
-    /// Create from domain entity
+    /// Create a list item DTO from a domain Bookmark
     pub fn from_domain(bookmark: &Bookmark) -> Self {
         Self {
             id: bookmark.id(),
@@ -142,14 +140,15 @@ impl BookmarkListItem {
         }
     }
 
-    /// Convert collection of bookmarks to list items
+    /// Convert a collection of Bookmarks into list item DTOs
     pub fn from_domain_collection(bookmarks: &[Bookmark]) -> Vec<Self> {
         bookmarks.iter().map(Self::from_domain).collect()
     }
 }
 
 impl BookmarkSearchRequest {
-    /// Convert to application search parameters
+    /// Convert the search request into a more generic struct used in the application service,
+    /// if desired (not mandatory if you build queries directly in the service).
     pub fn to_application_params(&self) -> crate::application::services::search::SearchParamsDto {
         crate::application::services::search::SearchParamsDto {
             query: self.query.clone(),
@@ -163,5 +162,121 @@ impl BookmarkSearchRequest {
             limit: self.limit,
             offset: self.offset,
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::bookmark::Bookmark;
+    use crate::domain::tag::Tag;
+    use std::collections::HashSet;
+
+    #[test]
+    fn test_bookmark_create_single_tag() {
+        let request = BookmarkCreateRequest {
+            url: "https://example.com".into(),
+            title: Some("Example".into()),
+            description: None,
+            tags: Some(vec!["rust".into()]),
+            fetch_metadata: None,
+        };
+
+        let (url, title, desc, tags) = request.to_domain_objects().unwrap();
+        assert_eq!(url, "https://example.com");
+        assert_eq!(title, "Example");
+        assert_eq!(desc, ""); // no description given
+        assert_eq!(tags.len(), 1);
+        assert!(tags.contains(&Tag::new("rust").unwrap()));
+    }
+
+    #[test]
+    fn test_bookmark_create_multiple_comma_separated_tags() {
+        let request = BookmarkCreateRequest {
+            url: "https://foo.com".into(),
+            title: None,
+            description: None,
+            tags: Some(vec!["rust, programming, testing".into()]),
+            fetch_metadata: None,
+        };
+
+        let (_, _, _, tags) = request.to_domain_objects().unwrap();
+        assert_eq!(tags.len(), 3);
+        assert!(tags.contains(&Tag::new("rust").unwrap()));
+        assert!(tags.contains(&Tag::new("programming").unwrap()));
+        assert!(tags.contains(&Tag::new("testing").unwrap()));
+    }
+
+    #[test]
+    fn test_bookmark_update_tags_none() {
+        let request = BookmarkUpdateRequest {
+            id: 42,
+            title: Some("Updated Title".into()),
+            description: None,
+            tags: None,
+        };
+
+        let maybe_tags = request.to_domain_tags().unwrap();
+        assert!(maybe_tags.is_none(), "No tags provided => None");
+    }
+
+    #[test]
+    fn test_bookmark_update_with_tags() {
+        let request = BookmarkUpdateRequest {
+            id: 123,
+            title: None,
+            description: None,
+            tags: Some(vec!["tag1".to_string(), "tag2, tag3".to_string()]),
+        };
+
+        let maybe_tags = request.to_domain_tags().unwrap();
+        let tags = maybe_tags.unwrap();
+        assert_eq!(tags.len(), 3);
+        assert!(tags.contains(&Tag::new("tag1").unwrap()));
+        assert!(tags.contains(&Tag::new("tag2").unwrap()));
+        assert!(tags.contains(&Tag::new("tag3").unwrap()));
+    }
+
+    #[test]
+    fn test_bookmark_response_from_domain() {
+        // Make a domain bookmark
+        let mut tag_set = HashSet::new();
+        tag_set.insert(Tag::new("rust").unwrap());
+        tag_set.insert(Tag::new("programming").unwrap());
+
+        let bookmark = Bookmark::new(
+            "https://example.com",
+            "Example Title",
+            "Example Desc",
+            tag_set,
+        )
+        .unwrap();
+
+        // Convert to response
+        let dto = BookmarkResponse::from_domain(&bookmark);
+
+        assert_eq!(dto.url, "https://example.com");
+        assert_eq!(dto.title, "Example Title");
+        assert_eq!(dto.description, "Example Desc");
+        assert_eq!(dto.tags.len(), 2);
+        assert!(dto.tags.contains(&"rust".to_string()));
+        assert!(dto.tags.contains(&"programming".to_string()));
+    }
+
+    #[test]
+    fn test_bookmark_list_item_from_domain() {
+        let bookmark = Bookmark::new(
+            "https://testing.com",
+            "TestTitle",
+            "Testing Desc",
+            HashSet::new(),
+        )
+        .unwrap();
+
+        let item = BookmarkListItem::from_domain(&bookmark);
+        assert_eq!(item.url, "https://testing.com");
+        assert_eq!(item.title, "TestTitle");
+        assert!(item.tags.is_empty());
     }
 }

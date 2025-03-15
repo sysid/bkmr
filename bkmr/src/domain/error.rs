@@ -16,6 +16,9 @@ pub enum DomainError {
 
     #[error("Bookmark not found: {0}")]
     BookmarkNotFound(String),
+
+    #[error("Cannot fetch metadata: {0}")]
+    CannotFetchMetadata(String),
 }
 
 pub type DomainResult<T> = Result<T, DomainError>;

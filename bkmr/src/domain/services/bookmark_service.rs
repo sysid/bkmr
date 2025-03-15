@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use anyhow::Result;
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::tag::Tag;
@@ -51,7 +50,7 @@ pub trait BookmarkService {
     fn search_by_content(&self, bookmarks: &[Bookmark], query: &str) -> Vec<Bookmark>;
 
     /// Extract metadata from a URL
-    fn fetch_metadata(&self, url: &str) -> Result<(String, String, String)>;
+    fn fetch_metadata(&self, url: &str) -> DomainResult<(String, String, String)>;
 
     /// Generate content for embedding
     fn generate_embedding_content(&self, bookmark: &Bookmark) -> String;
@@ -182,7 +181,7 @@ impl BookmarkService for BookmarkServiceImpl {
             .collect()
     }
 
-    fn fetch_metadata(&self, _url: &str) -> Result<(String, String, String)> {
+    fn fetch_metadata(&self, _url: &str) -> DomainResult<(String, String, String)> {
         // This is a domain services operation but delegates to external services
         // Actual implementation would use dependency injection for the external services
         // For now, we'll return empty values for simplicity
