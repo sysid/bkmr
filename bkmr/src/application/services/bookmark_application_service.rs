@@ -266,3 +266,184 @@ where
         }
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use crate::infrastructure::repositories::in_memory::bookmark_repository::InMemoryBookmarkRepository;
+
+    fn create_service_and_repo() -> (BookmarkApplicationService<InMemoryBookmarkRepository>, InMemoryBookmarkRepository) {
+        let repo = InMemoryBookmarkRepository::new();
+        let service = BookmarkApplicationService::new(repo.clone());
+        (service, repo)
+    }
+
+    #[test]
+    fn test_add_bookmark_success() {
+        let (service, _repo) = create_service_and_repo();
+
+        let request = BookmarkCreateRequest {
+            url: "https://example.com".into(),
+            title: Some("Example".into()),
+            description: Some("A test".into()),
+            tags: Some(vec!["rust".into()]),
+            fetch_metadata: None,
+        };
+
+        let response = service.add_bookmark(request).unwrap();
+        assert_eq!(response.url, "https://example.com");
+        assert_eq!(response.title, "Example");
+        assert_eq!(response.description, "A test");
+        assert!(response.tags.contains(&"rust".to_string()));
+    }
+
+    #[test]
+    fn test_add_bookmark_already_exists() {
+        let (service, repo) = create_service_and_repo();
+
+        // Insert a bookmark with the same URL
+        let mut existing = Bookmark::new("https://example.com", "Existing", "Desc", HashSet::new()).unwrap();
+        repo.add(&mut existing).unwrap();
+
+        let request = BookmarkCreateRequest {
+            url: "https://example.com".into(),
+            title: Some("Duplicate".into()),
+            description: None,
+            tags: None,
+            fetch_metadata: None,
+        };
+
+        let err = service.add_bookmark(request).unwrap_err();
+        match err {
+            ApplicationError::BookmarkExists(url) => {
+                assert_eq!(url, "https://example.com");
+            },
+            _ => panic!("Expected BookmarkExists error"),
+        }
+    }
+
+    #[test]
+    fn test_update_bookmark_success() {
+        let (service, repo) = create_service_and_repo();
+
+        // Insert a bookmark
+        let mut bookmark = Bookmark::new("https://example.com", "Old Title", "Old Desc", HashSet::new()).unwrap();
+        repo.add(&mut bookmark).unwrap();
+        let id = bookmark.id().unwrap();
+
+        // Prepare an update
+        let request = BookmarkUpdateRequest {
+            id,
+            title: Some("New Title".into()),
+            description: Some("New Description".into()),
+            tags: Some(vec!["rust".into()]),
+        };
+
+        let response = service.update_bookmark(request).unwrap();
+        assert_eq!(response.title, "New Title");
+        assert_eq!(response.description, "New Description");
+        assert_eq!(response.tags.len(), 1);
+        assert!(response.tags.contains(&"rust".to_string()));
+    }
+
+    #[test]
+    fn test_update_bookmark_not_found() {
+        let (service, _repo) = create_service_and_repo();
+
+        let request = BookmarkUpdateRequest {
+            id: 999,
+            title: Some("Not Found".into()),
+            description: None,
+            tags: None,
+        };
+
+        let err = service.update_bookmark(request).unwrap_err();
+        match err {
+            ApplicationError::BookmarkNotFound(id) => assert_eq!(id, 999),
+            _ => panic!("Expected BookmarkNotFound error"),
+        }
+    }
+
+    #[test]
+    fn test_delete_bookmark() {
+        let (service, repo) = create_service_and_repo();
+
+        // Insert a bookmark
+        let mut bookmark = Bookmark::new("https://example.com", "Delete Me", "Desc", HashSet::new()).unwrap();
+        repo.add(&mut bookmark).unwrap();
+        let id = bookmark.id().unwrap();
+
+        // Delete it
+        let deleted = service.delete_bookmark(id).unwrap();
+        assert!(deleted);
+
+        // Trying again returns false
+        let deleted_again = service.delete_bookmark(id).unwrap();
+        assert!(!deleted_again);
+    }
+
+    #[test]
+    fn test_get_bookmark() {
+        let (service, repo) = create_service_and_repo();
+
+        let mut b = Bookmark::new("https://example.com", "Some Title", "Desc", HashSet::new()).unwrap();
+        repo.add(&mut b).unwrap();
+        let id = b.id().unwrap();
+
+        let found = service.get_bookmark(id).unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().url, "https://example.com");
+
+        let not_found = service.get_bookmark(999).unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_search_bookmarks() {
+        let (service, repo) = create_service_and_repo();
+
+        // Insert multiple bookmarks
+        let mut b1 = Bookmark::new("https://rust-lang.org", "Rust Lang", "Rust language", HashSet::new()).unwrap();
+        let mut b2 = Bookmark::new("https://python.org", "Python Lang", "Python language", HashSet::new()).unwrap();
+        repo.add(&mut b1).unwrap();
+        repo.add(&mut b2).unwrap();
+
+        // Make a search request
+        let request = BookmarkSearchRequest {
+            query: Some("rust".into()),
+            ..Default::default()
+        };
+
+        let response = service.search_bookmarks(request).unwrap();
+        assert_eq!(response.total_count, 1);
+        assert_eq!(response.bookmarks[0].url, "https://rust-lang.org");
+    }
+
+    #[test]
+    fn test_record_bookmark_access() {
+        let (service, repo) = create_service_and_repo();
+
+        let mut b = Bookmark::new("https://example.com", "Title", "Desc", HashSet::new()).unwrap();
+        repo.add(&mut b).unwrap();
+        let id = b.id().unwrap();
+
+        service.record_bookmark_access(id).unwrap();
+        service.record_bookmark_access(id).unwrap();
+
+        let updated = repo.get_by_id(id).unwrap().unwrap();
+        assert_eq!(updated.access_count(), 2);
+    }
+
+    #[test]
+    fn test_fetch_url_metadata() {
+        let (service, _repo) = create_service_and_repo();
+
+        // Currently returns (String::new(), String::new(), String::new())
+        let (title, desc, extra) = service.fetch_url_metadata("https://example.com").unwrap();
+        assert_eq!(title, "");
+        assert_eq!(desc, "");
+        assert_eq!(extra, "");
+    }
+}

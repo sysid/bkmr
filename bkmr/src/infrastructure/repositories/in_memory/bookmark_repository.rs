@@ -68,6 +68,7 @@ impl DbBookmark {
 }
 
 /// Thread-safe, in-memory repository for Bookmarks, refactored to match the structure of the SQLite repository.
+#[derive(Clone)]
 pub struct InMemoryBookmarkRepository {
     storage: Arc<RwLock<HashMap<i32, DbBookmark>>>,
     next_id: Arc<RwLock<i32>>,

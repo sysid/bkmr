@@ -178,3 +178,170 @@ where
         Ok(tags)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    use maplit::hashset;
+    use crate::domain::tag::Tag;
+    use crate::domain::bookmark::Bookmark;
+    use crate::infrastructure::repositories::in_memory::bookmark_repository::InMemoryBookmarkRepository;
+
+    fn create_service_and_repo() -> (TagApplicationService<InMemoryBookmarkRepository>, InMemoryBookmarkRepository) {
+        let repo = InMemoryBookmarkRepository::new();
+        let service = TagApplicationService::new(repo.clone());
+        (service, repo)
+    }
+
+    #[test]
+    fn test_get_all_tags() {
+        let (service, repo) = create_service_and_repo();
+
+        // Add bookmarks with tags
+        let mut b1 = Bookmark::new("https://example.com", "Title1", "Desc1", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
+        let mut b2 = Bookmark::new("https://another.com", "Title2", "Desc2", hashset!{ Tag::new("lang").unwrap(), Tag::new("python").unwrap() }).unwrap();
+        repo.add(&mut b1).unwrap();
+        repo.add(&mut b2).unwrap();
+
+        let tags = service.get_all_tags().unwrap();
+        // For example: rust -> 1, lang -> 2, python -> 1
+        assert_eq!(tags.len(), 3);
+        // You could do more precise checks by searching the vector for each name, etc.
+    }
+
+    #[test]
+    fn test_get_related_tags() {
+        let (service, repo) = create_service_and_repo();
+
+        // Add bookmarks
+        let mut b1 = Bookmark::new("https://example.com", "Test", "Desc", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
+        let mut b2 = Bookmark::new("https://another.com", "Test2", "Desc2", hashset!{ Tag::new("rust").unwrap(), Tag::new("web").unwrap() }).unwrap();
+        repo.add(&mut b1).unwrap();
+        repo.add(&mut b2).unwrap();
+
+        // Check related to 'rust'
+        let related = service.get_related_tags("rust").unwrap();
+        // Might contain 'lang' -> 1, 'web' -> 1
+        assert_eq!(related.len(), 2);
+    }
+
+    #[test]
+    fn test_add_tags_to_bookmarks() {
+        let (service, repo) = create_service_and_repo();
+
+        // Insert a bookmark
+        let mut b = Bookmark::new("https://example.com", "Title", "Desc", HashSet::new()).unwrap();
+        repo.add(&mut b).unwrap();
+        let id = b.id().unwrap();
+
+        let request = TagOperationRequest {
+            bookmark_ids: vec![id],
+            tags: vec!["rust".into(), "programming".into()],
+            replace_existing: Some(false),
+        };
+
+        let updated_count = service.add_tags_to_bookmarks(request).unwrap();
+        assert_eq!(updated_count, 1);
+
+        let updated = repo.get_by_id(id).unwrap().unwrap();
+        let updated_tags = updated.tags();
+        assert_eq!(updated_tags.len(), 2);
+        assert!(updated_tags.contains(&Tag::new("rust").unwrap()));
+        assert!(updated_tags.contains(&Tag::new("programming").unwrap()));
+    }
+
+    #[test]
+    fn test_remove_tags_from_bookmarks() {
+        let (service, repo) = create_service_and_repo();
+
+        let mut b = Bookmark::new("https://example.com", "Title", "Desc", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
+        repo.add(&mut b).unwrap();
+        let id = b.id().unwrap();
+
+        let request = TagOperationRequest {
+            bookmark_ids: vec![id],
+            tags: vec!["rust".into()],
+            replace_existing: None,
+        };
+
+        let updated_count = service.remove_tags_from_bookmarks(request).unwrap();
+        assert_eq!(updated_count, 1);
+
+        let updated = repo.get_by_id(id).unwrap().unwrap();
+        assert_eq!(updated.tags().len(), 1);
+        assert!(updated.tags().contains(&Tag::new("lang").unwrap()));
+        assert!(!updated.tags().contains(&Tag::new("rust").unwrap()));
+    }
+
+    #[test]
+    fn test_merge_tags() {
+        let (service, repo) = create_service_and_repo();
+
+        // Two bookmarks each containing source tag
+        let mut b1 = Bookmark::new("https://example1.com", "Title1", "Desc1", hashset!{ Tag::new("source").unwrap() }).unwrap();
+        let mut b2 = Bookmark::new("https://example2.com", "Title2", "Desc2", hashset!{ Tag::new("source").unwrap(), Tag::new("other").unwrap() }).unwrap();
+        repo.add(&mut b1).unwrap();
+        repo.add(&mut b2).unwrap();
+
+        let request = TagMergeRequest {
+            source_tag: "source".into(),
+            target_tag: "target".into(),
+        };
+
+        let updated_count = service.merge_tags(request).unwrap();
+        assert_eq!(updated_count, 2);
+
+        // Check that 'source' replaced with 'target'
+        let all = repo.get_all().unwrap();
+        for bm in &all {
+            assert!(bm.tags().contains(&Tag::new("target").unwrap()));
+            assert!(!bm.tags().contains(&Tag::new("source").unwrap()));
+        }
+    }
+
+    #[test]
+    fn test_rename_tag() {
+        let (service, repo) = create_service_and_repo();
+
+        // Bookmarks with old tag
+        let mut b1 = Bookmark::new("https://example1.com", "Title1", "Desc1", hashset!{ Tag::new("oldtag").unwrap() }).unwrap();
+        let mut b2 = Bookmark::new("https://example2.com", "Title2", "Desc2", hashset!{ Tag::new("oldtag").unwrap(), Tag::new("other").unwrap() }).unwrap();
+        repo.add(&mut b1).unwrap();
+        repo.add(&mut b2).unwrap();
+
+        let request = TagRenameRequest {
+            old_name: "oldtag".into(),
+            new_name: "newtag".into(),
+        };
+
+        let updated_count = service.rename_tag(request).unwrap();
+        assert_eq!(updated_count, 2);
+
+        let all = repo.get_all().unwrap();
+        for bm in &all {
+            assert!(bm.tags().contains(&Tag::new("newtag").unwrap()));
+            assert!(!bm.tags().contains(&Tag::new("oldtag").unwrap()));
+        }
+    }
+
+    #[test]
+    fn test_get_tag_suggestions() {
+        let (service, repo) = create_service_and_repo();
+
+        // Bookmarks with tags
+        let mut b1 = Bookmark::new("https://example1.com", "Title1", "Desc1", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
+        let mut b2 = Bookmark::new("https://example2.com", "Title2", "Desc2", hashset!{ Tag::new("rubble").unwrap() }).unwrap();
+        repo.add(&mut b1).unwrap();
+        repo.add(&mut b2).unwrap();
+
+        // Query partial 'ru'
+        let suggestions = service.get_tag_suggestions("ru").unwrap();
+        // Might contain 'rust', 'rubble'
+        assert_eq!(suggestions.suggestions.len(), 2);
+        let found_names: Vec<_> = suggestions.suggestions.iter().map(|s| &s.name).collect();
+        assert!(found_names.contains(&&"rust".to_string()));
+        assert!(found_names.contains(&&"rubble".to_string()));
+    }
+}
+
