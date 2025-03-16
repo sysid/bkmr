@@ -58,6 +58,10 @@ thiserror = "2.0.12"
 url = "2.5.4"
 rand = "0.9.0"
 maplit = "1.0.2"
+toml = "0.8.20"
+dirs = "6.0.0"
+config = "0.15.11"
+serial_test = "3.2.0"
 # https://github.com/sfackler/rust-openssl/issues/763#issuecomment-1150213102
 #openssl = { version = "0.10.66", features = ["vendored"] }
 

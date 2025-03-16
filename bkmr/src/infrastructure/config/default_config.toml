@@ -1,0 +1,11 @@
+# Default bkmr configuration
+
+# Database URL
+db_url = "../db/bkmr.db"
+
+# FZF options
+[fzf_opts]
+height = "50%"
+reverse = false
+show_tags = false
+no_url = false
