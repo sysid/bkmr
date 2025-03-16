@@ -200,7 +200,6 @@ mod tests {
     use maplit::hashset;
     use serial_test::serial;
     use std::collections::HashSet;
-    use tracing::Instrument;
 
     // Returns a stable path in `target/test_db/`.
     // We recreate (or remove) the DB file each time for a clean slate,

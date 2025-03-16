@@ -1,2 +1,2 @@
-pub mod repositories;
 pub mod config;
+pub mod repositories;

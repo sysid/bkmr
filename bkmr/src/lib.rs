@@ -37,13 +37,13 @@ pub mod service {
     pub mod process;
 }
 
+pub mod application;
 pub mod cli;
 pub mod context;
-pub mod environment;
-pub mod util;
 pub mod domain;
-pub mod application;
+pub mod environment;
 pub mod infrastructure;
+pub mod util;
 
 /// creates list of normalized tags from "tag1,t2,t3" string
 /// be aware of shell parsing rules, so no blanks or quotes

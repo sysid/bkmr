@@ -1,14 +1,14 @@
 #[cfg(test)]
 #[ignore]
 mod tests {
-    
-    use crate::domain::bookmark::Bookmark;
-    use crate::domain::tag::Tag;
-    use std::collections::HashSet;
+
     use crate::application::dto::BookmarkSearchRequest;
     use crate::application::services::bookmark_application_service::BookmarkApplicationService;
+    use crate::domain::bookmark::Bookmark;
     use crate::domain::repositories::bookmark_repository::BookmarkRepository;
+    use crate::domain::tag::Tag;
     use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+    use std::collections::HashSet;
 
     // For creating temporary SQLite files
     use tempfile::NamedTempFile;
@@ -62,9 +62,27 @@ mod tests {
         let (service, _repo, _tmpfile) = create_service_and_repo();
 
         // Add various bookmarks
-        add_bookmark(&service, "https://rust-lang.org", "Rust Book", "Rust language docs", &["tag1"]);
-        add_bookmark(&service, "https://python.org", "Python Book", "Python language docs", &["tag2"]);
-        add_bookmark(&service, "https://other.com", "Other Title", "Unrelated desc", &["tag3"]);
+        add_bookmark(
+            &service,
+            "https://rust-lang.org",
+            "Rust Book",
+            "Rust language docs",
+            &["tag1"],
+        );
+        add_bookmark(
+            &service,
+            "https://python.org",
+            "Python Book",
+            "Python language docs",
+            &["tag2"],
+        );
+        add_bookmark(
+            &service,
+            "https://other.com",
+            "Other Title",
+            "Unrelated desc",
+            &["tag3"],
+        );
 
         // Search for 'rust'
         let request = BookmarkSearchRequest {
@@ -89,11 +107,29 @@ mod tests {
         let (service, _repo, _tmpfile) = create_service_and_repo();
 
         // Create a single bookmark that has both tagX and tagY
-        let both_id = add_bookmark(&service, "https://both.com", "Both", "Has both tags", &["tagX", "tagY"]);
+        let both_id = add_bookmark(
+            &service,
+            "https://both.com",
+            "Both",
+            "Has both tags",
+            &["tagX", "tagY"],
+        );
         // Another that has only tagX
-        let _x_id = add_bookmark(&service, "https://onlyx.com", "OnlyX", "Has tagX", &["tagX"]);
+        let _x_id = add_bookmark(
+            &service,
+            "https://onlyx.com",
+            "OnlyX",
+            "Has tagX",
+            &["tagX"],
+        );
         // Another that has only tagY
-        let _y_id = add_bookmark(&service, "https://onlyy.com", "OnlyY", "Has tagY", &["tagY"]);
+        let _y_id = add_bookmark(
+            &service,
+            "https://onlyy.com",
+            "OnlyY",
+            "Has tagY",
+            &["tagY"],
+        );
 
         // We want bookmarks that contain both tagX and tagY
         let request = BookmarkSearchRequest {
@@ -142,7 +178,13 @@ mod tests {
         let (service, _repo, _tmpfile) = create_service_and_repo();
 
         // Bookmarks with various tags
-        add_bookmark(&service, "https://ex1.com", "Ex1", "Desc", &["tag1", "tag2"]);
+        add_bookmark(
+            &service,
+            "https://ex1.com",
+            "Ex1",
+            "Desc",
+            &["tag1", "tag2"],
+        );
         add_bookmark(&service, "https://ex2.com", "Ex2", "Desc", &["tag1"]);
         add_bookmark(&service, "https://ex3.com", "Ex3", "Desc", &["tag2"]);
         add_bookmark(&service, "https://ex4.com", "Ex4", "Desc", &["tag3"]);
@@ -194,7 +236,13 @@ mod tests {
 
         // Bookmarks
         let _b1 = add_bookmark(&service, "https://b1.com", "B1", "Desc", &["rust", "lang"]);
-        let _b2 = add_bookmark(&service, "https://b2.com", "B2", "Desc", &["rust", "lang", "extra"]);
+        let _b2 = add_bookmark(
+            &service,
+            "https://b2.com",
+            "B2",
+            "Desc",
+            &["rust", "lang", "extra"],
+        );
         let _b3 = add_bookmark(&service, "https://b3.com", "B3", "Desc", &["rust"]);
 
         // EXACT => [rust, lang] means we only want bookmarks whose tags are precisely {rust, lang}
@@ -274,8 +322,8 @@ mod tests {
         let resp = service.search_bookmarks(request).unwrap();
         assert_eq!(resp.total_count, 2); // total in memory
         assert_eq!(resp.bookmarks.len(), 2); // we get 2 in the 'page'
-        // by default they're sorted ascending by ID or creation order if no sort param
-        // so we expect items #2 and #3 if the default order is ID ascending
+                                             // by default they're sorted ascending by ID or creation order if no sort param
+                                             // so we expect items #2 and #3 if the default order is ID ascending
     }
 
     #[test]
@@ -283,10 +331,34 @@ mod tests {
         let (service, _repo, _tmpfile) = create_service_and_repo();
 
         // A variety of tags
-        add_bookmark(&service, "https://b1.com", "Rust Web", "Rust+Web dev", &["rust", "web"]);
-        add_bookmark(&service, "https://b2.com", "Rust Gaming", "Rust+Game dev", &["rust", "game"]);
-        add_bookmark(&service, "https://b3.com", "Python Web", "Flask or Django", &["python", "web"]);
-        add_bookmark(&service, "https://b4.com", "No match", "Unrelated", &["random"]);
+        add_bookmark(
+            &service,
+            "https://b1.com",
+            "Rust Web",
+            "Rust+Web dev",
+            &["rust", "web"],
+        );
+        add_bookmark(
+            &service,
+            "https://b2.com",
+            "Rust Gaming",
+            "Rust+Game dev",
+            &["rust", "game"],
+        );
+        add_bookmark(
+            &service,
+            "https://b3.com",
+            "Python Web",
+            "Flask or Django",
+            &["python", "web"],
+        );
+        add_bookmark(
+            &service,
+            "https://b4.com",
+            "No match",
+            "Unrelated",
+            &["random"],
+        );
 
         // We want: (All tags => [rust]) OR (Any tags => [web, game]) => that means rust + (web or game).
         // Then exclude ANY => [python], so nothing that has python
@@ -296,11 +368,11 @@ mod tests {
 
         // We'll build the request
         let request = BookmarkSearchRequest {
-            query: Some("dev".into()),      // text must contain 'dev'
+            query: Some("dev".into()),           // text must contain 'dev'
             all_tags: Some(vec!["rust".into()]), // must have rust
             any_tags: Some(vec!["web".into(), "game".into()]), // must have either web or game
             exclude_any_tags: Some(vec!["python".into()]), // must NOT have python
-            limit: Some(1),     // show only the first
+            limit: Some(1),                      // show only the first
             offset: None,
             ..Default::default()
         };

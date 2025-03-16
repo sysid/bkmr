@@ -1,7 +1,7 @@
 // src/cli/error.rs
-use thiserror::Error;
 use crate::application::error::ApplicationError;
 use crate::domain::error::DomainError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CliError {

@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 use std::fmt;
-use chrono::{DateTime, Utc};
 use url::Url;
 
 use crate::domain::error::{DomainError, DomainResult};
@@ -30,7 +30,11 @@ impl Bookmark {
         let url_str = url.as_ref();
 
         // Validate URL unless it's a special URL like "shell::" or a file path
-        if !url_str.starts_with("shell::") && !url_str.starts_with('/') && !url_str.starts_with('~') && Url::parse(url_str).is_err() {
+        if !url_str.starts_with("shell::")
+            && !url_str.starts_with('/')
+            && !url_str.starts_with('~')
+            && Url::parse(url_str).is_err()
+        {
             return Err(DomainError::InvalidUrl(url_str.to_string()));
         }
 
@@ -74,14 +78,30 @@ impl Bookmark {
     }
 
     // Getters
-    pub fn id(&self) -> Option<i32> { self.id }
-    pub fn url(&self) -> &str { &self.url }
-    pub fn title(&self) -> &str { &self.title }
-    pub fn description(&self) -> &str { &self.description }
-    pub fn tags(&self) -> &HashSet<Tag> { &self.tags }
-    pub fn access_count(&self) -> i32 { self.access_count }
-    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn id(&self) -> Option<i32> {
+        self.id
+    }
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+    pub fn tags(&self) -> &HashSet<Tag> {
+        &self.tags
+    }
+    pub fn access_count(&self) -> i32 {
+        self.access_count
+    }
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 
     // Domain operations
 
@@ -95,9 +115,10 @@ impl Bookmark {
     /// Remove a tag from the bookmark
     pub fn remove_tag(&mut self, tag: &Tag) -> DomainResult<()> {
         if !self.tags.remove(tag) {
-            return Err(DomainError::TagOperationFailed(
-                format!("Tag '{}' not found on bookmark", tag)
-            ));
+            return Err(DomainError::TagOperationFailed(format!(
+                "Tag '{}' not found on bookmark",
+                tag
+            )));
         }
 
         self.updated_at = Utc::now();
@@ -132,13 +153,18 @@ impl Bookmark {
     /// Get the content for embedding generation
     pub fn get_content_for_embedding(&self) -> String {
         // Filter out system tags (starting or ending with underscore)
-        let visible_tags: HashSet<_> = self.tags.iter()
+        let visible_tags: HashSet<_> = self
+            .tags
+            .iter()
             .filter(|tag| !tag.value().starts_with('_') && !tag.value().ends_with('_'))
             .cloned()
             .collect();
 
         let tags_str = Tag::format_tags(&visible_tags);
-        format!("{}{} -- {}{}", tags_str, self.title, self.description, tags_str)
+        format!(
+            "{}{} -- {}{}",
+            tags_str, self.title, self.description, tags_str
+        )
     }
 
     /// Check if the bookmark matches all given tags
@@ -188,8 +214,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         assert_eq!(bookmark.url(), "https://example.com");
         assert_eq!(bookmark.title(), "Example Site");
@@ -207,15 +234,15 @@ mod tests {
             "not-a-valid-url",
             "Invalid URL Test",
             "Testing invalid URL handling",
-            tags
+            tags,
         );
 
         assert!(result.is_err());
         match result {
             Err(DomainError::InvalidUrl(url)) => {
                 assert_eq!(url, "not-a-valid-url");
-            },
-            _ => panic!("Expected InvalidUrl error")
+            }
+            _ => panic!("Expected InvalidUrl error"),
         }
     }
 
@@ -228,7 +255,7 @@ mod tests {
             "shell::echo hello",
             "Shell Command",
             "A shell command",
-            tags.clone()
+            tags.clone(),
         );
         assert!(shell_url.is_ok());
 
@@ -237,7 +264,7 @@ mod tests {
             "/path/to/file.txt",
             "File Path",
             "A file path",
-            tags.clone()
+            tags.clone(),
         );
         assert!(file_url.is_ok());
 
@@ -246,7 +273,7 @@ mod tests {
             "~/documents/file.txt",
             "Home Path",
             "A path in home directory",
-            tags
+            tags,
         );
         assert!(home_url.is_ok());
     }
@@ -260,8 +287,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         // Add a tag
         bookmark.add_tag(Tag::new("added").unwrap()).unwrap();
@@ -287,8 +315,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         // Set completely new tags
         let mut new_tags = HashSet::new();
@@ -309,8 +338,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         assert_eq!(bookmark.access_count(), 0);
 
@@ -330,8 +360,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         let old_updated_at = bookmark.updated_at();
 
@@ -340,7 +371,7 @@ mod tests {
 
         bookmark.update(
             "Updated Title".to_string(),
-            "Updated description".to_string()
+            "Updated description".to_string(),
         );
 
         assert_eq!(bookmark.title(), "Updated Title");
@@ -358,8 +389,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         let formatted = bookmark.formatted_tags();
         assert!(formatted == ",tag1,tag2," || formatted == ",tag2,tag1,");
@@ -375,8 +407,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            tags
-        ).unwrap();
+            tags,
+        )
+        .unwrap();
 
         let content = bookmark.get_content_for_embedding();
         assert!(content.contains("visible"));
@@ -396,8 +429,9 @@ mod tests {
             "https://example.com",
             "Example Site",
             "An example website",
-            bookmark_tags
-        ).unwrap();
+            bookmark_tags,
+        )
+        .unwrap();
 
         // Test matches_all_tags
         let mut query_tags = HashSet::new();

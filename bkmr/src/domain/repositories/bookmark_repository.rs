@@ -1,20 +1,20 @@
 // src/domain/repositories/bookmark_repository.rs
 
-use std::collections::HashSet;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::tag::Tag;
-use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::error::DomainError;
+use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
+use crate::domain::tag::Tag;
+use std::collections::HashSet;
 
 /*
-    Repository Interface
-    The BookmarkRepository interface follows the repository pattern to separate domain models from data access:
+   Repository Interface
+   The BookmarkRepository interface follows the repository pattern to separate domain models from data access:
 
-    Domain-Centric: Methods speak in domain terms, not persistence terms
-    Abstraction: Hides data access details behind a clean interface
-    Testability: Easy to create mock implementations for testing
-    Flexibility: Allows switching persistence mechanisms without changing domain code
- */
+   Domain-Centric: Methods speak in domain terms, not persistence terms
+   Abstraction: Hides data access details behind a clean interface
+   Testability: Easy to create mock implementations for testing
+   Flexibility: Allows switching persistence mechanisms without changing domain code
+*/
 /// Repository trait for bookmark persistence operations
 pub trait BookmarkRepository {
     /// Get a bookmark by its ID
@@ -52,21 +52,28 @@ pub trait BookmarkRepository {
 
     /// Get bookmarks filtered by tags (all tags must match)
     fn get_by_all_tags(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError> {
-        let query = crate::domain::repositories::query::BookmarkQuery::new()
-            .with_specification(crate::domain::repositories::query::AllTagsSpecification::new(tags.clone()));
+        let query = crate::domain::repositories::query::BookmarkQuery::new().with_specification(
+            crate::domain::repositories::query::AllTagsSpecification::new(tags.clone()),
+        );
         self.search(&query)
     }
 
     /// Get bookmarks filtered by tags (any tag may match)
     fn get_by_any_tag(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError> {
-        let query = crate::domain::repositories::query::BookmarkQuery::new()
-            .with_specification(crate::domain::repositories::query::AnyTagSpecification::new(tags.clone()));
+        let query = crate::domain::repositories::query::BookmarkQuery::new().with_specification(
+            crate::domain::repositories::query::AnyTagSpecification::new(tags.clone()),
+        );
         self.search(&query)
     }
 
     /// Get bookmarks ordered by access date
-    fn get_by_access_date(&self, direction: SortDirection, limit: Option<usize>) -> Result<Vec<Bookmark>, DomainError> {
-        let mut query = crate::domain::repositories::query::BookmarkQuery::new().with_sort_by_date(direction);
+    fn get_by_access_date(
+        &self,
+        direction: SortDirection,
+        limit: Option<usize>,
+    ) -> Result<Vec<Bookmark>, DomainError> {
+        let mut query =
+            crate::domain::repositories::query::BookmarkQuery::new().with_sort_by_date(direction);
         if let Some(limit) = limit {
             query = query.with_limit(limit);
         }
@@ -75,8 +82,9 @@ pub trait BookmarkRepository {
 
     /// Search bookmarks by text
     fn search_by_text(&self, text: &str) -> Result<Vec<Bookmark>, DomainError> {
-        let query = crate::domain::repositories::query::BookmarkQuery::new()
-            .with_specification(crate::domain::repositories::query::TextSearchSpecification::new(text.to_string()));
+        let query = crate::domain::repositories::query::BookmarkQuery::new().with_specification(
+            crate::domain::repositories::query::TextSearchSpecification::new(text.to_string()),
+        );
         self.search(&query)
     }
 
@@ -85,4 +93,3 @@ pub trait BookmarkRepository {
         Ok(self.get_by_url(url)?.is_some())
     }
 }
-

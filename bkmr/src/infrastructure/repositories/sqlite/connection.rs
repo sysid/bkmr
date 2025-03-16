@@ -19,7 +19,7 @@ pub fn establish_connection(database_url: &str) -> SqliteResult<SqliteConnection
     debug!("Establishing connection to: {}", database_url);
 
     let conn = diesel::sqlite::SqliteConnection::establish(database_url)
-    .map_err(SqliteRepositoryError::ConnectionError)?;
+        .map_err(SqliteRepositoryError::ConnectionError)?;
 
     Ok(conn)
 }
@@ -31,8 +31,7 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
     // Create parent directory if it doesn't exist
     if let Some(parent) = Path::new(database_url).parent() {
         if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .map_err(SqliteRepositoryError::IoError)?;
+            std::fs::create_dir_all(parent).map_err(SqliteRepositoryError::IoError)?;
         }
     }
 
@@ -52,7 +51,9 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
 
 /// Run any pending database migrations
 pub fn run_pending_migrations(pool: &ConnectionPool) -> SqliteResult<()> {
-    let mut conn = pool.get().map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))?;
+    let mut conn = pool
+        .get()
+        .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))?;
 
     conn.run_pending_migrations(MIGRATIONS)
         .map_err(|e| SqliteRepositoryError::MigrationError(e.to_string()))?;

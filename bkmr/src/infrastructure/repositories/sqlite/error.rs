@@ -1,8 +1,8 @@
 // src/infrastructure/repositories/sqlite/error.rs
 
 use diesel::r2d2;
-use thiserror::Error;
 use diesel::result::Error as DieselError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SqliteRepositoryError {
@@ -43,8 +43,11 @@ impl From<SqliteRepositoryError> for crate::domain::error::DomainError {
     fn from(err: SqliteRepositoryError) -> Self {
         match err {
             SqliteRepositoryError::BookmarkNotFound(id) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!("Bookmark not found with ID: {}", id))
-            },
+                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
+                    "Bookmark not found with ID: {}",
+                    id
+                ))
+            }
             _ => crate::domain::error::DomainError::BookmarkOperationFailed(err.to_string()),
         }
     }

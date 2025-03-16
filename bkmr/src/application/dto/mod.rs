@@ -3,10 +3,9 @@ pub mod tag_dto;
 
 // Re-export common DTOs for convenience
 pub use bookmark_dto::{
-    BookmarkCreateRequest, BookmarkUpdateRequest, BookmarkResponse,
-    BookmarkSearchRequest, BookmarkSearchResponse, BookmarkListItem,
+    BookmarkCreateRequest, BookmarkListItem, BookmarkResponse, BookmarkSearchRequest,
+    BookmarkSearchResponse, BookmarkUpdateRequest,
 };
 pub use tag_dto::{
-    TagInfoResponse, TagOperationRequest, TagSuggestionResponse,
-    TagMergeRequest, TagRenameRequest,
+    TagInfoResponse, TagMergeRequest, TagOperationRequest, TagRenameRequest, TagSuggestionResponse,
 };

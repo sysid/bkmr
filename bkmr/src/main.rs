@@ -1,10 +1,5 @@
 // bkmr/src/main.rs
 
-use bkmr::cli::args::Cli;
-use clap::Parser;
-use crossterm::style::Stylize;
-use tracing_subscriber::prelude::*;
-
 use bkmr::cli;
 
 fn main() {
@@ -14,15 +9,14 @@ fn main() {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bkmr::cli::setup_logging;
     use camino::Utf8PathBuf;
     use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};
     use rstest::fixture;
-    use bkmr::cli::setup_logging;
 
     #[ctor::ctor]
     fn init() {

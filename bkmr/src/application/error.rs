@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::domain::error::DomainError;
+use thiserror::Error;
 
 /// High-level errors for the application layer.
 #[derive(Error, Debug)]

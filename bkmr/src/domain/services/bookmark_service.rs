@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use crate::domain::bookmark::Bookmark;
-use crate::domain::tag::Tag;
 use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::tag::Tag;
 
 /// Trait defining core bookmark operations
 pub trait BookmarkService {
@@ -108,9 +108,10 @@ impl BookmarkService for BookmarkServiceImpl {
         if errors.is_empty() {
             Ok(())
         } else {
-            Err(DomainError::TagOperationFailed(
-                format!("Failed to remove tags: {}", errors.join(", "))
-            ))
+            Err(DomainError::TagOperationFailed(format!(
+                "Failed to remove tags: {}",
+                errors.join(", ")
+            )))
         }
     }
 
@@ -173,7 +174,11 @@ impl BookmarkService for BookmarkServiceImpl {
                     "{} {} {}",
                     bm.title().to_lowercase(),
                     bm.description().to_lowercase(),
-                    bm.tags().iter().map(|t| t.value().to_lowercase()).collect::<Vec<_>>().join(" ")
+                    bm.tags()
+                        .iter()
+                        .map(|t| t.value().to_lowercase())
+                        .collect::<Vec<_>>()
+                        .join(" ")
                 );
                 content.contains(&query)
             })
@@ -207,12 +212,7 @@ mod tests {
         tags.insert(Tag::new("tag1").unwrap());
         tags.insert(Tag::new("tag2").unwrap());
 
-        Bookmark::new(
-            "https://example.com",
-            "Example Site",
-            "A test site",
-            tags
-        ).unwrap()
+        Bookmark::new("https://example.com", "Example Site", "A test site", tags).unwrap()
     }
 
     fn create_test_tags(tag_names: &[&str]) -> HashSet<Tag> {
@@ -227,12 +227,14 @@ mod tests {
         let service = BookmarkServiceImpl::new();
         let tags = create_test_tags(&["test1", "test2"]);
 
-        let bookmark = service.create_bookmark(
-            "https://example.com",
-            "Example",
-            "Description",
-            tags.clone()
-        ).unwrap();
+        let bookmark = service
+            .create_bookmark(
+                "https://example.com",
+                "Example",
+                "Description",
+                tags.clone(),
+            )
+            .unwrap();
 
         assert_eq!(bookmark.url(), "https://example.com");
         assert_eq!(bookmark.title(), "Example");
@@ -245,11 +247,9 @@ mod tests {
         let service = BookmarkServiceImpl::new();
         let mut bookmark = create_test_bookmark();
 
-        service.update_bookmark_metadata(
-            &mut bookmark,
-            "Updated Title",
-            "Updated Description"
-        ).unwrap();
+        service
+            .update_bookmark_metadata(&mut bookmark, "Updated Title", "Updated Description")
+            .unwrap();
 
         assert_eq!(bookmark.title(), "Updated Title");
         assert_eq!(bookmark.description(), "Updated Description");
@@ -322,21 +322,22 @@ mod tests {
 
         // Bookmark 2: tag2, tag3
         let tags2 = create_test_tags(&["tag2", "tag3"]);
-        bookmarks.push(Bookmark::new(
-            "https://example2.com", "Example 2", "Desc 2", tags2
-        ).unwrap());
+        bookmarks
+            .push(Bookmark::new("https://example2.com", "Example 2", "Desc 2", tags2).unwrap());
 
         // Bookmark 3: tag3, tag4
         let tags3 = create_test_tags(&["tag3", "tag4"]);
-        bookmarks.push(Bookmark::new(
-            "https://example3.com", "Example 3", "Desc 3", tags3
-        ).unwrap());
+        bookmarks
+            .push(Bookmark::new("https://example3.com", "Example 3", "Desc 3", tags3).unwrap());
 
         // Test ALL tags filter
         let result = service.filter_by_tags(
             &bookmarks,
             Some(create_test_tags(&["tag2"])),
-            None, None, None, None
+            None,
+            None,
+            None,
+            None,
         );
         assert_eq!(result.len(), 2); // Bookmark 1 and 2 have tag2
 
@@ -345,33 +346,42 @@ mod tests {
             &bookmarks,
             None,
             Some(create_test_tags(&["tag1", "tag4"])),
-            None, None, None
+            None,
+            None,
+            None,
         );
         assert_eq!(result.len(), 2); // Bookmark 1 has tag1, Bookmark 3 has tag4
 
         // Test ALL_NOT tags filter
         let result = service.filter_by_tags(
             &bookmarks,
-            None, None,
+            None,
+            None,
             Some(create_test_tags(&["tag1"])),
-            None, None
+            None,
+            None,
         );
         assert_eq!(result.len(), 2); // Bookmark 2 and 3 don't have tag1
 
         // Test ANY_NOT tags filter
         let result = service.filter_by_tags(
             &bookmarks,
-            None, None, None,
+            None,
+            None,
+            None,
             Some(create_test_tags(&["tag3"])),
-            None
+            None,
         );
         assert_eq!(result.len(), 1); // Only Bookmark 1 doesn't have tag3
 
         // Test EXACT tags filter
         let result = service.filter_by_tags(
             &bookmarks,
-            None, None, None, None,
-            Some(create_test_tags(&["tag3", "tag4"]))
+            None,
+            None,
+            None,
+            None,
+            Some(create_test_tags(&["tag3", "tag4"])),
         );
         assert_eq!(result.len(), 1); // Only Bookmark 3 has exactly tag3 and tag4
     }
@@ -385,27 +395,44 @@ mod tests {
 
         // Bookmark 1: contains "rust" in title
         let tags1 = create_test_tags(&["programming"]);
-        bookmarks.push(Bookmark::new(
-            "https://rust-lang.org", "Rust Language", "A programming language", tags1
-        ).unwrap());
+        bookmarks.push(
+            Bookmark::new(
+                "https://rust-lang.org",
+                "Rust Language",
+                "A programming language",
+                tags1,
+            )
+            .unwrap(),
+        );
 
         // Bookmark 2: contains "rust" in description
         let tags2 = create_test_tags(&["language"]);
-        bookmarks.push(Bookmark::new(
-            "https://example.com", "Example", "About Rust programming", tags2
-        ).unwrap());
+        bookmarks.push(
+            Bookmark::new(
+                "https://example.com",
+                "Example",
+                "About Rust programming",
+                tags2,
+            )
+            .unwrap(),
+        );
 
         // Bookmark 3: contains "rust" in tags
         let tags3 = create_test_tags(&["rust", "code"]);
-        bookmarks.push(Bookmark::new(
-            "https://example.org", "Example Org", "A website", tags3
-        ).unwrap());
+        bookmarks
+            .push(Bookmark::new("https://example.org", "Example Org", "A website", tags3).unwrap());
 
         // Bookmark 4: doesn't contain "rust" anywhere
         let tags4 = create_test_tags(&["unrelated"]);
-        bookmarks.push(Bookmark::new(
-            "https://example.net", "Something Else", "Unrelated content", tags4
-        ).unwrap());
+        bookmarks.push(
+            Bookmark::new(
+                "https://example.net",
+                "Something Else",
+                "Unrelated content",
+                tags4,
+            )
+            .unwrap(),
+        );
 
         // Search for "rust"
         let results = service.search_by_content(&bookmarks, "rust");

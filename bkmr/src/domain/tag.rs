@@ -1,5 +1,5 @@
-use std::fmt;
 use std::collections::HashSet;
+use std::fmt;
 
 use crate::domain::error::{DomainError, DomainResult};
 
@@ -20,7 +20,7 @@ impl Tag {
 
         if value.contains(',') || value.contains(' ') {
             return Err(DomainError::InvalidTag(
-                "Tag cannot contain commas or spaces".to_string()
+                "Tag cannot contain commas or spaces".to_string(),
             ));
         }
 
@@ -36,7 +36,8 @@ impl Tag {
     pub fn parse_tags<S: AsRef<str>>(tag_str: S) -> DomainResult<HashSet<Tag>> {
         let mut result = HashSet::new();
 
-        for tag_value in tag_str.as_ref()
+        for tag_value in tag_str
+            .as_ref()
             .split(',')
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
@@ -49,9 +50,7 @@ impl Tag {
 
     /// Format a set of tags into a normalized tag string
     pub fn format_tags(tags: &HashSet<Tag>) -> String {
-        let mut tag_values: Vec<_> = tags.iter()
-            .map(|tag| tag.value.clone())
-            .collect();
+        let mut tag_values: Vec<_> = tags.iter().map(|tag| tag.value.clone()).collect();
 
         tag_values.sort();
 
@@ -81,8 +80,8 @@ impl fmt::Display for Tag {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
     use super::*;
+    use std::collections::HashSet;
 
     #[test]
     fn test_tag_creation_valid() {

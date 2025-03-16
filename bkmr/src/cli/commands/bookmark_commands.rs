@@ -1,9 +1,8 @@
 use crate::adapter::dal::Dal;
-use crate::model::bookmark::BookmarkUpdater;
 use crate::adapter::embeddings::{cosine_similarity, deserialize_embedding};
 use crate::adapter::json::{bms_to_json, read_ndjson_file_and_create_bookmarks};
 use crate::application::dto::{
-    BookmarkCreateRequest, BookmarkSearchRequest, BookmarkUpdateRequest
+    BookmarkCreateRequest, BookmarkSearchRequest, BookmarkUpdateRequest,
 };
 use crate::application::services::bookmark_application_service::BookmarkApplicationService;
 use crate::cli::args::{Cli, Commands};
@@ -12,10 +11,12 @@ use crate::context::Context;
 use crate::environment::CONFIG;
 use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 use crate::model::bms::Bookmarks;
+use crate::model::bookmark::BookmarkUpdater;
 use crate::model::tag::Tags;
 use crate::service::fzf::fzf_process;
 use crate::service::process::{
-    delete_bms, edit_bms, open_bm, show_bms, DisplayBookmark, DisplayField, ALL_FIELDS, DEFAULT_FIELDS
+    delete_bms, edit_bms, open_bm, show_bms, DisplayBookmark, DisplayField, ALL_FIELDS,
+    DEFAULT_FIELDS,
 };
 use crate::util::helper::{confirm, ensure_int_vector};
 use camino::Utf8Path;
@@ -58,7 +59,8 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         is_fuzzy,
         is_json,
         limit,
-    } = cli.command.unwrap() {
+    } = cli.command.unwrap()
+    {
         let mut fields = DEFAULT_FIELDS.to_vec();
 
         // Combine prefix tags with tags_all if present
@@ -69,7 +71,11 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         // Create search request for application service
         let search_request = BookmarkSearchRequest {
             query: fts_query,
-            all_tags: if tags_all.is_empty() { None } else { Some(vec![tags_all]) },
+            all_tags: if tags_all.is_empty() {
+                None
+            } else {
+                Some(vec![tags_all])
+            },
             any_tags: tags_any.map(|t| vec![t]),
             exclude_all_tags: tags_all_not.map(|t| vec![t]),
             exclude_any_tags: tags_any_not.map(|t| vec![t]),
@@ -86,14 +92,18 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
         // Convert to traditional model for display compatibility
         let mut bms = Bookmarks::new(String::new());
-        bms.bms = response.bookmarks.iter().map(|item| {
-            let mut bm = crate::model::bookmark::Bookmark::default();
-            bm.id = item.id.unwrap_or(0);
-            bm.URL = item.url.clone();
-            bm.metadata = item.title.clone();
-            bm.tags = item.tags.join(",");
-            bm
-        }).collect();
+        bms.bms = response
+            .bookmarks
+            .iter()
+            .map(|item| {
+                let mut bm = crate::model::bookmark::Bookmark::default();
+                bm.id = item.id.unwrap_or(0);
+                bm.URL = item.url.clone();
+                bm.metadata = item.title.clone();
+                bm.tags = item.tags.join(",");
+                bm
+            })
+            .collect();
 
         if order_desc || order_asc {
             fields.push(DisplayField::LastUpdateTs);
@@ -110,7 +120,8 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
                 return Ok(());
             }
             _ => {
-                let d_bms: Vec<DisplayBookmark> = bms.bms.iter().map(DisplayBookmark::from).collect();
+                let d_bms: Vec<DisplayBookmark> =
+                    bms.bms.iter().map(DisplayBookmark::from).collect();
                 show_bms(&d_bms, &fields);
                 eprintln!("Found {} bookmarks", bms.bms.len());
 
@@ -123,11 +134,14 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
                         .join(",");
                     println!("{}", ids);
                 } else {
-                    stderr.set_color(ColorSpec::new().set_fg(Some(Color::Green)))
+                    stderr
+                        .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
                         .map_err(|e| CliError::Other(format!("Failed to set color: {}", e)))?;
-                    writeln!(&mut stderr, "Selection: ")
-                        .map_err(|e| CliError::Other(format!("Failed to write to stderr: {}", e)))?;
-                    stderr.reset()
+                    writeln!(&mut stderr, "Selection: ").map_err(|e| {
+                        CliError::Other(format!("Failed to write to stderr: {}", e))
+                    })?;
+                    stderr
+                        .reset()
                         .map_err(|e| CliError::Other(format!("Failed to reset color: {}", e)))?;
                     crate::service::process::process(&bms.bms);
                 }
@@ -139,7 +153,12 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
-    if let Commands::SemSearch { query, limit, non_interactive } = cli.command.unwrap() {
+    if let Commands::SemSearch {
+        query,
+        limit,
+        non_interactive,
+    } = cli.command.unwrap()
+    {
         let bms = Bookmarks::new(String::new());
         let results = find_similar(&query, &bms)?;
         let limit = limit.unwrap_or(10) as usize;
@@ -172,11 +191,13 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
                 .join(",");
             println!("{}", ids);
         } else {
-            stderr.set_color(ColorSpec::new().set_fg(Some(Color::Green)))
+            stderr
+                .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
                 .map_err(|e| CliError::Other(format!("Failed to set color: {}", e)))?;
             writeln!(&mut stderr, "Selection: ")
                 .map_err(|e| CliError::Other(format!("Failed to write to stderr: {}", e)))?;
-            stderr.reset()
+            stderr
+                .reset()
                 .map_err(|e| CliError::Other(format!("Failed to reset color: {}", e)))?;
             crate::service::process::process(
                 &filtered_results
@@ -195,15 +216,18 @@ fn find_similar(query: &str, bms: &Bookmarks) -> CliResult<Vec<(i32, f32)>> {
     let embedding = Context::read_global()
         .execute(query)
         .map_err(|e| CliError::Other(e.to_string()))?
-        .ok_or_else(|| CliError::CommandFailed("No embedding generated. OpenAI flag set?".to_string()))?;
+        .ok_or_else(|| {
+            CliError::CommandFailed("No embedding generated. OpenAI flag set?".to_string())
+        })?;
 
     let query_vector = ndarray::Array1::from(embedding);
     let mut results = Vec::with_capacity(bms.bms.len());
 
     for bm in &bms.bms {
         if let Some(embedding_data) = &bm.embedding {
-            let bm_embedding = deserialize_embedding(embedding_data.clone())
-                .map_err(|e| CliError::CommandFailed(format!("Failed to deserialize embedding: {}", e)))?;
+            let bm_embedding = deserialize_embedding(embedding_data.clone()).map_err(|e| {
+                CliError::CommandFailed(format!("Failed to deserialize embedding: {}", e))
+            })?;
             let bm_vector = ndarray::Array1::from(bm_embedding);
             let similarity = cosine_similarity(&query_vector, &bm_vector);
             results.push((bm.id, similarity));
@@ -219,9 +243,12 @@ pub fn open(cli: Cli) -> CliResult<()> {
     if let Commands::Open { ids } = cli.command.unwrap() {
         let mut dal = Dal::new(CONFIG.db_url.clone());
         for id in get_ids(ids)? {
-            open_bm(&dal.get_bookmark_by_id(id)
-                .map_err(|e| CliError::CommandFailed(format!("Failed to get bookmark: {}", e)))?)
-                .map_err(|e| CliError::CommandFailed(format!("Failed to open bookmark: {}", e)))?;
+            open_bm(
+                &dal.get_bookmark_by_id(id).map_err(|e| {
+                    CliError::CommandFailed(format!("Failed to get bookmark: {}", e))
+                })?,
+            )
+            .map_err(|e| CliError::CommandFailed(format!("Failed to open bookmark: {}", e)))?;
         }
     }
     Ok(())
@@ -229,7 +256,15 @@ pub fn open(cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn add(cli: Cli) -> CliResult<()> {
-    if let Commands::Add { url, tags, title, desc, no_web, edit } = cli.command.unwrap() {
+    if let Commands::Add {
+        url,
+        tags,
+        title,
+        desc,
+        no_web,
+        edit,
+    } = cli.command.unwrap()
+    {
         // Create service
         let service = create_bookmark_service()?;
         let mut dal = Dal::new(CONFIG.db_url.clone());
@@ -240,7 +275,9 @@ pub fn add(cli: Cli) -> CliResult<()> {
             .check_tags(normalized_tags.clone())
             .map_err(|e| CliError::CommandFailed(format!("Failed to check tags: {}", e)))?;
 
-        if !unknown_tags.is_empty() && !confirm(&format!("Unknown tags: {:?}, create?", unknown_tags)) {
+        if !unknown_tags.is_empty()
+            && !confirm(&format!("Unknown tags: {:?}, create?", unknown_tags))
+        {
             return Err(CliError::OperationAborted);
         }
 
@@ -256,7 +293,11 @@ pub fn add(cli: Cli) -> CliResult<()> {
             url: url.clone(),
             title: title.or(Some(web_title)),
             description: desc.or(Some(web_desc)),
-            tags: if normalized_tags.is_empty() { None } else { Some(normalized_tags) },
+            tags: if normalized_tags.is_empty() {
+                None
+            } else {
+                Some(normalized_tags)
+            },
             fetch_metadata: Some(!no_web),
         };
 
@@ -272,12 +313,10 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
         // Show the bookmark for confirmation
         if let Some(id) = result.id {
-            let bm = dal.get_bookmark_by_id(id)
+            let bm = dal
+                .get_bookmark_by_id(id)
                 .map_err(|e| CliError::CommandFailed(format!("Failed to get bookmark: {}", e)))?;
-            show_bms(
-                &vec![DisplayBookmark::from(&bm)],
-                &DEFAULT_FIELDS,
-            );
+            show_bms(&vec![DisplayBookmark::from(&bm)], &DEFAULT_FIELDS);
         }
     }
     Ok(())
@@ -295,10 +334,18 @@ pub fn delete(cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn update(cli: Cli) -> CliResult<()> {
-    if let Commands::Update { ids, tags, tags_not, force } = cli.command.unwrap() {
+    if let Commands::Update {
+        ids,
+        tags,
+        tags_not,
+        force,
+    } = cli.command.unwrap()
+    {
         // Validate force update requirements
         if force && (tags.is_none() || tags_not.is_some()) {
-            return Err(CliError::InvalidInput("Force update requires tags but no ntags".to_string()));
+            return Err(CliError::InvalidInput(
+                "Force update requires tags but no ntags".to_string(),
+            ));
         }
 
         let ids = get_ids(ids)?;
@@ -310,8 +357,9 @@ pub fn update(cli: Cli) -> CliResult<()> {
 
         for id in ids.clone() {
             // Get the bookmark
-            let bookmark = service.get_bookmark(id)?
-                .ok_or_else(|| CliError::CommandFailed(format!("Bookmark with ID {} not found", id)))?;
+            let bookmark = service.get_bookmark(id)?.ok_or_else(|| {
+                CliError::CommandFailed(format!("Bookmark with ID {} not found", id))
+            })?;
 
             // Get current tags
             let mut current_tags: Vec<String> = bookmark.tags;
@@ -386,12 +434,14 @@ pub fn show(cli: Cli) -> CliResult<()> {
 pub fn surprise(cli: Cli) -> CliResult<()> {
     if let Commands::Surprise { n } = cli.command.unwrap() {
         let mut dal = Dal::new(CONFIG.db_url.clone());
-        let bms = dal.get_randomized_bookmarks(n)
-            .map_err(|e| CliError::CommandFailed(format!("Failed to get randomized bookmarks: {}", e)))?;
+        let bms = dal.get_randomized_bookmarks(n).map_err(|e| {
+            CliError::CommandFailed(format!("Failed to get randomized bookmarks: {}", e))
+        })?;
 
         for bm in &bms {
-            open::that(&bm.URL)
-                .map_err(|e| CliError::CommandFailed(format!("Failed to open URL {}: {}", bm.URL, e)))?;
+            open::that(&bm.URL).map_err(|e| {
+                CliError::CommandFailed(format!("Failed to open URL {}: {}", bm.URL, e))
+            })?;
         }
     }
     Ok(())
@@ -402,17 +452,22 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
     if let Commands::CreateDb { path } = cli.command.unwrap() {
         let path = Utf8Path::new(&path);
         if path.exists() {
-            return Err(CliError::InvalidInput(format!("Database already exists at {:?}", path)));
+            return Err(CliError::InvalidInput(format!(
+                "Database already exists at {:?}",
+                path
+            )));
         }
 
         if let Some(parent) = path.parent() {
-            create_dir_all(parent)
-                .map_err(|e| CliError::CommandFailed(format!("Failed to create parent directories: {}", e)))?;
+            create_dir_all(parent).map_err(|e| {
+                CliError::CommandFailed(format!("Failed to create parent directories: {}", e))
+            })?;
         }
 
         let mut dal = Dal::new(path.to_string());
-        crate::adapter::dal::migration::init_db(&mut dal.conn)
-            .map_err(|e| CliError::CommandFailed(format!("Failed to initialize database: {}", e)))?;
+        crate::adapter::dal::migration::init_db(&mut dal.conn).map_err(|e| {
+            CliError::CommandFailed(format!("Failed to initialize database: {}", e))
+        })?;
         dal.clean_table()
             .map_err(|e| CliError::CommandFailed(format!("Failed to clean table: {}", e)))?;
 
@@ -425,16 +480,18 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
 pub fn backfill(cli: Cli) -> CliResult<()> {
     if let Commands::Backfill { dry_run } = cli.command.unwrap() {
         let mut dal = Dal::new(CONFIG.db_url.clone());
-        let bms = dal.get_bookmarks_without_embedding()
-            .map_err(|e| CliError::CommandFailed(format!("Failed to get bookmarks without embedding: {}", e)))?;
+        let bms = dal.get_bookmarks_without_embedding().map_err(|e| {
+            CliError::CommandFailed(format!("Failed to get bookmarks without embedding: {}", e))
+        })?;
 
         for bm in &bms {
             println!("Updating: {:?}", bm.metadata);
             if !dry_run {
                 let mut bm = bm.clone();
                 bm.update();
-                dal.update_bookmark(bm)
-                    .map_err(|e| CliError::CommandFailed(format!("Failed to update bookmark: {}", e)))?;
+                dal.update_bookmark(bm).map_err(|e| {
+                    CliError::CommandFailed(format!("Failed to update bookmark: {}", e))
+                })?;
             }
         }
     }
@@ -461,12 +518,11 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::adapter::embeddings::OpenAiEmbedding;
+
     use camino::Utf8PathBuf;
     use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};
     use rstest::*;
-    use std::fs;
 
     #[fixture]
     fn temp_dir() -> Utf8PathBuf {
@@ -498,7 +554,7 @@ mod tests {
         let result = get_ids("1,abc,3".to_string());
         assert!(result.is_err());
         match result {
-            Err(CliError::InvalidIdFormat(_)) => {}, // Expected error
+            Err(CliError::InvalidIdFormat(_)) => {} // Expected error
             _ => panic!("Expected InvalidIdFormat error"),
         }
     }

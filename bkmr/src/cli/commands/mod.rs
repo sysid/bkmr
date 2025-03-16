@@ -3,8 +3,8 @@ mod bookmark_commands;
 mod tag_commands;
 
 use crate::cli::args::{Cli, Commands};
-use termcolor::StandardStream;
 use crate::cli::error::CliResult;
+use termcolor::StandardStream;
 
 pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
     match cli.command {
@@ -33,7 +33,7 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
                 eprintln!("ids: {:?}, tags: {:?}", ids, tags);
             }
             Ok(())
-        },
+        }
         None => Ok(()),
     }
 }

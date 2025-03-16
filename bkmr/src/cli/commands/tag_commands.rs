@@ -1,13 +1,13 @@
 // src/cli/commands/tag_commands.rs
+use crate::application::dto::tag_dto::{TagMergeRequest, TagOperationRequest, TagRenameRequest};
+use crate::application::services::tag_application_service::TagApplicationService;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
 use crate::environment::CONFIG;
-use crate::application::services::tag_application_service::TagApplicationService;
 use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 use crate::util::helper::confirm;
-use crate::application::dto::tag_dto::{TagMergeRequest, TagOperationRequest, TagRenameRequest};
 
-use tracing::{instrument};
+use tracing::instrument;
 
 // Create a service factory function to reduce boilerplate
 fn create_tag_service() -> CliResult<TagApplicationService<SqliteBookmarkRepository>> {
@@ -50,7 +50,10 @@ pub fn merge_tags(name1: &str, name2: &str) -> CliResult<()> {
     };
 
     let count = service.merge_tags(request)?;
-    println!("Updated {} bookmarks, merged '{}' into '{}'", count, name1, name2);
+    println!(
+        "Updated {} bookmarks, merged '{}' into '{}'",
+        count, name1, name2
+    );
 
     Ok(())
 }
@@ -70,13 +73,20 @@ pub fn rename_tag(old_name: &str, new_name: &str) -> CliResult<()> {
     };
 
     let count = service.rename_tag(request)?;
-    println!("Updated {} bookmarks, renamed '{}' to '{}'", count, old_name, new_name);
+    println!(
+        "Updated {} bookmarks, renamed '{}' to '{}'",
+        count, old_name, new_name
+    );
 
     Ok(())
 }
 
 #[instrument]
-pub fn add_tags_to_bookmarks(bookmark_ids: Vec<i32>, tag_names: Vec<String>, replace: bool) -> CliResult<()> {
+pub fn add_tags_to_bookmarks(
+    bookmark_ids: Vec<i32>,
+    tag_names: Vec<String>,
+    replace: bool,
+) -> CliResult<()> {
     let service = create_tag_service()?;
 
     let request = TagOperationRequest {
@@ -112,28 +122,29 @@ pub fn get_tag_suggestions(partial: &str) -> CliResult<Vec<String>> {
     let service = create_tag_service()?;
 
     let suggestions = service.get_tag_suggestions(partial)?;
-    Ok(suggestions.suggestions.into_iter().map(|t| t.name).collect())
+    Ok(suggestions
+        .suggestions
+        .into_iter()
+        .map(|t| t.name)
+        .collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::*;
-    use std::fs;
+
     use camino::Utf8PathBuf;
     use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};
     use rstest::{fixture, rstest};
+    use std::fs;
 
     #[fixture]
     fn temp_dir() -> Utf8PathBuf {
         let tempdir = tempdir().unwrap();
         let options = dir::CopyOptions::new().overwrite(true);
         copy_items(
-            &[
-                "tests/resources/bkmr.v1.db",
-                "tests/resources/bkmr.v2.db",
-            ],
+            &["tests/resources/bkmr.v1.db", "tests/resources/bkmr.v2.db"],
             "../db",
             &options,
         )
@@ -154,14 +165,18 @@ mod tests {
         let suggestions = get_tag_suggestions(partial)?;
 
         // Assert: Should find some results
-        assert!(!suggestions.is_empty(), "Expected at least one tag suggestion");
+        assert!(
+            !suggestions.is_empty(),
+            "Expected at least one tag suggestion"
+        );
 
         // All suggestions should contain the partial string
         for suggestion in &suggestions {
             assert!(
                 suggestion.to_lowercase().contains(partial),
                 "Suggestion '{}' doesn't contain the search term '{}'",
-                suggestion, partial
+                suggestion,
+                partial
             );
         }
 

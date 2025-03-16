@@ -6,14 +6,14 @@ use diesel::sql_query;
 use diesel::sql_types::{Integer, Text};
 use tracing::{error, instrument};
 
+use super::connection::{ConnectionPool, PooledConnection};
+use super::error::{SqliteRepositoryError, SqliteResult};
+use crate::adapter::dal::schema::bookmarks::{self, dsl};
 use crate::domain::bookmark::Bookmark;
+use crate::domain::error::DomainError;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::tag::Tag;
-use crate::domain::error::DomainError;
-use crate::adapter::dal::schema::bookmarks::{self, dsl};
-use super::connection::{ConnectionPool, PooledConnection};
-use super::error::{SqliteRepositoryError, SqliteResult};
 
 /// Implementation of BookmarkRepository for SQLite database
 #[derive(Clone)]
@@ -35,21 +35,23 @@ impl SqliteBookmarkRepository {
 
     /// Get a connection from the pool
     fn get_connection(&self) -> SqliteResult<PooledConnection> {
-        self.pool.get()
+        self.pool
+            .get()
             .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))
     }
 
     /// Convert a database model to a domain entity
     fn to_domain_model(&self, db_bookmark: DbBookmark) -> SqliteResult<Bookmark> {
         // Parse tags from the stored format
-        let _tags = Tag::parse_tags(&db_bookmark.tags)
-            .map_err(|e| SqliteRepositoryError::ConversionError(format!("Failed to parse tags for bookmark ID {}: {}", db_bookmark.id, e)))?;
+        let _tags = Tag::parse_tags(&db_bookmark.tags).map_err(|e| {
+            SqliteRepositoryError::ConversionError(format!(
+                "Failed to parse tags for bookmark ID {}: {}",
+                db_bookmark.id, e
+            ))
+        })?;
 
         // Convert stored timestamp to DateTime<Utc>
-        let created_at = DateTime::from_naive_utc_and_offset(
-            db_bookmark.last_update_ts,
-            Utc
-        );
+        let created_at = DateTime::from_naive_utc_and_offset(db_bookmark.last_update_ts, Utc);
 
         // Use same timestamp for updated_at for now
         let updated_at = created_at;
@@ -64,7 +66,13 @@ impl SqliteBookmarkRepository {
             db_bookmark.flags,
             created_at,
             updated_at,
-        ).map_err(|e| SqliteRepositoryError::ConversionError(format!("Failed to create domain bookmark from DB model for ID {}: {}", db_bookmark.id, e)))
+        )
+        .map_err(|e| {
+            SqliteRepositoryError::ConversionError(format!(
+                "Failed to create domain bookmark from DB model for ID {}: {}",
+                db_bookmark.id, e
+            ))
+        })
     }
 
     /// Convert a domain entity to a database model
@@ -75,7 +83,7 @@ impl SqliteBookmarkRepository {
             tags: bookmark.formatted_tags(),
             desc: bookmark.description().to_string(),
             flags: bookmark.access_count(),
-            embedding: None, // We'll handle this separately
+            embedding: None,    // We'll handle this separately
             content_hash: None, // We'll handle this separately
         }
     }
@@ -101,8 +109,13 @@ impl SqliteBookmarkRepository {
                 .bind::<Text, _>(&params[1])
                 .bind::<Text, _>(&params[2])
                 .load(&mut conn),
-            _ => return Err(SqliteRepositoryError::InvalidParameter("Too many parameters for query".to_string()))
-        }.map_err(SqliteRepositoryError::DatabaseError)?;
+            _ => {
+                return Err(SqliteRepositoryError::InvalidParameter(
+                    "Too many parameters for query".to_string(),
+                ))
+            }
+        }
+        .map_err(SqliteRepositoryError::DatabaseError)?;
 
         // Extract IDs
         Ok(results.into_iter().map(|result| result.id).collect())
@@ -167,16 +180,20 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             .filter(dsl::id.eq(id))
             .first::<DbBookmark>(&mut conn)
             .optional()
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to get bookmark with ID {}: {}", id, e)
-            ))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to get bookmark with ID {}: {}",
+                    id, e
+                ))
+            })?;
 
         match result {
             Some(db_bookmark) => {
-                let bookmark = self.to_domain_model(db_bookmark)
+                let bookmark = self
+                    .to_domain_model(db_bookmark)
                     .map_err(DomainError::from)?;
                 Ok(Some(bookmark))
-            },
+            }
             None => Ok(None),
         }
     }
@@ -191,16 +208,20 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             .filter(dsl::URL.eq(escaped_url))
             .first::<DbBookmark>(&mut conn)
             .optional()
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to get bookmark with URL {}: {}", url, e)
-            ))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to get bookmark with URL {}: {}",
+                    url, e
+                ))
+            })?;
 
         match result {
             Some(db_bookmark) => {
-                let bookmark = self.to_domain_model(db_bookmark)
+                let bookmark = self
+                    .to_domain_model(db_bookmark)
                     .map_err(DomainError::from)?;
                 Ok(Some(bookmark))
-            },
+            }
             None => Ok(None),
         }
     }
@@ -213,7 +234,8 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             // Get all bookmarks and filter them in-memory using the specification
             let all_bookmarks = self.get_all()?;
 
-            let filtered = all_bookmarks.into_iter()
+            let filtered = all_bookmarks
+                .into_iter()
                 .filter(|bookmark| query.matches(bookmark))
                 .collect::<Vec<_>>();
 
@@ -223,10 +245,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 match sort_direction {
                     SortDirection::Ascending => {
                         sorted.sort_by_key(|a| a.updated_at());
-                    },
+                    }
                     SortDirection::Descending => {
                         sorted.sort_by(|a, b| b.updated_at().cmp(&a.updated_at()));
-                    },
+                    }
                 }
             }
 
@@ -256,10 +278,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             match sort_direction {
                 SortDirection::Ascending => {
                     query_builder = query_builder.order(dsl::last_update_ts.asc());
-                },
+                }
                 SortDirection::Descending => {
                     query_builder = query_builder.order(dsl::last_update_ts.desc());
-                },
+                }
             }
         }
 
@@ -273,21 +295,18 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         }
 
         // Execute query
-        let db_bookmarks = query_builder
-            .load::<DbBookmark>(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to search bookmarks: {}", e)
-            ))?;
+        let db_bookmarks = query_builder.load::<DbBookmark>(&mut conn).map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to search bookmarks: {}", e))
+        })?;
 
         // Convert to domain models
-        let bookmarks = db_bookmarks.into_iter()
-            .filter_map(|db_bookmark| {
-                match self.to_domain_model(db_bookmark) {
-                    Ok(bookmark) => Some(bookmark),
-                    Err(e) => {
-                        error!("Failed to convert bookmark: {}", e);
-                        None
-                    }
+        let bookmarks = db_bookmarks
+            .into_iter()
+            .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
+                Ok(bookmark) => Some(bookmark),
+                Err(e) => {
+                    error!("Failed to convert bookmark: {}", e);
+                    None
                 }
             })
             .collect();
@@ -298,11 +317,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     fn get_all(&self) -> Result<Vec<Bookmark>, DomainError> {
         let mut conn = self.get_connection().map_err(DomainError::from)?;
 
-        let db_bookmarks = dsl::bookmarks
-            .load::<DbBookmark>(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to get all bookmarks: {}", e)
-            ))?;
+        let db_bookmarks = dsl::bookmarks.load::<DbBookmark>(&mut conn).map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to get all bookmarks: {}", e))
+        })?;
 
         let mut bookmarks = Vec::new();
         for db_bookmark in db_bookmarks {
@@ -326,7 +343,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 tags: bookmark.formatted_tags(),
                 desc: bookmark.description().to_string(),
                 flags: bookmark.access_count(),
-                embedding: None, // Will be handled separately
+                embedding: None,    // Will be handled separately
                 content_hash: None, // Will be handled separately
             };
 
@@ -348,9 +365,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
             Ok(())
         })
-        .map_err(|e| DomainError::BookmarkOperationFailed(
-            format!("Failed to add bookmark: {}", e)
-        ))?;
+        .map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to add bookmark: {}", e))
+        })?;
 
         Ok(())
     }
@@ -358,9 +375,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     fn update(&self, bookmark: &Bookmark) -> Result<(), DomainError> {
         let mut conn = self.get_connection().map_err(DomainError::from)?;
 
-        let id = bookmark.id().ok_or_else(|| DomainError::BookmarkOperationFailed(
-            "Bookmark has no ID".to_string()
-        ))?;
+        let id = bookmark.id().ok_or_else(|| {
+            DomainError::BookmarkOperationFailed("Bookmark has no ID".to_string())
+        })?;
 
         // Create the update data
         let changes = self.to_db_model(bookmark);
@@ -369,9 +386,12 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
             .set(&changes)
             .execute(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to update bookmark with ID {}: {}", id, e)
-            ))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to update bookmark with ID {}: {}",
+                    id, e
+                ))
+            })?;
 
         if result == 0 {
             return Err(DomainError::BookmarkNotFound(id.to_string()));
@@ -386,26 +406,26 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // Begin transaction
         conn.transaction::<bool, diesel::result::Error, _>(|conn| {
             // Delete the bookmark
-            let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id)))
-                .execute(conn)?;
+            let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
 
             if result == 0 {
                 return Ok(false); // No bookmark was deleted
             }
 
             // Update IDs of remaining bookmarks to maintain sequential IDs
-            diesel::sql_query(
-                "UPDATE bookmarks SET id = id - 1 WHERE id > ?"
-            )
-            .bind::<Integer, _>(id)
-            .execute(conn)?;
+            diesel::sql_query("UPDATE bookmarks SET id = id - 1 WHERE id > ?")
+                .bind::<Integer, _>(id)
+                .execute(conn)?;
 
             // Return success
             Ok(true)
         })
-        .map_err(|e| DomainError::BookmarkOperationFailed(
-            format!("Failed to delete bookmark with ID {}: {}", id, e)
-        ))
+        .map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!(
+                "Failed to delete bookmark with ID {}: {}",
+                id, e
+            ))
+        })
     }
 
     #[instrument(skip(self), level = "trace")]
@@ -429,11 +449,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             ORDER BY 2 DESC;
         ";
 
-        let tag_frequencies: Vec<TagsFrequency> = sql_query(query)
-            .load(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to get all tags: {}", e)
-            ))?;
+        let tag_frequencies: Vec<TagsFrequency> =
+            sql_query(query).load(&mut conn).map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!("Failed to get all tags: {}", e))
+            })?;
 
         // Convert to domain model
         let mut result = Vec::new();
@@ -473,9 +492,13 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let tag_frequencies: Vec<TagsFrequency> = sql_query(query)
             .bind::<Text, _>(search_tag)
             .load(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to get related tags for '{}': {}", tag.value(), e)
-            ))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to get related tags for '{}': {}",
+                    tag.value(),
+                    e
+                ))
+            })?;
 
         // Convert to domain model (excluding the search tag itself)
         let mut result = Vec::new();
@@ -507,12 +530,16 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
         // Get random IDs
         let random_ids: Vec<RandomId> = diesel::sql_query(format!(
-            "SELECT id FROM bookmarks ORDER BY RANDOM() LIMIT {}", count
+            "SELECT id FROM bookmarks ORDER BY RANDOM() LIMIT {}",
+            count
         ))
         .load(&mut conn)
-        .map_err(|e| DomainError::BookmarkOperationFailed(
-            format!("Failed to get {} random bookmark IDs: {}", count, e)
-        ))?;
+        .map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!(
+                "Failed to get {} random bookmark IDs: {}",
+                count, e
+            ))
+        })?;
 
         // If no bookmarks found, return empty vec
         if random_ids.is_empty() {
@@ -526,19 +553,21 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let db_bookmarks = dsl::bookmarks
             .filter(dsl::id.eq_any(ids))
             .load::<DbBookmark>(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to load random bookmarks: {}", e)
-            ))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to load random bookmarks: {}",
+                    e
+                ))
+            })?;
 
         // Convert to domain models
-        let bookmarks = db_bookmarks.into_iter()
-            .filter_map(|db_bookmark| {
-                match self.to_domain_model(db_bookmark) {
-                    Ok(bookmark) => Some(bookmark),
-                    Err(e) => {
-                        error!("Failed to convert bookmark: {}", e);
-                        None
-                    }
+        let bookmarks = db_bookmarks
+            .into_iter()
+            .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
+                Ok(bookmark) => Some(bookmark),
+                Err(e) => {
+                    error!("Failed to convert bookmark: {}", e);
+                    None
                 }
             })
             .collect();
@@ -552,9 +581,12 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let db_bookmarks = dsl::bookmarks
             .filter(dsl::embedding.is_null())
             .load::<DbBookmark>(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(
-                format!("Failed to get bookmarks without embeddings: {}", e)
-            ))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to get bookmarks without embeddings: {}",
+                    e
+                ))
+            })?;
 
         let mut bookmarks = Vec::new();
         for db_bookmark in db_bookmarks {
@@ -649,13 +681,13 @@ mod tests {
     use crate::domain::repositories::query::TextSearchSpecification;
     use crate::infrastructure::repositories::sqlite::connection::init_db;
     use std::collections::HashSet;
-    
 
     fn setup_test_db() -> Result<(SqliteBookmarkRepository, String), DomainError> {
         // Create a temporary file instead of a path in a temporary directory
         // This ensures we have proper write permissions
-        let temp_file = tempfile::NamedTempFile::new()
-            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to create temp file: {}", e)))?;
+        let temp_file = tempfile::NamedTempFile::new().map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to create temp file: {}", e))
+        })?;
         let db_path = temp_file.path().to_str().unwrap().to_string();
 
         // Keep the temp_file from being deleted while we're using it
@@ -663,25 +695,35 @@ mod tests {
         std::mem::forget(temp_file);
 
         // Initialize pool with a unique path for each test
-        let pool = super::super::connection::init_pool(&db_path)
-            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to initialize pool: {}", e)))?;
+        let pool = super::super::connection::init_pool(&db_path).map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to initialize pool: {}", e))
+        })?;
 
         // Initialize DB schema
-        let mut conn = pool.get()
-            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to get connection: {}", e)))?;
-        init_db(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to initialize DB: {}", e)))?;
+        let mut conn = pool.get().map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to get connection: {}", e))
+        })?;
+        init_db(&mut conn).map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!("Failed to initialize DB: {}", e))
+        })?;
 
         // Clean any existing data
         diesel::sql_query("DELETE FROM bookmarks")
             .execute(&mut conn)
-            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to clean table: {}", e)))?;
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!("Failed to clean table: {}", e))
+            })?;
 
         Ok((SqliteBookmarkRepository::new(pool), db_path))
     }
 
-    fn create_test_bookmark(title: &str, url: &str, tags: Vec<&str>) -> Result<Bookmark, DomainError> {
-        let tag_set: HashSet<Tag> = tags.into_iter()
+    fn create_test_bookmark(
+        title: &str,
+        url: &str,
+        tags: Vec<&str>,
+    ) -> Result<Bookmark, DomainError> {
+        let tag_set: HashSet<Tag> = tags
+            .into_iter()
             .map(Tag::new)
             .collect::<std::result::Result<HashSet<_>, _>>()?;
 
@@ -696,7 +738,7 @@ mod tests {
         let mut bookmark = create_test_bookmark(
             "Test Bookmark",
             "https://example.com",
-            vec!["test", "example"]
+            vec!["test", "example"],
         )?;
 
         repo.add(&mut bookmark)?;
@@ -726,11 +768,8 @@ mod tests {
         let (repo, _) = setup_test_db()?;
 
         // Create and add a bookmark
-        let mut bookmark = create_test_bookmark(
-            "URL Test",
-            "https://url-test.com",
-            vec!["url", "test"]
-        )?;
+        let mut bookmark =
+            create_test_bookmark("URL Test", "https://url-test.com", vec!["url", "test"])?;
 
         repo.add(&mut bookmark)?;
 
@@ -757,7 +796,7 @@ mod tests {
         let mut bookmark = create_test_bookmark(
             "Original Title",
             "https://update-test.com",
-            vec!["original"]
+            vec!["original"],
         )?;
 
         repo.add(&mut bookmark)?;
@@ -768,7 +807,10 @@ mod tests {
         updated_tags.insert(Tag::new("updated")?);
 
         let mut updated = bookmark.clone();
-        updated.update("Updated Title".to_string(), "Updated Description".to_string());
+        updated.update(
+            "Updated Title".to_string(),
+            "Updated Description".to_string(),
+        );
         updated.set_tags(updated_tags)?;
 
         repo.update(&updated)?;
@@ -791,18 +833,12 @@ mod tests {
         let (repo, _) = setup_test_db()?;
 
         // Add two bookmarks
-        let mut bookmark1 = create_test_bookmark(
-            "First Bookmark",
-            "https://first.com",
-            vec!["test"]
-        )?;
+        let mut bookmark1 =
+            create_test_bookmark("First Bookmark", "https://first.com", vec!["test"])?;
         repo.add(&mut bookmark1)?;
 
-        let mut bookmark2 = create_test_bookmark(
-            "Second Bookmark",
-            "https://second.com",
-            vec!["test"]
-        )?;
+        let mut bookmark2 =
+            create_test_bookmark("Second Bookmark", "https://second.com", vec!["test"])?;
         repo.add(&mut bookmark2)?;
 
         // Directly query all bookmarks to see their state
@@ -819,8 +855,16 @@ mod tests {
         assert_eq!(updated.len(), 1, "Should have 1 bookmark after deletion");
 
         // The remaining bookmark should have ID 1 and be the second bookmark
-        assert_eq!(updated[0].id(), Some(1), "Remaining bookmark should have ID 1");
-        assert_eq!(updated[0].url(), "https://second.com", "Remaining bookmark should be the second one");
+        assert_eq!(
+            updated[0].id(),
+            Some(1),
+            "Remaining bookmark should have ID 1"
+        );
+        assert_eq!(
+            updated[0].url(),
+            "https://second.com",
+            "Remaining bookmark should be the second one"
+        );
 
         Ok(())
     }
@@ -833,19 +877,19 @@ mod tests {
         let mut bookmark1 = create_test_bookmark(
             "Rust Programming",
             "https://rust-lang.org",
-            vec!["programming", "rust"]
+            vec!["programming", "rust"],
         )?;
 
         let mut bookmark2 = create_test_bookmark(
             "Python Guide",
             "https://python.org",
-            vec!["programming", "python"]
+            vec!["programming", "python"],
         )?;
 
         let mut bookmark3 = create_test_bookmark(
             "Cooking Recipes",
             "https://recipes.com",
-            vec!["cooking", "food"]
+            vec!["cooking", "food"],
         )?;
 
         repo.add(&mut bookmark1)?;
@@ -873,17 +917,11 @@ mod tests {
         let (repo, _) = setup_test_db()?;
 
         // Add bookmarks with various tags
-        let mut bookmark1 = create_test_bookmark(
-            "Test 1",
-            "https://example1.com",
-            vec!["tag1", "tag2"]
-        )?;
+        let mut bookmark1 =
+            create_test_bookmark("Test 1", "https://example1.com", vec!["tag1", "tag2"])?;
 
-        let mut bookmark2 = create_test_bookmark(
-            "Test 2",
-            "https://example2.com",
-            vec!["tag2", "tag3"]
-        )?;
+        let mut bookmark2 =
+            create_test_bookmark("Test 2", "https://example2.com", vec!["tag2", "tag3"])?;
 
         repo.add(&mut bookmark1)?;
         repo.add(&mut bookmark2)?;
@@ -916,23 +954,14 @@ mod tests {
         let (repo, _) = setup_test_db()?;
 
         // Add bookmarks with related tags
-        let mut bookmark1 = create_test_bookmark(
-            "Test 1",
-            "https://example1.com",
-            vec!["common", "related1"]
-        )?;
+        let mut bookmark1 =
+            create_test_bookmark("Test 1", "https://example1.com", vec!["common", "related1"])?;
 
-        let mut bookmark2 = create_test_bookmark(
-            "Test 2",
-            "https://example2.com",
-            vec!["common", "related2"]
-        )?;
+        let mut bookmark2 =
+            create_test_bookmark("Test 2", "https://example2.com", vec!["common", "related2"])?;
 
-        let mut bookmark3 = create_test_bookmark(
-            "Test 3",
-            "https://example3.com",
-            vec!["unrelated"]
-        )?;
+        let mut bookmark3 =
+            create_test_bookmark("Test 3", "https://example3.com", vec!["unrelated"])?;
 
         repo.add(&mut bookmark1)?;
         repo.add(&mut bookmark2)?;
@@ -945,7 +974,8 @@ mod tests {
         // Should find related1 and related2
         assert_eq!(related.len(), 2);
 
-        let tag_values: HashSet<String> = related.iter()
+        let tag_values: HashSet<String> = related
+            .iter()
             .map(|(tag, _)| tag.value().to_string())
             .collect();
 
@@ -965,7 +995,7 @@ mod tests {
             let mut bookmark = create_test_bookmark(
                 &format!("Test {}", i),
                 &format!("https://example{}.com", i),
-                vec!["test"]
+                vec!["test"],
             )?;
             repo.add(&mut bookmark)?;
         }
@@ -994,7 +1024,7 @@ mod tests {
             let mut bookmark = create_test_bookmark(
                 &format!("Test {}", i),
                 &format!("https://example{}.com", i),
-                vec!["test"]
+                vec!["test"],
             )?;
             repo.add(&mut bookmark)?;
         }
@@ -1013,11 +1043,8 @@ mod tests {
         let (repo, _) = setup_test_db()?;
 
         // Add a test bookmark
-        let mut bookmark = create_test_bookmark(
-            "Test Bookmark",
-            "https://exists-test.com",
-            vec!["test"]
-        )?;
+        let mut bookmark =
+            create_test_bookmark("Test Bookmark", "https://exists-test.com", vec!["test"])?;
         repo.add(&mut bookmark)?;
 
         // Check existing URL

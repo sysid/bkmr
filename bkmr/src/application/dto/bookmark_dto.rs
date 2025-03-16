@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::DomainResult;  // domain error alias
+use crate::domain::error::DomainResult; // domain error alias
 use crate::domain::tag::Tag;
 
 /// Request object for creating a new bookmark
@@ -116,7 +116,11 @@ impl BookmarkResponse {
             url: bookmark.url().to_string(),
             title: bookmark.title().to_string(),
             description: bookmark.description().to_string(),
-            tags: bookmark.tags().iter().map(|t| t.value().to_string()).collect(),
+            tags: bookmark
+                .tags()
+                .iter()
+                .map(|t| t.value().to_string())
+                .collect(),
             access_count: bookmark.access_count(),
             created_at: bookmark.created_at(),
             updated_at: bookmark.updated_at(),
@@ -136,7 +140,11 @@ impl BookmarkListItem {
             id: bookmark.id(),
             url: bookmark.url().to_string(),
             title: bookmark.title().to_string(),
-            tags: bookmark.tags().iter().map(|t| t.value().to_string()).collect(),
+            tags: bookmark
+                .tags()
+                .iter()
+                .map(|t| t.value().to_string())
+                .collect(),
         }
     }
 
@@ -164,7 +172,6 @@ impl BookmarkSearchRequest {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

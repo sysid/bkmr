@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-use crate::domain::error::DomainResult;  // domain error alias
+use crate::domain::error::DomainResult; // domain error alias
 use crate::domain::tag::Tag;
 
 /// Response object for tag information
@@ -88,7 +88,6 @@ impl TagOperationRequest {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

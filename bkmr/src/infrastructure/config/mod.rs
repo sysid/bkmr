@@ -2,10 +2,9 @@ use clap::Parser;
 use once_cell::sync::{Lazy, OnceCell};
 use serde::Deserialize;
 use std::env;
-use std::path::PathBuf;
 use std::sync::RwLock;
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::debug;
 
 // Default height for FZF window
 const DEFAULT_HEIGHT: &str = "50%";
@@ -13,13 +12,11 @@ const DEFAULT_HEIGHT: &str = "50%";
 static SETTINGS: OnceCell<RwLock<Settings>> = OnceCell::new();
 
 // For backwards compatibility
-pub static CONFIG: Lazy<Settings> = Lazy::new(|| {
-    match Settings::read_global() {
-        Ok(guard) => guard.clone(),
-        Err(e) => {
-            eprintln!("Warning: Failed to read global settings: {}", e);
-            Settings::new()
-        }
+pub static CONFIG: Lazy<Settings> = Lazy::new(|| match Settings::read_global() {
+    Ok(guard) => guard.clone(),
+    Err(e) => {
+        eprintln!("Warning: Failed to read global settings: {}", e);
+        Settings::new()
     }
 });
 
@@ -142,9 +139,9 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::*;
-    use std::env;
+
     use serial_test::serial;
+    use std::env;
 
     // Helper for reliable environment variable cleanup
     struct EnvGuard {
