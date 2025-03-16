@@ -1,3 +1,3 @@
 pub mod services;
 pub mod dto;
-mod error;
+pub(crate) mod error;
