@@ -2,6 +2,8 @@ use diesel::sqlite::Sqlite;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use tracing::debug;
 
+use crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError;
+
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
 /// Initializes the database by running all pending migrations.
@@ -19,17 +21,16 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 /// * Retrieving pending migrations
 /// * Running pending migrations
 #[allow(unused)]
-// In helper.rs
-pub fn init_db(connection: &mut impl MigrationHarness<Sqlite>) -> anyhow::Result<()> {
+pub fn init_db(connection: &mut impl MigrationHarness<Sqlite>) -> Result<(), SqliteRepositoryError> {
     debug!("{:?}", "--> initdb <--");
 
     connection
         .revert_all_migrations(MIGRATIONS)
-        .map_err(|e| anyhow::anyhow!("Failed to revert migrations: {}", e))?;
+        .map_err(|e| SqliteRepositoryError::MigrationError(format!("Failed to revert migrations: {}", e)))?;
 
     let pending = connection
         .pending_migrations(MIGRATIONS)
-        .map_err(|e| anyhow::anyhow!("Failed to get pending migrations: {}", e))?;
+        .map_err(|e| SqliteRepositoryError::MigrationError(format!("Failed to get pending migrations: {}", e)))?;
 
     pending.iter().for_each(|m| {
         debug!("Pending Migration: {}", m.name());
@@ -37,7 +38,7 @@ pub fn init_db(connection: &mut impl MigrationHarness<Sqlite>) -> anyhow::Result
 
     connection
         .run_pending_migrations(MIGRATIONS)
-        .map_err(|e| anyhow::anyhow!("Failed to run pending migrations: {}", e))?;
+        .map_err(|e| SqliteRepositoryError::MigrationError(format!("Failed to run pending migrations: {}", e)))?;
 
     Ok(())
 }
