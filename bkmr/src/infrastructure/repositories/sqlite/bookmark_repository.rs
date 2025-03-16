@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::sql_types::{Integer, Text};
-use tracing::error;
+use tracing::{error, instrument};
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
@@ -16,6 +16,7 @@ use super::connection::{ConnectionPool, PooledConnection};
 use super::error::{SqliteRepositoryError, SqliteResult};
 
 /// Implementation of BookmarkRepository for SQLite database
+#[derive(Clone)]
 pub struct SqliteBookmarkRepository {
     pool: ConnectionPool,
 }
@@ -407,6 +408,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         ))
     }
 
+    #[instrument(skip(self), level = "trace")]
     fn get_all_tags(&self) -> Result<Vec<(Tag, usize)>, DomainError> {
         let mut conn = self.get_connection().map_err(DomainError::from)?;
 

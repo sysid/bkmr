@@ -146,6 +146,20 @@ impl TagService for TagServiceImpl {
         related
     }
 
+    /// Merges a source tag into a target tag across multiple bookmarks.
+    ///
+    /// This function iterates over the provided bookmarks and replaces occurrences
+    /// of the `source` tag with the `target` tag.
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(usize)` representing the number of bookmarks that were updated.
+    /// Returns `Err(DomainError::TagOperationFailed)` if `source` and `target` are the same.
+    ///
+    /// # Errors
+    ///
+    /// * Returns an error if `source` and `target` are identical.
+    /// * Returns an error if setting new tags on a bookmark fails.
     fn merge_tags(
         &self,
         bookmarks: &mut [Bookmark],
@@ -176,6 +190,8 @@ impl TagService for TagServiceImpl {
         Ok(count)
     }
 
+    /// convenience wrapper around merge_tags to rename a tag across multiple bookmarks
+    /// or do nothing
     fn rename_tag(
         &self,
         bookmarks: &mut [Bookmark],

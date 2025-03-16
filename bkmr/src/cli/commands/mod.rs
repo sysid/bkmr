@@ -3,7 +3,6 @@ mod bookmark_commands;
 mod tag_commands;
 
 use crate::cli::args::{Cli, Commands};
-use anyhow::Result;
 use termcolor::StandardStream;
 use crate::cli::error::CliResult;
 

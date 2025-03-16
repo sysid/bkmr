@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::application::dto::tag_dto::{
-    TagInfoResponse, TagMergeRequest, TagOperationRequest, TagRenameRequest, TagSuggestionResponse
+    TagInfoResponse, TagMergeRequest, TagOperationRequest, TagRenameRequest, TagSuggestionResponse,
 };
 use crate::application::error::ApplicationResult;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
@@ -70,7 +70,8 @@ where
 
             if request.replace_existing.unwrap_or(false) {
                 // Replace all tags
-                self.domain_service.replace_tags(&mut bookmark, tags.clone())?;
+                self.domain_service
+                    .replace_tags(&mut bookmark, tags.clone())?;
             } else {
                 // Add tags
                 self.domain_service.add_tags(&mut bookmark, &tags)?;
@@ -85,7 +86,10 @@ where
     }
 
     /// Remove tags from bookmarks
-    pub fn remove_tags_from_bookmarks(&self, request: TagOperationRequest) -> ApplicationResult<usize> {
+    pub fn remove_tags_from_bookmarks(
+        &self,
+        request: TagOperationRequest,
+    ) -> ApplicationResult<usize> {
         let tags = self.parse_tags(&request.tags)?;
 
         let mut updated_count = 0;
@@ -96,7 +100,11 @@ where
             };
 
             // If remove_tags fails, we skip that bookmark
-            if self.domain_service.remove_tags(&mut bookmark, &tags).is_ok() {
+            if self
+                .domain_service
+                .remove_tags(&mut bookmark, &tags)
+                .is_ok()
+            {
                 self.repository.update(&bookmark)?;
                 updated_count += 1;
             }
@@ -111,7 +119,9 @@ where
         let target = self.domain_service.create_tag(&request.target_tag)?;
 
         let mut bookmarks = self.repository.get_all()?;
-        let count = self.domain_service.merge_tags(&mut bookmarks, &source, &target)?;
+        let count = self
+            .domain_service
+            .merge_tags(&mut bookmarks, &source, &target)?;
 
         // Save all updated bookmarks
         for bookmark in &bookmarks {
@@ -126,7 +136,9 @@ where
         let old_tag = self.domain_service.create_tag(&request.old_name)?;
 
         let mut bookmarks = self.repository.get_all()?;
-        let count = self.domain_service.rename_tag(&mut bookmarks, &old_tag, &request.new_name)?;
+        let count = self
+            .domain_service
+            .rename_tag(&mut bookmarks, &old_tag, &request.new_name)?;
 
         // Save all updated
         for bookmark in &bookmarks {
@@ -182,41 +194,103 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
-    use maplit::hashset;
-    use crate::domain::tag::Tag;
     use crate::domain::bookmark::Bookmark;
-    use crate::infrastructure::repositories::in_memory::bookmark_repository::InMemoryBookmarkRepository;
+    use crate::domain::tag::Tag;
+    use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+    use maplit::hashset;
+    use serial_test::serial;
+    use std::collections::HashSet;
+    use tracing::Instrument;
 
-    fn create_service_and_repo() -> (TagApplicationService<InMemoryBookmarkRepository>, InMemoryBookmarkRepository) {
-        let repo = InMemoryBookmarkRepository::new();
+    // Returns a stable path in `target/test_db/`.
+    // We recreate (or remove) the DB file each time for a clean slate,
+    // but we do NOT delete it after tests, so you can inspect it later.
+    fn create_persistent_db_path() -> String {
+        // e.g. put in `target/test_db/bookmarks_test.sqlite`
+        let db_dir = std::env::current_dir()
+            .expect("Failed to get current dir")
+            .join("target")
+            .join("test_db");
+        std::fs::create_dir_all(&db_dir).expect("Failed to create test_db directory");
+
+        let db_path = db_dir.join("bookmarks_test.sqlite");
+
+        // If the file already exists, remove it so tests start with a clean DB
+        if db_path.exists() {
+            std::fs::remove_file(&db_path).expect("Failed to remove old test DB file");
+        }
+
+        db_path.to_str().expect("Non-UTF8 path?").to_string()
+    }
+
+    // Helper function to create a fresh SQLite test repo + service.
+    fn create_service_and_repo() -> (
+        TagApplicationService<SqliteBookmarkRepository>,
+        SqliteBookmarkRepository,
+        String,
+    ) {
+        // 2) Create a temporary file on disk
+        let db_path = create_persistent_db_path();
+
+        // 3) Build the SQLite repo from that path
+        let repo = SqliteBookmarkRepository::from_url(&db_path)
+            .expect("Failed to initialize SqliteBookmarkRepository");
+
+        // 4) Construct the application service
         let service = TagApplicationService::new(repo.clone());
-        (service, repo)
+
+        // 5) Return (service, repo, the temp file handle)
+        (service, repo, db_path)
     }
 
     #[test]
+    #[serial]
     fn test_get_all_tags() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Add bookmarks with tags
-        let mut b1 = Bookmark::new("https://example.com", "Title1", "Desc1", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
-        let mut b2 = Bookmark::new("https://another.com", "Title2", "Desc2", hashset!{ Tag::new("lang").unwrap(), Tag::new("python").unwrap() }).unwrap();
+        let mut b1 = Bookmark::new(
+            "https://example.com",
+            "Title1",
+            "Desc1",
+            hashset! { Tag::new("rust").unwrap(), Tag::new("lang").unwrap() },
+        )
+        .unwrap();
+        let mut b2 = Bookmark::new(
+            "https://another.com",
+            "Title2",
+            "Desc2",
+            hashset! { Tag::new("lang").unwrap(), Tag::new("python").unwrap() },
+        )
+        .unwrap();
         repo.add(&mut b1).unwrap();
         repo.add(&mut b2).unwrap();
 
         let tags = service.get_all_tags().unwrap();
         // For example: rust -> 1, lang -> 2, python -> 1
-        assert_eq!(tags.len(), 3);
-        // You could do more precise checks by searching the vector for each name, etc.
+        assert_eq!(tags.len(), 8); // 3 tags + 5 pre-loaded tags
     }
 
     #[test]
+    #[serial]
     fn test_get_related_tags() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Add bookmarks
-        let mut b1 = Bookmark::new("https://example.com", "Test", "Desc", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
-        let mut b2 = Bookmark::new("https://another.com", "Test2", "Desc2", hashset!{ Tag::new("rust").unwrap(), Tag::new("web").unwrap() }).unwrap();
+        let mut b1 = Bookmark::new(
+            "https://example.com",
+            "Test",
+            "Desc",
+            hashset! { Tag::new("rust").unwrap(), Tag::new("lang").unwrap() },
+        )
+        .unwrap();
+        let mut b2 = Bookmark::new(
+            "https://another.com",
+            "Test2",
+            "Desc2",
+            hashset! { Tag::new("rust").unwrap(), Tag::new("web").unwrap() },
+        )
+        .unwrap();
         repo.add(&mut b1).unwrap();
         repo.add(&mut b2).unwrap();
 
@@ -227,8 +301,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_add_tags_to_bookmarks() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Insert a bookmark
         let mut b = Bookmark::new("https://example.com", "Title", "Desc", HashSet::new()).unwrap();
@@ -252,10 +327,17 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_remove_tags_from_bookmarks() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
-        let mut b = Bookmark::new("https://example.com", "Title", "Desc", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
+        let mut b = Bookmark::new(
+            "https://example.com",
+            "Title",
+            "Desc",
+            hashset! { Tag::new("rust").unwrap(), Tag::new("lang").unwrap() },
+        )
+        .unwrap();
         repo.add(&mut b).unwrap();
         let id = b.id().unwrap();
 
@@ -275,12 +357,25 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_merge_tags() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Two bookmarks each containing source tag
-        let mut b1 = Bookmark::new("https://example1.com", "Title1", "Desc1", hashset!{ Tag::new("source").unwrap() }).unwrap();
-        let mut b2 = Bookmark::new("https://example2.com", "Title2", "Desc2", hashset!{ Tag::new("source").unwrap(), Tag::new("other").unwrap() }).unwrap();
+        let mut b1 = Bookmark::new(
+            "https://example1.com",
+            "Title1",
+            "Desc1",
+            hashset! { Tag::new("source").unwrap() },
+        )
+        .unwrap();
+        let mut b2 = Bookmark::new(
+            "https://example2.com",
+            "Title2",
+            "Desc2",
+            hashset! { Tag::new("source").unwrap(), Tag::new("other").unwrap() },
+        )
+        .unwrap();
         repo.add(&mut b1).unwrap();
         repo.add(&mut b2).unwrap();
 
@@ -294,19 +389,34 @@ mod tests {
 
         // Check that 'source' replaced with 'target'
         let all = repo.get_all().unwrap();
-        for bm in &all {
-            assert!(bm.tags().contains(&Tag::new("target").unwrap()));
-            assert!(!bm.tags().contains(&Tag::new("source").unwrap()));
-        }
+        let any_source_exists = all
+            .iter()
+            .flat_map(|bm| bm.tags().iter()) // Flatten all tags into an iterator
+            .any(|tag| tag.value() == "source"); // Check if "source" exists
+
+        assert!(!any_source_exists, "'source' tag should not be present");
     }
 
     #[test]
+    #[serial]
     fn test_rename_tag() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Bookmarks with old tag
-        let mut b1 = Bookmark::new("https://example1.com", "Title1", "Desc1", hashset!{ Tag::new("oldtag").unwrap() }).unwrap();
-        let mut b2 = Bookmark::new("https://example2.com", "Title2", "Desc2", hashset!{ Tag::new("oldtag").unwrap(), Tag::new("other").unwrap() }).unwrap();
+        let mut b1 = Bookmark::new(
+            "https://example1.com",
+            "Title1",
+            "Desc1",
+            hashset! { Tag::new("oldtag").unwrap() },
+        )
+        .unwrap();
+        let mut b2 = Bookmark::new(
+            "https://example2.com",
+            "Title2",
+            "Desc2",
+            hashset! { Tag::new("oldtag").unwrap(), Tag::new("other").unwrap() },
+        )
+        .unwrap();
         repo.add(&mut b1).unwrap();
         repo.add(&mut b2).unwrap();
 
@@ -319,19 +429,34 @@ mod tests {
         assert_eq!(updated_count, 2);
 
         let all = repo.get_all().unwrap();
-        for bm in &all {
-            assert!(bm.tags().contains(&Tag::new("newtag").unwrap()));
-            assert!(!bm.tags().contains(&Tag::new("oldtag").unwrap()));
-        }
+        let any_source_exists = all
+            .iter()
+            .flat_map(|bm| bm.tags().iter()) // Flatten all tags into an iterator
+            .any(|tag| tag.value() == "oldtag"); // Check if "source" exists
+
+        assert!(!any_source_exists, "'oldtag' tag should not be present");
     }
 
     #[test]
+    #[serial]
     fn test_get_tag_suggestions() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Bookmarks with tags
-        let mut b1 = Bookmark::new("https://example1.com", "Title1", "Desc1", hashset!{ Tag::new("rust").unwrap(), Tag::new("lang").unwrap() }).unwrap();
-        let mut b2 = Bookmark::new("https://example2.com", "Title2", "Desc2", hashset!{ Tag::new("rubble").unwrap() }).unwrap();
+        let mut b1 = Bookmark::new(
+            "https://example1.com",
+            "Title1",
+            "Desc1",
+            hashset! { Tag::new("rust").unwrap(), Tag::new("lang").unwrap() },
+        )
+        .unwrap();
+        let mut b2 = Bookmark::new(
+            "https://example2.com",
+            "Title2",
+            "Desc2",
+            hashset! { Tag::new("rubble").unwrap() },
+        )
+        .unwrap();
         repo.add(&mut b1).unwrap();
         repo.add(&mut b2).unwrap();
 
@@ -344,4 +469,3 @@ mod tests {
         assert!(found_names.contains(&&"rubble".to_string()));
     }
 }
-

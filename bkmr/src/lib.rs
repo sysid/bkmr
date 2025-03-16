@@ -136,3 +136,12 @@ pub fn update_bm(
     dal.update_bookmark(bm_updated)
         .map_err(|e| anyhow::anyhow!("Error updating bookmark: {:?}", e))
 }
+#[cfg(test)]
+/// must be public to be used from integration tests
+mod tests {
+    use crate::util::testing;
+    #[ctor::ctor]
+    fn init() {
+        testing::init_test_setup().expect("Failed to initialize test setup");
+    }
+}

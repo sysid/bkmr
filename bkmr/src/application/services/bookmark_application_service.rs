@@ -34,7 +34,10 @@ where
     }
 
     /// Add a new bookmark
-    pub fn add_bookmark(&self, request: BookmarkCreateRequest) -> ApplicationResult<BookmarkResponse> {
+    pub fn add_bookmark(
+        &self,
+        request: BookmarkCreateRequest,
+    ) -> ApplicationResult<BookmarkResponse> {
         // Check if bookmark already exists
         if self.repository.exists_by_url(&request.url)? {
             return Err(ApplicationError::BookmarkExists(request.url.clone()));
@@ -57,7 +60,10 @@ where
     }
 
     /// Update an existing bookmark
-    pub fn update_bookmark(&self, request: BookmarkUpdateRequest) -> ApplicationResult<BookmarkResponse> {
+    pub fn update_bookmark(
+        &self,
+        request: BookmarkUpdateRequest,
+    ) -> ApplicationResult<BookmarkResponse> {
         // Get existing bookmark (or return a typed not-found error)
         let bookmark = self
             .repository
@@ -90,7 +96,8 @@ where
 
         // Update tags if provided
         if let Some(tags) = request.to_domain_tags()? {
-            self.domain_service.replace_tags(&mut updated_bookmark, tags)?;
+            self.domain_service
+                .replace_tags(&mut updated_bookmark, tags)?;
         }
 
         // Persist changes
@@ -159,13 +166,15 @@ where
 
         // Exclude all
         if let Some(tags) = &params.exclude_all_tags {
-            let spec = NotSpecification::new(AllTagsSpecification::new(self.parse_tags(tags.clone())?));
+            let spec =
+                NotSpecification::new(AllTagsSpecification::new(self.parse_tags(tags.clone())?));
             compound_spec = Self::chain_specs(compound_spec, spec);
         }
 
         // Exclude any
         if let Some(tags) = &params.exclude_any_tags {
-            let spec = NotSpecification::new(AnyTagSpecification::new(self.parse_tags(tags.clone())?));
+            let spec =
+                NotSpecification::new(AnyTagSpecification::new(self.parse_tags(tags.clone())?));
             compound_spec = Self::chain_specs(compound_spec, spec);
         }
 
@@ -261,28 +270,50 @@ where
         new_spec: S,
     ) -> Option<Box<dyn Specification<Bookmark>>> {
         match existing_spec {
-            Some(e) => Some(Box::new(crate::domain::repositories::query::AndSpecification::new(e, new_spec))),
+            Some(e) => Some(Box::new(
+                crate::domain::repositories::query::AndSpecification::new(e, new_spec),
+            )),
             None => Some(Box::new(new_spec)),
         }
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;
-    use crate::infrastructure::repositories::in_memory::bookmark_repository::InMemoryBookmarkRepository;
+    // 1) Pull in the sqlite repo (instead of the in-memory one)
+    use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 
-    fn create_service_and_repo() -> (BookmarkApplicationService<InMemoryBookmarkRepository>, InMemoryBookmarkRepository) {
-        let repo = InMemoryBookmarkRepository::new();
+    // For creating temporary SQLite files
+    use tempfile::NamedTempFile;
+
+    // Helper function to create a fresh SQLite test repo + service.
+    fn create_service_and_repo() -> (
+        BookmarkApplicationService<SqliteBookmarkRepository>,
+        SqliteBookmarkRepository,
+        NamedTempFile,
+    ) {
+        // 2) Create a temporary file on disk
+        let tmpfile = NamedTempFile::new().expect("Failed to create temp file for SQLite");
+        let db_path = tmpfile.path().to_str().unwrap().to_string();
+
+        // 3) Build the SQLite repo from that path
+        let repo = SqliteBookmarkRepository::from_url(&db_path)
+            .expect("Failed to initialize SqliteBookmarkRepository");
+
+        // 4) Construct the application service
         let service = BookmarkApplicationService::new(repo.clone());
-        (service, repo)
+
+        // 5) Return (service, repo, the temp file handle)
+        (service, repo, tmpfile)
     }
 
     #[test]
     fn test_add_bookmark_success() {
-        let (service, _repo) = create_service_and_repo();
+        // This now returns (service, repo, _tmpfile),
+        // but we only need the service for this test.
+        let (service, _repo, _tmpfile) = create_service_and_repo();
 
         let request = BookmarkCreateRequest {
             url: "https://example.com".into(),
@@ -301,10 +332,11 @@ mod tests {
 
     #[test]
     fn test_add_bookmark_already_exists() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Insert a bookmark with the same URL
-        let mut existing = Bookmark::new("https://example.com", "Existing", "Desc", HashSet::new()).unwrap();
+        let mut existing =
+            Bookmark::new("https://example.com", "Existing", "Desc", HashSet::new()).unwrap();
         repo.add(&mut existing).unwrap();
 
         let request = BookmarkCreateRequest {
@@ -319,17 +351,23 @@ mod tests {
         match err {
             ApplicationError::BookmarkExists(url) => {
                 assert_eq!(url, "https://example.com");
-            },
+            }
             _ => panic!("Expected BookmarkExists error"),
         }
     }
 
     #[test]
     fn test_update_bookmark_success() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Insert a bookmark
-        let mut bookmark = Bookmark::new("https://example.com", "Old Title", "Old Desc", HashSet::new()).unwrap();
+        let mut bookmark = Bookmark::new(
+            "https://example.com",
+            "Old Title",
+            "Old Desc",
+            HashSet::new(),
+        )
+        .unwrap();
         repo.add(&mut bookmark).unwrap();
         let id = bookmark.id().unwrap();
 
@@ -350,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_update_bookmark_not_found() {
-        let (service, _repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         let request = BookmarkUpdateRequest {
             id: 999,
@@ -368,10 +406,11 @@ mod tests {
 
     #[test]
     fn test_delete_bookmark() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Insert a bookmark
-        let mut bookmark = Bookmark::new("https://example.com", "Delete Me", "Desc", HashSet::new()).unwrap();
+        let mut bookmark =
+            Bookmark::new("https://example.com", "Delete Me", "Desc", HashSet::new()).unwrap();
         repo.add(&mut bookmark).unwrap();
         let id = bookmark.id().unwrap();
 
@@ -386,9 +425,10 @@ mod tests {
 
     #[test]
     fn test_get_bookmark() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
-        let mut b = Bookmark::new("https://example.com", "Some Title", "Desc", HashSet::new()).unwrap();
+        let mut b =
+            Bookmark::new("https://example.com", "Some Title", "Desc", HashSet::new()).unwrap();
         repo.add(&mut b).unwrap();
         let id = b.id().unwrap();
 
@@ -402,11 +442,23 @@ mod tests {
 
     #[test]
     fn test_search_bookmarks() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Insert multiple bookmarks
-        let mut b1 = Bookmark::new("https://rust-lang.org", "Rust Lang", "Rust language", HashSet::new()).unwrap();
-        let mut b2 = Bookmark::new("https://python.org", "Python Lang", "Python language", HashSet::new()).unwrap();
+        let mut b1 = Bookmark::new(
+            "https://rust-lang.org",
+            "Rust Lang",
+            "Rust language",
+            HashSet::new(),
+        )
+        .unwrap();
+        let mut b2 = Bookmark::new(
+            "https://python.org",
+            "Python Lang",
+            "Python language",
+            HashSet::new(),
+        )
+        .unwrap();
         repo.add(&mut b1).unwrap();
         repo.add(&mut b2).unwrap();
 
@@ -423,7 +475,7 @@ mod tests {
 
     #[test]
     fn test_record_bookmark_access() {
-        let (service, repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         let mut b = Bookmark::new("https://example.com", "Title", "Desc", HashSet::new()).unwrap();
         repo.add(&mut b).unwrap();
@@ -438,7 +490,7 @@ mod tests {
 
     #[test]
     fn test_fetch_url_metadata() {
-        let (service, _repo) = create_service_and_repo();
+        let (service, repo, _tmpfile) = create_service_and_repo();
 
         // Currently returns (String::new(), String::new(), String::new())
         let (title, desc, extra) = service.fetch_url_metadata("https://example.com").unwrap();

@@ -503,31 +503,31 @@ mod tests {
         }
     }
 
-    #[allow(unused_variables)]
-    #[ignore = "requires database and OpenAI setup"]
-    #[rstest]
-    fn test_find_similar(temp_dir: Utf8PathBuf) -> CliResult<()> {
-        // Given: Set up test environment
-        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").map_err(|e| CliError::Io(e))?;
-        let bms = Bookmarks::new("".to_string());
-
-        // Initialize context with OpenAI
-        Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))
-            .map_err(|e| CliError::Domain(e))?;
-
-        // Execute search
-        let results = find_similar("test query", &bms)?;
-
-        // Basic validation
-        assert!(!results.is_empty(), "Expected non-empty results");
-
-        // Verify that results are ordered by similarity (descending)
-        let similarities: Vec<_> = results.iter().map(|(_, sim)| *sim).collect();
-        assert!(
-            similarities.windows(2).all(|w| w[0] >= w[1]),
-            "Expected similarities to be in descending order"
-        );
-
-        Ok(())
-    }
+    // #[allow(unused_variables)]
+    // #[ignore = "requires database and OpenAI setup"]
+    // #[rstest]
+    // fn test_find_similar(temp_dir: Utf8PathBuf) -> CliResult<()> {
+    //     // Given: Set up test environment
+    //     fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").map_err(|e| CliError::Io(e))?;
+    //     let bms = Bookmarks::new("".to_string());
+    //
+    //     // Initialize context with OpenAI
+    //     Context::update_global(Context::new(Box::new(OpenAiEmbedding::default())))
+    //         .map_err(|e| CliError::Domain(e))?;
+    //
+    //     // Execute search
+    //     let results = find_similar("test query", &bms)?;
+    //
+    //     // Basic validation
+    //     assert!(!results.is_empty(), "Expected non-empty results");
+    //
+    //     // Verify that results are ordered by similarity (descending)
+    //     let similarities: Vec<_> = results.iter().map(|(_, sim)| *sim).collect();
+    //     assert!(
+    //         similarities.windows(2).all(|w| w[0] >= w[1]),
+    //         "Expected similarities to be in descending order"
+    //     );
+    //
+    //     Ok(())
+    // }
 }

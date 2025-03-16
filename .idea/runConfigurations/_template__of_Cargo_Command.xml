@@ -4,7 +4,7 @@
     <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
     <envs>
       <env name="BKMR_DB_URL" value="../db/bkmr.db" />
-      <env name="RUST_LOG" value="DEBUG" />
+      <env name="RUST_LOG" value="TRACE" />
     </envs>
     <option name="emulateTerminal" value="false" />
     <option name="channel" value="DEFAULT" />
