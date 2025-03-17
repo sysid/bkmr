@@ -1,5 +1,6 @@
 // src/main.rs
-use bkmr::adapter::embeddings::{DummyEmbedding, OpenAiEmbedding};
+use bkmr::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
+
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::commands;
 use bkmr::cli::error::CliResult;

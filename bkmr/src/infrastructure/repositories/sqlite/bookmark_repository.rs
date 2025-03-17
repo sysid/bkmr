@@ -16,7 +16,7 @@ use crate::domain::tag::Tag;
 use crate::infrastructure::repositories::sqlite::schema::bookmarks::dsl;
 
 /// Implementation of BookmarkRepository for SQLite database
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SqliteBookmarkRepository {
     pool: ConnectionPool,
 }

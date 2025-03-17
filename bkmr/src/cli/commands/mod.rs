@@ -3,10 +3,7 @@
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
 use termcolor::StandardStream;
-use tracing::{debug, info, instrument};
-use crate::application::services::bookmark_application_service::BookmarkApplicationService;
-use crate::environment::CONFIG;
-use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+use tracing::{info, instrument};
 
 // Import submodules
 pub mod bookmark_commands;
@@ -36,92 +33,20 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
     }
 }
 
-// Create a new application service for database migration
-pub struct DatabaseMigrationService {
-    repository_url: String,
-}
-
-impl DatabaseMigrationService {
-    pub fn new(repository_url: String) -> Self {
-        Self { repository_url }
-    }
-
-    pub fn check_embedding_column_exists(&self) -> CliResult<bool> {
-        use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
-        use crate::infrastructure::repositories::sqlite::connection::check_embedding_column_exists;
-
-        // Create repository
-        let repository = SqliteBookmarkRepository::from_url(&self.repository_url)
-            .map_err(|e| crate::cli::error::CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
-
-        // Get a connection
-        let mut conn = repository.get_connection()
-            .map_err(|e| crate::cli::error::CliError::RepositoryError(format!("Failed to get connection: {}", e)))?;
-
-        // Check if embedding column exists
-        check_embedding_column_exists(&mut conn)
-            .map_err(|e| crate::cli::error::CliError::RepositoryError(format!("Failed to check embedding column: {}", e)))
-    }
-
-    pub fn run_migrations(&self) -> CliResult<()> {
-        use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
-        use crate::infrastructure::repositories::sqlite::migration::MIGRATIONS;
-        use diesel::connection::SimpleConnection;
-        use diesel_migrations::MigrationHarness;
-
-        // Create repository
-        let repository = SqliteBookmarkRepository::from_url(&self.repository_url)
-            .map_err(|e| crate::cli::error::CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
-
-        // Get a connection
-        let mut conn = repository.get_connection()
-            .map_err(|e| crate::cli::error::CliError::RepositoryError(format!("Failed to get connection: {}", e)))?;
-
-        // Check if migrations table exists
-        let migrations_exist = check_if_migrations_table_exists(&mut conn)
-            .map_err(|e| crate::cli::error::CliError::Other(e.to_string()))?;
-
-        // Create migrations table if it doesn't exist
-        if !migrations_exist {
-            const MIGRATION_TABLE_SQL: &str = r#"
-                BEGIN TRANSACTION;
-                CREATE TABLE IF NOT EXISTS __diesel_schema_migrations (
-                    version VARCHAR(50) PRIMARY KEY NOT NULL,
-                    run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-                );
-                INSERT INTO __diesel_schema_migrations (version, run_on)
-                VALUES ('20221229110455', '2023-12-23 09:27:06');
-                COMMIT;
-            "#;
-
-            info!("Creating migration table...");
-            conn.batch_execute(MIGRATION_TABLE_SQL)
-                .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Failed to create migrations table: {}", e)))?;
-        }
-
-        let pending = conn.pending_migrations(MIGRATIONS)
-            .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Failed to get pending migrations: {}", e)))?;
-
-        pending.iter().for_each(|m| {
-            debug!("Pending Migration: {}", m.name());
-        });
-
-        conn.run_pending_migrations(MIGRATIONS)
-            .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Failed to run pending migrations: {}", e)))
-    }
-}
-
 #[instrument(level = "debug")]
 pub fn enable_embeddings_if_required() -> CliResult<()> {
+    use crate::application::services::migration_service::MigrationService;
     use crate::environment::CONFIG;
     use crate::util::helper::confirm;
     use crossterm::style::Stylize;
 
-    // Create the migration service
-    let service = DatabaseMigrationService::new(CONFIG.db_url.clone());
+    // Create the migration service from the application layer
+    let service = MigrationService::new(CONFIG.db_url.clone());
 
     // Check if embedding column exists
-    let embedding_exists = service.check_embedding_column_exists()?;
+    let embedding_exists = service
+        .check_embedding_column_exists()
+        .map_err(|e| CliError::Application(e))?;
 
     if embedding_exists {
         info!("Embedding column already exists, no action required.");
@@ -132,48 +57,27 @@ pub fn enable_embeddings_if_required() -> CliResult<()> {
     eprintln!("Two new columns will be added to the 'bookmarks' table:");
 
     if !confirm("Please backup up your DB before continue! Do you want to continue?") {
-        return Err(crate::cli::error::CliError::OperationAborted);
+        return Err(CliError::OperationAborted);
     }
 
     // Run migrations
-    service.run_migrations()?;
+    service
+        .run_migrations()
+        .map_err(|e| CliError::Application(e))?;
 
     eprintln!("{}", "Database schema has been extended.".blue());
     Ok(())
 }
 
-// Helper function to check if migrations table exists
-fn check_if_migrations_table_exists(conn: &mut diesel::SqliteConnection) -> Result<bool, diesel::result::Error> {
-    use diesel::prelude::*;
-    use diesel::sql_query;
-    use diesel::sql_types::Integer;
-
-    #[derive(QueryableByName, Debug)]
-    struct ExistenceCheck {
-        #[diesel(sql_type = Integer)]
-        diesel_exists: i32,
-    }
-
-    let query = "
-        SELECT 1 as diesel_exists FROM sqlite_master WHERE type='table' AND name='__diesel_schema_migrations';
-    ";
-
-    let result: Vec<ExistenceCheck> = sql_query(query)
-        .load(conn)?;
-
-    Ok(!result.is_empty())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::dto::BookmarkResponse;
+    use crate::application::services::bookmark_application_service::BookmarkApplicationService;
     use crate::cli::args::{Cli, Commands};
     use crate::cli::error::CliResult;
     use crate::context::{Context, CTX};
     use crate::infrastructure::embeddings::DummyEmbedding;
     use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
-    use crate::application::services::bookmark_application_service::BookmarkApplicationService;
     use clap::Parser;
     use std::fs;
     use std::path::Path;
@@ -208,7 +112,10 @@ mod tests {
     }
 
     // Helper to create a bookmark application service
-    fn create_service(db_path: &str) -> Result<BookmarkApplicationService<SqliteBookmarkRepository>, crate::cli::error::CliError> {
+    fn create_service(
+        db_path: &str,
+    ) -> Result<BookmarkApplicationService<SqliteBookmarkRepository>, crate::cli::error::CliError>
+    {
         let repo = SqliteBookmarkRepository::from_url(db_path)
             .map_err(|e| crate::cli::error::CliError::RepositoryError(e.to_string()))?;
 
@@ -243,11 +150,13 @@ mod tests {
     #[test]
     fn test_add_and_show_bookmark() -> CliResult<()> {
         // Set up test environment
-        let (db_path, stderr) = setup_test_environment("add_show_test.db")?;
+        let (db_path, _stderr) = setup_test_environment("add_show_test.db")?;
 
         // Create database first
         let create_cli = Cli::parse_from(["bkmr", "create-db", &db_path]);
-        execute_command(stderr.clone(), create_cli)?;
+        // Create a new stderr for each command execution
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, create_cli)?;
 
         // Add a bookmark
         let add_cli = Cli::parse_from([
@@ -263,7 +172,9 @@ mod tests {
             "--no-web",
         ]);
 
-        execute_command(stderr.clone(), add_cli)?;
+        // Create a new stderr
+        let add_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(add_stderr, add_cli)?;
 
         // Use the application service to verify bookmark was added
         let service = create_service(&db_path)?;
@@ -283,15 +194,16 @@ mod tests {
         assert!(bookmark.tags.contains(&"example".to_string()));
 
         // Test show command
-        let show_cli = Cli::parse_from([
-            "bkmr",
-            "show",
-            &bookmark.id.unwrap().to_string(),
-        ]);
+        let show_cli = Cli::parse_from(["bkmr", "show", &bookmark.id.unwrap().to_string()]);
 
+        // Create a new stderr
+        let show_stderr = StandardStream::stderr(ColorChoice::Never);
         // Execute show command (just checking that it doesn't error)
-        let show_result = execute_command(stderr.clone(), show_cli);
-        assert!(show_result.is_ok(), "Show command should execute successfully");
+        let show_result = execute_command(show_stderr, show_cli);
+        assert!(
+            show_result.is_ok(),
+            "Show command should execute successfully"
+        );
 
         // Clean up
         if Path::new(&db_path).exists() {
@@ -308,7 +220,9 @@ mod tests {
 
         // Create database first
         let create_cli = Cli::parse_from(["bkmr", "create-db", &db_path]);
-        execute_command(stderr.clone(), create_cli)?;
+        // Create a new stderr for each command execution
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, create_cli)?;
 
         // Add a bookmark
         let add_cli = Cli::parse_from([
@@ -320,7 +234,8 @@ mod tests {
             "--no-web",
         ]);
 
-        execute_command(stderr.clone(), add_cli)?;
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, add_cli)?;
 
         // Use application service to get bookmarks
         let service = create_service(&db_path)?;
@@ -351,7 +266,8 @@ mod tests {
 
         // Create database first
         let create_cli = Cli::parse_from(["bkmr", "create-db", &db_path]);
-        execute_command(stderr.clone(), create_cli)?;
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, create_cli)?;
 
         // Add a bookmark
         let add_cli = Cli::parse_from([
@@ -363,7 +279,8 @@ mod tests {
             "--no-web",
         ]);
 
-        execute_command(stderr.clone(), add_cli)?;
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, add_cli)?;
 
         // Use application service to get bookmarks
         let service = create_service(&db_path)?;
@@ -373,15 +290,11 @@ mod tests {
         let id = bookmarks[0].id.unwrap();
 
         // Update the bookmark
-        let update_cli = Cli::parse_from([
-            "bkmr",
-            "update",
-            &id.to_string(),
-            "--tags",
-            "updated,new",
-        ]);
+        let update_cli =
+            Cli::parse_from(["bkmr", "update", &id.to_string(), "--tags", "updated,new"]);
 
-        execute_command(stderr.clone(), update_cli)?;
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, update_cli)?;
 
         // Verify tags were updated
         let updated = service.get_bookmark(id)?;
@@ -390,9 +303,18 @@ mod tests {
         let updated = updated.unwrap();
 
         // Should have both original and new tags
-        assert!(updated.tags.contains(&"initial".to_string()), "Should keep initial tag");
-        assert!(updated.tags.contains(&"updated".to_string()), "Should add updated tag");
-        assert!(updated.tags.contains(&"new".to_string()), "Should add new tag");
+        assert!(
+            updated.tags.contains(&"initial".to_string()),
+            "Should keep initial tag"
+        );
+        assert!(
+            updated.tags.contains(&"updated".to_string()),
+            "Should add updated tag"
+        );
+        assert!(
+            updated.tags.contains(&"new".to_string()),
+            "Should add new tag"
+        );
 
         // Update with force flag to replace tags
         let force_update_cli = Cli::parse_from([
@@ -404,7 +326,8 @@ mod tests {
             "--force",
         ]);
 
-        execute_command(stderr.clone(), force_update_cli)?;
+        let create_stderr = StandardStream::stderr(ColorChoice::Never);
+        execute_command(create_stderr, force_update_cli)?;
 
         // Verify tags were replaced
         let force_updated = service.get_bookmark(id)?;
@@ -414,7 +337,10 @@ mod tests {
 
         // Should only have the new forced tag
         assert_eq!(force_updated.tags.len(), 1, "Should have exactly 1 tag");
-        assert!(force_updated.tags.contains(&"forced".to_string()), "Should only have forced tag");
+        assert!(
+            force_updated.tags.contains(&"forced".to_string()),
+            "Should only have forced tag"
+        );
 
         // Clean up
         if Path::new(&db_path).exists() {

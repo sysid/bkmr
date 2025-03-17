@@ -646,7 +646,9 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
             eprintln!("Would load {} texts for semantic search.", bms.len());
             Ok(())
         } else {
-            todo!()
+            // todo!()
+            eprintln!("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+            Ok(())
             // create_embeddings_for_non_bookmarks(path)
             //     .map_err(|e| CliError::CommandFailed(format!("Failed to create embeddings: {}", e)))
         }
