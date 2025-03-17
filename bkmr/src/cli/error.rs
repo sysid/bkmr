@@ -1,24 +1,31 @@
 // src/cli/error.rs
+
+use std::io;
+use thiserror::Error;
+
 use crate::application::error::ApplicationError;
 use crate::domain::error::DomainError;
-use thiserror::Error;
+use crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError;
 
 #[derive(Error, Debug)]
 pub enum CliError {
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
-
     #[error("Command failed: {0}")]
     CommandFailed(String),
 
-    #[error("Operation aborted by user")]
-    OperationAborted,
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
 
     #[error("Invalid ID format: {0}")]
     InvalidIdFormat(String),
 
+    #[error("Operation aborted by user")]
+    OperationAborted,
+
     #[error("Repository error: {0}")]
     RepositoryError(String),
+
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
 
     #[error("Application error: {0}")]
     Application(#[from] ApplicationError),
@@ -26,8 +33,8 @@ pub enum CliError {
     #[error("Domain error: {0}")]
     Domain(#[from] DomainError),
 
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
+    #[error("SQLite error: {0}")]
+    Sqlite(#[from] SqliteRepositoryError),
 
     #[error("Other error: {0}")]
     Other(String),
@@ -35,7 +42,20 @@ pub enum CliError {
 
 pub type CliResult<T> = Result<T, CliError>;
 
-// Utility function to convert string errors to CliError
-pub fn into_cli_error<E: std::error::Error>(err: E, context: &str) -> CliError {
-    CliError::CommandFailed(format!("{}: {}", context, err))
-}
+// impl From<DomainError> for CliError {
+//     fn from(err: DomainError) -> Self {
+//         CliError::Domain(err)
+//     }
+// }
+//
+// impl From<ApplicationError> for CliError {
+//     fn from(err: ApplicationError) -> Self {
+//         CliError::Application(err)
+//     }
+// }
+//
+// impl From<SqliteRepositoryError> for CliError {
+//     fn from(err: SqliteRepositoryError) -> Self {
+//         CliError::Sqlite(err)
+//     }
+// }

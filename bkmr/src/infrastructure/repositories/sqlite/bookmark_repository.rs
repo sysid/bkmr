@@ -4,16 +4,16 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_query;
 use diesel::sql_types::{Integer, Text};
-use tracing::{error, instrument};
+use tracing::{debug, error, instrument};
 
 use super::connection::{ConnectionPool, PooledConnection};
 use super::error::{SqliteRepositoryError, SqliteResult};
-use crate::adapter::dal::schema::bookmarks::{self, dsl};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainError;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::tag::Tag;
+use crate::infrastructure::repositories::sqlite::schema::bookmarks::dsl;
 
 /// Implementation of BookmarkRepository for SQLite database
 #[derive(Clone)]
@@ -26,6 +26,42 @@ impl SqliteBookmarkRepository {
     pub fn new(pool: ConnectionPool) -> Self {
         Self { pool }
     }
+    /// Cleans the table by deleting all bookmarks except ID 1
+    pub fn clean_table(&self) -> SqliteResult<()> {
+        let mut conn = self.get_connection()?;
+
+        sql_query("DELETE FROM bookmarks WHERE id != 1;")
+            .execute(&mut conn)
+            .map_err(|e| SqliteRepositoryError::DatabaseError(e))?;
+
+        debug!("Cleaned table.");
+        Ok(())
+    }
+
+    /// Get oldest bookmarks ordered by update timestamp
+    pub fn get_oldest_bookmarks(&self, limit: usize) -> SqliteResult<Vec<Bookmark>> {
+        let mut conn = self.get_connection()?;
+
+        let db_bookmarks = sql_query(
+            "SELECT *
+            FROM bookmarks
+            ORDER BY last_update_ts ASC
+            LIMIT ?;",
+        )
+        .bind::<Integer, _>(limit as i32)
+        .load::<DbBookmark>(&mut conn)
+        .map_err(|e| SqliteRepositoryError::DatabaseError(e))?;
+
+        let mut bookmarks = Vec::new();
+        for db_bookmark in db_bookmarks {
+            match self.to_domain_model(db_bookmark) {
+                Ok(bookmark) => bookmarks.push(bookmark),
+                Err(e) => error!("Failed to convert bookmark: {}", e),
+            }
+        }
+
+        Ok(bookmarks)
+    }
 
     /// Create a new SQLite repository with the provided database URL
     pub fn from_url(database_url: &str) -> SqliteResult<Self> {
@@ -34,7 +70,7 @@ impl SqliteBookmarkRepository {
     }
 
     /// Get a connection from the pool
-    fn get_connection(&self) -> SqliteResult<PooledConnection> {
+    pub(crate) fn get_connection(&self) -> SqliteResult<PooledConnection> {
         self.pool
             .get()
             .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))
@@ -606,7 +642,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
 /// Database model for bookmarks
 #[derive(Queryable, Identifiable, QueryableByName, Debug)]
-#[diesel(table_name = bookmarks)]
+#[diesel(table_name = crate::infrastructure::repositories::sqlite::schema::bookmarks)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 struct DbBookmark {
     #[diesel(sql_type = Integer)]
@@ -632,7 +668,7 @@ struct DbBookmark {
 
 /// Changes for updating a bookmark
 #[derive(AsChangeset, Debug)]
-#[diesel(table_name = bookmarks)]
+#[diesel(table_name = crate::infrastructure::repositories::sqlite::schema::bookmarks)]
 struct DbBookmarkChanges {
     #[allow(non_snake_case)]
     pub URL: String,
@@ -646,7 +682,7 @@ struct DbBookmarkChanges {
 
 /// New bookmark for insertion
 #[derive(Insertable, Debug)]
-#[diesel(table_name = bookmarks)]
+#[diesel(table_name = crate::infrastructure::repositories::sqlite::schema::bookmarks)]
 struct NewBookmark {
     #[allow(non_snake_case)]
     pub URL: String,
@@ -679,7 +715,7 @@ struct TagsFrequency {
 mod tests {
     use super::*;
     use crate::domain::repositories::query::TextSearchSpecification;
-    use crate::infrastructure::repositories::sqlite::connection::init_db;
+    use crate::infrastructure::repositories::sqlite::migration::init_db;
     use std::collections::HashSet;
 
     fn setup_test_db() -> Result<(SqliteBookmarkRepository, String), DomainError> {
@@ -1054,6 +1090,215 @@ mod tests {
         // Check non-existing URL
         let not_exists = repo.exists_by_url("https://does-not-exist.com")?;
         assert!(!not_exists);
+
+        Ok(())
+    }
+    // Additional tests for SqliteBookmarkRepository
+    // Add to the end of the tests module in bookmark_repository.rs
+    #[test]
+    fn test_clean_table() -> Result<(), DomainError> {
+        let (repo, _) = setup_test_db()?;
+
+        // Add multiple bookmarks
+        let mut bm1 = create_test_bookmark("Title 1", "https://example1.com", vec!["test"])?;
+        let mut bm2 = create_test_bookmark("Title 2", "https://example2.com", vec!["test"])?;
+        let mut bm3 = create_test_bookmark("Title 3", "https://example3.com", vec!["test"])?;
+
+        repo.add(&mut bm1)?;
+        repo.add(&mut bm2)?;
+        repo.add(&mut bm3)?;
+
+        // Verify multiple bookmarks exist
+        let all_before = repo.get_all()?;
+        assert!(
+            all_before.len() >= 3,
+            "Should have at least 3 bookmarks before cleaning"
+        );
+
+        // Clean table - should delete all except ID 1
+        repo.clean_table()?;
+
+        // Verify only bookmark with ID 1 remains
+        let all_after = repo.get_all()?;
+        assert_eq!(
+            all_after.len(),
+            1,
+            "Should have only 1 bookmark after cleaning"
+        );
+        assert_eq!(
+            all_after[0].id(),
+            Some(1),
+            "Remaining bookmark should have ID 1"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_oldest_bookmarks() -> Result<(), DomainError> {
+        let (repo, _) = setup_test_db()?;
+
+        // Create bookmarks with controlled timestamps
+        // In a real test we'd control the timestamps more explicitly
+        let mut bm1 = create_test_bookmark("Old 1", "https://old1.com", vec!["old"])?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let mut bm2 = create_test_bookmark("Old 2", "https://old2.com", vec!["old"])?;
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let mut bm3 = create_test_bookmark("New", "https://new.com", vec!["new"])?;
+
+        repo.add(&mut bm1)?;
+        repo.add(&mut bm2)?;
+        repo.add(&mut bm3)?;
+
+        // Get oldest 2 bookmarks
+        let oldest = repo.get_oldest_bookmarks(2)?;
+
+        // Verify we got 2 bookmarks
+        assert_eq!(oldest.len(), 2, "Should get exactly 2 bookmarks");
+
+        // Verify they're in the right order (oldest first)
+        assert_eq!(
+            oldest[0].url(),
+            "https://old1.com",
+            "First should be oldest"
+        );
+        assert_eq!(
+            oldest[1].url(),
+            "https://old2.com",
+            "Second should be second oldest"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_database_compaction_after_delete() -> Result<(), DomainError> {
+        let (repo, _) = setup_test_db()?;
+
+        // Create several bookmarks in sequence
+        let mut bm1 = create_test_bookmark("First", "https://first.com", vec!["test"])?;
+        let mut bm2 = create_test_bookmark("Second", "https://second.com", vec!["test"])?;
+        let mut bm3 = create_test_bookmark("Third", "https://third.com", vec!["test"])?;
+        let mut bm4 = create_test_bookmark("Fourth", "https://fourth.com", vec!["test"])?;
+
+        repo.add(&mut bm1)?;
+        repo.add(&mut bm2)?;
+        repo.add(&mut bm3)?;
+        repo.add(&mut bm4)?;
+
+        // Verify IDs are sequential
+        let all_before = repo.get_all()?;
+        let ids_before: Vec<i32> = all_before.iter().filter_map(|b| b.id()).collect();
+
+        // Make sure we have at least 4 bookmarks
+        assert!(ids_before.len() >= 4, "Should have at least 4 bookmarks");
+
+        // Delete bookmark with ID 2
+        let id_to_delete = 2;
+        repo.delete(id_to_delete)?;
+
+        // Get all bookmarks again
+        let all_after = repo.get_all()?;
+
+        // Check that IDs have been compacted (no gaps)
+        let ids_after: Vec<i32> = all_after.iter().filter_map(|b| b.id()).collect();
+
+        // Should have one fewer bookmark
+        assert_eq!(
+            ids_after.len(),
+            ids_before.len() - 1,
+            "Should have one fewer bookmark"
+        );
+
+        // The IDs should be sequential without gaps
+        for i in 1..=ids_after.len() {
+            assert!(
+                ids_after.contains(&(i as i32)),
+                "Missing ID {} after compaction",
+                i
+            );
+        }
+
+        // Specifically, check that the bookmark that was at ID 3 is now at ID 2
+        let former_id3 = all_before
+            .iter()
+            .find(|b| b.id() == Some(3))
+            .map(|b| b.url().to_string());
+
+        let new_id2 = all_after
+            .iter()
+            .find(|b| b.id() == Some(2))
+            .map(|b| b.url().to_string());
+
+        assert_eq!(
+            former_id3, new_id2,
+            "Bookmark formerly at ID 3 should now be at ID 2"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dal_compatibility() -> Result<(), DomainError> {
+        // This test ensures that the SqliteBookmarkRepository can handle the same operations
+        // as the original Dal implementation
+
+        let (repo, _) = setup_test_db()?;
+
+        // 1. Test inserting a bookmark
+        let mut bookmark = create_test_bookmark(
+            "Test Compatibility",
+            "https://compat-test.com",
+            vec!["test", "compat"],
+        )?;
+        repo.add(&mut bookmark)?;
+
+        // 2. Test getting by ID
+        let found = repo.get_by_id(bookmark.id().unwrap())?;
+        assert!(found.is_some(), "Should find bookmark by ID");
+
+        // 3. Test getting by URL
+        let found_by_url = repo.get_by_url("https://compat-test.com")?;
+        assert!(found_by_url.is_some(), "Should find bookmark by URL");
+
+        // 4. Test updating a bookmark
+        let mut to_update = found.unwrap();
+        to_update.update(
+            "Updated Title".to_string(),
+            "Updated description".to_string(),
+        );
+        repo.update(&to_update)?;
+
+        // Verify update worked
+        let updated = repo.get_by_id(to_update.id().unwrap())?;
+        assert_eq!(updated.unwrap().title(), "Updated Title");
+
+        // 5. Test getting bookmarks without embeddings
+        let without_embedding = repo.get_without_embeddings()?;
+        assert!(
+            !without_embedding.is_empty(),
+            "Should find bookmarks without embeddings"
+        );
+
+        // 6. Test getting random bookmarks
+        let random = repo.get_random(2)?;
+        assert!(random.len() <= 2, "Should get at most 2 random bookmarks");
+
+        // 7. Test getting all tags
+        let all_tags = repo.get_all_tags()?;
+        assert!(!all_tags.is_empty(), "Should find some tags");
+
+        // 8. Test getting related tags (if any tags exist)
+        if !all_tags.is_empty() {
+            let first_tag = &all_tags[0].0;
+            let related = repo.get_related_tags(first_tag)?;
+            // Just check that the operation completes, may or may not have related tags
+        }
+
+        // 9. Test delete
+        repo.delete(bookmark.id().unwrap())?;
+        let deleted = repo.get_by_id(bookmark.id().unwrap())?;
+        assert!(deleted.is_none(), "Bookmark should be deleted");
 
         Ok(())
     }

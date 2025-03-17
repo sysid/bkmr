@@ -5,14 +5,11 @@ use diesel::RunQueryDsl;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 use std::path::Path;
 use tracing::{debug, info, trace};
-
+use crate::infrastructure::repositories::sqlite::migration::MIGRATIONS;
 use super::error::{SqliteRepositoryError, SqliteResult};
 
 pub type ConnectionPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<SqliteConnection>>;
-
-// Re-export the migrations from the existing codebase
-pub const MIGRATIONS: EmbeddedMigrations = crate::adapter::dal::migration::MIGRATIONS;
 
 /// Establish a new database connection without using anyhow
 pub fn establish_connection(database_url: &str) -> SqliteResult<SqliteConnection> {
@@ -59,12 +56,6 @@ pub fn run_pending_migrations(pool: &ConnectionPool) -> SqliteResult<()> {
         .map_err(|e| SqliteRepositoryError::MigrationError(e.to_string()))?;
 
     Ok(())
-}
-
-/// Initialize the database with the required schema
-pub fn init_db(conn: &mut SqliteConnection) -> SqliteResult<()> {
-    crate::adapter::dal::migration::init_db(conn)
-        .map_err(|e| SqliteRepositoryError::MigrationError(e.to_string()))
 }
 
 /// Check if the database has the required embedding column

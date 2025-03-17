@@ -66,6 +66,11 @@ impl BookmarkServiceImpl {
     pub fn new() -> Self {
         Self {}
     }
+
+    pub fn calculate_content_hash(&self, bookmark: &Bookmark) -> Vec<u8> {
+        let content = self.generate_embedding_content(bookmark);
+        md5::compute(content).0.to_vec()
+    }
 }
 
 impl BookmarkService for BookmarkServiceImpl {

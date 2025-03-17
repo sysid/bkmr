@@ -1,12 +1,8 @@
 // src/cli/mod.rs
-pub mod args;
-pub mod commands;
-pub mod error;
 
-use crate::adapter::embeddings::{DummyEmbedding, OpenAiEmbedding};
 use crate::cli::args::Commands;
 use crate::context::{Context, CTX};
-use anyhow::Result;
+use crate::cli::error::{CliError, CliResult};
 use args::Cli;
 use clap::Parser;
 use std::sync::RwLock;
@@ -18,12 +14,21 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, Layer};
+use crate::application::services::bookmark_application_service::BookmarkApplicationService;
+use crate::environment::CONFIG;
+use crate::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
+use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+
+pub mod args;
+pub mod commands;
+pub mod error;
+pub mod display;
+pub mod process;
+pub mod fzf;
 
 #[instrument]
-pub fn run() -> Result<()> {
+pub fn run() -> CliResult<()> {
     let cli = Cli::parse();
-    // let stdout = StandardStream::stdout(ColorChoice::Always);
-    // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
 
     // Set up logging based on verbosity
@@ -32,13 +37,15 @@ pub fn run() -> Result<()> {
     if let Some(Commands::CreateDb { .. }) = &cli.command {
         // Skip the path.exists check and create database with correct schema
     } else {
-        todo!();
-        // let path = std::path::Path::new(&CONFIG.db_url);
-        // if !path.exists() {
-        //     eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
-        //     std::process::exit(1);
-        // }
-        // commands::enable_embeddings_if_required().expect("Failed to enable embeddings");
+        let path = std::path::Path::new(&crate::environment::CONFIG.db_url);
+        if !path.exists() {
+            return Err(error::CliError::InvalidInput(format!(
+                "Database path does not exist: {}",
+                path.display()
+            )));
+        }
+
+        commands::enable_embeddings_if_required()?;
     }
 
     // Set up context with appropriate embedding service
@@ -50,20 +57,15 @@ pub fn run() -> Result<()> {
 
     // Set the global context
     if CTX.set(RwLock::from(context)).is_err() {
-        eprintln!("Failed to initialize context");
-        std::process::exit(1);
+        return Err(error::CliError::Other("Failed to initialize context".to_string()));
     }
 
     // Process command
-    if let Err(e) = commands::execute_command(stderr, cli) {
-        eprintln!("Error: {}", e);
-        std::process::exit(1);
-    }
-
-    Ok(())
+    commands::execute_command(stderr, cli)
 }
+
 pub fn setup_logging(verbosity: u8) {
-    debug!("INIT: Attempting logger init from main.rs");
+    debug!("INIT: Attempting logger init from cli/mod.rs");
 
     let filter = match verbosity {
         0 => LevelFilter::WARN,
@@ -105,3 +107,12 @@ pub fn setup_logging(verbosity: u8) {
         _ => {}
     }
 }
+
+// Create a service factory function to reduce boilerplate
+pub fn create_bookmark_service() -> CliResult<BookmarkApplicationService<SqliteBookmarkRepository>> {
+    SqliteBookmarkRepository::from_url(&CONFIG.db_url)
+        .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))
+        .map(BookmarkApplicationService::new)
+}
+
+

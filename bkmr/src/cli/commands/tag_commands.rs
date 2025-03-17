@@ -1,4 +1,5 @@
 // src/cli/commands/tag_commands.rs
+
 use crate::application::dto::tag_dto::{TagMergeRequest, TagOperationRequest, TagRenameRequest};
 use crate::application::services::tag_application_service::TagApplicationService;
 use crate::cli::args::{Cli, Commands};
@@ -132,36 +133,29 @@ pub fn get_tag_suggestions(partial: &str) -> CliResult<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use camino::Utf8PathBuf;
-    use camino_tempfile::tempdir;
-    use fs_extra::{copy_items, dir};
-    use rstest::{fixture, rstest};
+    use rstest::rstest;
     use std::fs;
-
-    #[fixture]
-    fn temp_dir() -> Utf8PathBuf {
-        let tempdir = tempdir().unwrap();
-        let options = dir::CopyOptions::new().overwrite(true);
-        copy_items(
-            &["tests/resources/bkmr.v1.db", "tests/resources/bkmr.v2.db"],
-            "../db",
-            &options,
-        )
-        .expect("Failed to copy test project directory");
-
-        fs::rename("../db/bkmr.v2.db", "../db/bkmr.db").expect("Failed to rename database");
-
-        tempdir.into_path()
-    }
+    use tempfile::tempdir;
 
     #[ignore = "requires database setup and user confirmation"]
-    #[rstest]
-    fn test_get_tag_suggestions(temp_dir: Utf8PathBuf) -> CliResult<()> {
+    #[test]
+    fn test_get_tag_suggestions() -> CliResult<()> {
         // Arrange: Set up environment
-        let partial = "ru"; // Looking for tags starting with "ru"
+        let tmp_dir = tempdir().unwrap();
+        let db_path = tmp_dir.path().join("test.db");
+
+        // Create test database and seed it
+        std::env::set_var("BKMR_DB_URL", db_path.to_str().unwrap());
+
+        // Seed database with tags
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())
+            .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
+
+        // Set up test data
+        // ...
 
         // Act: Get suggestions
+        let partial = "ru"; // Looking for tags starting with "ru"
         let suggestions = get_tag_suggestions(partial)?;
 
         // Assert: Should find some results

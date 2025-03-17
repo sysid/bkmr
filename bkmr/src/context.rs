@@ -1,9 +1,9 @@
 // bkmr/src/context.rs
-use crate::adapter::embeddings::{serialize_embedding, DummyEmbedding, Embedding};
-use anyhow::Result;
 use once_cell::sync::OnceCell;
 use std::fmt;
 use std::sync::RwLock;
+use crate::infrastructure::embeddings::{serialize_embedding, DummyEmbedding, Embedding};
+use crate::domain::error::{DomainError, DomainResult};
 
 pub static CTX: OnceCell<RwLock<Context>> = OnceCell::new();
 
@@ -24,7 +24,7 @@ impl Context {
         Self { embedder }
     }
 
-    pub fn execute(&self, text: &str) -> Result<Option<Vec<f32>>> {
+    pub fn execute(&self, text: &str) -> DomainResult<Option<Vec<f32>>> {
         self.embedder.embed(text)
     }
 
@@ -56,10 +56,10 @@ impl Context {
             .expect("Failed to acquire context read lock")
     }
 
-    pub fn update_global(new_context: Context) -> Result<()> {
+    pub fn update_global(new_context: Context) -> DomainResult<()> {
         let mut context = Self::global()
             .write()
-            .map_err(|e| anyhow::anyhow!("Failed to acquire context write lock: {}", e))?;
+            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to acquire context write lock: {}", e)))?;
         *context = new_context;
         Ok(())
     }
@@ -69,13 +69,12 @@ impl Context {
 mod tests {
     use super::Context;
     use super::*;
-    use anyhow::Result;
     use rstest::*;
 
     // Mock embedder that always succeeds
     struct SuccessEmbedding;
     impl Embedding for SuccessEmbedding {
-        fn embed(&self, _text: &str) -> Result<Option<Vec<f32>>> {
+        fn embed(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
             Ok(Some(vec![0.1, 0.2, 0.3]))
         }
     }
@@ -83,7 +82,7 @@ mod tests {
     // Mock embedder that always returns None
     struct NoneEmbedding;
     impl Embedding for NoneEmbedding {
-        fn embed(&self, _text: &str) -> Result<Option<Vec<f32>>> {
+        fn embed(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
             Ok(None)
         }
     }
@@ -91,8 +90,8 @@ mod tests {
     // Mock embedder that always fails
     struct FailingEmbedding;
     impl Embedding for FailingEmbedding {
-        fn embed(&self, _text: &str) -> Result<Option<Vec<f32>>> {
-            Err(anyhow::anyhow!("Embedding failed"))
+        fn embed(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
+            Err(DomainError::BookmarkOperationFailed("Embedding failed".to_string()))
         }
     }
 
@@ -129,7 +128,7 @@ mod tests {
     fn test_execute_failure(failing_context: Context) {
         let result = failing_context.execute("test text");
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Embedding failed");
+        assert_eq!(result.unwrap_err().to_string(), "Bookmark operation failed: Embedding failed");
     }
 
     #[rstest]
@@ -160,7 +159,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_global() -> Result<()> {
+    fn test_read_global() -> DomainResult<()> {
         Context::update_global(Context::new(Box::new(DummyEmbedding)))?;
         let ctx = Context::read_global();
         // Verify we can access the default DummyEmbedding context

@@ -76,14 +76,20 @@ where
     Ok(bookmarks)
 }
 
-pub fn bms_to_json(bms: &Vec<Bookmark>) {
-    let bms_view: Vec<BookmarkView> = bms.iter().map(BookmarkView::from).collect();
-    let json =
-        serde_json::to_string_pretty(&bms_view).expect("Failed to serialize bookmarks to JSON.");
-    io::stdout()
-        .write_all(json.as_bytes())
-        .expect("Failed to write JSON to stdout.");
+pub fn bms_to_json(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
+    let json = serde_json::to_string_pretty(&bookmarks).map_err(|e| {
+        CliError::CommandFailed(format!(
+            "Failed to serialize bookmarks to JSON: {}",
+            e
+        ))
+    })?;
+
+    io::stdout().write_all(json.as_bytes()).map_err(|e| {
+        CliError::CommandFailed(format!("Failed to write JSON to stdout: {}", e))
+    })?;
+
     println!();
+    Ok(())
 }
 
 #[derive(Serialize)]

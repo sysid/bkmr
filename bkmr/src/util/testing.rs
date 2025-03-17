@@ -1,8 +1,5 @@
 // src/util/testing.rs
 
-use anyhow::{Context as _, Result};
-use lazy_static::lazy_static;
-use rstest::fixture;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -14,10 +11,16 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use crate::adapter::dal::{migration, Dal};
-use crate::adapter::embeddings::DummyEmbedding;
+use lazy_static::lazy_static;
+use rstest::fixture;
+
 use crate::context::Context;
-use crate::model::bookmark::Bookmark;
+use crate::infrastructure::embeddings::DummyEmbedding;
+use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+use crate::infrastructure::repositories::sqlite::migration;
+use crate::domain::bookmark::Bookmark;
+use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::repositories::bookmark_repository::BookmarkRepository;
 
 // Common test environment variables
 pub const TEST_ENV_VARS: &[&str] = &["BKMR_DB_URL", "RUST_LOG", "NO_CLEANUP"];
@@ -31,12 +34,13 @@ lazy_static! {
     ];
 }
 
-pub fn init_test_setup() -> Result<()> {
+pub fn init_test_setup() -> DomainResult<()> {
     // Set up logging first
     setup_test_logging();
 
     debug!("Initializing test context with DummyEmbedding");
-    Context::update_global(Context::new(Box::new(DummyEmbedding)))?;
+    Context::update_global(Context::new(Box::new(DummyEmbedding)))
+        .map_err(|e| DomainError::BookmarkOperationFailed(e.to_string()))?;
 
     // Set up environment variables
     set_test_env_vars();
@@ -91,26 +95,35 @@ fn set_test_env_vars() {
     env::set_var("BKMR_DB_URL", TEST_DB_PATH.to_str().unwrap());
 }
 
-pub fn setup_test_db() -> Result<Dal> {
-    let mut dal = Dal::new(TEST_DB_PATH.to_string_lossy().to_string());
-    migration::init_db(&mut dal.conn).context("Failed to initialize test database")?;
-    Ok(dal)
+pub fn setup_test_db() -> DomainResult<SqliteBookmarkRepository> {
+    let repository = SqliteBookmarkRepository::from_url(&TEST_DB_PATH.to_string_lossy().to_string())
+        .map_err(|e| DomainError::BookmarkOperationFailed(e.to_string()))?;
+
+    // Initialize the database if needed
+    let mut conn = repository.get_connection()
+        .map_err(|e| DomainError::BookmarkOperationFailed(e.to_string()))?;
+
+    migration::init_db(&mut conn)
+        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to initialize test database: {}", e)))?;
+
+    Ok(repository)
 }
+
 #[fixture]
-pub fn test_dal() -> Dal {
+pub fn test_repository() -> SqliteBookmarkRepository {
     setup_test_db().expect("Failed to set up test database")
 }
+
 #[fixture]
-pub fn bms(mut test_dal: Dal) -> Vec<Bookmark> {
-    let bms = test_dal.get_bookmarks("");
-    bms.unwrap()
+pub fn bookmarks(test_repository: SqliteBookmarkRepository) -> Vec<Bookmark> {
+    test_repository.get_all().expect("Failed to get bookmarks")
 }
 
 /// Gets test bookmarks from the database
-pub fn get_test_bookmarks() -> Result<Vec<Bookmark>> {
-    let mut dal = setup_test_db()?;
-    dal.get_bookmarks("")
-        .context("Failed to get test bookmarks")
+pub fn get_test_bookmarks() -> DomainResult<Vec<Bookmark>> {
+    let repository = setup_test_db()?;
+    repository.get_all()
+        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to get test bookmarks: {}", e)))
 }
 
 pub fn print_active_env_vars() {
@@ -124,15 +137,16 @@ pub fn print_active_env_vars() {
 }
 
 /// Creates a temporary test directory with test resources
-pub fn setup_temp_dir() -> Result<PathBuf> {
+pub fn setup_temp_dir() -> DomainResult<PathBuf> {
     use fs_extra::dir::CopyOptions;
     use tempfile::tempdir;
 
-    let tempdir = tempdir().context("Failed to create temp directory")?;
+    let tempdir = tempdir()
+        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to create temp directory: {}", e)))?;
     let options = CopyOptions::new().overwrite(true);
 
     fs_extra::copy_items(&TEST_RESOURCES, "../db", &options)
-        .context("Failed to copy test resources")?;
+        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to copy test resources: {}", e)))?;
 
     Ok(tempdir.into_path())
 }

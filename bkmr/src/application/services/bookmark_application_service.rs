@@ -249,6 +249,12 @@ where
         Ok(meta)
     }
 
+    // Add this method to the BookmarkApplicationService implementation
+    pub fn get_all_bookmarks(&self) -> ApplicationResult<Vec<BookmarkResponse>> {
+        let bookmarks = self.repository.get_all()?;
+        Ok(BookmarkResponse::from_domain_collection(&bookmarks))
+    }
+
     /// Helper to parse tags from a list of strings
     fn parse_tags(&self, tag_strings: Vec<String>) -> DomainResult<HashSet<Tag>> {
         let mut tags = HashSet::new();

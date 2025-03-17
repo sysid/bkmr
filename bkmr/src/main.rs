@@ -1,22 +1,117 @@
-// bkmr/src/main.rs
+// src/main.rs
+use bkmr::adapter::embeddings::{DummyEmbedding, OpenAiEmbedding};
+use bkmr::cli::args::{Cli, Commands};
+use bkmr::cli::commands;
+use bkmr::cli::error::CliResult;
+use bkmr::context::{Context, CTX};
+use bkmr::environment::CONFIG;
+use bkmr::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+use clap::Parser;
+use crossterm::style::Stylize;
+use std::path::Path;
+use std::sync::RwLock;
+use termcolor::{ColorChoice, StandardStream};
+use tracing::{debug, info, instrument};
+use tracing_subscriber::{
+    filter::{filter_fn, LevelFilter},
+    fmt::{self, format::FmtSpan},
+    prelude::*,
+};
 
-use bkmr::cli;
-
+#[instrument]
 fn main() {
-    if let Err(e) = cli::run() {
-        eprintln!("Error: {}", e);
+    // let stdout = StandardStream::stdout(ColorChoice::Always);
+    // use stderr as human output in order to make stdout output passable to downstream processes
+    let stderr = StandardStream::stderr(ColorChoice::Always);
+
+    let cli = Cli::parse();
+
+    setup_logging(cli.debug);
+
+    if let Some(Commands::CreateDb { .. }) = &cli.command {
+        // Skip the path.exists check and create database with correct schema
+    } else {
+        let path = Path::new(&CONFIG.db_url);
+        if !path.exists() {
+            eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
+            std::process::exit(1);
+        }
+        if let Err(e) = commands::enable_embeddings_if_required() {
+            eprintln!("{}", format!("Error: {}", e).red());
+            std::process::exit(1);
+        }
+    }
+
+    let context = if cli.openai {
+        Context::new(Box::new(OpenAiEmbedding::default()))
+    } else {
+        Context::new(Box::new(DummyEmbedding))
+    };
+
+    // Set the global context
+    if CTX.set(RwLock::from(context)).is_err() {
+        eprintln!("{}", "Failed to initialize context".red());
         std::process::exit(1);
+    }
+
+    if let Err(e) = commands::execute_command(stderr, cli) {
+        eprintln!("{}", format!("Error: {}", e).red());
+        std::process::exit(1);
+    }
+}
+
+fn setup_logging(verbosity: u8) {
+    debug!("INIT: Attempting logger init from main.rs");
+
+    let filter = match verbosity {
+        0 => LevelFilter::WARN,
+        1 => LevelFilter::INFO,
+        2 => LevelFilter::DEBUG,
+        3 => LevelFilter::TRACE,
+        _ => {
+            eprintln!("Don't be crazy, max is -d -d -d");
+            LevelFilter::TRACE
+        }
+    };
+
+    // Create a noisy module filter
+    let noisy_modules = ["skim", "html5ever", "reqwest", "mio", "want", "tuikit"];
+    let module_filter = filter_fn(move |metadata| {
+        !noisy_modules
+            .iter()
+            .any(|name| metadata.target().starts_with(name))
+    });
+
+    // Create a subscriber with formatted output directed to stderr
+    let fmt_layer = fmt::layer()
+        .with_writer(std::io::stderr) // Set writer first
+        .with_target(true)
+        // src/main.rs (continued)
+        .with_thread_names(false)
+        .with_span_events(FmtSpan::ENTER)
+        .with_span_events(FmtSpan::CLOSE);
+
+    // Apply filters to the layer
+    let filtered_layer = fmt_layer.with_filter(filter).with_filter(module_filter);
+
+    tracing_subscriber::registry().with(filtered_layer).init();
+
+    // Log initial debug level
+    match filter {
+        LevelFilter::INFO => info!("Debug mode: info"),
+        LevelFilter::DEBUG => debug!("Debug mode: debug"),
+        LevelFilter::TRACE => debug!("Debug mode: trace"),
+        _ => {}
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bkmr::cli::setup_logging;
-    use camino::Utf8PathBuf;
-    use camino_tempfile::tempdir;
     use fs_extra::{copy_items, dir};
     use rstest::fixture;
+    use std::path::PathBuf;
+    use tempfile::tempdir;
 
     #[ctor::ctor]
     fn init() {
@@ -24,7 +119,7 @@ mod tests {
     }
 
     #[fixture]
-    fn temp_dir() -> Utf8PathBuf {
+    fn temp_dir() -> PathBuf {
         let tempdir = tempdir().unwrap();
         let options = dir::CopyOptions::new().overwrite(true);
         copy_items(

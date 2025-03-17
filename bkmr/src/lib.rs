@@ -1,3 +1,4 @@
+// src/lib.rs
 #![crate_type = "lib"]
 #![crate_name = "bkmr"]
 
@@ -5,69 +6,50 @@ extern crate skim;
 
 use std::collections::HashSet;
 
-use crate::adapter::dal::Dal;
-
-use anyhow::Result;
+use crate::application::services::bookmark_application_service::BookmarkApplicationService;
+use crate::domain::error::DomainResult;
+use crate::domain::tag::Tag;
+use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 
 use crate::environment::CONFIG;
-use crate::model::bookmark::Bookmark;
-use crate::model::bookmark::BookmarkUpdater;
-use crate::model::tag::Tags;
-use itertools::Itertools;
-use reqwest::blocking::Client;
-use select::document::Document;
-use select::predicate::{Attr, Name};
 use tracing::{debug, error};
 
-pub mod adapter {
-    pub mod dal;
-    pub mod embeddings;
-    pub mod json;
-}
-
-pub mod model {
-    pub mod bms;
-    pub mod bookmark;
-    pub mod tag;
-}
-
-pub mod service {
-    pub mod embeddings;
-    pub mod fzf;
-    pub mod process;
-}
-
+// Core modules
+pub mod domain;
 pub mod application;
+pub mod infrastructure;
+
+// CLI modules
 pub mod cli;
 pub mod context;
-pub mod domain;
 pub mod environment;
-pub mod infrastructure;
 pub mod util;
 
 /// creates list of normalized tags from "tag1,t2,t3" string
 /// be aware of shell parsing rules, so no blanks or quotes
-pub fn load_url_details(url: &str) -> Result<(String, String, String)> {
-    let client = Client::new();
-    let body = client.get(url).send()?.text()?;
+pub fn load_url_details(url: &str) -> DomainResult<(String, String, String)> {
+    let client = reqwest::blocking::Client::new();
+    let body = client.get(url).send()
+        .map_err(|e| domain::error::DomainError::CannotFetchMetadata(e.to_string()))?
+        .text()
+        .map_err(|e| domain::error::DomainError::CannotFetchMetadata(e.to_string()))?;
 
-    let document = Document::from(body.as_str());
-    // let document = Document::from(body.to_string());
+    let document = select::document::Document::from(body.as_str());
 
     let title = document
-        .find(Name("title"))
+        .find(select::predicate::Name("title"))
         .next()
         .map(|n| n.text().trim().to_owned())
         .unwrap_or_default();
 
     let description = document
-        .find(Attr("name", "description"))
+        .find(select::predicate::Attr("name", "description"))
         .next()
         .and_then(|n| n.attr("content"))
         .unwrap_or_default();
 
     let keywords = document
-        .find(Attr("name", "keywords"))
+        .find(select::predicate::Attr("name", "keywords"))
         .next()
         .and_then(|node| node.attr("content"))
         .unwrap_or_default();
@@ -77,65 +59,85 @@ pub fn load_url_details(url: &str) -> Result<(String, String, String)> {
     Ok((title, description.to_owned(), keywords.to_owned()))
 }
 
+/// Update bookmarks tags
 pub fn update_bookmarks(
     ids: Vec<i32>,
     tags: Vec<String>,
     tags_not: Vec<String>,
     force: bool,
-) -> Result<()> {
-    // let mut bms = Bookmarks::new("".to_string());
-    let mut dal = Dal::new(CONFIG.db_url.clone());
+) -> DomainResult<()> {
+    let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url)
+        .map_err(|e| domain::error::DomainError::BookmarkOperationFailed(e.to_string()))?;
+
+    let service = BookmarkApplicationService::new(repository);
+
     for id in ids {
-        update_bm(id, &tags, &tags_not, &mut dal, force).map_err(|e| {
-            // Adjust the error handling here as needed
-            // If 'e' needs to be used or logged, do it here. If necessary, clone 'e'.
-            // Example: log::error!("Error updating bookmark: {}", e);
-            // Assuming 'e' implements the 'Error' trait and can be converted/cloned
+        update_bm(id, &tags, &tags_not, &service, force).map_err(|e| {
             error!("Error updating bookmark {}: {}", id, e);
             e
         })?;
     }
+
     Ok(())
 }
 
+/// Update a single bookmark's tags
 pub fn update_bm(
     id: i32,
     tags: &Vec<String>,
     tags_not: &Vec<String>,
-    dal: &mut Dal,
+    service: &BookmarkApplicationService<SqliteBookmarkRepository>,
     force: bool,
-) -> Result<Vec<Bookmark>> {
-    let tags: HashSet<String> = tags.iter().cloned().collect();
-    let tags_not: HashSet<String> = tags_not.iter().cloned().collect();
-    debug!("id {}, tags {:?}, tags_not {:?}", id, tags, tags_not);
+) -> DomainResult<()> {
+    let tags_set: HashSet<String> = tags.iter().cloned().collect();
+    let tags_not_set: HashSet<String> = tags_not.iter().cloned().collect();
 
-    let bm = dal.get_bookmark_by_id(id)?;
+    // Get the bookmark
+    let Some(bookmark) = service.get_bookmark(id)
+        .map_err(|e| domain::error::DomainError::BookmarkOperationFailed(e.to_string()))?
+        else {
+        return Err(domain::error::DomainError::BookmarkNotFound(id.to_string()));
+    };
 
+    // Process tags
     let new_tags = if force {
-        tags
+        // Just use the provided tags
+        tags_set.clone()
     } else {
-        let mut new_tags = Tags::normalize_tag_string(Some(bm.tags.clone()))
-            .into_iter()
-            .collect::<HashSet<String>>();
-        new_tags.extend(tags);
-        new_tags
-            .difference(&tags_not)
-            .map(|s| s.to_string())
-            .collect()
+        // Start with current tags
+        let mut result: HashSet<String> = bookmark.tags.into_iter().collect();
+
+        // Add new tags
+        result.extend(tags_set);
+
+        // Remove tags_not
+        for tag in &tags_not_set {
+            result.remove(tag);
+        }
+
+        result
     };
 
-    let bm_tags: Vec<String> = new_tags.iter().sorted().cloned().collect();
-    debug!("bm_tags {:?}", bm_tags);
+    // Convert to Tag domain objects
+    let tag_objects = new_tags.into_iter()
+        .filter_map(|t| Tag::new(&t).ok())
+        .collect::<HashSet<_>>();
 
-    let mut bm_updated = Bookmark {
-        tags: format!(",{},", bm_tags.join(",")),
-        flags: bm.flags + 1,
-        ..bm
+    // Create update request
+    let request = application::dto::BookmarkUpdateRequest {
+        id,
+        title: None,
+        description: None,
+        tags: Some(tag_objects.iter().map(|t| t.value().to_string()).collect()),
     };
-    bm_updated.update();
-    dal.update_bookmark(bm_updated)
-        .map_err(|e| anyhow::anyhow!("Error updating bookmark: {:?}", e))
+
+    // Update the bookmark
+    service.update_bookmark(request)
+        .map_err(|e| domain::error::DomainError::BookmarkOperationFailed(e.to_string()))?;
+
+    Ok(())
 }
+
 #[cfg(test)]
 /// must be public to be used from integration tests
 mod tests {
