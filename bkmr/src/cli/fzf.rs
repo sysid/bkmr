@@ -1,6 +1,5 @@
 // src/cli/fzf.rs
 
-use std::any::Any;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -17,13 +16,7 @@ use skim::{
     SkimItemReceiver, SkimItemSender,
 };
 use tracing::{debug, instrument};
-use tuikit::raw::IntoRawMode;
-
-// Wrapper struct since we can't implement external traits on external types
-#[derive(Clone, Debug)]
-struct BookmarkWrapper {
-    bookmark: BookmarkResponse,
-}
+use tuikit::{attr::Attr, attr::Color, raw::IntoRawMode};
 
 impl SkimItem for BookmarkResponse {
     fn text(&self) -> std::borrow::Cow<str> {
@@ -61,9 +54,9 @@ impl SkimItem for BookmarkResponse {
         let end_idx_title = start_idx_title + title.len();
 
         // Create attribute for title (green)
-        let attr_title = tuikit::attr::Attr {
-            fg: tuikit::attr::Color::GREEN,
-            ..tuikit::attr::Attr::default()
+        let attr_title = Attr {
+            fg: Color::GREEN,
+            ..Attr::default()
         };
 
         // Create attribute segments
@@ -75,9 +68,9 @@ impl SkimItem for BookmarkResponse {
             let start_idx_url = text.find('<').unwrap_or(0) as u32;
             let end_idx_url = start_idx_url + url.len() as u32 + 2; // +2 for < and >
 
-            let attr_url = tuikit::attr::Attr {
-                fg: tuikit::attr::Color::YELLOW,
-                ..tuikit::attr::Attr::default()
+            let attr_url = Attr {
+                fg: Color::YELLOW,
+                ..Attr::default()
             };
 
             attr_segments.push((attr_url, (start_idx_url, end_idx_url)));
@@ -88,9 +81,9 @@ impl SkimItem for BookmarkResponse {
             let start_idx_tags = text.find('[').unwrap_or(0) as u32;
             let end_idx_tags = text.find(']').unwrap_or(text.len()) as u32 + 1; // +1 for ]
 
-            let attr_tags = tuikit::attr::Attr {
-                fg: tuikit::attr::Color::MAGENTA,
-                ..tuikit::attr::Attr::default()
+            let attr_tags = Attr {
+                fg: Color::MAGENTA,
+                ..Attr::default()
             };
 
             attr_segments.push((attr_tags, (start_idx_tags, end_idx_tags)));
@@ -115,6 +108,12 @@ impl SkimItem for BookmarkResponse {
     }
 }
 
+/// Processes bookmarks using the fzf-like selector interface
+///
+/// Control keys:
+/// - Enter/Ctrl-o: Open the selected bookmark
+/// - Ctrl-e: Edit the selected bookmark
+/// - Ctrl-d: Delete the selected bookmark
 #[instrument(skip(bookmarks), level = "debug")]
 pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
     if bookmarks.is_empty() {
@@ -128,24 +127,26 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
         .reverse(CONFIG.fzf_opts.reverse)
         .multi(false)
         .ansi(true)
+        .filter(Some("".to_string())) // Turn on actual filtering so unmatched items are dropped
         .bind(vec![
             "ctrl-o:accept".to_string(),
             "ctrl-e:accept".to_string(),
             "ctrl-d:accept".to_string(),
             "enter:accept".to_string(),
+            "esc:abort".to_string(),
         ])
         .build()
-        .expect("Failed to build skim options");
+        .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Failed to build skim options: {}", e)))?;
 
     // Set up channel for bookmark items
     let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = unbounded();
 
-    // Send bookmarks to skim through wrapper
+    // Send bookmarks to skim
     for bookmark in bookmarks {
-        debug!("Sending bookmark to skim: {:?}", bookmark);
+        debug!("Sending bookmark to skim: {}", bookmark.title);
         tx_item
             .send(Arc::new(bookmark.clone()))
-            .expect("Failed to send bookmark to skim");
+            .map_err(|_| crate::cli::error::CliError::CommandFailed("Failed to send bookmark to skim".to_string()))?;
     }
     drop(tx_item); // Close channel to signal end of items
 
@@ -154,30 +155,11 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
         let key = output.final_key;
         debug!("Final key: {:?}", key);
 
-        // let selected_bookmarks = filter_bms(output);
-        if output.selected_items.is_empty() {
-            println!("No items selected.");
-        } else {
-            println!("Selected items:");
-            for item in &output.selected_items {
-                println!(" - {}", item.output());
-            }
-        }
-        let selected_bookmarks = output
-            .selected_items
-            .iter()
-            .map(|selected_item| {
-                (**selected_item)
-                    .as_any()
-                    .downcast_ref::<BookmarkResponse>()
-                    .unwrap()
-                    .to_owned()
-            })
-            .collect::<Vec<BookmarkResponse>>();
-
-        debug!("Selected bookmarks: {:?}", selected_bookmarks);
+        // Get selected bookmarks
+        let selected_bookmarks = get_selected_bookmarks(&output);
 
         if selected_bookmarks.is_empty() {
+            debug!("No bookmarks selected");
             return Ok(());
         }
 
@@ -185,6 +167,7 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
         let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
         debug!("Selected bookmark IDs: {:?}", ids);
 
+        // Process the selected action based on the key
         match key {
             Key::Enter | Key::Ctrl('o') => {
                 // Open selected bookmarks
@@ -200,34 +183,52 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
                 // Delete selected bookmarks
                 delete_bookmarks(ids)?;
             }
-            _ => {} // Other keys are ignored
+            Key::ESC => {
+                debug!("Selection aborted");
+            }
+            _ => {
+                debug!("Unhandled key: {:?}", key);
+            }
         }
 
         // Clear terminal after action
-        if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
-            execute!(stdout, Clear(ClearType::FromCursorDown)).ok();
-        }
+        clear_terminal();
     }
 
     Ok(())
 }
-fn filter_bms(out: SkimOutput) -> Vec<BookmarkResponse> {
-    debug!("query: {:?} cmd: {:?}", out.query, out.cmd);
 
-    out.selected_items.iter().for_each(|i| {
-        println!("{}\n", i.output());
-    });
-    let selected_bms = out
+/// Extract selected bookmarks from skim output
+fn get_selected_bookmarks(output: &SkimOutput) -> Vec<BookmarkResponse> {
+    debug!("query: {:?} cmd: {:?}", output.query, output.cmd);
+
+    let selected_bookmarks = output
         .selected_items
         .iter()
-        .map(|selected_item| {
-            (**selected_item)
+        .filter_map(|item| {
+            (**item)
                 .as_any()
                 .downcast_ref::<BookmarkResponse>()
-                .unwrap()
-                .to_owned()
+                .map(|bm| bm.to_owned())
         })
         .collect::<Vec<BookmarkResponse>>();
-    debug!("selected_bms: {:?}", selected_bms);
-    selected_bms
+
+    if !selected_bookmarks.is_empty() {
+        println!("Selected bookmarks:");
+        for bookmark in &selected_bookmarks {
+            println!(" - {}: {}", bookmark.id.unwrap_or(0), bookmark.title);
+        }
+    }
+
+    debug!("Selected {} bookmarks", selected_bookmarks.len());
+    selected_bookmarks
+}
+
+/// Clears the terminal screen after an action
+fn clear_terminal() {
+    if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
+        if let Err(e) = execute!(stdout, Clear(ClearType::FromCursorDown)) {
+            debug!("Failed to clear terminal: {}", e);
+        }
+    }
 }
