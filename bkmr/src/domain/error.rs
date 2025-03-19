@@ -19,6 +19,9 @@ pub enum DomainError {
 
     #[error("Cannot fetch metadata: {0}")]
     CannotFetchMetadata(String),
+
+    #[error("Repository error: {0}")]
+    RepositoryError(String),
 }
 
 pub type DomainResult<T> = Result<T, DomainError>;

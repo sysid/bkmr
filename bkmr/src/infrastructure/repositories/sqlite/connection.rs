@@ -4,24 +4,22 @@ use diesel::r2d2::{self, ConnectionManager};
 use diesel::sqlite::SqliteConnection;
 use diesel::Connection;
 use diesel::RunQueryDsl;
-use diesel_migrations::MigrationHarness;
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
 use std::path::Path;
 use tracing::{debug, info, trace};
 
 pub type ConnectionPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<SqliteConnection>>;
 
-/// Establish a new database connection without using anyhow
+/// Establish a new database connection
 pub fn establish_connection(database_url: &str) -> SqliteResult<SqliteConnection> {
     debug!("Establishing connection to: {}", database_url);
 
-    let conn = diesel::sqlite::SqliteConnection::establish(database_url)
-        .map_err(SqliteRepositoryError::ConnectionError)?;
-
-    Ok(conn)
+    diesel::sqlite::SqliteConnection::establish(database_url)
+        .map_err(SqliteRepositoryError::ConnectionError)
 }
 
-/// Initialize a connection pool (no anyhow)
+/// Initialize a connection pool
 pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
     debug!("Initializing connection pool for: {}", database_url);
 

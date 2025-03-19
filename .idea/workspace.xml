@@ -9,26 +9,10 @@
   <component name="ChangeListManager">
     <list default="true" id="2b2e04ba-46ed-4ecd-9601-4ddfa8dd8eb0" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/application/services/embedding_service.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/application/services/embedding_service.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/bookmark_commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/bookmark_commands.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/tag_commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/tag_commands.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/display.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/display.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/fzf.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/fzf.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/process.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/process.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/json.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/json.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/domain/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/domain/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/error.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/bookmark_repository.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/bookmark_repository.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/connection.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/connection.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/models.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/models.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/util/helper.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/util/helper.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/util/path.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/util/path.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/util/testing.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/util/testing.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_fzf.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/tests/test_lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/tests/test_main.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_models.rs" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_process.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/error.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -53,9 +37,12 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Cargo.Test bookmark_repository.executor": "Run",
+    "Cargo.Test bookmark_repository::tests.executor": "Run",
     "Cargo.Test cli::process::tests::test_ensure_int_vector.executor": "Run",
     "Cargo.Test given_bookmark_ids_when_showing_then_displays_correct_entries.executor": "Run",
     "Cargo.Test given_valid_url_when_loading_details_then_returns_correct_metadata.executor": "Run",
+    "Cargo.Test infrastructure::repositories::sqlite::bookmark_repository::tests::test_check_schema_migrations_exists.executor": "Run",
     "Cargo.Test process::tests.executor": "Run",
     "Cargo.Test test_main.executor": "Run",
     "Cargo.Test tests::verify_cli.executor": "Run",
@@ -69,11 +56,12 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
     "org.rust.first.attach.projects": "true",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RunManager" selected="Cargo.Test given_valid_url_when_loading_details_then_returns_correct_metadata">
+  <component name="RunManager" selected="Cargo.Test bookmark_repository">
     <configuration name="Run bkmr" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="buildProfileId" value="dev" />
       <option name="command" value="run --package bkmr --bin bkmr" />
@@ -109,8 +97,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test cli::process::tests::test_ensure_int_vector" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package bkmr --lib cli::process::tests::test_ensure_int_vector -- --exact" />
+    <configuration name="Test bookmark_repository" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --lib infrastructure::repositories::sqlite::bookmark_repository" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -126,8 +114,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test given_bookmark_ids_when_showing_then_displays_correct_entries" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package bkmr --test test_main given_bookmark_ids_when_showing_then_displays_correct_entries -- --exact" />
+    <configuration name="Test bookmark_repository::tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --lib infrastructure::repositories::sqlite::bookmark_repository::tests" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -160,8 +148,8 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test process::tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="command" value="test --package bkmr --lib cli::process::tests" />
+    <configuration name="Test infrastructure::repositories::sqlite::bookmark_repository::tests::test_check_schema_migrations_exists" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --lib infrastructure::repositories::sqlite::bookmark_repository::tests::test_check_schema_migrations_exists -- --exact" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -196,11 +184,11 @@
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Cargo.Test bookmark_repository" />
+        <item itemvalue="Cargo.Test infrastructure::repositories::sqlite::bookmark_repository::tests::test_check_schema_migrations_exists" />
+        <item itemvalue="Cargo.Test bookmark_repository::tests" />
         <item itemvalue="Cargo.Test given_valid_url_when_loading_details_then_returns_correct_metadata" />
         <item itemvalue="Cargo.Test test_main" />
-        <item itemvalue="Cargo.Test given_bookmark_ids_when_showing_then_displays_correct_entries" />
-        <item itemvalue="Cargo.Test process::tests" />
-        <item itemvalue="Cargo.Test cli::process::tests::test_ensure_int_vector" />
       </list>
     </recent_temporary>
   </component>
@@ -215,7 +203,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1742410750332</updated>
-      <workItem from="1742410752754" duration="3146000" />
+      <workItem from="1742410752754" duration="4593000" />
     </task>
     <servers />
   </component>
