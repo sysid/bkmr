@@ -46,7 +46,7 @@ pub fn enable_embeddings_if_required() -> CliResult<()> {
     // Check if embedding column exists
     let embedding_exists = service
         .check_embedding_column_exists()
-        .map_err(|e| CliError::Application(e))?;
+        .map_err(CliError::Application)?;
 
     if embedding_exists {
         info!("Embedding column already exists, no action required.");
@@ -61,9 +61,7 @@ pub fn enable_embeddings_if_required() -> CliResult<()> {
     }
 
     // Run migrations
-    service
-        .run_migrations()
-        .map_err(|e| CliError::Application(e))?;
+    service.run_migrations().map_err(CliError::Application)?;
 
     eprintln!("{}", "Database schema has been extended.".blue());
     Ok(())
@@ -73,7 +71,7 @@ pub fn enable_embeddings_if_required() -> CliResult<()> {
 mod tests {
     use super::*;
     use crate::application::services::bookmark_application_service::BookmarkApplicationService;
-    use crate::cli::args::{Cli, Commands};
+    use crate::cli::args::Cli;
     use crate::cli::error::CliResult;
     use crate::context::{Context, CTX};
     use crate::infrastructure::embeddings::DummyEmbedding;

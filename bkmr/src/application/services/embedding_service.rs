@@ -4,7 +4,6 @@ use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::context::Context;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
-use crate::infrastructure::embeddings::serialize_embedding;
 use tracing::{debug, info};
 
 pub struct EmbeddingService<R> {
@@ -41,7 +40,7 @@ where
             // Generate embedding
             if let Some(embedding) = Context::read_global().get_embedding(&content) {
                 // Create a mutable copy for updating
-                let mut bookmark_to_update = bookmark.clone();
+                let bookmark_to_update = bookmark.clone();
 
                 // Update the bookmark
                 self.repository.update(&bookmark_to_update)?;
@@ -61,7 +60,7 @@ where
         let bookmark = self
             .repository
             .get_by_id(bookmark_id)?
-            .ok_or_else(|| ApplicationError::BookmarkNotFound(bookmark_id))?;
+            .ok_or(ApplicationError::BookmarkNotFound(bookmark_id))?;
 
         // Get content for embedding
         let content = bookmark.get_content_for_embedding();

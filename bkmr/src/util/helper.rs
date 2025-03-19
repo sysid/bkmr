@@ -1,10 +1,9 @@
 // src/util/helper.rs
+use md5;
 use regex::Regex;
+use std::env;
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
-use std::env;
-use tracing::debug;
-use md5;
 
 /// Ensure a vector of strings contains only integers
 #[allow(clippy::ptr_arg)]
@@ -91,6 +90,7 @@ pub fn extract_filename(input: &str) -> String {
     let path = Path::new(path_str);
 
     // Extract the filename, if it exists, and convert it to a String
-    path.file_name()
-        .map_or(input.to_string(), |filename| filename.to_string_lossy().to_string())
+    path.file_name().map_or(input.to_string(), |filename| {
+        filename.to_string_lossy().to_string()
+    })
 }

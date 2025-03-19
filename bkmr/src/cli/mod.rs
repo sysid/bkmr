@@ -1,8 +1,12 @@
 // src/cli/mod.rs
 
+use crate::application::services::bookmark_application_service::BookmarkApplicationService;
 use crate::cli::args::Commands;
-use crate::context::{Context, CTX};
 use crate::cli::error::{CliError, CliResult};
+use crate::context::{Context, CTX};
+use crate::environment::CONFIG;
+use crate::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
+use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 use args::Cli;
 use clap::Parser;
 use std::sync::RwLock;
@@ -14,17 +18,13 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, Layer};
-use crate::application::services::bookmark_application_service::BookmarkApplicationService;
-use crate::environment::CONFIG;
-use crate::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
-use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 
 pub mod args;
 pub mod commands;
-pub mod error;
 pub mod display;
-pub mod process;
+pub mod error;
 pub mod fzf;
+pub mod process;
 
 #[instrument]
 pub fn run() -> CliResult<()> {
@@ -57,7 +57,9 @@ pub fn run() -> CliResult<()> {
 
     // Set the global context
     if CTX.set(RwLock::from(context)).is_err() {
-        return Err(error::CliError::Other("Failed to initialize context".to_string()));
+        return Err(error::CliError::Other(
+            "Failed to initialize context".to_string(),
+        ));
     }
 
     // Process command
@@ -109,10 +111,9 @@ pub fn setup_logging(verbosity: u8) {
 }
 
 // Create a service factory function to reduce boilerplate
-pub fn create_bookmark_service() -> CliResult<BookmarkApplicationService<SqliteBookmarkRepository>> {
+pub fn create_bookmark_service() -> CliResult<BookmarkApplicationService<SqliteBookmarkRepository>>
+{
     SqliteBookmarkRepository::from_url(&CONFIG.db_url)
         .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))
         .map(BookmarkApplicationService::new)
 }
-
-

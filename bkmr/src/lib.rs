@@ -15,8 +15,8 @@ use crate::environment::CONFIG;
 use tracing::{debug, error};
 
 // Core modules
-pub mod domain;
 pub mod application;
+pub mod domain;
 pub mod infrastructure;
 
 // CLI modules
@@ -29,7 +29,9 @@ pub mod util;
 /// be aware of shell parsing rules, so no blanks or quotes
 pub fn load_url_details(url: &str) -> DomainResult<(String, String, String)> {
     let client = reqwest::blocking::Client::new();
-    let body = client.get(url).send()
+    let body = client
+        .get(url)
+        .send()
         .map_err(|e| domain::error::DomainError::CannotFetchMetadata(e.to_string()))?
         .text()
         .map_err(|e| domain::error::DomainError::CannotFetchMetadata(e.to_string()))?;
@@ -93,9 +95,10 @@ pub fn update_bm(
     let tags_not_set: HashSet<String> = tags_not.iter().cloned().collect();
 
     // Get the bookmark
-    let Some(bookmark) = service.get_bookmark(id)
+    let Some(bookmark) = service
+        .get_bookmark(id)
         .map_err(|e| domain::error::DomainError::BookmarkOperationFailed(e.to_string()))?
-        else {
+    else {
         return Err(domain::error::DomainError::BookmarkNotFound(id.to_string()));
     };
 
@@ -119,7 +122,8 @@ pub fn update_bm(
     };
 
     // Convert to Tag domain objects
-    let tag_objects = new_tags.into_iter()
+    let tag_objects = new_tags
+        .into_iter()
         .filter_map(|t| Tag::new(&t).ok())
         .collect::<HashSet<_>>();
 
@@ -132,7 +136,8 @@ pub fn update_bm(
     };
 
     // Update the bookmark
-    service.update_bookmark(request)
+    service
+        .update_bookmark(request)
         .map_err(|e| domain::error::DomainError::BookmarkOperationFailed(e.to_string()))?;
 
     Ok(())

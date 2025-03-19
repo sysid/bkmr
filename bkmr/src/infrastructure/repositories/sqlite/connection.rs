@@ -1,12 +1,12 @@
+use super::error::{SqliteRepositoryError, SqliteResult};
+use crate::infrastructure::repositories::sqlite::migration::MIGRATIONS;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::sqlite::SqliteConnection;
 use diesel::Connection;
 use diesel::RunQueryDsl;
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::MigrationHarness;
 use std::path::Path;
 use tracing::{debug, info, trace};
-use crate::infrastructure::repositories::sqlite::migration::MIGRATIONS;
-use super::error::{SqliteRepositoryError, SqliteResult};
 
 pub type ConnectionPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<SqliteConnection>>;

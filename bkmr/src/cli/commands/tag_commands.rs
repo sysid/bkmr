@@ -133,8 +133,7 @@ pub fn get_tag_suggestions(partial: &str) -> CliResult<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
-    use std::fs;
+
     use tempfile::tempdir;
 
     #[ignore = "requires database setup and user confirmation"]
@@ -148,8 +147,9 @@ mod tests {
         std::env::set_var("BKMR_DB_URL", db_path.to_str().unwrap());
 
         // Seed database with tags
-        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())
-            .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap()).map_err(|e| {
+            CliError::RepositoryError(format!("Failed to create repository: {}", e))
+        })?;
 
         // Set up test data
         // ...

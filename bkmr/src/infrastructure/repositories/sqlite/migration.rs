@@ -21,24 +21,26 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 /// * Retrieving pending migrations
 /// * Running pending migrations
 #[allow(unused)]
-pub fn init_db(connection: &mut impl MigrationHarness<Sqlite>) -> Result<(), SqliteRepositoryError> {
+pub fn init_db(
+    connection: &mut impl MigrationHarness<Sqlite>,
+) -> Result<(), SqliteRepositoryError> {
     debug!("{:?}", "--> initdb <--");
 
-    connection
-        .revert_all_migrations(MIGRATIONS)
-        .map_err(|e| SqliteRepositoryError::MigrationError(format!("Failed to revert migrations: {}", e)))?;
+    connection.revert_all_migrations(MIGRATIONS).map_err(|e| {
+        SqliteRepositoryError::MigrationError(format!("Failed to revert migrations: {}", e))
+    })?;
 
-    let pending = connection
-        .pending_migrations(MIGRATIONS)
-        .map_err(|e| SqliteRepositoryError::MigrationError(format!("Failed to get pending migrations: {}", e)))?;
+    let pending = connection.pending_migrations(MIGRATIONS).map_err(|e| {
+        SqliteRepositoryError::MigrationError(format!("Failed to get pending migrations: {}", e))
+    })?;
 
     pending.iter().for_each(|m| {
         debug!("Pending Migration: {}", m.name());
     });
 
-    connection
-        .run_pending_migrations(MIGRATIONS)
-        .map_err(|e| SqliteRepositoryError::MigrationError(format!("Failed to run pending migrations: {}", e)))?;
+    connection.run_pending_migrations(MIGRATIONS).map_err(|e| {
+        SqliteRepositoryError::MigrationError(format!("Failed to run pending migrations: {}", e))
+    })?;
 
     Ok(())
 }

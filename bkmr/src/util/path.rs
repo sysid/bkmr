@@ -1,7 +1,6 @@
 // src/util/path.rs
-use std::path::{Path, PathBuf};
-use std::fs;
 use regex::Regex;
+use std::path::{Path, PathBuf};
 
 /// resolves existing path and follows symlinks, returns None if path does not exist
 /// also removes suffix like ":1" or ":0" from the path if present
@@ -43,6 +42,7 @@ pub fn extract_filename(input: &str) -> String {
     let path = Path::new(path_str);
 
     // Extract the filename, if it exists, and convert it to a String
-    path.file_name()
-        .map_or(input.to_string(), |filename| filename.to_string_lossy().to_string())
+    path.file_name().map_or(input.to_string(), |filename| {
+        filename.to_string_lossy().to_string()
+    })
 }

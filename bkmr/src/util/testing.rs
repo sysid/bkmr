@@ -15,12 +15,12 @@ use lazy_static::lazy_static;
 use rstest::fixture;
 
 use crate::context::Context;
-use crate::infrastructure::embeddings::DummyEmbedding;
-use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
-use crate::infrastructure::repositories::sqlite::migration;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
+use crate::infrastructure::embeddings::DummyEmbedding;
+use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+use crate::infrastructure::repositories::sqlite::migration;
 
 // Common test environment variables
 pub const TEST_ENV_VARS: &[&str] = &["BKMR_DB_URL", "RUST_LOG", "NO_CLEANUP"];
@@ -96,15 +96,17 @@ fn set_test_env_vars() {
 }
 
 pub fn setup_test_db() -> DomainResult<SqliteBookmarkRepository> {
-    let repository = SqliteBookmarkRepository::from_url(&TEST_DB_PATH.to_string_lossy().to_string())
+    let repository = SqliteBookmarkRepository::from_url(TEST_DB_PATH.to_string_lossy().as_ref())
         .map_err(|e| DomainError::BookmarkOperationFailed(e.to_string()))?;
 
     // Initialize the database if needed
-    let mut conn = repository.get_connection()
+    let mut conn = repository
+        .get_connection()
         .map_err(|e| DomainError::BookmarkOperationFailed(e.to_string()))?;
 
-    migration::init_db(&mut conn)
-        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to initialize test database: {}", e)))?;
+    migration::init_db(&mut conn).map_err(|e| {
+        DomainError::BookmarkOperationFailed(format!("Failed to initialize test database: {}", e))
+    })?;
 
     Ok(repository)
 }
@@ -122,8 +124,9 @@ pub fn bookmarks(test_repository: SqliteBookmarkRepository) -> Vec<Bookmark> {
 /// Gets test bookmarks from the database
 pub fn get_test_bookmarks() -> DomainResult<Vec<Bookmark>> {
     let repository = setup_test_db()?;
-    repository.get_all()
-        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to get test bookmarks: {}", e)))
+    repository.get_all().map_err(|e| {
+        DomainError::BookmarkOperationFailed(format!("Failed to get test bookmarks: {}", e))
+    })
 }
 
 pub fn print_active_env_vars() {
@@ -141,12 +144,14 @@ pub fn setup_temp_dir() -> DomainResult<PathBuf> {
     use fs_extra::dir::CopyOptions;
     use tempfile::tempdir;
 
-    let tempdir = tempdir()
-        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to create temp directory: {}", e)))?;
+    let tempdir = tempdir().map_err(|e| {
+        DomainError::BookmarkOperationFailed(format!("Failed to create temp directory: {}", e))
+    })?;
     let options = CopyOptions::new().overwrite(true);
 
-    fs_extra::copy_items(&TEST_RESOURCES, "../db", &options)
-        .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to copy test resources: {}", e)))?;
+    fs_extra::copy_items(&TEST_RESOURCES, "../db", &options).map_err(|e| {
+        DomainError::BookmarkOperationFailed(format!("Failed to copy test resources: {}", e))
+    })?;
 
     Ok(tempdir.into_path())
 }

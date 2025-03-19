@@ -89,7 +89,7 @@ impl SkimItem for BookmarkResponse {
             attr_segments.push((attr_tags, (start_idx_tags, end_idx_tags)));
         }
 
-        AnsiString::new_str(&context.text, attr_segments)
+        AnsiString::new_str(context.text, attr_segments)
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
@@ -136,7 +136,12 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
             "esc:abort".to_string(),
         ])
         .build()
-        .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Failed to build skim options: {}", e)))?;
+        .map_err(|e| {
+            crate::cli::error::CliError::CommandFailed(format!(
+                "Failed to build skim options: {}",
+                e
+            ))
+        })?;
 
     // Set up channel for bookmark items
     let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = unbounded();
@@ -144,9 +149,11 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
     // Send bookmarks to skim
     for bookmark in bookmarks {
         debug!("Sending bookmark to skim: {}", bookmark.title);
-        tx_item
-            .send(Arc::new(bookmark.clone()))
-            .map_err(|_| crate::cli::error::CliError::CommandFailed("Failed to send bookmark to skim".to_string()))?;
+        tx_item.send(Arc::new(bookmark.clone())).map_err(|_| {
+            crate::cli::error::CliError::CommandFailed(
+                "Failed to send bookmark to skim".to_string(),
+            )
+        })?;
     }
     drop(tx_item); // Close channel to signal end of items
 

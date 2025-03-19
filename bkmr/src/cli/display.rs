@@ -1,8 +1,8 @@
 // src/cli/display.rs (Updated)
 
-use std::fmt;
-use chrono::{DateTime, NaiveDateTime, Utc};
 use crate::domain::bookmark::Bookmark;
+use chrono::{DateTime, Utc};
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DisplayField {
@@ -148,10 +148,7 @@ pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
     }
 
     // Determine column widths
-    let mut col_widths: Vec<usize> = fields
-        .iter()
-        .map(|f| f.to_string().len())
-        .collect();
+    let mut col_widths: Vec<usize> = fields.iter().map(|f| f.to_string().len()).collect();
 
     for bm in bookmarks {
         for (i, field) in fields.iter().enumerate() {

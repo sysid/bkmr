@@ -3,10 +3,8 @@ use bkmr::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
 
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::commands;
-use bkmr::cli::error::CliResult;
 use bkmr::context::{Context, CTX};
 use bkmr::environment::CONFIG;
-use bkmr::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
 use clap::Parser;
 use crossterm::style::Stylize;
 use std::path::Path;

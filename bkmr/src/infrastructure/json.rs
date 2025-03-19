@@ -1,15 +1,14 @@
 // src/infrastructure/json.rs
 
-use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::{self, BufRead, BufReader, Write};
-use std::path::Path;
-use tracing::debug;
 use crate::application::dto::BookmarkResponse;
 use crate::cli::error::{CliError, CliResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::tag::Tag;
+use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{self, BufRead, BufReader, Write};
+use std::path::Path;
 
 #[derive(Serialize, Deserialize)]
 struct TextDocument {
@@ -23,9 +22,8 @@ pub fn read_ndjson_file_and_create_bookmarks<P>(file_path: P) -> DomainResult<Ve
 where
     P: AsRef<Path>,
 {
-    let file = File::open(file_path.as_ref()).map_err(|e| {
-        DomainError::CannotFetchMetadata(format!("Failed to open file: {}", e))
-    })?;
+    let file = File::open(file_path.as_ref())
+        .map_err(|e| DomainError::CannotFetchMetadata(format!("Failed to open file: {}", e)))?;
 
     let reader = BufReader::new(file);
     let mut bookmarks = Vec::new();
@@ -46,7 +44,7 @@ where
         let id = record.id;
         let filename = extract_filename(&id);
 
-        let mut tags = Tag::parse_tags(",_imported_,")?;
+        let tags = Tag::parse_tags(",_imported_,")?;
         let bookmark = Bookmark::new(
             &id,             // URL
             &filename,       // Title
@@ -72,8 +70,9 @@ fn extract_filename(input: &str) -> String {
     let path = Path::new(path_str);
 
     // Extract the filename, if it exists, and convert it to a String
-    path.file_name()
-        .map_or(input.to_string(), |filename| filename.to_string_lossy().to_string())
+    path.file_name().map_or(input.to_string(), |filename| {
+        filename.to_string_lossy().to_string()
+    })
 }
 
 #[derive(Serialize)]
@@ -106,15 +105,12 @@ impl From<&Bookmark> for BookmarkView {
 /// Converts bookmarks to JSON and writes to standard output
 pub fn bms_to_json(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
     let json = serde_json::to_string_pretty(&bookmarks).map_err(|e| {
-        CliError::CommandFailed(format!(
-            "Failed to serialize bookmarks to JSON: {}",
-            e
-        ))
+        CliError::CommandFailed(format!("Failed to serialize bookmarks to JSON: {}", e))
     })?;
 
-    io::stdout().write_all(json.as_bytes()).map_err(|e| {
-        CliError::CommandFailed(format!("Failed to write JSON to stdout: {}", e))
-    })?;
+    io::stdout()
+        .write_all(json.as_bytes())
+        .map_err(|e| CliError::CommandFailed(format!("Failed to write JSON to stdout: {}", e)))?;
 
     println!();
     Ok(())

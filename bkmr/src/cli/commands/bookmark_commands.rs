@@ -4,29 +4,30 @@ use std::fs::create_dir_all;
 use std::io::Write;
 use std::path::Path;
 
-use crate::application::dto::{BookmarkCreateRequest, BookmarkResponse, BookmarkSearchRequest, BookmarkUpdateRequest};
+use crate::application::dto::{
+    BookmarkCreateRequest, BookmarkResponse, BookmarkSearchRequest, BookmarkUpdateRequest,
+};
 use crate::application::services::bookmark_application_service::BookmarkApplicationService;
 use crate::cli::args::{Cli, Commands};
+use crate::cli::display::{DisplayBookmark, DisplayField, ALL_FIELDS, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
+use crate::cli::fzf::fzf_process;
+use crate::cli::process::{delete_bookmarks, edit_bookmarks, open_bookmark, process};
 use crate::context::Context;
 use crate::environment::CONFIG;
-use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
-use crate::infrastructure::repositories::sqlite::migration::{init_db, MIGRATIONS};
-use crate::infrastructure::embeddings::{cosine_similarity, deserialize_embedding, OpenAiEmbedding};
-use crate::util::helper::{confirm, ensure_int_vector};
-use crate::cli::display::{DisplayBookmark, DisplayField, DEFAULT_FIELDS, ALL_FIELDS};
-use crate::cli::fzf::fzf_process;
-use crate::cli::process::{process, open_bookmark, edit_bookmarks, delete_bookmarks};
+use crate::infrastructure::embeddings::{
+    cosine_similarity, deserialize_embedding, OpenAiEmbedding,
+};
 use crate::infrastructure::json::{bms_to_json, read_ndjson_file_and_create_bookmarks};
+use crate::infrastructure::repositories::sqlite::bookmark_repository::SqliteBookmarkRepository;
+use crate::infrastructure::repositories::sqlite::migration::init_db;
+use crate::util::helper::{confirm, ensure_int_vector};
 
-use crossterm::style::Stylize;
-use diesel::connection::SimpleConnection;
-use diesel_migrations::MigrationHarness;
-use itertools::Itertools;
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use tracing::{debug, info, instrument};
 use crate::cli::create_bookmark_service;
 use crate::domain::repositories::bookmark_repository::BookmarkRepository;
+use itertools::Itertools;
+use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use tracing::instrument;
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -83,7 +84,8 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         let response = service.search_bookmarks(search_request)?;
 
         // Convert DTOs to DisplayBookmark for presentation
-        let bookmarks = response.bookmarks
+        let bookmarks = response
+            .bookmarks
             .iter()
             .map(|item| {
                 let mut display_bookmark = DisplayBookmark::default();
@@ -103,7 +105,9 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         match (is_fuzzy, is_json) {
             (true, _) => {
                 // Get full bookmark details for fzf
-                let bookmark_responses = response.bookmarks.iter()
+                let bookmark_responses = response
+                    .bookmarks
+                    .iter()
                     .filter_map(|item| {
                         if let Some(id) = item.id {
                             service.get_bookmark(id).ok().flatten()
@@ -118,7 +122,9 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             }
             (_, true) => {
                 // Get full bookmark details for JSON output
-                let bookmark_responses = response.bookmarks.iter()
+                let bookmark_responses = response
+                    .bookmarks
+                    .iter()
                     .filter_map(|item| {
                         if let Some(id) = item.id {
                             service.get_bookmark(id).ok().flatten()
@@ -136,7 +142,8 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
                 eprintln!("Found {} bookmarks", bookmarks.len());
 
                 if non_interactive {
-                    let ids = response.bookmarks
+                    let ids = response
+                        .bookmarks
                         .iter()
                         .filter_map(|bm| bm.id)
                         .map(|id| id.to_string())
@@ -155,7 +162,9 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
                         .map_err(|e| CliError::Other(format!("Failed to reset color: {}", e)))?;
 
                     // Get full bookmark details for processing
-                    let bookmark_responses = response.bookmarks.iter()
+                    let bookmark_responses = response
+                        .bookmarks
+                        .iter()
                         .filter_map(|item| {
                             if let Some(id) = item.id {
                                 service.get_bookmark(id).ok().flatten()
@@ -172,7 +181,6 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
     }
     Ok(())
 }
-
 
 #[instrument(skip(cli))]
 pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
@@ -200,7 +208,9 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         let embedding = Context::read_global()
             .execute(&query)
             .map_err(|e| CliError::Other(e.to_string()))?
-            .ok_or_else(|| CliError::CommandFailed("No embedding generated. OpenAI flag set?".to_string()))?;
+            .ok_or_else(|| {
+                CliError::CommandFailed("No embedding generated. OpenAI flag set?".to_string())
+            })?;
 
         // Use a specific application service method for semantic search if available,
         // or create one if necessary
@@ -215,9 +225,12 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         // Calculate similarity for each bookmark
         for bookmark in all_bookmarks {
             if let Some(id) = bookmark.id {
-                if let Some(embedding_bytes) = get_embedding_for_bookmark_from_service(&service, id)? {
-                    let bm_embedding = deserialize_embedding(embedding_bytes)
-                        .map_err(|e| CliError::CommandFailed(format!("Failed to deserialize embedding: {}", e)))?;
+                if let Some(embedding_bytes) =
+                    get_embedding_for_bookmark_from_service(&service, id)?
+                {
+                    let bm_embedding = deserialize_embedding(embedding_bytes).map_err(|e| {
+                        CliError::CommandFailed(format!("Failed to deserialize embedding: {}", e))
+                    })?;
                     let bm_vector = ndarray::Array1::from(bm_embedding);
                     let similarity = cosine_similarity(&query_vector, &bm_vector);
                     results.push(SemanticSearchResult {
@@ -229,7 +242,11 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         }
 
         // Sort results by similarity
-        results.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.similarity
+                .partial_cmp(&a.similarity)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         // Apply limit
         let limit = limit.unwrap_or(10) as usize;
@@ -247,7 +264,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         }
 
         // Display results
-        crate::cli::display::show_bookmarks(&display_bookmarks, &DEFAULT_FIELDS);
+        crate::cli::display::show_bookmarks(&display_bookmarks, DEFAULT_FIELDS);
 
         if non_interactive {
             let ids = limited_results
@@ -274,7 +291,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 // Helper function to get embedding via service
 fn get_embedding_for_bookmark_from_service(
     service: &BookmarkApplicationService<SqliteBookmarkRepository>,
-    id: i32
+    id: i32,
 ) -> CliResult<Option<Vec<u8>>> {
     // Ideally, we would add this method to the application service
     // For now, we'll use the existing repository approach
@@ -285,17 +302,20 @@ fn get_embedding_for_bookmark_from_service(
 }
 
 // Helper function to get embedding bytes for a bookmark using repository
-fn get_embedding_for_bookmark(repo: &SqliteBookmarkRepository, id: i32) -> CliResult<Option<Vec<u8>>> {
+fn get_embedding_for_bookmark(
+    repo: &SqliteBookmarkRepository,
+    id: i32,
+) -> CliResult<Option<Vec<u8>>> {
     use crate::application::services::embedding_service::EmbeddingService;
 
     // Create the embedding service
     let embedding_service = EmbeddingService::new(repo.clone());
 
     // Use the existing method
-    embedding_service.get_bookmark_embedding(id)
-        .map_err(|e| CliError::Application(e))
+    embedding_service
+        .get_bookmark_embedding(id)
+        .map_err(CliError::Application)
 }
-
 
 #[instrument(skip(cli))]
 pub fn open(cli: Cli) -> CliResult<()> {
@@ -327,21 +347,27 @@ pub fn add(cli: Cli) -> CliResult<()> {
         let service = create_bookmark_service()?;
 
         // Check if bookmark already exists
-        let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url)
-            .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
+        let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).map_err(|e| {
+            CliError::RepositoryError(format!("Failed to create repository: {}", e))
+        })?;
 
         if repository.exists_by_url(&url)? {
-            return Err(CliError::CommandFailed(format!("Bookmark already exists: {}", url)));
+            return Err(CliError::CommandFailed(format!(
+                "Bookmark already exists: {}",
+                url
+            )));
         }
 
         // Check for unknown tags
         if let Some(ref tags_str) = tags {
             let repo_tags = repository.get_all_tags()?;
-            let known_tags: Vec<String> = repo_tags.into_iter()
+            let known_tags: Vec<String> = repo_tags
+                .into_iter()
                 .map(|(tag, _)| tag.value().to_string())
                 .collect();
 
-            let new_tags: Vec<String> = tags_str.split(',')
+            let new_tags: Vec<String> = tags_str
+                .split(',')
                 .map(|t| t.trim().to_lowercase())
                 .filter(|t| !t.is_empty() && !known_tags.contains(t))
                 .collect();
@@ -386,8 +412,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
         if let Some(id) = result.id {
             if let Some(bookmark) = service.get_bookmark(id)? {
                 crate::cli::display::show_bookmarks(
-                    &vec![DisplayBookmark::from_dto(&bookmark)],
-                    &DEFAULT_FIELDS
+                    &[DisplayBookmark::from_dto(&bookmark)],
+                    DEFAULT_FIELDS,
                 );
             }
         }
@@ -409,7 +435,8 @@ pub fn delete(cli: Cli) -> CliResult<()> {
         }
 
         // Convert DTOs to domain objects for the delete function
-        let domain_bookmarks = bookmarks.iter()
+        let domain_bookmarks = bookmarks
+            .iter()
             .filter_map(|dto| {
                 let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).ok()?;
                 repository.get_by_id(dto.id.unwrap_or(0)).ok().flatten()
@@ -441,19 +468,23 @@ pub fn update(cli: Cli) -> CliResult<()> {
         let ids = get_ids(ids)?;
 
         // Process tags
-        let tags = tags.map(|t| {
-            t.split(',')
-                .map(|tag| tag.trim().to_string())
-                .filter(|tag| !tag.is_empty())
-                .collect::<Vec<_>>()
-        }).unwrap_or_default();
+        let tags = tags
+            .map(|t| {
+                t.split(',')
+                    .map(|tag| tag.trim().to_string())
+                    .filter(|tag| !tag.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
-        let tags_not = tags_not.map(|t| {
-            t.split(',')
-                .map(|tag| tag.trim().to_string())
-                .filter(|tag| !tag.is_empty())
-                .collect::<Vec<_>>()
-        }).unwrap_or_default();
+        let tags_not = tags_not
+            .map(|t| {
+                t.split(',')
+                    .map(|tag| tag.trim().to_string())
+                    .filter(|tag| !tag.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
 
         // Application service approach
         let service = create_bookmark_service()?;
@@ -502,14 +533,14 @@ pub fn update(cli: Cli) -> CliResult<()> {
     Ok(())
 }
 
-
 #[instrument(skip(cli))]
 pub fn edit(cli: Cli) -> CliResult<()> {
     if let Commands::Edit { ids } = cli.command.unwrap() {
         let service = create_bookmark_service()?;
         let ids = get_ids(ids)?;
 
-        let domain_bookmarks = ids.iter()
+        let domain_bookmarks = ids
+            .iter()
             .filter_map(|id| {
                 let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).ok()?;
                 repository.get_by_id(*id).ok().flatten()
@@ -537,7 +568,7 @@ pub fn show(cli: Cli) -> CliResult<()> {
             }
         }
 
-        crate::cli::display::show_bookmarks(&bookmarks, &ALL_FIELDS);
+        crate::cli::display::show_bookmarks(&bookmarks, ALL_FIELDS);
     }
     Ok(())
 }
@@ -545,8 +576,9 @@ pub fn show(cli: Cli) -> CliResult<()> {
 #[instrument(skip(cli))]
 pub fn surprise(cli: Cli) -> CliResult<()> {
     if let Commands::Surprise { n } = cli.command.unwrap() {
-        let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url)
-            .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
+        let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).map_err(|e| {
+            CliError::RepositoryError(format!("Failed to create repository: {}", e))
+        })?;
 
         let bookmarks = repository.get_random(n as usize)?;
 
@@ -577,18 +609,22 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
         }
 
         let database_url = path.to_string_lossy().to_string();
-        let repository = SqliteBookmarkRepository::from_url(&database_url)
-            .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
+        let repository = SqliteBookmarkRepository::from_url(&database_url).map_err(|e| {
+            CliError::RepositoryError(format!("Failed to create repository: {}", e))
+        })?;
 
         // Get connection and initialize database
-        let mut conn = repository.get_connection()
+        let mut conn = repository
+            .get_connection()
             .map_err(|e| CliError::RepositoryError(format!("Failed to get connection: {}", e)))?;
 
-        init_db(&mut conn)
-            .map_err(|e| CliError::CommandFailed(format!("Failed to initialize database: {}", e)))?;
+        init_db(&mut conn).map_err(|e| {
+            CliError::CommandFailed(format!("Failed to initialize database: {}", e))
+        })?;
 
         // Clean table
-        repository.clean_table()
+        repository
+            .clean_table()
             .map_err(|e| CliError::CommandFailed(format!("Failed to clean table: {}", e)))?;
 
         println!("Database created at {:?}", path);
@@ -599,8 +635,9 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
 #[instrument(skip(cli))]
 pub fn backfill(cli: Cli) -> CliResult<()> {
     if let Commands::Backfill { dry_run } = cli.command.unwrap() {
-        let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url)
-            .map_err(|e| CliError::RepositoryError(format!("Failed to create repository: {}", e)))?;
+        let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).map_err(|e| {
+            CliError::RepositoryError(format!("Failed to create repository: {}", e))
+        })?;
 
         let bookmarks = repository.get_without_embeddings()?;
 
@@ -659,30 +696,29 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
 
 // Extension for DisplayBookmark to support conversion from DTO
 // impl DisplayBookmark {
-    // pub fn from_dto(dto: &crate::application::dto::BookmarkResponse) -> Self {
-    //     Self {
-    //         id: dto.id.unwrap_or(0),
-    //         url: dto.url.clone(),
-    //         title: dto.title.clone(),
-    //         description: dto.description.clone(),
-    //         tags: dto.tags.join(","),
-    //         access_count: dto.access_count,
-    //         last_update_ts: dto.updated_at,
-    //         similarity: None,
-    //     }
-    // }
-
-    // pub fn from_domain(bookmark: &crate::domain::bookmark::Bookmark) -> Self {
-    //     Self {
-    //         id: bookmark.id().unwrap_or(0),
-    //         url: bookmark.url().to_string(),
-    //         title: bookmark.title().to_string(),
-    //         description: bookmark.description().to_string(),
-    //         tags: bookmark.formatted_tags(),
-    //         access_count: bookmark.access_count(),
-    //         last_update_ts: bookmark.updated_at(),
-    //         similarity: None,
-    //     }
-    // }
+// pub fn from_dto(dto: &crate::application::dto::BookmarkResponse) -> Self {
+//     Self {
+//         id: dto.id.unwrap_or(0),
+//         url: dto.url.clone(),
+//         title: dto.title.clone(),
+//         description: dto.description.clone(),
+//         tags: dto.tags.join(","),
+//         access_count: dto.access_count,
+//         last_update_ts: dto.updated_at,
+//         similarity: None,
+//     }
 // }
 
+// pub fn from_domain(bookmark: &crate::domain::bookmark::Bookmark) -> Self {
+//     Self {
+//         id: bookmark.id().unwrap_or(0),
+//         url: bookmark.url().to_string(),
+//         title: bookmark.title().to_string(),
+//         description: bookmark.description().to_string(),
+//         tags: bookmark.formatted_tags(),
+//         access_count: bookmark.access_count(),
+//         last_update_ts: bookmark.updated_at(),
+//         similarity: None,
+//     }
+// }
+// }

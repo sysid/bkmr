@@ -1,9 +1,9 @@
 // bkmr/src/context.rs
+use crate::domain::error::{DomainError, DomainResult};
+use crate::infrastructure::embeddings::{serialize_embedding, DummyEmbedding, Embedding};
 use once_cell::sync::OnceCell;
 use std::fmt;
 use std::sync::RwLock;
-use crate::infrastructure::embeddings::{serialize_embedding, DummyEmbedding, Embedding};
-use crate::domain::error::{DomainError, DomainResult};
 
 pub static CTX: OnceCell<RwLock<Context>> = OnceCell::new();
 
@@ -57,9 +57,12 @@ impl Context {
     }
 
     pub fn update_global(new_context: Context) -> DomainResult<()> {
-        let mut context = Self::global()
-            .write()
-            .map_err(|e| DomainError::BookmarkOperationFailed(format!("Failed to acquire context write lock: {}", e)))?;
+        let mut context = Self::global().write().map_err(|e| {
+            DomainError::BookmarkOperationFailed(format!(
+                "Failed to acquire context write lock: {}",
+                e
+            ))
+        })?;
         *context = new_context;
         Ok(())
     }
@@ -91,7 +94,9 @@ mod tests {
     struct FailingEmbedding;
     impl Embedding for FailingEmbedding {
         fn embed(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
-            Err(DomainError::BookmarkOperationFailed("Embedding failed".to_string()))
+            Err(DomainError::BookmarkOperationFailed(
+                "Embedding failed".to_string(),
+            ))
         }
     }
 
@@ -128,7 +133,10 @@ mod tests {
     fn test_execute_failure(failing_context: Context) {
         let result = failing_context.execute("test text");
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().to_string(), "Bookmark operation failed: Embedding failed");
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Bookmark operation failed: Embedding failed"
+        );
     }
 
     #[rstest]

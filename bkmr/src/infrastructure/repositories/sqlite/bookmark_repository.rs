@@ -32,7 +32,7 @@ impl SqliteBookmarkRepository {
 
         sql_query("DELETE FROM bookmarks WHERE id != 1;")
             .execute(&mut conn)
-            .map_err(|e| SqliteRepositoryError::DatabaseError(e))?;
+            .map_err(SqliteRepositoryError::DatabaseError)?;
 
         debug!("Cleaned table.");
         Ok(())
@@ -50,7 +50,7 @@ impl SqliteBookmarkRepository {
         )
         .bind::<Integer, _>(limit as i32)
         .load::<DbBookmark>(&mut conn)
-        .map_err(|e| SqliteRepositoryError::DatabaseError(e))?;
+        .map_err(SqliteRepositoryError::DatabaseError)?;
 
         let mut bookmarks = Vec::new();
         for db_bookmark in db_bookmarks {
@@ -119,92 +119,9 @@ impl SqliteBookmarkRepository {
             tags: bookmark.formatted_tags(),
             desc: bookmark.description().to_string(),
             flags: bookmark.access_count(),
-            embedding: None,    // We'll handle this separately
-            content_hash: None, // We'll handle this separately
+            embedding: None,    // todo: We'll handle this separately
+            content_hash: None, // todo: We'll handle this separately
         }
-    }
-
-    /// Execute a query that might return bookmark IDs
-    fn execute_id_query(&self, query: &str, params: Vec<String>) -> SqliteResult<Vec<i32>> {
-        let mut conn = self.get_connection()?;
-
-        // Build the query with a dynamic approach for parameters
-        let query_builder = diesel::sql_query(query);
-
-        // Since we can't reassign query_builder due to changing types,
-        // we need to handle parameter binding differently
-        let results: Vec<IdResult> = match params.len() {
-            0 => query_builder.load(&mut conn),
-            1 => query_builder.bind::<Text, _>(&params[0]).load(&mut conn),
-            2 => query_builder
-                .bind::<Text, _>(&params[0])
-                .bind::<Text, _>(&params[1])
-                .load(&mut conn),
-            3 => query_builder
-                .bind::<Text, _>(&params[0])
-                .bind::<Text, _>(&params[1])
-                .bind::<Text, _>(&params[2])
-                .load(&mut conn),
-            _ => {
-                return Err(SqliteRepositoryError::InvalidParameter(
-                    "Too many parameters for query".to_string(),
-                ))
-            }
-        }
-        .map_err(SqliteRepositoryError::DatabaseError)?;
-
-        // Extract IDs
-        Ok(results.into_iter().map(|result| result.id).collect())
-    }
-
-    /// Build SQL condition from specifications
-    fn build_sql_conditions(&self, query: &BookmarkQuery) -> (String, Vec<String>) {
-        let conditions: Vec<String> = Vec::new();
-        let params = Vec::new();
-
-        // If no specification, return empty conditions
-        if query.specification.is_none() {
-            return (String::new(), params);
-        }
-
-        // For simplicity, we'll handle common query patterns directly
-        // This could be expanded to handle more complex specifications
-
-        // Return the built conditions
-        let conditions_str = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        (conditions_str, params)
-    }
-
-    /// Generate a SQL ORDER BY clause from query sorting parameters
-    fn build_sql_order_by(&self, query: &BookmarkQuery) -> String {
-        if let Some(direction) = query.sort_by_date {
-            match direction {
-                SortDirection::Ascending => "ORDER BY last_update_ts ASC".to_string(),
-                SortDirection::Descending => "ORDER BY last_update_ts DESC".to_string(),
-            }
-        } else {
-            "ORDER BY id ASC".to_string() // Default ordering
-        }
-    }
-
-    /// Generate SQL LIMIT and OFFSET clauses
-    fn build_sql_pagination(&self, query: &BookmarkQuery) -> String {
-        let mut pagination = String::new();
-
-        if let Some(limit) = query.limit {
-            pagination.push_str(&format!(" LIMIT {}", limit));
-        }
-
-        if let Some(offset) = query.offset {
-            pagination.push_str(&format!(" OFFSET {}", offset));
-        }
-
-        pagination
     }
 }
 

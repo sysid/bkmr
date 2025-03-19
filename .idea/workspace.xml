@@ -8,59 +8,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2b2e04ba-46ed-4ecd-9601-4ddfa8dd8eb0" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/aws.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/bkmr.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/bkmr.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/dataSources.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/google-java-format.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/jpa-buddy.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/All Tests.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test main__tests.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test tag.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test tag__test__test_clean_tags.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test tag__test__test_create_normalized_tag_string.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test tag__test__test_tags.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_bms.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_check_tags.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_create_db.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_dal__test_bm_exists.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_dal__test_get_bookmarks.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_embeddings.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test test_update_bm.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test_environment.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test_test_dal.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Test_test_process.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/Tests in 'tests'.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/_template__of_Cargo_Command.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/rsenv.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_abspath.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_clean_tags.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_create_normalized_tag_string.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_delete_bms.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_do_sth_with_bms.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_ensure_int_vector.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_environment.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_get_bookmarks.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_init_db.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_lib.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_open_bm.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_open_bms.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_parse_tags.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_print_ids.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_process.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/test_show_bms.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/twbm add.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/twbm delete.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/twbm edit.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/twbm search.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/twbm show.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/runConfigurations/twbm update.run.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/sqldialects.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/application/services/embedding_service.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/application/services/embedding_service.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/bookmark_commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/bookmark_commands.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/tag_commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/tag_commands.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/display.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/display.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bkmr/src/cli/fzf.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/fzf.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/process.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/process.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/json.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/json.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/bookmark_repository.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/bookmark_repository.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/connection.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/connection.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/models.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/models.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/util/helper.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/util/helper.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/util/path.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/util/path.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/util/testing.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/util/testing.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_fzf.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/tests/test_lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/tests/test_main.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_models.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_process.rs" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -85,20 +53,27 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Cargo.Test cli::process::tests::test_ensure_int_vector.executor": "Run",
+    "Cargo.Test given_bookmark_ids_when_showing_then_displays_correct_entries.executor": "Run",
+    "Cargo.Test given_valid_url_when_loading_details_then_returns_correct_metadata.executor": "Run",
+    "Cargo.Test process::tests.executor": "Run",
+    "Cargo.Test test_main.executor": "Run",
     "Cargo.Test tests::verify_cli.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.rust.reset.selective.auto.import": "true",
     "git-widget-placeholder": "feat/rsnip",
     "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.first.attach.projects": "true",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
-  <component name="RunManager" selected="Cargo.Test tests::verify_cli">
+  <component name="RunManager" selected="Cargo.Test given_valid_url_when_loading_details_then_returns_correct_metadata">
     <configuration name="Run bkmr" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
       <option name="buildProfileId" value="dev" />
       <option name="command" value="run --package bkmr --bin bkmr" />
@@ -134,9 +109,76 @@
         <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
       </method>
     </configuration>
-    <configuration name="Test tests::verify_cli" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
-      <option name="buildProfileId" value="test" />
-      <option name="command" value="test --package bkmr --bin bkmr tests::verify_cli -- --exact" />
+    <configuration name="Test cli::process::tests::test_ensure_int_vector" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --lib cli::process::tests::test_ensure_int_vector -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test given_bookmark_ids_when_showing_then_displays_correct_entries" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --test test_main given_bookmark_ids_when_showing_then_displays_correct_entries -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test given_valid_url_when_loading_details_then_returns_correct_metadata" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --test test_lib given_valid_url_when_loading_details_then_returns_correct_metadata -- --exact" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test process::tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --lib cli::process::tests" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
+      <envs />
+      <option name="emulateTerminal" value="true" />
+      <option name="channel" value="DEFAULT" />
+      <option name="requiredFeatures" value="true" />
+      <option name="allFeatures" value="false" />
+      <option name="withSudo" value="false" />
+      <option name="buildTarget" value="REMOTE" />
+      <option name="backtrace" value="SHORT" />
+      <option name="isRedirectInput" value="false" />
+      <option name="redirectInputPath" value="" />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="Test test_main" type="CargoCommandRunConfiguration" factoryName="Cargo Command" temporary="true">
+      <option name="command" value="test --package bkmr --test test_main" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$/bkmr" />
       <envs />
       <option name="emulateTerminal" value="true" />
@@ -154,7 +196,11 @@
     </configuration>
     <recent_temporary>
       <list>
-        <item itemvalue="Cargo.Test tests::verify_cli" />
+        <item itemvalue="Cargo.Test given_valid_url_when_loading_details_then_returns_correct_metadata" />
+        <item itemvalue="Cargo.Test test_main" />
+        <item itemvalue="Cargo.Test given_bookmark_ids_when_showing_then_displays_correct_entries" />
+        <item itemvalue="Cargo.Test process::tests" />
+        <item itemvalue="Cargo.Test cli::process::tests::test_ensure_int_vector" />
       </list>
     </recent_temporary>
   </component>
@@ -169,7 +215,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1742410750332</updated>
-      <workItem from="1742410752754" duration="302000" />
+      <workItem from="1742410752754" duration="3146000" />
     </task>
     <servers />
   </component>

@@ -1,9 +1,9 @@
 // src/infrastructure/embeddings.rs
 
-use std::fs::File;
-use std::io::Read;
 use ndarray::Array1;
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::Read;
 use thiserror::Error;
 use tracing::debug;
 
@@ -96,12 +96,14 @@ impl Embedding for OpenAiEmbedding {
             .map_err(|e| DomainError::CannotFetchMetadata(e.to_string()))?; // Fixed conversion
 
         if !response.status().is_success() {
-            let error_text = response.text()
+            let error_text = response
+                .text()
                 .map_err(|e| DomainError::CannotFetchMetadata(e.to_string()))?;
             return Err(DomainError::CannotFetchMetadata(error_text));
         }
 
-        let response_data: OpenAiEmbeddingResponse = response.json()
+        let response_data: OpenAiEmbeddingResponse = response
+            .json()
             .map_err(|e| DomainError::CannotFetchMetadata(e.to_string()))?;
 
         if response_data.data.is_empty() {

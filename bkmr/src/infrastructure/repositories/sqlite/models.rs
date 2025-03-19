@@ -1,14 +1,10 @@
 // src/infrastructure/repositories/sqlite/models.rs
+use super::error::SqliteRepositoryError;
+use crate::domain::bookmark::Bookmark;
+use crate::domain::tag::Tag;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::sql_types::{Binary, Integer, Text, Timestamp};
-use diesel::deserialize::FromSql;
-use diesel::sqlite::Sqlite;
-use std::collections::HashSet;
 use diesel::QueryableByName;
-use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::tag::Tag;
-use super::error::SqliteRepositoryError;
 
 #[derive(QueryableByName, Debug)]
 pub struct IdResult {
@@ -80,7 +76,7 @@ impl BookmarkWithEmbedding {
         let updated_at = DateTime::<Utc>::from_naive_utc_and_offset(self.updated_at, Utc);
 
         // Create domain Bookmark
-        let mut bookmark = Bookmark::from_storage(
+        let bookmark = Bookmark::from_storage(
             self.id,
             self.url,
             self.title,
@@ -89,7 +85,8 @@ impl BookmarkWithEmbedding {
             self.access_count,
             created_at,
             updated_at,
-        ).map_err(|e| SqliteRepositoryError::ConversionError(e.to_string()))?;
+        )
+        .map_err(|e| SqliteRepositoryError::ConversionError(e.to_string()))?;
 
         Ok(bookmark)
     }
