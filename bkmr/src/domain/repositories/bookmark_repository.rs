@@ -2,7 +2,7 @@
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainError;
-use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
+use crate::domain::repositories::query::{AllTagsSpecification, AnyTagSpecification, BookmarkQuery, SortDirection};
 use crate::domain::tag::Tag;
 use std::collections::HashSet;
 
@@ -52,16 +52,16 @@ pub trait BookmarkRepository {
 
     /// Get bookmarks filtered by tags (all tags must match)
     fn get_by_all_tags(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError> {
-        let query = crate::domain::repositories::query::BookmarkQuery::new().with_specification(
-            crate::domain::repositories::query::AllTagsSpecification::new(tags.clone()),
+        let query = BookmarkQuery::new().with_specification(
+            AllTagsSpecification::new(tags.clone()),
         );
         self.search(&query)
     }
 
     /// Get bookmarks filtered by tags (any tag may match)
     fn get_by_any_tag(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError> {
-        let query = crate::domain::repositories::query::BookmarkQuery::new().with_specification(
-            crate::domain::repositories::query::AnyTagSpecification::new(tags.clone()),
+        let query = BookmarkQuery::new().with_specification(
+            AnyTagSpecification::new(tags.clone()),
         );
         self.search(&query)
     }
@@ -73,7 +73,7 @@ pub trait BookmarkRepository {
         limit: Option<usize>,
     ) -> Result<Vec<Bookmark>, DomainError> {
         let mut query =
-            crate::domain::repositories::query::BookmarkQuery::new().with_sort_by_date(direction);
+            BookmarkQuery::new().with_sort_by_date(direction);
         if let Some(limit) = limit {
             query = query.with_limit(limit);
         }
@@ -82,7 +82,7 @@ pub trait BookmarkRepository {
 
     /// Search bookmarks by text
     fn search_by_text(&self, text: &str) -> Result<Vec<Bookmark>, DomainError> {
-        let query = crate::domain::repositories::query::BookmarkQuery::new().with_specification(
+        let query =BookmarkQuery::new().with_specification(
             crate::domain::repositories::query::TextSearchSpecification::new(text.to_string()),
         );
         self.search(&query)

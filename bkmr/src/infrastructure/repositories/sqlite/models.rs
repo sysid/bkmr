@@ -1,7 +1,6 @@
 // src/infrastructure/repositories/sqlite/models.rs
 use super::error::SqliteRepositoryError;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::tag::Tag;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use diesel::sql_types::{Binary, Integer, Text, Timestamp};
 use diesel::QueryableByName;
@@ -67,10 +66,6 @@ pub struct BookmarkWithEmbedding {
 
 impl BookmarkWithEmbedding {
     pub fn into_domain(self) -> Result<Bookmark, SqliteRepositoryError> {
-        // Parse tags
-        let tags = Tag::parse_tags(&self.tags)
-            .map_err(|e| SqliteRepositoryError::ConversionError(e.to_string()))?;
-
         // Create datetime from naive datetime
         let created_at = DateTime::<Utc>::from_naive_utc_and_offset(self.created_at, Utc);
         let updated_at = DateTime::<Utc>::from_naive_utc_and_offset(self.updated_at, Utc);

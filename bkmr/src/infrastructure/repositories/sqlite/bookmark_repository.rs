@@ -79,14 +79,6 @@ impl SqliteBookmarkRepository {
 
     /// Convert a database model to a domain entity
     fn to_domain_model(&self, db_bookmark: DbBookmark) -> SqliteResult<Bookmark> {
-        // Parse tags from the stored format
-        let tags = Tag::parse_tags(&db_bookmark.tags).map_err(|e| {
-            SqliteRepositoryError::ConversionError(format!(
-                "Failed to parse tags for bookmark ID {}: {}",
-                db_bookmark.id, e
-            ))
-        })?;
-
         // Convert stored timestamp to DateTime<Utc>
         let created_at = DateTime::from_naive_utc_and_offset(db_bookmark.last_update_ts, Utc);
 
@@ -346,7 +338,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             }
 
             // Update IDs of remaining bookmarks to maintain sequential IDs
-            diesel::sql_query("UPDATE bookmarks SET id = id - 1 WHERE id > ?")
+            sql_query("UPDATE bookmarks SET id = id - 1 WHERE id > ?")
                 .bind::<Integer, _>(id)
                 .execute(conn)?;
 
@@ -452,7 +444,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         }
 
         // Get random IDs
-        let random_ids: Vec<RandomId> = diesel::sql_query(format!(
+        let random_ids: Vec<RandomId> = sql_query(format!(
             "SELECT id FROM bookmarks ORDER BY RANDOM() LIMIT {}",
             count
         ))
@@ -623,7 +615,7 @@ mod tests {
         })?;
 
         // Clean any existing data
-        diesel::sql_query("DELETE FROM bookmarks")
+        sql_query("DELETE FROM bookmarks")
             .execute(&mut conn)
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!("Failed to clean table: {}", e))
@@ -640,7 +632,7 @@ mod tests {
         let tag_set: HashSet<Tag> = tags
             .into_iter()
             .map(Tag::new)
-            .collect::<std::result::Result<HashSet<_>, _>>()?;
+            .collect::<Result<HashSet<_>, _>>()?;
 
         Bookmark::new(url, title, "Test description", tag_set)
     }
@@ -1279,7 +1271,7 @@ mod tests {
         let mut conn = repo.get_connection().map_err(DomainError::from)?;
 
         // Query to check if migrations table exists - fixed SQL syntax
-        let result = diesel::sql_query(
+        let result = sql_query(
             "
         SELECT COUNT(*) as table_exists
         FROM sqlite_master
@@ -1321,7 +1313,7 @@ mod tests {
         let mut conn = repo.get_connection().map_err(DomainError::from)?;
 
         // Query to check if embedding column exists
-        let exists: bool = diesel::sql_query(
+        let exists: bool = sql_query(
             "
         SELECT COUNT(*) as column_exists
         FROM pragma_table_info('bookmarks')

@@ -37,9 +37,9 @@ pub fn run() -> CliResult<()> {
     if let Some(Commands::CreateDb { .. }) = &cli.command {
         // Skip the path.exists check and create database with correct schema
     } else {
-        let path = std::path::Path::new(&crate::environment::CONFIG.db_url);
+        let path = std::path::Path::new(&CONFIG.db_url);
         if !path.exists() {
-            return Err(error::CliError::InvalidInput(format!(
+            return Err(CliError::InvalidInput(format!(
                 "Database path does not exist: {}",
                 path.display()
             )));
@@ -57,7 +57,7 @@ pub fn run() -> CliResult<()> {
 
     // Set the global context
     if CTX.set(RwLock::from(context)).is_err() {
-        return Err(error::CliError::Other(
+        return Err(CliError::Other(
             "Failed to initialize context".to_string(),
         ));
     }

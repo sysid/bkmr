@@ -128,15 +128,15 @@ impl Default for DisplayBookmark {
             description: String::new(),
             tags: String::new(),
             access_count: 0,
-            last_update_ts: chrono::Utc::now(),
+            last_update_ts: Utc::now(),
             similarity: None,
         }
     }
 }
 
 // Legacy compatibility
-impl From<&crate::domain::bookmark::Bookmark> for DisplayBookmark {
-    fn from(bookmark: &crate::domain::bookmark::Bookmark) -> Self {
+impl From<&Bookmark> for DisplayBookmark {
+    fn from(bookmark: &Bookmark) -> Self {
         Self::from_domain(bookmark)
     }
 }

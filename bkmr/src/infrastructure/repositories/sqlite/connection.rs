@@ -15,7 +15,7 @@ pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<SqliteConne
 pub fn establish_connection(database_url: &str) -> SqliteResult<SqliteConnection> {
     debug!("Establishing connection to: {}", database_url);
 
-    diesel::sqlite::SqliteConnection::establish(database_url)
+    SqliteConnection::establish(database_url)
         .map_err(SqliteRepositoryError::ConnectionError)
 }
 

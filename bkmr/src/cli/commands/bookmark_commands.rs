@@ -290,7 +290,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 }
 // Helper function to get embedding via service
 fn get_embedding_for_bookmark_from_service(
-    service: &BookmarkApplicationService<SqliteBookmarkRepository>,
+    _service: &BookmarkApplicationService<SqliteBookmarkRepository>,
     id: i32,
 ) -> CliResult<Option<Vec<u8>>> {
     // Ideally, we would add this method to the application service
@@ -424,24 +424,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
 #[instrument(skip(cli))]
 pub fn delete(cli: Cli) -> CliResult<()> {
     if let Commands::Delete { ids } = cli.command.unwrap() {
-        let service = create_bookmark_service()?;
         let ids = get_ids(ids)?;
-
-        let mut bookmarks = Vec::new();
-        for id in &ids {
-            if let Some(bookmark) = service.get_bookmark(*id)? {
-                bookmarks.push(bookmark);
-            }
-        }
-
-        // Convert DTOs to domain objects for the delete function
-        let domain_bookmarks = bookmarks
-            .iter()
-            .filter_map(|dto| {
-                let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).ok()?;
-                repository.get_by_id(dto.id.unwrap_or(0)).ok().flatten()
-            })
-            .collect::<Vec<_>>();
 
         delete_bookmarks(ids)
             .map_err(|e| CliError::CommandFailed(format!("Failed to delete bookmarks: {}", e)))?;
@@ -536,16 +519,7 @@ pub fn update(cli: Cli) -> CliResult<()> {
 #[instrument(skip(cli))]
 pub fn edit(cli: Cli) -> CliResult<()> {
     if let Commands::Edit { ids } = cli.command.unwrap() {
-        let service = create_bookmark_service()?;
         let ids = get_ids(ids)?;
-
-        let domain_bookmarks = ids
-            .iter()
-            .filter_map(|id| {
-                let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).ok()?;
-                repository.get_by_id(*id).ok().flatten()
-            })
-            .collect::<Vec<_>>();
 
         edit_bookmarks(ids)
             .map_err(|e| CliError::CommandFailed(format!("Failed to edit bookmarks: {}", e)))?;
@@ -633,7 +607,7 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn backfill(cli: Cli) -> CliResult<()> {
+pub fn backfill(cli: Cli) -> CliResult<()> {  // todo: lots to fix
     if let Commands::Backfill { dry_run } = cli.command.unwrap() {
         let repository = SqliteBookmarkRepository::from_url(&CONFIG.db_url).map_err(|e| {
             CliError::RepositoryError(format!("Failed to create repository: {}", e))

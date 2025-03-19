@@ -8,11 +8,32 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2b2e04ba-46ed-4ecd-9601-4ddfa8dd8eb0" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/domain/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/domain/error.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/Cargo.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/adapter/dal.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/adapter/dal/migration.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/adapter/dal/schema.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/adapter/json.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/application/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/application/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/bookmark_commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/bookmark_commands.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/commands/tag_commands.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/commands/tag_commands.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/display.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/display.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/fzf.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/fzf.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/cli/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/cli/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/domain/repositories/bookmark_repository.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/domain/repositories/bookmark_repository.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/config/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/config/mod.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/bookmark_repository.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/bookmark_repository.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/error.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/error.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/connection.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/connection.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/models.rs" beforeDir="false" afterPath="$PROJECT_DIR$/bkmr/src/infrastructure/repositories/sqlite/models.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/model/bms.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/model/bookmark.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/model/tag.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/service/embeddings.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/service/fzf.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/src/service/process.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_bms.rs" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bkmr/tests/test_dal.rs" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -25,6 +46,9 @@
   </component>
   <component name="MacroExpansionManager">
     <option name="directoryName" value="5tu9eSMa" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
   </component>
   <component name="ProjectColorInfo"><![CDATA[{
   "customColor": "",
@@ -58,6 +82,7 @@
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
     "org.rust.first.attach.projects": "true",
+    "run.code.analysis.last.selected.profile": "pProject Default",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -203,7 +228,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1742410750332</updated>
-      <workItem from="1742410752754" duration="4593000" />
+      <workItem from="1742410752754" duration="5683000" />
     </task>
     <servers />
   </component>

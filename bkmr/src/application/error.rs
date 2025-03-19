@@ -21,4 +21,4 @@ pub enum ApplicationError {
 }
 
 /// Result alias for application services.
-pub type ApplicationResult<T> = std::result::Result<T, ApplicationError>;
+pub type ApplicationResult<T> = Result<T, ApplicationError>;

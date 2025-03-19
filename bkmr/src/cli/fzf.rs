@@ -19,7 +19,7 @@ use tracing::{debug, instrument};
 use tuikit::{attr::Attr, attr::Color, raw::IntoRawMode};
 
 impl SkimItem for BookmarkResponse {
-    fn text(&self) -> std::borrow::Cow<str> {
+    fn text(&self) -> Cow<str> {
         let id = self.id.unwrap_or(0);
         let title = &self.title;
         let url = &self.url;
@@ -38,7 +38,7 @@ impl SkimItem for BookmarkResponse {
             format!("{}: {} <{}>{}", id, title, url, tags_display)
         };
 
-        std::borrow::Cow::Owned(text)
+        Cow::Owned(text)
     }
 
     fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {

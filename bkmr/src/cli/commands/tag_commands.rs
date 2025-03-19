@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn test_get_tag_suggestions() -> CliResult<()> {
         // Arrange: Set up environment
-        let tmp_dir = tempdir().unwrap();
+        let tmp_dir = tempdir()?;
         let db_path = tmp_dir.path().join("test.db");
 
         // Create test database and seed it

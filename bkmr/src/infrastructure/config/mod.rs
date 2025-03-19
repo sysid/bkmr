@@ -26,7 +26,7 @@ pub enum ConfigError {
     LockError(String),
 }
 
-pub type ConfigResult<T> = std::result::Result<T, ConfigError>;
+pub type ConfigResult<T> = Result<T, ConfigError>;
 
 #[derive(Parser, Debug, Clone, Deserialize)]
 pub struct FzfEnvOpts {

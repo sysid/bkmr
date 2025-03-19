@@ -98,7 +98,7 @@ mod tests {
         // Initialize context with dummy embedding
         let context = Context::new(Box::new(DummyEmbedding));
         if CTX.set(RwLock::from(context)).is_err() {
-            return Err(crate::cli::error::CliError::Other(
+            return Err(CliError::Other(
                 "Failed to initialize context".to_string(),
             ));
         }
@@ -112,10 +112,10 @@ mod tests {
     // Helper to create a bookmark application service
     fn create_service(
         db_path: &str,
-    ) -> Result<BookmarkApplicationService<SqliteBookmarkRepository>, crate::cli::error::CliError>
+    ) -> Result<BookmarkApplicationService<SqliteBookmarkRepository>, CliError>
     {
         let repo = SqliteBookmarkRepository::from_url(db_path)
-            .map_err(|e| crate::cli::error::CliError::RepositoryError(e.to_string()))?;
+            .map_err(|e| CliError::RepositoryError(e.to_string()))?;
 
         Ok(BookmarkApplicationService::new(repo))
     }
