@@ -176,37 +176,37 @@ pub fn fzf_process(bookmarks: &[BookmarkResponse]) -> CliResult<()> {
             .collect::<Vec<BookmarkResponse>>();
 
         debug!("Selected bookmarks: {:?}", selected_bookmarks);
-        //
-        // if selected_bookmarks.is_empty() {
-        //     return Ok(());
-        // }
-        //
-        // // Get IDs of selected bookmarks
-        // let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
-        // debug!("Selected bookmark IDs: {:?}", ids);
-        //
-        // match key {
-        //     Key::Enter | Key::Ctrl('o') => {
-        //         // Open selected bookmarks
-        //         for bookmark in &selected_bookmarks {
-        //             open_bookmark(bookmark)?;
-        //         }
-        //     }
-        //     Key::Ctrl('e') => {
-        //         // Edit selected bookmarks
-        //         edit_bookmarks(ids)?;
-        //     }
-        //     Key::Ctrl('d') => {
-        //         // Delete selected bookmarks
-        //         delete_bookmarks(ids)?;
-        //     }
-        //     _ => {} // Other keys are ignored
-        // }
-        //
-        // // Clear terminal after action
-        // if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
-        //     execute!(stdout, Clear(ClearType::FromCursorDown)).ok();
-        // }
+
+        if selected_bookmarks.is_empty() {
+            return Ok(());
+        }
+
+        // Get IDs of selected bookmarks
+        let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
+        debug!("Selected bookmark IDs: {:?}", ids);
+
+        match key {
+            Key::Enter | Key::Ctrl('o') => {
+                // Open selected bookmarks
+                for bookmark in &selected_bookmarks {
+                    open_bookmark(bookmark)?;
+                }
+            }
+            Key::Ctrl('e') => {
+                // Edit selected bookmarks
+                edit_bookmarks(ids)?;
+            }
+            Key::Ctrl('d') => {
+                // Delete selected bookmarks
+                delete_bookmarks(ids)?;
+            }
+            _ => {} // Other keys are ignored
+        }
+
+        // Clear terminal after action
+        if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
+            execute!(stdout, Clear(ClearType::FromCursorDown)).ok();
+        }
     }
 
     Ok(())
