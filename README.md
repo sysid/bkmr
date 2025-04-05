@@ -19,7 +19,7 @@
 
 - **Lightning-fast**: 20x faster than similar Python tools
 - **Intuitive**: Built for developer workflows with powerful search
-- **Flexible**: Handle any type of content—not just web URLs
+- **Flexible**: Handle any type of content — not just web URLs
 - **Intelligent**: Full-text and semantic search capabilities
 - **Privacy-focused**: Local database, no cloud dependencies
 
@@ -33,7 +33,7 @@ bkmr search --fzf
 bkmr search -t python,security "authentication"
 
 # Add web URLs with automatic metadata
-bkmr add https://example.com tag1,tag2
+bkmr add https://example.com tag1,tag2  # title, description, etc will be loaded automatically
 
 # Store code snippets
 bkmr add "SELECT * FROM users WHERE role = 'admin'" sql,snippet --type snip
@@ -63,8 +63,14 @@ See bkmr in action:
 1. **Install:**
    ```bash
    cargo install bkmr
-   # or
+
+   # or via pip/pipx/uv
    pip install bkmr
+
+   # or via brew
+   brew tap sysid/bkmr
+   brew info bkmr
+
    ```
 
 2. **Setup:**
