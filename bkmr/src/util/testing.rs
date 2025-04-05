@@ -1,12 +1,10 @@
 // src/util/testing.rs
 
-use anyhow::{Context as _, Result};
-use lazy_static::lazy_static;
-use rstest::fixture;
 use std::env;
 use std::fs;
-use std::path::PathBuf;
-use tracing::{debug, info};
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use tracing::{debug, info, instrument};
 use tracing_subscriber::{
     filter::filter_fn,
     fmt::{self, format::FmtSpan},
@@ -14,58 +12,87 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use crate::adapter::dal::{migration, Dal};
-use crate::adapter::embeddings::DummyEmbedding;
-use crate::context::Context;
-use crate::model::bookmark::Bookmark;
+use crate::app_state::AppState;
+use crate::infrastructure::repositories::sqlite::migration;
+use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 
-// Common test environment variables
-pub const TEST_ENV_VARS: &[&str] = &["BKMR_DB_URL", "RUST_LOG", "NO_CLEANUP"];
-
-lazy_static! {
-    pub static ref TEST_DB_PATH: PathBuf = PathBuf::from("../db/bkmr.db");
-    pub static ref TEST_RESOURCES: Vec<&'static str> = vec![
-        "tests/resources/bkmr.v1.db",
-        "tests/resources/bkmr.v2.db",
-        "tests/resources/bkmr.v2.noembed.db"
-    ];
+/// A struct that holds global test configuration and paths.
+/// Everything is initialized exactly once via OnceLock.
+#[derive(Debug)]
+pub struct TestEnv {
+    /// Path to your test database
+    pub db_path: PathBuf,
+    /// Paths to resource files
+    pub resources: Vec<&'static str>,
 }
 
-pub fn init_test_setup() -> Result<()> {
-    // Set up logging first
-    setup_test_logging();
-
-    debug!("Initializing test context with DummyEmbedding");
-    Context::update_global(Context::new(Box::new(DummyEmbedding)))?;
-
-    // Set up environment variables
-    set_test_env_vars();
-
-    info!("Test Setup complete");
-    Ok(())
+impl TestEnv {
+    /// Creates the default test configuration (paths, etc.).
+    fn new() -> Self {
+        Self {
+            db_path: PathBuf::from("../db/bkmr.db"),
+            resources: vec![
+                "tests/resources/bkmr.v1.db",
+                "tests/resources/bkmr.v2.db",
+                "tests/resources/bkmr.v2.noembed.db",
+            ],
+        }
+    }
 }
 
+/// Global OnceLock holding the TestEnv data.
+static TEST_ENV: OnceLock<TestEnv> = OnceLock::new();
+
+/// Initializes the global test environment exactly once.
+/// - Sets up logging
+/// - Updates global AppState
+/// - Sets BKMR_DB_URL to match `TestEnv::db_path`
+/// Returns a reference to the fully-initialized TestEnv.
+pub fn init_test_env() -> &'static TestEnv {
+    // Initialize test environment config, storing it in TEST_ENV exactly once.
+    let env_data = TEST_ENV.get_or_init(|| {
+        let data = TestEnv::new();
+        setup_test_logging(); // set up logger only once
+        AppState::update_global(AppState::default()).expect("Failed to update global AppState");
+        info!("Test environment initialized with DummyEmbedding");
+        data
+    });
+    env_data
+}
+
+/// Logging setup only runs once; subsequent calls do nothing if `tracing` is already set.
 fn setup_test_logging() {
-    debug!("INIT: Attempting logger init from testing.rs");
+    debug!("Attempting logger init from testing.rs");
+    if tracing::dispatcher::has_been_set() {
+        debug!("Tracing subscriber already set");
+        return;
+    }
+
     if env::var("RUST_LOG").is_err() {
         env::set_var("RUST_LOG", "trace");
     }
 
+    // Silence spammy modules
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
 
-    // Create a filter for noisy modules
-    let noisy_modules = ["skim", "html5ever", "reqwest", "mio", "want", "tuikit"];
+    let noisy_modules = [
+        "skim",
+        "html5ever",
+        "reqwest",
+        "mio",
+        "want",
+        "tuikit",
+        "hyper_util",
+    ];
     let module_filter = filter_fn(move |metadata| {
         !noisy_modules
             .iter()
             .any(|name| metadata.target().starts_with(name))
     });
 
-    // Set up the subscriber with environment filter
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug"));
 
-    // Build and set the subscriber
     let subscriber = tracing_subscriber::registry().with(
         fmt::layer()
             .with_writer(std::io::stderr)
@@ -76,104 +103,109 @@ fn setup_test_logging() {
             .with_filter(env_filter),
     );
 
-    // Only set if we haven't already set a global subscriber
-    if tracing::dispatcher::has_been_set() {
-        debug!("Tracing subscriber already set");
-    } else {
-        subscriber.try_init().unwrap_or_else(|e| {
-            eprintln!("Error: Failed to set up logging: {}", e);
-        });
+    subscriber.try_init().unwrap_or_else(|e| {
+        eprintln!("Error: Failed to set up logging: {}", e);
+    });
+}
+
+#[derive(Debug, Clone)]
+pub struct EnvGuard {
+    db_url: Option<String>,
+    fzf_opts: Option<String>,
+}
+
+impl Default for EnvGuard {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Sets up common test environment variables
-fn set_test_env_vars() {
-    env::set_var("BKMR_DB_URL", TEST_DB_PATH.to_str().unwrap());
-}
-
-pub fn setup_test_db() -> Result<Dal> {
-    let mut dal = Dal::new(TEST_DB_PATH.to_string_lossy().to_string());
-    migration::init_db(&mut dal.conn).context("Failed to initialize test database")?;
-    Ok(dal)
-}
-#[fixture]
-pub fn test_dal() -> Dal {
-    setup_test_db().expect("Failed to set up test database")
-}
-#[fixture]
-pub fn bms(mut test_dal: Dal) -> Vec<Bookmark> {
-    let bms = test_dal.get_bookmarks("");
-    bms.unwrap()
-}
-
-/// Gets test bookmarks from the database
-pub fn get_test_bookmarks() -> Result<Vec<Bookmark>> {
-    let mut dal = setup_test_db()?;
-    dal.get_bookmarks("")
-        .context("Failed to get test bookmarks")
-}
-
-pub fn print_active_env_vars() {
-    for var in TEST_ENV_VARS {
-        if let Ok(value) = env::var(var) {
-            println!("{var}={value}");
-        } else {
-            println!("{var} is not set");
+impl EnvGuard {
+    pub fn new() -> Self {
+        Self {
+            db_url: env::var("BKMR_DB_URL").ok(),
+            fzf_opts: env::var("BKMR_FZF_OPTS").ok(),
         }
     }
 }
 
-/// Creates a temporary test directory with test resources
-pub fn setup_temp_dir() -> Result<PathBuf> {
+impl Drop for EnvGuard {
+    #[instrument(level = "trace")]
+    fn drop(&mut self) {
+        env::remove_var("BKMR_DB_URL");
+        env::remove_var("BKMR_FZF_OPTS");
+        if let Some(val) = &self.db_url {
+            env::set_var("BKMR_DB_URL", val);
+        }
+        if let Some(val) = &self.fzf_opts {
+            env::set_var("BKMR_FZF_OPTS", val);
+        }
+    }
+}
+
+/// Creates a new repository with an initialized DB for testing.
+pub fn setup_test_db() -> SqliteBookmarkRepository {
+    let env_data = init_test_env();
+    let repository =
+        SqliteBookmarkRepository::from_url(env_data.db_path.to_string_lossy().as_ref())
+            .expect("Failed to create SqliteBookmarkRepository");
+    let mut conn = repository
+        .get_connection()
+        .expect("Failed to get connection from SqliteBookmarkRepository");
+    migration::init_db(&mut conn).expect("Failed to initialize DB schema");
+    repository
+}
+
+/// Creates a temporary directory and copies test resources into `../db`.
+pub fn setup_temp_dir() -> PathBuf {
     use fs_extra::dir::CopyOptions;
     use tempfile::tempdir;
 
-    let tempdir = tempdir().context("Failed to create temp directory")?;
+    let env_data = init_test_env(); // ensure global is initialized
+    let tempdir = tempdir().expect("Failed to create temp dir");
     let options = CopyOptions::new().overwrite(true);
 
-    fs_extra::copy_items(&TEST_RESOURCES, "../db", &options)
-        .context("Failed to copy test resources")?;
+    fs_extra::copy_items(&env_data.resources, "../db", &options)
+        .expect("Failed to copy test resources into ../db");
 
-    Ok(tempdir.into_path())
+    tempdir.into_path()
 }
 
-/// Cleans up test directory unless NO_CLEANUP is set
-pub fn teardown_temp_dir(temp_dir: &PathBuf) {
+/// Removes the temp directory if NO_CLEANUP is not set; otherwise leaves artifacts.
+pub fn teardown_temp_dir(temp_dir: &Path) {
     if env::var("NO_CLEANUP").is_err() && temp_dir.exists() {
         let _ = fs::remove_dir_all(temp_dir);
     } else {
-        debug!("Test artifacts left at: {}", temp_dir.display());
+        info!("Test artifacts left at: {}", temp_dir.display());
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::{Context, CTX};
+    use serial_test::serial;
 
-    #[ctor::ctor]
-    fn init() {
-        init_test_setup().expect("Failed to initialize test setup");
+    #[test]
+    fn my_test() {
+        let test_env = init_test_env();
+        let _guard = EnvGuard::new();
+        assert!(test_env.db_path.exists());
+        info!("test logic here");
     }
 
     #[test]
+    #[serial]
     fn test_setup_test_db() {
-        let result = setup_test_db();
-        assert!(result.is_ok(), "Failed to setup test DB: {:?}", result);
+        let _ = init_test_env();
+        let repo = setup_test_db();
+        assert!(repo.get_connection().is_ok());
     }
 
     #[test]
     fn test_setup_temp_dir() {
-        let temp_dir = setup_temp_dir().expect("Failed to create temp dir");
-        assert!(temp_dir.exists(), "Temp dir should exist");
+        let _ = init_test_env();
+        let temp_dir = setup_temp_dir();
+        assert!(temp_dir.exists());
         teardown_temp_dir(&temp_dir);
-    }
-
-    #[test]
-    fn test_context_initialization() {
-        assert!(CTX.get().is_some(), "Context should be initialized");
-        // Verify we're using DummyEmbedding for tests
-        let embedding = Context::read_global().get_embedding("test");
-        assert!(embedding.is_none(), "DummyEmbedding should return None");
     }
 }

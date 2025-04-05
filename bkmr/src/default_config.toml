@@ -1,0 +1,8 @@
+# src/default_config.toml
+db_url = "../db/bkmr.db"
+
+[fzf_opts]
+height = "50%"
+reverse = false
+show_tags = false
+no_url = false

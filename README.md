@@ -3,152 +3,132 @@
 ![Crates.io](https://img.shields.io/crates/v/bkmr)
 ![Crates.io](https://img.shields.io/crates/d/bkmr)
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
-
-[![PyPI Version][pypi-image]][pypi-url]
-[![Downloads](https://static.pepy.tech/badge/bkmr/month)](https://pepy.tech/project/bkmr)
 [![Build Status][build-image]][build-url]
 
+# Beyond Bookmarks: A Command-Line Knowledge Management System
 
-### [Generalized Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)
+`bkmr` is a blazing-fast, feature-rich command-line tool that extends far beyond traditional bookmark management. Store, organize, find, and interact with:
 
-# Ultrafast Bookmark Manager and Launcher
+- Web URLs with automatic metadata extraction
+- Snippets of code or text
+- Local files and directories
+- Shell commands for automation
+- Documentation with embeddings for semantic search
 
-> New Feature: Semantic Search (AI Embeddings)
+## Why bkmr?
 
-[Elevating Bookmark Management with AI-Driven Semantic Search](https://sysid.github.io/elevating-bookmark-management-with-ai-driven-semantic-search/)
+- **Lightning-fast**: 20x faster than similar Python tools
+- **Intuitive**: Built for developer workflows with powerful search
+- **Flexible**: Handle any type of content—not just web URLs
+- **Intelligent**: Full-text and semantic search capabilities
+- **Privacy-focused**: Local database, no cloud dependencies
 
-Features:
-- semantic search using OpenAI embeddings (requires OpenAI API key)
-- full-text search with semantic ranking (FTS5)
-- fuzzy search `--fzf` (CTRL-O/Y: copy to clipboard, CTRL-E: edit, CTRL-D: delete, Enter: open)
-- tags for classification
-- can handle HTTP URLs, directories, files (e.g. Office, Images, ....)
-- can execute URI strings as shell commands via protocol prefix: 'shell::'
-  URI-Example: `shell::vim +/"## SqlAlchemy" $HOME/document.md`
-- automatically enriches URLs with title and description from Web
-- manages statistics about bookmark usage
+## Core Features
 
-**`bkmr search --fzf` is a great way to open bookmarks very fast.**
-
-## Usage
 ```bash
-bkmr --help
+# Quick fuzzy search with interactive selection
+bkmr search --fzf
 
-A Bookmark Manager and Launcher for the Terminal
+# Advanced filtering with tags
+bkmr search -t python,security "authentication"
 
-Usage: bkmr [OPTIONS] [NAME] [COMMAND]
+# Add web URLs with automatic metadata
+bkmr add https://example.com tag1,tag2
 
-Commands:
-  search      Searches Bookmarks
-  sem-search  Semantic Search with OpenAI
-  open        Open/launch bookmarks
-  add         Add a bookmark
-  delete      Delete bookmarks
-  update      Update bookmarks
-  edit        Edit bookmarks
-  show        Show Bookmarks (list of ids, separated by comma, no blanks)
-  surprise    Opens n random URLs
-  tags        Tag for which related tags should be shown. No input: all tags are printed
-  create-db   Initialize bookmark database
-  backfill    Backfill embeddings for bookmarks
-  load-texts  Load texts for semantic similarity search
-  help        Print this message or the help of the given subcommand(s)
+# Store code snippets
+bkmr add "SELECT * FROM users WHERE role = 'admin'" sql,snippet --type snip
 
-Arguments:
-  [NAME]  Optional name to operate on
+# Execute shell commands via bookmark
+bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,search
+
+# Semantic search with AI
+bkmr --openai sem-search "containerized application security"
 ```
 
-<a href="https://asciinema.org/a/ULCDIrw4pG9diaVJb17AjIAa7?autoplay=1&speed=2"><img src="https://asciinema.org/a/ULCDIrw4pG9diaVJb17AjIAa7.png" width="836"/></a>
+## Demos
 
-### Examples
-```bash
-# FTS examples (https://www.sqlite.org/fts5.htm)
-bkmr search '"https://securit" *'
-bkmr search 'security NOT keycloak'
+See bkmr in action:
 
-# FTS combined with tag filtering
-bkmr search -t tag1,tag2 -n notag1 <searchquery>
+- [Getting Started](https://asciinema.org/a/XXXXX)
+- [Search & Filtering](https://asciinema.org/a/XXXXX)
+- [Managing Bookmarks](https://asciinema.org/a/XXXXX)
+- [Tag Management](https://asciinema.org/a/XXXXX)
+- [Interactive Features](https://asciinema.org/a/XXXXX)
+- [Advanced Features](https://asciinema.org/a/XXXXX)
+- [Import & Export](https://asciinema.org/a/XXXXX)
+- [Unique Features](https://asciinema.org/a/XXXXX)
 
-# Search by any tag and sort by bookmark age ascending
-bkmr search -T tag1,tag2 -O
+## Getting Started
 
-# Give me the 10 oldest bookmarks
-bkmr search -O --limit 10
+1. **Install:**
+   ```bash
+   cargo install bkmr
+   # or
+   pip install bkmr
+   ```
 
-# Adding URI to local files
-bkmr add /home/user/presentation.pptx tag1,tag2 --title 'My super Presentation'
+2. **Setup:**
+   ```bash
+   # Configuration 
+   bkmr --generate-config > ~/.config/bkmr/config.toml
 
-# Adding shell commands as URI
-bkmr add "shell::vim +/'# SqlAlchemy' sql.md" shell,sql,doc --title 'sqlalchemy snippets'
+   # Create database
+   bkmr create-db ~/.config/bkmr/bkmr.db
+   
+   # Optional: Configure location (override config.toml)
+   export BKMR_DB_URL=~/path/to/db
+   ```
 
-# JSON dump of entire database
-bkmr search --json
+3. **Start using:**
+   ```bash
+   # Add your first bookmark
+   bkmr add https://github.com/yourusername/yourrepo github,project
+   
+   # Find it again
+   bkmr search github
+   ```
 
-# Semantic Search based on OpenAI Embeddings
-bkmr --openai sem-search "python security"  # requires OPENAI_API_KEY
-```
-Tags must be separated by comma without blanks.
+## Command Reference
 
-## Installation
-1. `cargo install bkmr`
-2. initialize the database: `bkmr create-db db_path`
-3. `export "BKMR_DB_URL=db-path"`, location of created sqlite database must be known
-4. add URLs
+| Command | Description |
+|---------|-------------|
+| `search` | Search across all content with full-text and tag filtering |
+| `sem-search` | AI-powered semantic search using OpenAI embeddings |
+| `add` | Add new content (URLs, snippets, files, shell commands) |
+| `open` | Launch or interact with stored items |
+| `edit` | Modify existing items |
+| `tags` | View and manage your tag taxonomy |
 
-If you do not have Rust on your machine you can use: `pip install bkmr`
+## Advanced Features
 
-More configuration options can be found at [documentation page](https://github.com/sysid/bkmr/wiki/configuration).
+- **Template interpolation**: Use Jinja-style templates in URLs and commands
+- **Content embedding**: Store semantic representations for AI-powered search
+- **Custom actions**: Configure custom behaviors for different content types
+- **Multiple output formats**: Terminal display, clipboard, or JSON export
 
-### Upgrade to 1.x.x
-A database migration will be performed on the first run of the new version.
-This will add two columns to the bookmarks table for the OpenAI embeddings.
-No destructive changes are made to the database.
+For detailed documentation on advanced features:
+- [Semantic Search Guide](./docs/semantic-search.md)
+- [Template Interpolation](./docs/template-interpolation.md)
+- [Content Types](./docs/content-types.md)
+- [Configuration Options](./docs/configuration.md)
 
-## Semantic Search
-`bkmr` provides now full semantic search of generalized bookmarks using OpenAI's Embeddings. 
+## Workflow Integration
 
-You can find more information on the [documentation page](https://github.com/sysid/bkmr/wiki/semantic-search).
+`bkmr` shines as the central hub for your technical knowledge and daily workflow:
 
-## Benchmarking
-- ca. 20x faster than the Python original [twbm](https://github.com/sysid/twbm) after warming up Python.
-- same for [buku](https://github.com/jarun/buku).
-```bash
-time twbm search 'zzz*' --np
-0. zzzeek : Asynchronous Python and Databases [343]
-   https://techspot.zzzeek.org/2015/02/15/asynchronous-python-and-databases/
-   async, knowhow, py
+1. **Store information once, find it instantly** - Never lose important URLs, commands, or snippets
+2. **Reduce context switching** - Launch applications, files, and commands directly from search
+3. **Build a personal knowledge base** - Accumulate and organize technical references
+4. **Automate repetitive tasks** - Turn complex command sequences into simple bookmarks
 
+## Upgrading from Previous Versions
 
-Found: 1
-343
+If you're upgrading from a previous version, `bkmr` will automatically handle database migration to add support for newer features.
 
-real    0m0.501s
-user    0m0.268s
-sys     0m0.070s
+## Community and Contributions
 
-
-
-time bkmr search 'zzz*' --np
-1. zzzeek : Asynchronous Python and Databases [343]
-   https://techspot.zzzeek.org/2015/02/15/asynchronous-python-and-databases/
-   async knowhow py
-
-
-real    0m0.027s
-user    0m0.008s
-sys     0m0.016s
-```
-[sysid blog: bkmr](https://sysid.github.io/bkmr/)
-
+We welcome contributions! Please check our [Contributing Guidelines](./CONTRIBUTING.md) to get started.
 
 <!-- Badges -->
-[pypi-url]: https://pypi.org/project/bkmr/
-
 [build-image]: https://github.com/sysid/bkmr/actions/workflows/release_wheels.yml/badge.svg
 [build-url]: https://github.com/sysid/bkmr/actions/workflows/release_wheels.yml
-
-[quality-image]: https://api.codeclimate.com/v1/badges/3130fa0ba3b7993fbf0a/maintainability
-[quality-url]: https://codeclimate.com/github/nalgeon/podsearch-py
-
-[pypi-image]: https://badge.fury.io/py/bkmr.svg
-[pypi-url]: https://pypi.org/project/bkmr/

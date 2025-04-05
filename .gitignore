@@ -1,3 +1,6 @@
+.idea/workspace.xml
+db/bkmr_backup_*.db
+db/bkmr.*.noembed.db
 db/bkmr.db
 .envrc
 # Created by https://www.toptal.com/developers/gitignore/api/rust
