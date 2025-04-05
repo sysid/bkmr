@@ -90,15 +90,17 @@ create table bookmarks_fts_idx
 */
 insert into main.bookmarks (URL, metadata, tags, "desc", flags)
 values
-    ('https://www.google.com', 'Google', ',ccc,yyy,', 'Example Entry', 0),
-    ('http://xxxxx/yyyyy', 'TEST: entry for bookmark xxxx', ',ccc,xxx,yyy,', 'nice description b', 0),
-       ('http://aaaaa/bbbbb', 'TEST: entry for bookmark bbbb', ',aaa,bbb,', 'nice description a', 0),
-       ('http://asdf/asdf', 'bla blub', ',aaa,bbb,', 'nice description a2', 0),
-       ('http://asdf2/asdf2', 'bla blub2', ',aaa,bbb,ccc,', 'nice description a3', 0),
-       ('http://11111/11111', 'bla blub3', ',aaa,bbb,ccc,', 'nice description a4', 0),
-       ('http://none/none', '', ',,', '', 0),
-       ('/Users/Q187392', 'home', ',,', '', 0),
-       ('$HOME/dev', 'dev', ',,', '', 0),
-       ('$HOME/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx', 'pptx', ',,', '', 0),
-       ('shell::vim +/"## SqlAlchemy" $HOME/dev/s/public/bkmr/bkmr/tests/resources/sample_docu.md', 'shell open vim', ',,', '', 0)
-       ;
+   ('https://www.google.com', 'Google', ',ccc,yyy,', 'Example Entry', 0),
+   ('http://xxxxx/yyyyy', 'TEST: entry for bookmark xxxx', ',ccc,xxx,yyy,', 'nice description b', 0),
+   ('http://aaaaa/bbbbb', 'TEST: entry for bookmark bbbb', ',aaa,bbb,', 'nice description a', 0),
+   ('http://asdf/asdf', 'bla blub', ',aaa,bbb,', 'nice description a2', 0),
+   ('http://asdf2/asdf2', 'bla blub2', ',aaa,bbb,ccc,', 'nice description a3', 0),
+   ('http://11111/11111', 'bla blub3', ',aaa,bbb,ccc,', 'nice description a4', 0),
+   ('http://none/none', '', ',,', '', 0),
+   ('/Users/Q187392', 'home', ',,', '', 0),
+   ('$HOME/dev', 'dev', ',,', '', 0),
+   ('$HOME/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx', 'pptx', ',,', '', 0),
+   ('https://example.com/{{ env_USER }}/dashboard', 'Checking jinja', ',,', '', 0),
+   ('text with environment varialbe default: {{ env("MY_VAR", "ENV_FALLBACK_VALUE") }}/dashboard', 'env', ',_snip_,', '', 0),
+   ('shell::vim +/"## SqlAlchemy" $HOME/dev/s/public/bkmr/bkmr/tests/resources/sample_docu.md', 'shell open vim', ',,', '', 0)
+   ;

@@ -1,0 +1,42 @@
+[
+  {
+    "url": "bba \"shell::ankiview -c $HOME/dev/s/private/other-anki/data/tw/collection.anki2 1737647330399\" ankiview --title \"geo\"",
+    "title": "ankiview",
+    "description": "",
+    "tags": [
+      "_snip_"
+    ]
+  },
+  {
+    "url": "fields @timestamp, @message, message.request.path\n| filter ispresent(message.request.path)\n| sort @timestamp desc\n| stats count(*) by bin(15min)\n| limit 10",
+    "title": "aws-cloudwatch-histogram",
+    "description": "",
+    "tags": [
+      "_snip_"
+    ]
+  },
+  {
+    "url": "jq -c '.features[] | {name: .properties.name, properties: .properties, geometry: .geometry}' x.json",
+    "title": "jq-los-route-geojson",
+    "description": "split geoJson from los-cha trace into json objects for OS index",
+    "tags": [
+      "_snip_"
+    ]
+  },
+  {
+    "url": "find . -type d \\( -path '*/.terraform/*' -o -path '*/prod/*' \\) -prune -o -type f -size -4M -mtime +30 -name '*.hcl'",
+    "title": "find-prune",
+    "description": "find . -type d \\( -name .terraform -o -name .terragrunt-cache \\) -prune -o \\( -type d -name '.git' -not -path '*/\\.build*' \\) -print\n-print is essential, else the pruned ones will also be printed (default behvior)",
+    "tags": [
+      "_snip_"
+    ]
+  },
+  {
+    "url": "%load_ext autoreload\n%autoreload 2\n\nimport pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport json\nimport os\nimport pickle\nimport sys\nimport time\nfrom datetime import datetime, timedelta\nfrom pathlib import Path\nfrom pprint import pprint",
+    "title": "jupyter",
+    "description": "",
+    "tags": [
+      "_snip_"
+    ]
+  }
+]

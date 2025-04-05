@@ -1,15 +1,12 @@
-// bkmr/src/main.rs
+// src/main.rs
+use bkmr::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
 
-use bkmr::cli::args::Commands;
-use bkmr::context::{Context, CTX};
-use bkmr::environment::CONFIG;
-use bkmr::{
-    adapter::embeddings::{DummyEmbedding, OpenAiEmbedding},
-    cli::{args::Cli, commands},
-};
+use bkmr::app_state::AppState;
+use bkmr::cli::args::Cli;
+use bkmr::cli::execute_command;
 use clap::Parser;
 use crossterm::style::Stylize;
-use std::sync::RwLock;
+use std::sync::Arc;
 use termcolor::{ColorChoice, StandardStream};
 use tracing::{debug, info, instrument};
 use tracing_subscriber::{
@@ -17,41 +14,33 @@ use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     prelude::*,
 };
+use bkmr::domain::embedding::Embedder;
 
 #[instrument]
 fn main() {
-    // let stdout = StandardStream::stdout(ColorChoice::Always);
     // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
-
     let cli = Cli::parse();
-
     setup_logging(cli.debug);
 
-    if let Some(Commands::CreateDb { .. }) = &cli.command {
-        // Skip the path.exists check and create database with correct schema
+    // Create embedder based on CLI option
+    let embedder: Arc<dyn Embedder> = if cli.openai {
+        debug!("OpenAI embeddings enabled");
+        Arc::new(OpenAiEmbedding::default())
     } else {
-        let path = std::path::Path::new(&CONFIG.db_url);
-        if !path.exists() {
-            eprintln!("Error: db_url path does not exist: {:?}", CONFIG.db_url);
-            std::process::exit(1);
-        }
-        commands::enable_embeddings_if_required().expect("Failed to enable embeddings");
-    }
-
-    let context = if cli.openai {
-        Context::new(Box::new(OpenAiEmbedding::default()))
-    } else {
-        Context::new(Box::new(DummyEmbedding))
+        debug!("Using DummyEmbedding (no embeddings will be stored)");
+        Arc::new(DummyEmbedding)
     };
 
-    // Set the global context
-    if CTX.set(RwLock::from(context)).is_err() {
-        eprintln!("{}", "Failed to initialize context".red());
+    // Initialize AppState with the embedder
+    let result = AppState::update_global(AppState::new(embedder));
+    if let Err(e) = result {
+        eprintln!("{}: {}", "Failed to initialize AppState".red(), e);
         std::process::exit(1);
     }
 
-    if let Err(e) = commands::execute_command(stderr, cli) {
+    // Execute the command
+    if let Err(e) = execute_command(stderr, cli) {
         eprintln!("{}", format!("Error: {}", e).red());
         std::process::exit(1);
     }
@@ -72,7 +61,15 @@ fn setup_logging(verbosity: u8) {
     };
 
     // Create a noisy module filter
-    let noisy_modules = ["skim", "html5ever", "reqwest", "mio", "want", "tuikit"];
+    let noisy_modules = [
+        "skim",
+        "html5ever",
+        "reqwest",
+        "mio",
+        "want",
+        "tuikit",
+        "hyper_util",
+    ];
     let module_filter = filter_fn(move |metadata| {
         !noisy_modules
             .iter()
@@ -83,6 +80,7 @@ fn setup_logging(verbosity: u8) {
     let fmt_layer = fmt::layer()
         .with_writer(std::io::stderr) // Set writer first
         .with_target(true)
+        // src/main.rs (continued)
         .with_thread_names(false)
         .with_span_events(FmtSpan::ENTER)
         .with_span_events(FmtSpan::CLOSE);
@@ -104,33 +102,6 @@ fn setup_logging(verbosity: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use camino::Utf8PathBuf;
-    use camino_tempfile::tempdir;
-    use fs_extra::{copy_items, dir};
-    use rstest::fixture;
-
-    #[ctor::ctor]
-    fn init() {
-        setup_logging(2); // Set maximum debug level for tests
-    }
-
-    #[fixture]
-    fn temp_dir() -> Utf8PathBuf {
-        let tempdir = tempdir().unwrap();
-        let options = dir::CopyOptions::new().overwrite(true);
-        copy_items(
-            &[
-                "tests/resources/bkmr.v1.db",
-                "tests/resources/bkmr.v2.db",
-                "tests/resources/bkmr.v2.noembed.db",
-            ],
-            "../db",
-            &options,
-        )
-        .expect("Failed to copy test project directory");
-
-        tempdir.into_path()
-    }
 
     #[test]
     fn verify_cli() {

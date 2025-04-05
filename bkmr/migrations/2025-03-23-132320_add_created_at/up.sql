@@ -1,0 +1,3 @@
+-- Your SQL goes here
+ALTER TABLE bookmarks ADD COLUMN created_ts DATETIME DEFAULT NULL;
+ALTER TABLE bookmarks ADD COLUMN embeddable BOOLEAN NOT NULL DEFAULT 0;
