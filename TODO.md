@@ -26,6 +26,8 @@ section parsing in edit mode: table like ------------
 
 tests fail when ~/.config/bkmr exists and has got wrong config (config tests)
 
+p without parameter does not print ids
+
 
 ## Gotcha
 bkmr search grad*  # expands to gradlew if present

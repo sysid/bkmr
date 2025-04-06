@@ -5,7 +5,9 @@
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 [![Build Status][build-image]][build-url]
 
-# Beyond Bookmarks: A Command-Line Knowledge Management System
+# Beyond Bookmarks: A CLI Knowledge Management System
+
+[bkmr reborn](https://sysid.github.io/bkmr-reborn/)
 
 `bkmr` is a blazing-fast, feature-rich command-line tool that extends far beyond traditional bookmark management. Store, organize, find, and interact with:
 
@@ -44,13 +46,20 @@ bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,se
 # Semantic search with AI
 bkmr --openai sem-search "containerized application security"
 ```
+### Bookmarks
+<img src="./docs/bkmr4-bookmarks.png" alt="bookmarks" width="600"/>
+
+### Snippets
+<img src="./docs/bkmr4-fzf-snippets.png" alt="fzf-snippets" width="800"/>
 
 ## Demos
 
 See bkmr in action:
 
-- [Getting Started](https://asciinema.org/a/XXXXX)
-- [Search & Filtering](https://asciinema.org/a/XXXXX)
+- <a href="https://asciinema.org/a/wpnsTw3Cl7DK2R7jK7WVpp9OR?autoplay=1&speed=2&t=3" alt="Getting Started">Getting Started</a>
+- <a href="https://asciinema.org/a/M97UJMKxw1nxnzO4SaowGZAmb?autoplay=1&speed=2&t=3" alt="Search and Filter">Search and Filter</a>
+- <a href="https://asciinema.org/a/uCuNPSlqRemlcXiVQ3CIqq8uV?autoplay=1&speed=2&t=3" alt="Edit and Update">Edit and Update</a>
+- <a href="https://asciinema.org/a/jNOLfhc6aFV3wPGTgOzgrM7Kc?autoplay=1&speed=2&t=3" alt="Tag Management">Tag Management</a>
 
 ## Getting Started
 

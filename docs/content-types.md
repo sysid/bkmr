@@ -26,7 +26,7 @@ bkmr add "SELECT * FROM users WHERE active = true ORDER BY created_at DESC LIMIT
 
 Snippets will be copied to clipboard when opened, rather than launching a browser.
 
-### Text Documents
+### Text Documents (tbd)
 Store plain text content such as notes, documentation, or any textual information.
 
 ```bash
