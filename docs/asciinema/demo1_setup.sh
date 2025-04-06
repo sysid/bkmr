@@ -3,6 +3,7 @@
 #doitlive speed: 2
 #doitlive env: DOCS_URL=https://doitlive.readthedocs.io
 #doitlive commentecho: false
+#doitlive env: BKMR_DB_URL=/tmp/bkmr/bkmr.db
 
 # Source environment and ensure clean state: sss
 #asciinema rec -t "bkmr: Getting Started" bkmr_getting_started.cast

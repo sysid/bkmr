@@ -1,40 +1,33 @@
-# Source environment
-source $HOME/dev/s/public/b2/docs/asciinema/demo-env.sh
+#doitlive shell: /bin/bash
+#doitlive prompt: damoekri
+#doitlive speed: 2
+#doitlive commentecho: false
+#doitlive alias: setup-environment="source $HOME/dev/s/public/bkmr/docs/asciinema/demo-env.sh"
+#doitlive env: BKMR_DB_URL=/tmp/bkmr/bkmr.db
 
-# Ensure we have specific bookmarks to update
-bkmr add https://www.postgresql.org "PostgreSQL" -d "The world's most advanced open source database" -t database,opensource
-bkmr add https://developer.mozilla.org "MDN Web Docs" -d "Resources for developers, by developers" -t programming,webdev,documentation
-bkmr add https://css-tricks.com "CSS-Tricks" -d "Tips, Tricks, and Techniques on using CSS" -t webdev,css,frontend
+#asciinema rec -i 4 -t "bkmr: Getting Started" demo3.cast
+#doitlive play /Users/Q187392/dev/s/public/bkmr/docs/asciinema/demo3_edit_update.sh
 
-# Check IDs for reference during demo
-bkmr search
+setup-environment
+bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
 
+bkmr search 'github'
 
-asciinema rec -t "bkmr: Managing Bookmarks" bkmr_management.cast
-
-bkmr search
-
-# Add a tag to bookmark 1
-bkmr update 1 -t favorites
+bkmr update 1 -t xxx  # add tag 'xxx' to bookmark with id 1
 
 # Show the updated bookmark
-bkmr show 1
+bkmr search 'github'
 
-# Remove a tag from bookmark 2
-bkmr update 2 -n git
+bkmr update 1 -n xxx  # remove tag 'xxx'
+bkmr search 'github'
 
-# Show the updated bookmark
-bkmr show 2
-
-bkmr edit 3
+bkmr edit 1  # edit bookmark with id 1
 # (This will open an editor - make some changes to title/description)
 
-# Create a temporary bookmark to delete
-bkmr add https://example.com tags=temp
+echo "Delete bookmarks"
+bkmr search --limit 2
 
-# Search for the new bookmark
-bkmr search temp
+echo "Tag management"
+bkmr tags  # list all tags
 
-# Delete the bookmark (assuming it's ID 4)
-bkmr delete 4
-
+bkmr tags _snip_  # list all tags related to tag _snip_
