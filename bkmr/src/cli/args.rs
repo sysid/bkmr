@@ -180,8 +180,9 @@ pub enum Commands {
     },
     /// Initialize bookmark database
     CreateDb {
-        /// pathname to database file
-        path: String,
+        /// pathname to database file (optional, uses config path if not provided)
+        #[arg(help = "Path where the database will be created (default: ~/.config/bkmr/bkmr.db)")]
+        path: Option<String>,
 
         #[arg(long, help = "Pre-fill the database with demo entries")]
         pre_fill: bool,

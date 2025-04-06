@@ -1,6 +1,7 @@
+use std::path::Path;
 // src/application/services/factory.rs
 use std::sync::{Arc, OnceLock};
-
+use crossterm::style::Stylize;
 use crate::app_state::AppState;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation::InterpolationService;
@@ -24,7 +25,18 @@ pub fn create_bookmark_repository() -> Arc<SqliteBookmarkRepository> {
             let app_state = AppState::read_global();
             let db_url = &app_state.settings.db_url;
 
-            // Create the repository only once
+            // Check if the database file exists before trying to create the repository
+            if !Path::new(db_url).exists() {
+                eprintln!("{}", "Error: Database not found.".red());
+                eprintln!("No database configured or the configured database does not exist.");
+                eprintln!("Either:");
+                eprintln!("  1. Set BKMR_DB_URL environment variable to point to an existing database");
+                eprintln!("  2. Create a database using 'bkmr create-db <path>'");
+                eprintln!("  3. Ensure the default database at '~/.config/bkmr/bkmr.db' exists");
+                std::process::exit(1);
+            }
+
+            // Create the repository only once, runs all migrations
             Arc::new(
                 SqliteBookmarkRepository::from_url(db_url)
                     .expect("Failed to create SQLite bookmark repository"),

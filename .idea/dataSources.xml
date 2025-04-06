@@ -16,7 +16,7 @@
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
     <data-source source="LOCAL" name="bkmr.v1" uuid="0aaf4221-a612-4638-80f7-b589baa6954c">
-      <driver-ref>sqlite.xerial</driver-ref>
+      <driver-ref>86a1aabf-c3cf-4094-8e29-5eed768bcbc6</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/bkmr/tests/resources/bkmr.v1.db</jdbc-url>
@@ -40,7 +40,7 @@
       </libraries>
     </data-source>
     <data-source source="LOCAL" name="bkmr.v2" uuid="5ade5eec-9461-49ac-9c65-75adb80c9ae1">
-      <driver-ref>sqlite.xerial</driver-ref>
+      <driver-ref>86a1aabf-c3cf-4094-8e29-5eed768bcbc6</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/bkmr/tests/resources/bkmr.v2.db</jdbc-url>
@@ -64,7 +64,7 @@
       </libraries>
     </data-source>
     <data-source source="LOCAL" name="bkmr.v2.noembed" uuid="f2e59861-7ac8-4416-9363-877ce5afc8a0">
-      <driver-ref>sqlite.xerial</driver-ref>
+      <driver-ref>86a1aabf-c3cf-4094-8e29-5eed768bcbc6</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/bkmr/tests/resources/bkmr.v2.noembed.db</jdbc-url>

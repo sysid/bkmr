@@ -15,6 +15,7 @@ embedding plugin
 
 highlight the found string in fzf (like rsnip: example jq)
 
+docu fzf actions
 
 
 

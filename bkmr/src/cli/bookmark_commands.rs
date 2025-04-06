@@ -586,16 +586,42 @@ pub fn surprise(cli: Cli) -> CliResult<()> {
 #[instrument(skip(cli))]
 pub fn create_db(cli: Cli) -> CliResult<()> {
     if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
+        // Get the database path from either the command-line argument or the config system
+        let db_path = match path {
+            Some(p) => p,
+            None => {
+                // Get from config system via app_state
+                let app_state = AppState::read_global();
+                let configured_path = &app_state.settings.db_url;
+
+                // Check if it's a default path
+                if configured_path.ends_with("../db/bkmr.db") {
+                    eprintln!("{}", "Error: No database path provided.".red());
+                    eprintln!("Please specify a path or configure BKMR_DB_URL");
+                    eprintln!("Example usage:");
+                    eprintln!("  bkmr create-db ~/my-bookmarks.db");
+                    eprintln!("  or");
+                    eprintln!("  export BKMR_DB_URL=~/my-bookmarks.db");
+                    eprintln!("  bkmr create-db");
+                    eprintln!("  or add to ~/.config/bkmr/config.toml:");
+                    eprintln!("  db_url = \"~/my-bookmarks.db\"");
+                    return Err(CliError::InvalidInput("No database path provided".to_string()));
+                }
+
+                configured_path.clone()
+            }
+        };
+
         // Check if the database file already exists
-        if Path::new(&path).exists() {
+        if Path::new(&db_path).exists() {
             return Err(CliError::InvalidInput(format!(
                 "Database already exists at: {}. Please choose a different path or delete the existing file.",
-                path
+                db_path
             )));
         }
 
         // Create parent directories if they don't exist
-        if let Some(parent) = Path::new(&path).parent() {
+        if let Some(parent) = Path::new(&db_path).parent() {
             if !parent.exists() {
                 fs::create_dir_all(parent).map_err(|e| {
                     CliError::Io(io::Error::new(
@@ -606,10 +632,10 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
             }
         }
 
-        println!("Creating new database at: {}", path);
+        println!("Creating new database at: {}", db_path);
 
         // Create the repository with the new path
-        let repository = SqliteBookmarkRepository::from_url(&path)?;
+        let repository = SqliteBookmarkRepository::from_url(&db_path)?;
 
         // Get a connection
         let mut conn = repository.get_connection()?;
@@ -620,7 +646,7 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
         // Clean the bookmark table to ensure we start with an empty database
         repository.empty_bookmark_table()?;
 
-        println!("Database created successfully at: {}", path);
+        println!("Database created successfully at: {}", db_path);
 
         // Pre-fill the database with demo entries if requested
         if pre_fill {

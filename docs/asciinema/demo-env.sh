@@ -1,5 +1,5 @@
 echo "-M- bkmr demo environment"
-rm -vfr ~/.config/bkmr
+rm -fr /tmp/bkmr
 unset BKMR_DB_URL
 unset BKMR_FZF_OPTS
 
@@ -9,10 +9,19 @@ export EDITOR=vim
 export COLUMNS=100
 export LINES=30
 
-return  # comment for partial init
+mkdir -p /tmp/bkmr
+#!/bin/bash
+NAME="Alice"
 
-mkdir -p ~/.config/bkmr
-cp /Users/Q187392/dev/s/public/b2/docs/asciinema/demo1.db ~/.config/bkmr/bkmr.db
+cat <<_EOF_ > /tmp/bkmr/config.toml
+db_url = "/tmp/bkmr/bkmr.db"
+
+[fzf_opts]
+height = "50%"
+reverse = false
+show_tags = false
+no_url = false
+_EOF_
 
 echo "-M- BKMR_DB_URL: $BKMR_DB_URL"
-tree ~/.config/bkmr
+tree /tmp/bkmr

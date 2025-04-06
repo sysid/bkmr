@@ -1,29 +1,25 @@
-# Source environment
-source $HOME/dev/s/public/b2/docs/asciinema/demo-env.sh
+#doitlive shell: /bin/bash
+#doitlive prompt: damoekri
+#doitlive speed: 2
+#doitlive commentecho: false
+#doitlive alias: setup-environment="source $HOME/dev/s/public/bkmr/docs/asciinema/demo-env.sh"
 
-# Ensure we have sufficient bookmarks to demonstrate search
-bkmr add https://rust-lang.org "Rust Programming Language" -d "A language empowering everyone to build reliable and efficient software" -t programming,rust,language
-bkmr add https://github.com "GitHub" -d "Where the world builds software" -t programming,git,collaboration,platform
-bkmr add https://news.ycombinator.com "Hacker News" -d "A social news website focusing on computer science and entrepreneurship" -t news,tech,community
-bkmr add https://dev.to "DEV Community" -d "A constructive and inclusive social network for software developers" -t programming,community,blog
-bkmr add https://stackoverflow.com "Stack Overflow" -d "Public platform for developers to learn and share programming knowledge" -t programming,qa,community
-bkmr add https://python.org "Python" -d "A programming language that lets you work quickly and integrate systems effectively" -t programming,python,language
+# Source environment and ensure clean state: sss
+#asciinema rec -t "bkmr: Getting Started" bkmr_getting_started.cast
+#doitlive play /Users/Q187392/dev/s/public/bkmr/docs/asciinema/demo2_search_filter.sh
+#asciinema play -i 4 --speed 2 bkmr_getting_started.cast
+
+# Setup environment
+setup-environment
+bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
+
+echo "Search"
+bkmr search -N _snip_,_imported_
+
+bkmr search --fzf
+bkmr search --fzf --fzf-style enhanced
+echo "Actions: Enter: open, CTRL-E: edit, CTRL-D: delete, CTRL-Y: yank"
 
 
-asciinema rec -t "bkmr: Search & Filtering" bkmr_search.cast
-
-# Search for bookmarks with "programming" tag
-bkmr search -t programming
-
-# Search for bookmarks with both "programming" and "rust" tags
-bkmr search -t programming,rust
-
-# Search for bookmarks with any of "news" or "tech" tags
-bkmr search -n news,tech
-
-# Full text search
-bkmr search github
-
-# Combine text search with tag filtering
-bkmr search rust -t programming
-
+echo "Search with tags, execute the command with ENTER"
+bkmr search -t shell,rust
