@@ -51,12 +51,6 @@ See bkmr in action:
 
 - [Getting Started](https://asciinema.org/a/XXXXX)
 - [Search & Filtering](https://asciinema.org/a/XXXXX)
-- [Managing Bookmarks](https://asciinema.org/a/XXXXX)
-- [Tag Management](https://asciinema.org/a/XXXXX)
-- [Interactive Features](https://asciinema.org/a/XXXXX)
-- [Advanced Features](https://asciinema.org/a/XXXXX)
-- [Import & Export](https://asciinema.org/a/XXXXX)
-- [Unique Features](https://asciinema.org/a/XXXXX)
 
 ## Getting Started
 
@@ -113,10 +107,10 @@ See bkmr in action:
 - **Multiple output formats**: Terminal display, clipboard, or JSON export
 
 For detailed documentation on advanced features:
-- [Semantic Search Guide](./docs/semantic-search.md)
-- [Template Interpolation](./docs/template-interpolation.md)
-- [Content Types](./docs/content-types.md)
 - [Configuration Options](./docs/configuration.md)
+- [Content Types](./docs/content-types.md)
+- [Template Interpolation](./docs/template-interpolation.md)
+- [Advanced Usage](./docs/advanced_usage.md)
 
 ## Workflow Integration
 

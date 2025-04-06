@@ -1,6 +1,54 @@
 # Configuration Options for bkmr
 
-`bkmr` offers several configuration options to customize its behavior and appearance. This document covers the available settings and how to use them.
+`bkmr` offers several configuration options to customize its behavior and appearance. This document covers the available settings and how to configure them.
+
+## Configuration Methods
+
+`bkmr` loads configuration in the following order of precedence (highest to lowest):
+
+1. Command-line arguments (highest priority)
+2. Environment variables
+3. Custom config file (if specified with `--config-file`)
+4. Default config file (`~/.config/bkmr/config.toml`)
+5. Built-in default values (lowest priority)
+
+## Configuration File
+
+`bkmr` uses TOML configuration files. By default, it looks for a config file at:
+
+```
+~/.config/bkmr/config.toml
+```
+
+### Example Configuration File
+
+```toml
+# Main database path
+db_url = "/path/to/your/bookmarks.db"
+
+# FZF options
+[fzf_opts]
+height = "70%"
+reverse = true
+show_tags = true
+no_url = false
+```
+
+### Generating a Default Config
+
+You can generate a default configuration file with:
+
+```bash
+bkmr --generate-config > ~/.config/bkmr/config.toml
+```
+
+### Using a Custom Config File
+
+You can specify a custom configuration file:
+
+```bash
+bkmr --config-file /path/to/your/custom-config.toml search
+```
 
 ## Environment Variables
 
@@ -8,7 +56,7 @@
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `BKMR_DB_URL` | Path to SQLite database file | `../db/bkmr.db` |
+| `BKMR_DB_URL` | Path to SQLite database file | `~/.config/bkmr/bkmr.db` |
 | `OPENAI_API_KEY` | API key for OpenAI (needed for semantic search) | None |
 | `EDITOR` | Text editor for editing bookmarks | `vim` |
 
@@ -27,7 +75,7 @@ Individual FZF options can include:
 - `--show-tags`: Display tags in the result list
 - `--no-url`: Hide URLs in the result list
 
-### Example Configuration
+### Example Environment Variables
 
 Add these to your shell profile (`.bashrc`, `.zshrc`, etc.):
 
@@ -51,7 +99,8 @@ These options apply to all commands:
 |--------|-------------|
 | `--debug`, `-d` | Enable debug output (use multiple times for more verbosity) |
 | `--openai` | Enable OpenAI integration for semantic features |
-| `--config FILE` | Use a custom config file |
+| `--config-file FILE` | Use a custom config file |
+| `--generate-config` | Output a default configuration to stdout |
 
 ### Command-Specific Options
 
@@ -71,6 +120,26 @@ Many commands have specific options. Here are some common ones:
 | `--fzf` | Use fuzzy finder interface | |
 | `--json` | Output results as JSON | |
 
+## Creating a Database
+
+When running `bkmr create-db`, the command will:
+
+1. Check for existing configuration (file or environment variables)
+2. If no configuration is found, warn that default settings will be used
+3. Ask for confirmation before proceeding with default database location
+
+To specify a custom database location:
+
+```bash
+bkmr create-db /path/to/your/bookmarks.db
+```
+
+You can pre-fill the database with example entries:
+
+```bash
+bkmr create-db --pre-fill
+```
+
 ## Enhanced FZF Experience
 
 The FZF interface has keyboard shortcuts for common actions:
@@ -89,10 +158,14 @@ The FZF interface has keyboard shortcuts for common actions:
 By default, `bkmr` uses the following directory structure:
 
 ```
-$HOME/.local/share/bkmr/
-├── bookmarks.db    # Main database file
-└── backups/        # Database backups (created during migrations)
+$HOME/.config/bkmr/
+├── config.toml    # Configuration file
+└── bkmr.db        # Main database file (default location)
 ```
+
+If the home directory is not available, `bkmr` will fall back to:
+1. Platform-specific local data directory
+2. Current working directory with `.bkmr` subfolder
 
 ## Database Migrations
 
@@ -102,7 +175,7 @@ When upgrading to a new version, `bkmr` will automatically:
 2. Create a backup of your database with date suffix
 3. Apply necessary migrations
 
-You can disable automatic migrations by setting `BKMR_NO_AUTO_MIGRATE=1` if you prefer to manage migrations manually.
+Backups are saved in the same directory as your database with a date suffix (e.g., `bkmr_backup_20250406.db`).
 
 ## Advanced Configuration
 
@@ -146,4 +219,4 @@ Since `bkmr` uses a SQLite database, you can sync between devices using:
 - Syncthing
 - Dropbox, Google Drive, etc.
 
-Just make sure to point `BKMR_DB_URL` to the synchronized location on each device.
+Just make sure to point your configuration to the synchronized database location on each device, either through the config file or `BKMR_DB_URL` environment variable.
