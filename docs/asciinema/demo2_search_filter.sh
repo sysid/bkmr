@@ -9,7 +9,7 @@
 #doitlive play /Users/Q187392/dev/s/public/bkmr/docs/asciinema/demo2_search_filter.sh
 #asciinema play -i 4 --speed 2 bkmr_getting_started.cast
 
-# Setup environment
+# Setup environment, used /tmp/bkmr/bkmr.db
 setup-environment
 bkmr create-db --pre-fill
 

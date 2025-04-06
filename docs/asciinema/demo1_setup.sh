@@ -9,16 +9,15 @@
 #doitlive play /Users/Q187392/dev/s/public/bkmr/docs/asciinema/demo1_setup.sh
 #asciinema play -i 4 --speed 2 bkmr_getting_started.cast
 
+setup-environment
+
 echo "Create configuration"
 mkdir -p /tmp/bkmr
 bkmr --generate-config > /tmp/bkmr/config.toml
-tree /tmp/bkmr
+more /tmp/bkmr/config.toml
 
 echo "Initialize database."
 bkmr create-db /tmp/bkmr/bkmr.db
-tree /tmp/bkmr
-
-echo "You can set it also via environment variable"
 export BKMR_DB_URL=/tmp/bkmr/demo.db
 
 echo "Now add some data..."
@@ -32,3 +31,8 @@ echo "URL metadata has been fetched automatically. Nice!"
 
 echo "Show info about bkmr and its configuration"
 bkmr info
+
+echo "Create pre-loaded demo-database"
+rm -vf /tmp/bkmr/bkmr.db
+bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
+bkmr search

@@ -1,7 +1,7 @@
 use crate::domain::error::{DomainError, DomainResult};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use serial_test::serial;
+use std::path::{Path, PathBuf};
 use tracing::{debug, instrument, trace, warn};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -48,9 +48,21 @@ pub struct Settings {
     #[serde(default)]
     pub fzf_opts: FzfOpts,
 
-    /// Tracks whether settings were loaded from a config file (not serialized)
+    /// Tracks configuration source (not serialized)
     #[serde(skip)]
-    pub loaded_from_file: bool,
+    pub config_source: ConfigSource,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+pub enum ConfigSource {
+    Default,
+    ConfigFile,
+    Environment,
+}
+impl Default for ConfigSource {
+    fn default() -> Self {
+        ConfigSource::Default
+    }
 }
 
 fn default_db_path() -> String {
@@ -87,7 +99,7 @@ impl Default for Settings {
         Self {
             db_url: default_db_path(),
             fzf_opts: FzfOpts::default(),
-            loaded_from_file: false,
+            config_source: ConfigSource::Default,
         }
     }
 }
@@ -127,7 +139,6 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
 
     // Start with default settings
     let mut settings = Settings::default();
-    settings.loaded_from_file = false;
 
     // If a specific config file is provided, try to load it first
     if let Some(path) = config_file {
@@ -137,7 +148,7 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
             if let Ok(config_text) = std::fs::read_to_string(path) {
                 if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
                     // Mark as loaded from file
-                    file_settings.loaded_from_file = true;
+                    file_settings.config_source = ConfigSource::ConfigFile;
                     settings = file_settings;
 
                     trace!("Successfully loaded settings from specified file");
@@ -148,10 +159,7 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
                 warn!("Failed to read config file: {:?}", path);
             }
 
-            // If a specific config file was provided and loaded, don't check standard locations
-            trace!("Settings after loading config file: {:?}", settings);
-
-            // Still apply environment variable overrides
+            // Apply environment variable overrides
             apply_env_overrides(&mut settings);
 
             return Ok(settings);
@@ -169,6 +177,7 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
     ];
 
     // Load from config files if they exist
+    let mut found_config = false;
     for config_path in config_sources.iter().flatten() {
         if config_path.exists() {
             trace!("Loading config from: {:?}", config_path);
@@ -176,38 +185,47 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
             if let Ok(config_text) = std::fs::read_to_string(config_path) {
                 if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
                     // Update settings with values from file and mark as loaded
-                    file_settings.loaded_from_file = true;
+                    file_settings.config_source = ConfigSource::ConfigFile;
                     settings = file_settings;
-                    break;  // Use the first found configuration file
+                    found_config = true;
+                    break; // Use the first found configuration file
                 }
             }
         }
     }
 
-    if !settings.loaded_from_file {
-        eprintln!("No configuration file found, using default settings and environment variables.");
-    }
-
-    // Apply environment variable overrides
+    // Apply environment variable overrides (this will track if env vars are used)
     apply_env_overrides(&mut settings);
 
-    debug!("Settings loaded: {:?}", settings);
+    if settings.config_source == ConfigSource::Default {
+        debug!("No configuration file or environment variables found, using default settings.");
+    }
+
+    trace!("Settings loaded: {:?}", settings);
     Ok(settings)
 }
 
 // Extract environment variable application to a separate function
 fn apply_env_overrides(settings: &mut Settings) {
+    let mut used_env_vars = false;
+
     if let Ok(db_url) = std::env::var("BKMR_DB_URL") {
         trace!("Using BKMR_DB_URL from environment: {}", db_url);
         settings.db_url = db_url;
+        used_env_vars = true;
     }
 
     if let Ok(fzf_opts) = std::env::var("BKMR_FZF_OPTS") {
         trace!("Using BKMR_FZF_OPTS from environment: {}", fzf_opts);
         settings.fzf_opts = parse_fzf_opts(&fzf_opts);
+        used_env_vars = true;
     }
 
-    trace!("Settings loaded: {:?}", settings);
+    // If we've used environment variables and were using defaults before,
+    // update the source
+    if used_env_vars && settings.config_source == ConfigSource::Default {
+        settings.config_source = ConfigSource::Environment;
+    }
 }
 
 // Add this function to config.rs
@@ -441,7 +459,7 @@ mod tests {
                 show_tags: true,
                 no_url: false,
             },
-            loaded_from_file: true,
+            config_source: ConfigSource::ConfigFile,
         };
 
         // Verify settings match expected values

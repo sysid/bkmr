@@ -29,7 +29,7 @@ use std::path::Path;
 use std::{fs, io};
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::instrument;
-use crate::config::Settings;
+use crate::config::{ConfigSource, Settings};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -595,12 +595,12 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
                 let app_state = AppState::read_global();
                 let configured_path = &app_state.settings.db_url;
 
-                // Check if configuration was loaded from a config file
-                if !app_state.settings.loaded_from_file {
-                    eprintln!("{}", "Warning: Using default database path. No configuration file found.".yellow());
+                // Check if we're using default configuration
+                if app_state.settings.config_source == ConfigSource::Default {
+                    eprintln!("{}", "Warning: Using default database path. No configuration found.".yellow());
                     eprintln!("Default path: {}", configured_path);
                     eprintln!("Consider creating a configuration file at ~/.config/bkmr/config.toml");
-                    eprintln!("or specifying a database path with the --config-file option.");
+                    eprintln!("or setting the BKMR_DB_URL environment variable.");
 
                     // Ask for confirmation when using default configuration
                     if !confirm("Continue with default database location?") {
