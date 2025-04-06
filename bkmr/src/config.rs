@@ -1,7 +1,8 @@
 use crate::domain::error::{DomainError, DomainResult};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use tracing::{debug, instrument, trace};
+use std::path::{Path, PathBuf};
+use serial_test::serial;
+use tracing::{debug, instrument, trace, warn};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FzfOpts {
@@ -21,7 +22,6 @@ pub struct FzfOpts {
     #[serde(default)]
     pub no_url: bool,
 }
-
 
 fn default_height() -> String {
     "50%".to_string()
@@ -47,13 +47,30 @@ pub struct Settings {
     /// Options for the fuzzy finder interface
     #[serde(default)]
     pub fzf_opts: FzfOpts,
+
+    /// Tracks whether settings were loaded from a config file (not serialized)
+    #[serde(skip)]
+    pub loaded_from_file: bool,
 }
 
-
 fn default_db_path() -> String {
-    let db_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("../db"))
-        .join(".config/bkmr");
+    // Try to get the home directory
+    let db_dir = match dirs::home_dir() {
+        Some(home) => home.join(".config/bkmr"),
+        None => {
+            // Better fallback options in order:
+            // 1. Use data local directory if available
+            if let Some(data_dir) = dirs::data_local_dir() {
+                data_dir.join("bkmr")
+            }
+            // 2. Use current directory
+            else {
+                std::env::current_dir()
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".bkmr")
+            }
+        }
+    };
 
     // Ensure directory exists
     std::fs::create_dir_all(&db_dir).ok();
@@ -61,7 +78,7 @@ fn default_db_path() -> String {
     db_dir
         .join("bkmr.db")
         .to_str()
-        .unwrap_or("../db/bkmr.db")
+        .unwrap_or("./bkmr.db") // Fallback to current directory
         .to_string()
 }
 
@@ -70,6 +87,7 @@ impl Default for Settings {
         Self {
             db_url: default_db_path(),
             fzf_opts: FzfOpts::default(),
+            loaded_from_file: false,
         }
     }
 }
@@ -104,11 +122,43 @@ fn parse_fzf_opts(opts_str: &str) -> FzfOpts {
 
 // Load settings from config files and environment variables
 #[instrument(level = "debug")]
-pub fn load_settings() -> DomainResult<Settings> {
+pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
     trace!("Loading settings");
 
     // Start with default settings
     let mut settings = Settings::default();
+    settings.loaded_from_file = false;
+
+    // If a specific config file is provided, try to load it first
+    if let Some(path) = config_file {
+        if path.exists() {
+            trace!("Loading config from specified file: {:?}", path);
+
+            if let Ok(config_text) = std::fs::read_to_string(path) {
+                if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
+                    // Mark as loaded from file
+                    file_settings.loaded_from_file = true;
+                    settings = file_settings;
+
+                    trace!("Successfully loaded settings from specified file");
+                } else {
+                    warn!("Failed to parse config file: {:?}", path);
+                }
+            } else {
+                warn!("Failed to read config file: {:?}", path);
+            }
+
+            // If a specific config file was provided and loaded, don't check standard locations
+            trace!("Settings after loading config file: {:?}", settings);
+
+            // Still apply environment variable overrides
+            apply_env_overrides(&mut settings);
+
+            return Ok(settings);
+        } else {
+            warn!("Specified config file does not exist: {:?}", path);
+        }
+    }
 
     // Check for config files in standard locations
     let config_sources = [
@@ -124,16 +174,29 @@ pub fn load_settings() -> DomainResult<Settings> {
             trace!("Loading config from: {:?}", config_path);
 
             if let Ok(config_text) = std::fs::read_to_string(config_path) {
-                if let Ok(file_settings) = toml::from_str::<Settings>(&config_text) {
-                    // Update settings with values from file
-                    settings.db_url = file_settings.db_url;
-                    settings.fzf_opts = file_settings.fzf_opts;
+                if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
+                    // Update settings with values from file and mark as loaded
+                    file_settings.loaded_from_file = true;
+                    settings = file_settings;
+                    break;  // Use the first found configuration file
                 }
             }
         }
     }
 
-    // Override with environment variables
+    if !settings.loaded_from_file {
+        eprintln!("No configuration file found, using default settings and environment variables.");
+    }
+
+    // Apply environment variable overrides
+    apply_env_overrides(&mut settings);
+
+    debug!("Settings loaded: {:?}", settings);
+    Ok(settings)
+}
+
+// Extract environment variable application to a separate function
+fn apply_env_overrides(settings: &mut Settings) {
     if let Ok(db_url) = std::env::var("BKMR_DB_URL") {
         trace!("Using BKMR_DB_URL from environment: {}", db_url);
         settings.db_url = db_url;
@@ -145,7 +208,6 @@ pub fn load_settings() -> DomainResult<Settings> {
     }
 
     trace!("Settings loaded: {:?}", settings);
-    Ok(settings)
 }
 
 // Add this function to config.rs
@@ -163,6 +225,7 @@ mod tests {
     use serial_test::serial;
     use std::env;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     // Helper function to create a temporary config file
@@ -180,9 +243,98 @@ mod tests {
         env::remove_var("BKMR_DB_URL");
         env::remove_var("BKMR_FZF_OPTS");
 
-        let settings = load_settings().unwrap();
+        let settings = load_settings(None).unwrap();
 
         // Check default values
+        assert!(settings.db_url.contains("bkmr.db"));
+        assert_eq!(settings.fzf_opts.height, "50%");
+        assert!(!settings.fzf_opts.reverse);
+        assert!(!settings.fzf_opts.show_tags);
+        assert!(!settings.fzf_opts.no_url);
+    }
+
+    #[test]
+    #[serial]
+    fn test_specific_config_file() {
+        let _guard = EnvGuard::new();
+        env::remove_var("BKMR_DB_URL");
+        env::remove_var("BKMR_FZF_OPTS");
+
+        // Create a custom config file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("custom_config.toml");
+
+        let config_content = r#"
+        db_url = "/custom/path/to/db.db"
+
+        [fzf_opts]
+        height = "75%"
+        reverse = true
+        show_tags = true
+        no_url = true
+        "#;
+
+        fs::write(&config_path, config_content).unwrap();
+
+        // Load settings with the custom config file
+        let settings = load_settings(Some(&config_path)).unwrap();
+
+        // Check values from the custom config
+        assert_eq!(settings.db_url, "/custom/path/to/db.db");
+        assert_eq!(settings.fzf_opts.height, "75%");
+        assert!(settings.fzf_opts.reverse);
+        assert!(settings.fzf_opts.show_tags);
+        assert!(settings.fzf_opts.no_url);
+    }
+
+    #[test]
+    #[serial]
+    fn test_environment_variables_override_config_file() {
+        let _guard = EnvGuard::new();
+
+        // Create a custom config file
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_path = temp_dir.path().join("custom_config.toml");
+
+        let config_content = r#"
+        db_url = "/config/path/to/db.db"
+
+        [fzf_opts]
+        height = "60%"
+        reverse = false
+        show_tags = false
+        no_url = false
+        "#;
+
+        fs::write(&config_path, config_content).unwrap();
+
+        // Set environment variables
+        env::set_var("BKMR_DB_URL", "/env/path/to/db.db");
+        env::set_var("BKMR_FZF_OPTS", "--height 80% --reverse --show-tags");
+
+        // Load settings with the custom config file
+        let settings = load_settings(Some(&config_path)).unwrap();
+
+        // Environment variables should override config file values
+        assert_eq!(settings.db_url, "/env/path/to/db.db");
+        assert_eq!(settings.fzf_opts.height, "80%");
+        assert!(settings.fzf_opts.reverse);
+        assert!(settings.fzf_opts.show_tags);
+        assert!(!settings.fzf_opts.no_url);
+    }
+
+    #[test]
+    #[serial]
+    fn test_nonexistent_config_file() {
+        let _guard = EnvGuard::new();
+        env::remove_var("BKMR_DB_URL");
+        env::remove_var("BKMR_FZF_OPTS");
+
+        // Try to load a non-existent config file
+        let non_existent_path = Path::new("/this/path/does/not/exist/config.toml");
+        let settings = load_settings(Some(non_existent_path)).unwrap();
+
+        // Should fall back to default settings
         assert!(settings.db_url.contains("bkmr.db"));
         assert_eq!(settings.fzf_opts.height, "50%");
         assert!(!settings.fzf_opts.reverse);
@@ -199,7 +351,7 @@ mod tests {
         env::set_var("BKMR_DB_URL", "/test/custom.db");
         env::set_var("BKMR_FZF_OPTS", "--height 75% --reverse --show-tags");
 
-        let settings = load_settings().unwrap();
+        let settings = load_settings(None).unwrap();
 
         // Check that environment values override defaults
         assert_eq!(settings.db_url, "/test/custom.db");
@@ -218,7 +370,7 @@ mod tests {
         env::set_var("BKMR_DB_URL", "/partial/override.db");
         env::remove_var("BKMR_FZF_OPTS");
 
-        let settings = load_settings().unwrap();
+        let settings = load_settings(None).unwrap();
 
         // Check that only the specified variable is overridden
         assert_eq!(settings.db_url, "/partial/override.db");
@@ -289,6 +441,7 @@ mod tests {
                 show_tags: true,
                 no_url: false,
             },
+            loaded_from_file: true,
         };
 
         // Verify settings match expected values
@@ -327,7 +480,7 @@ mod tests {
         // Mock the config dir location for testing (same note as above)
 
         // Simulate loading with environment variables overriding config file
-        let settings = load_settings().unwrap();
+        let settings = load_settings(None).unwrap();
 
         // Environment values should win
         assert_eq!(settings.db_url, "/env/override.db");
@@ -340,6 +493,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_default_db_path() {
         // Test the default path generation
         let path = default_db_path();

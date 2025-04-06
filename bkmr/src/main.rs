@@ -32,8 +32,13 @@ fn main() {
         Arc::new(DummyEmbedding)
     };
 
-    // Initialize AppState with the embedder
-    let result = AppState::update_global(AppState::new(embedder));
+    // Convert config_file to Path reference if provided
+    let config_path_ref = cli.config_file.as_deref();
+
+    // Initialize AppState with the embedder and config file
+    let app_state = AppState::new_with_config_file(embedder, config_path_ref);
+    let result = AppState::update_global(app_state);
+
     if let Err(e) = result {
         eprintln!("{}: {}", "Failed to initialize AppState".red(), e);
         std::process::exit(1);

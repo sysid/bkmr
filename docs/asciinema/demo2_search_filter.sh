@@ -11,7 +11,7 @@
 
 # Setup environment
 setup-environment
-bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
+bkmr create-db --pre-fill
 
 echo "Search"
 bkmr search -N _snip_,_imported_

@@ -60,9 +60,11 @@ pub fn generate_completion(shell: &str) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use super::*;
 
     #[test]
+    #[serial]
     fn test_generate_bash_completion() -> io::Result<()> {
         // Create a buffer to capture output
         let mut buffer = Vec::new();
@@ -91,6 +93,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_generate_zsh_completion() -> io::Result<()> {
         // Create a buffer to capture output
         let mut buffer = Vec::new();
@@ -119,6 +122,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_generate_fish_completion() -> io::Result<()> {
         // Create a buffer to capture output
         let mut buffer = Vec::new();
@@ -143,6 +147,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_invalid_shell() {
         // Test with an invalid shell
         let result = generate_completion("invalid");

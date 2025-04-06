@@ -4,6 +4,7 @@ use crate::domain::error::{DomainError, DomainResult};
 use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
 use std::sync::{Arc, OnceLock, RwLock};
 use std::{env, fmt};
+use std::path::Path;
 use tracing::{debug, instrument};
 
 // Import our new config module
@@ -77,8 +78,12 @@ impl Default for AppState {
 
 impl AppState {
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        // Load settings using the new configuration system
-        let settings = load_settings().unwrap_or_else(|e| {
+        Self::new_with_config_file(embedder, None)
+    }
+
+    pub fn new_with_config_file(embedder: Arc<dyn Embedder>, config_file: Option<&Path>) -> Self {
+        // Load settings using the new configuration system with optional config file
+        let settings = load_settings(config_file).unwrap_or_else(|e| {
             debug!("Failed to load settings: {}. Using defaults.", e);
             Settings::default()
         });
@@ -120,12 +125,17 @@ impl AppState {
 
     /// Reload settings from the configuration files and environment variables.
     pub fn reload_settings() -> DomainResult<()> {
+        Self::reload_settings_with_config(None)
+    }
+
+    /// Reload settings with a specific config file
+    pub fn reload_settings_with_config(config_file: Option<&Path>) -> DomainResult<()> {
         let mut guard = Self::global()
             .write()
             .map_err(|e| DomainError::Other(format!("Write lock error: {}", e)))?;
 
         // Use the new configuration system
-        guard.settings = load_settings()?;
+        guard.settings = load_settings(config_file)?;
         Ok(())
     }
 }

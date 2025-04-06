@@ -484,8 +484,10 @@ mod tests {
     use super::*;
     use crate::domain::tag::Tag;
     use std::collections::HashSet;
+    use serial_test::serial;
 
     #[test]
+    #[serial]
     fn test_parse_input() {
         let input = "  1 2,  3  ";
         let tokens = parse_input(input);
@@ -497,6 +499,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_get_bookmark_by_index() {
         // Create test bookmarks
         let mut tags = HashSet::new();

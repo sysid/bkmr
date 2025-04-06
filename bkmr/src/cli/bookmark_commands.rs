@@ -29,6 +29,7 @@ use std::path::Path;
 use std::{fs, io};
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::instrument;
+use crate::config::Settings;
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -594,18 +595,18 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
                 let app_state = AppState::read_global();
                 let configured_path = &app_state.settings.db_url;
 
-                // Check if it's a default path
-                if configured_path.ends_with("../db/bkmr.db") {
-                    eprintln!("{}", "Error: No database path provided.".red());
-                    eprintln!("Please specify a path or configure BKMR_DB_URL");
-                    eprintln!("Example usage:");
-                    eprintln!("  bkmr create-db ~/my-bookmarks.db");
-                    eprintln!("  or");
-                    eprintln!("  export BKMR_DB_URL=~/my-bookmarks.db");
-                    eprintln!("  bkmr create-db");
-                    eprintln!("  or add to ~/.config/bkmr/config.toml:");
-                    eprintln!("  db_url = \"~/my-bookmarks.db\"");
-                    return Err(CliError::InvalidInput("No database path provided".to_string()));
+                // Check if configuration was loaded from a config file
+                if !app_state.settings.loaded_from_file {
+                    eprintln!("{}", "Warning: Using default database path. No configuration file found.".yellow());
+                    eprintln!("Default path: {}", configured_path);
+                    eprintln!("Consider creating a configuration file at ~/.config/bkmr/config.toml");
+                    eprintln!("or specifying a database path with the --config-file option.");
+
+                    // Ask for confirmation when using default configuration
+                    if !confirm("Continue with default database location?") {
+                        eprintln!("Database creation cancelled.");
+                        return Ok(());
+                    }
                 }
 
                 configured_path.clone()
