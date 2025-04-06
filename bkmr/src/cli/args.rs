@@ -21,7 +21,10 @@ pub struct Cli {
     #[arg(long = "openai", help = "use OpenAI API to embed bookmarks")]
     pub openai: bool,
 
-    #[arg(long = "generate-config", help = "bkmr --generate-config > ~/.config/bkmr/config.toml")]
+    #[arg(
+        long = "generate-config",
+        help = "bkmr --generate-config > ~/.config/bkmr/config.toml"
+    )]
     pub generate_config: bool,
 
     #[command(subcommand)]
@@ -179,6 +182,9 @@ pub enum Commands {
     CreateDb {
         /// pathname to database file
         path: String,
+
+        #[arg(long, help = "Pre-fill the database with demo entries")]
+        pre_fill: bool,
     },
     /// Set whether a bookmark can be embedded (used for semantic search)
     SetEmbeddable {

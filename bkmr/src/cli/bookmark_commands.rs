@@ -585,7 +585,7 @@ pub fn surprise(cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn create_db(cli: Cli) -> CliResult<()> {
-    if let Commands::CreateDb { path } = cli.command.unwrap() {
+    if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
         // Check if the database file already exists
         if Path::new(&path).exists() {
             return Err(CliError::InvalidInput(format!(
@@ -621,6 +621,13 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
         repository.empty_bookmark_table()?;
 
         println!("Database created successfully at: {}", path);
+
+        // Pre-fill the database with demo entries if requested
+        if pre_fill {
+            println!("Pre-filling database with demo entries...");
+            pre_fill_database(&repository)?;
+            println!("Demo entries added successfully!");
+        }
     }
     Ok(())
 }
@@ -827,9 +834,159 @@ pub fn info(cli: Cli) -> CliResult<()> {
     Ok(())
 }
 
+/// Pre-fills the database with a variety of demo entries to showcase bkmr's features
+fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
+    let app_state = AppState::read_global();
+    let embedder = &*app_state.context.embedder;
+
+    // Create demo entries
+    let demo_entries = vec![
+        // Regular URLs
+        (
+            "https://github.com",
+            "GitHub",
+            "Platform for version control and collaboration",
+            vec!["git", "development", "coding"],
+        ),
+        (
+            "https://rust-lang.org",
+            "Rust Programming Language",
+            "A language empowering everyone to build reliable and efficient software",
+            vec!["rust", "programming", "language"],
+        ),
+        (
+            "https://crates.io",
+            "Rust Package Registry",
+            "The Rust community's crate registry",
+            vec!["rust", "packages", "crates"],
+        ),
+
+        // Shell command URLs
+        (
+            "shell::echo 'Hello, World!'",
+            "Hello World Shell Command",
+            "Simple shell command that prints 'Hello, World!'",
+            vec!["shell", "example", "hello_world"],
+        ),
+        (
+            "shell::ls -la | grep '.rs$'",
+            "List Rust Files",
+            "Shell command to list all Rust files in the current directory",
+            vec!["shell", "rust", "files", "list"],
+        ),
+
+        // URL with interpolation (date)
+        (
+            "https://example.com/report?date={{ current_date | strftime(\"%Y-%m-%d\") }}",
+            "Daily Report",
+            "Dynamic URL that includes today's date",
+            vec!["report", "dynamic", "interpolation", "date"],
+        ),
+        (
+            "https://api.example.com/data?from={{ current_date | subtract_days(7) | strftime(\"%Y-%m-%d\") }}&to={{ current_date | strftime(\"%Y-%m-%d\") }}",
+            "Last 7 Days Data",
+            "API URL for fetching last 7 days of data",
+            vec!["api", "dynamic", "date_range", "interpolation"],
+        ),
+
+        // URL with environment variable interpolation
+        (
+            "https://api.service.com/v1/users?token={{ env('API_TOKEN', 'demo-token') }}",
+            "API with Token",
+            "Service API that uses an environment variable for authentication",
+            vec!["api", "token", "environment", "interpolation"],
+        ),
+
+        // Code snippet with language tag
+        (
+            "println!(\"Hello, {}!\", \"Rust\");\n\nfn main() {\n    println!(\"This is a Rust snippet example\");\n}",
+            "Rust Hello World Snippet",
+            "Simple Rust code snippet demonstrating println",
+            vec!["rust", "snippet", "code", "_snip_"],
+        ),
+        (
+            "function greet(name) {\n    console.log(`Hello, ${name}!`);\n}\n\ngreet('JavaScript');",
+            "JavaScript Greeting Function",
+            "Simple JavaScript function that greets a person",
+            vec!["javascript", "snippet", "function", "_snip_"],
+        ),
+
+        // Shell script snippet
+        (
+            "#!/bin/bash\n\necho \"Current directory:\"\npwd\n\necho \"\\nFiles:\"\nls -la",
+            "Directory Info Script",
+            "Shell script that shows current directory and lists files",
+            vec!["bash", "script", "shell", "_snip_"],
+        ),
+
+        // Snippet with interpolation
+        (
+            "#!/bin/bash\n\n# Today's date: {{ current_date | strftime(\"%Y-%m-%d\") }}\n\necho \"Report for {{ current_date | strftime(\"%B %d, %Y\") }}\"",
+            "Date Script with Interpolation",
+            "Shell script with embedded date interpolation",
+            vec!["bash", "date", "interpolation", "_snip_"],
+        ),
+
+        // SQL snippet
+        (
+            "SELECT *\nFROM users\nWHERE registration_date > '{{ current_date | subtract_days(30) | strftime(\"%Y-%m-%d\") }}'\nORDER BY username ASC;",
+            "Recent Users SQL Query",
+            "SQL query to find users registered in the last 30 days",
+            vec!["sql", "query", "users", "_snip_"],
+        ),
+
+        // Markdown document
+        (
+            "# Meeting Notes: {{ current_date | strftime(\"%B %d, %Y\") }}\n\n## Agenda\n- Review last week's progress\n- Discuss current blockers\n- Plan for next sprint\n\n## Action Items\n- [ ] Document API changes\n- [ ] Complete code review\n- [ ] Deploy to staging",
+            "Meeting Notes Template",
+            "Template for taking meeting notes with dynamic date",
+            vec!["markdown", "meeting", "template", "_imported_"],
+        ),
+
+        // URL with shell interpolation
+        (
+            "https://example.com/user/{{ \"whoami\" | shell }}",
+            "User-specific Link",
+            "URL that includes the current username via shell command",
+            vec!["dynamic", "shell", "interpolation"],
+        ),
+    ];
+
+    // Add each entry to the database
+    for (url, title, description, tags) in demo_entries {
+        let mut tag_set = HashSet::new();
+        for tag_str in tags {
+            if let Ok(tag) = Tag::new(tag_str) {
+                tag_set.insert(tag);
+            }
+        }
+
+        match Bookmark::new(url, title, description, tag_set, embedder) {
+            Ok(mut bookmark) => {
+                // Set embeddable flag for regular URLs
+                if url.starts_with("http") && !url.contains("{{") {
+                    bookmark.set_embeddable(true);
+                }
+
+                // Add the bookmark to the repository
+                if let Err(e) = repository.add(&mut bookmark) {
+                    eprintln!("Failed to add demo bookmark {}: {}", title, e);
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to create demo bookmark {}: {}", title, e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
 
     #[test]
     fn test_get_ids_valid() {
@@ -991,5 +1148,96 @@ mod tests {
 
         // Assert
         assert_eq!(result, SortDirection::Descending);
+    }
+
+    #[test]
+    #[serial]
+    fn test_pre_fill_database() {
+        // Arrange
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = setup_test_db();
+
+        // Make sure we start with an empty database
+        repository
+            .empty_bookmark_table()
+            .expect("Failed to empty bookmark table");
+
+        // Verify database is initially empty
+        let initial_bookmarks = repository.get_all().expect("Failed to get bookmarks");
+        assert_eq!(
+            initial_bookmarks.len(),
+            0,
+            "Database should be empty initially"
+        );
+
+        // Act
+        pre_fill_database(&repository).expect("Failed to pre-fill database");
+
+        // Assert
+        let bookmarks = repository.get_all().expect("Failed to get bookmarks");
+
+        // Verify we have added the expected number of demo entries
+        assert!(
+            !bookmarks.is_empty(),
+            "Database should contain demo entries"
+        );
+
+        // Define expected entry types to check for
+        let expected_types = vec![
+            // Regular URLs
+            ("https://github.com", false),
+            ("https://rust-lang.org", false),
+            // Shell command URLs
+            ("shell::", false),
+            // URL with interpolation (date)
+            ("{{", false),
+            // Code snippets
+            ("_snip_", true),
+            // Imported documents
+            ("_imported_", true),
+        ];
+
+        // Check that each expected type exists in the database
+        for (pattern, is_tag) in expected_types {
+            let found = if is_tag {
+                // Check for a tag containing the pattern
+                bookmarks
+                    .iter()
+                    .any(|b| b.tags.iter().any(|t| t.value().contains(pattern)))
+            } else {
+                // Check for a URL containing the pattern
+                bookmarks.iter().any(|b| b.url.contains(pattern))
+            };
+
+            assert!(
+                found,
+                "Database should contain an entry with {} '{}'",
+                if is_tag { "tag" } else { "URL containing" },
+                pattern
+            );
+        }
+
+        // Check that we have entries with embeddable flag set
+        let embeddable_entries = bookmarks.iter().filter(|b| b.embeddable).count();
+        assert!(
+            embeddable_entries > 0,
+            "Database should contain entries with embeddable flag set"
+        );
+
+        // Test specific entries for correct data
+        let github_entry = bookmarks.iter().find(|b| b.url == "https://github.com");
+        assert!(github_entry.is_some(), "GitHub entry should exist");
+        if let Some(entry) = github_entry {
+            assert_eq!(entry.title, "GitHub");
+            assert!(entry.tags.iter().any(|t| t.value() == "git"));
+        }
+
+        // Test that snippets are correctly marked
+        let snippets = bookmarks
+            .iter()
+            .filter(|b| b.tags.iter().any(|t| t.value() == "_snip_"))
+            .count();
+        assert!(snippets > 0, "Database should contain snippet entries");
     }
 }
