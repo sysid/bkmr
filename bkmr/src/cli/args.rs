@@ -148,6 +148,8 @@ pub enum Commands {
             default_value = "uri"
         )]
         bookmark_type: String,
+        #[arg(short = 'c', long = "clone", help = "clone an existing bookmark by ID")]
+        clone_id: Option<i32>,
     },
     /// Delete bookmarks
     Delete {

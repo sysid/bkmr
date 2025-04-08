@@ -13,12 +13,9 @@ From trait for errors, simplify/optimize error handling
 
 embedding plugin
 
-highlight the found string in fzf (like rsnip: example jq)
-
 docu fzf actions
 
 ## Features
-- clone snippet and edit
 - markdown text with ankiview visualization
 - rich text with ankiview visualization
 - run payload as script (which shell environment?)
@@ -35,7 +32,6 @@ section parsing in edit mode: table like ------------
 
 tests fail when ~/.config/bkmr exists and has got wrong config (config tests)
 
-p without parameter does not print ids
 
 
 ## Gotcha

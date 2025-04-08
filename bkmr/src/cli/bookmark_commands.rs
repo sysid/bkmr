@@ -305,6 +305,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         no_web,
         edit,
         bookmark_type,
+        clone_id,
     } = cli.command.unwrap()
     {
         let bookmark_service = create_bookmark_service();
@@ -333,72 +334,40 @@ pub fn add(cli: Cli) -> CliResult<()> {
             }
         }
 
-        // If URL is not provided or edit flag is set, open the editor
-        if url.is_none() || edit {
-            // Create a template for the specific bookmark type
-            let mut template = BookmarkTemplate::for_type(system_tag);
+        // Prepare the template - either from clone or new
+        let mut template = if let Some(id) = clone_id {
+            // Get the bookmark to clone
+            let bookmark = bookmark_service.get_bookmark(id)?
+                .ok_or_else(|| CliError::InvalidInput(format!("No bookmark found with ID {}", id)))?;
 
-            // Override with provided values if they exist
-            if let Some(url_value) = &url {
-                template.url = url_value.clone();
-            }
-            if let Some(title_value) = &title {
-                template.title = title_value.clone();
-            }
-            if let Some(desc_value) = &desc {
-                template.comments = desc_value.clone();
-            }
-
-            // Add user-provided tags
-            for tag in &tag_set {
-                template.tags.insert(tag.clone());
-            }
-
-            // Convert the template to a bookmark
-            let temp_bookmark = template.to_bookmark(None).map_err(|e| {
-                CliError::Other(format!("Failed to create temporary bookmark: {}", e))
-            })?;
-
-            // Open the editor with our prepared template
-            match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
-                Ok((edited_bookmark, was_modified)) => {
-                    if !was_modified {
-                        println!("No changes made in editor. Bookmark not added.");
-                        return Ok(());
-                    }
-
-                    // Add the edited bookmark
-                    match bookmark_service.add_bookmark(
-                        &edited_bookmark.url,
-                        Some(&edited_bookmark.title),
-                        Some(&edited_bookmark.description),
-                        Some(&edited_bookmark.tags),
-                        false, // Don't fetch metadata since we've already edited it
-                    ) {
-                        Ok(bookmark) => {
-                            println!(
-                                "Added bookmark: {} (ID: {})",
-                                bookmark.title,
-                                bookmark.id.unwrap_or(0)
-                            );
-                        }
-                        Err(e) => {
-                            return Err(CliError::CommandFailed(format!(
-                                "Failed to add bookmark: {}",
-                                e
-                            )));
-                        }
-                    }
-                }
-                Err(e) => {
-                    return Err(CliError::CommandFailed(format!(
-                        "Failed to edit bookmark: {}",
-                        e
-                    )));
-                }
-            }
+            // Create a template with the bookmark data but without ID
+            let mut template = BookmarkTemplate::from_bookmark(&bookmark);
+            template.id = None; // Clear ID to treat as new bookmark
+            template
         } else {
-            // Regular add without editing - URL must be provided in this case
+            // Create a new template for the specific bookmark type
+            BookmarkTemplate::for_type(system_tag)
+        };
+
+        // Override with provided values if they exist
+        if let Some(url_value) = &url {
+            template.url = url_value.clone();
+        }
+        if let Some(title_value) = &title {
+            template.title = title_value.clone();
+        }
+        if let Some(desc_value) = &desc {
+            template.comments = desc_value.clone();
+        }
+
+        // Add user-provided tags (keep existing tags for cloned bookmarks)
+        for tag in &tag_set {
+            template.tags.insert(tag.clone());
+        }
+
+        // If URL is provided, edit flag is not set, and we're not cloning,
+        // use the simple add path without opening editor
+        if url.is_some() && !edit && clone_id.is_none() {
             let url = url.unwrap();
             let bookmark = bookmark_service.add_bookmark(
                 &url,
@@ -413,6 +382,52 @@ pub fn add(cli: Cli) -> CliResult<()> {
                 bookmark.title,
                 bookmark.id.unwrap_or(0)
             );
+            return Ok(());
+        }
+
+        // Otherwise, open in editor
+        // Convert template to a temporary bookmark for editing
+        let temp_bookmark = template.to_bookmark(None).map_err(|e| {
+            CliError::Other(format!("Failed to create temporary bookmark: {}", e))
+        })?;
+
+        // Open the editor with our prepared template
+        match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
+            Ok((edited_bookmark, was_modified)) => {
+                if !was_modified {
+                    println!("No changes made in editor. Bookmark not added.");
+                    return Ok(());
+                }
+
+                // Add the edited bookmark
+                match bookmark_service.add_bookmark(
+                    &edited_bookmark.url,
+                    Some(&edited_bookmark.title),
+                    Some(&edited_bookmark.description),
+                    Some(&edited_bookmark.tags),
+                    false, // Don't fetch metadata since we've already edited it
+                ) {
+                    Ok(bookmark) => {
+                        println!(
+                            "Added bookmark: {} (ID: {})",
+                            bookmark.title,
+                            bookmark.id.unwrap_or(0)
+                        );
+                    }
+                    Err(e) => {
+                        return Err(CliError::CommandFailed(format!(
+                            "Failed to add bookmark: {}",
+                            e
+                        )));
+                    }
+                }
+            }
+            Err(e) => {
+                return Err(CliError::CommandFailed(format!(
+                    "Failed to edit bookmark: {}",
+                    e
+                )));
+            }
         }
     }
     Ok(())
