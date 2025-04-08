@@ -17,6 +17,15 @@ highlight the found string in fzf (like rsnip: example jq)
 
 docu fzf actions
 
+## Features
+- clone snippet and edit
+- markdown text with ankiview visualization
+- rich text with ankiview visualization
+- run payload as script (which shell environment?)
+
+### Proposals
+- new field 'action': instead of prefix "shell" for action selection
+
 
 
 ## BUGs

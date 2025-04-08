@@ -46,11 +46,12 @@ pub fn process(bookmarks: &[Bookmark]) -> CliResult<()> {
 
         match tokens[0].as_str() {
             "p" => {
-                if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    print_bookmark_ids(indices, bookmarks)?;
-                } else if tokens.len() == 1 {
-                    // Print all ids
+                if tokens.len() == 1 {
+                    // Just "p" command, print all ids
                     print_all_bookmark_ids(bookmarks)?;
+                } else if let Some(indices) = ensure_int_vector(&tokens[1..]) {
+                    // "p" with indices
+                    print_bookmark_ids(indices, bookmarks)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -272,6 +273,12 @@ fn print_bookmark_ids(indices: Vec<i32>, bookmarks: &[Bookmark]) -> CliResult<()
         }
     }
 
+    if ids.is_empty() {
+        println!("No bookmark IDs found for the specified indices");
+        io::stdout().flush().map_err(CliError::Io)?;
+        return Ok(());
+    }
+
     ids.sort();
     println!(
         "{}",
@@ -280,6 +287,7 @@ fn print_bookmark_ids(indices: Vec<i32>, bookmarks: &[Bookmark]) -> CliResult<()
             .collect::<Vec<_>>()
             .join(",")
     );
+    io::stdout().flush().map_err(CliError::Io)?; // todo: check if necessary
 
     Ok(())
 }
@@ -289,6 +297,16 @@ fn print_bookmark_ids(indices: Vec<i32>, bookmarks: &[Bookmark]) -> CliResult<()
 fn print_all_bookmark_ids(bookmarks: &[Bookmark]) -> CliResult<()> {
     let mut ids: Vec<_> = bookmarks.iter().filter_map(|b| b.id).collect();
 
+    if ids.is_empty() {
+        println!("No bookmark IDs found");
+        io::stdout().flush().map_err(CliError::Io)?; // todo: check if this is needed
+        return Ok(());
+    }
+
+    // Print the count for verification
+    println!("Found {} bookmark IDs", ids.len());
+
+    // Sort and print the IDs
     ids.sort();
     println!(
         "{}",
@@ -297,6 +315,7 @@ fn print_all_bookmark_ids(bookmarks: &[Bookmark]) -> CliResult<()> {
             .collect::<Vec<_>>()
             .join(",")
     );
+    io::stdout().flush().map_err(CliError::Io)?; // todo: check if this is needed
 
     Ok(())
 }
@@ -483,8 +502,8 @@ pub fn copy_url_to_clipboard(url: &str) -> CliResult<()> {
 mod tests {
     use super::*;
     use crate::domain::tag::Tag;
-    use std::collections::HashSet;
     use serial_test::serial;
+    use std::collections::HashSet;
 
     #[test]
     #[serial]
