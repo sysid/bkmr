@@ -14,18 +14,23 @@
 setup-environment
 echo "Create pre-filled demo database"
 bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
+clear
 
 echo "Search all except entries with tags _snip_, _imported_"
 bkmr search -N _snip_,_imported_
+clear
 
 bkmr search --fzf  # use fuzzy finding
+clear
 
 # run 4: hello world
 bkmr search --fzf --fzf-style enhanced
 echo "FZF actions: Enter: open, CTRL-E: edit, CTRL-D: delete, CTRL-Y: yank"
+clear
 
 # edit 4 with CTRL-E
 bkmr search --fzf --fzf-style enhanced
+clear
 
 echo "Search with tags filter, execute the command with 1 ENTER"
 bkmr search -t shell 'hello world'

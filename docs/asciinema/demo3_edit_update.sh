@@ -11,16 +11,19 @@
 setup-environment
 echo "Create pre-filled demo database"
 bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
+clear
 
 bkmr search 'github'  # search for term 'github'
 
 bkmr update 1 -t xxx  # add tag 'xxx' to bookmark with id 1
+clear
 
 # Show the updated bookmark
 bkmr search 'github'  # look for tag: xxx
 
 bkmr update 1 -n xxx  # remove tag 'xxx'
 bkmr search 'github'  # look for removed tag: xxx
+clear
 
 bkmr edit 1  # edit bookmark with id 1
 # (This will open an editor - make some changes to title/description)

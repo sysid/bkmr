@@ -11,8 +11,10 @@
 setup-environment
 echo "Create pre-filled demo database"
 bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
+clear
 
 bkmr search  # show the data
+clear
 
 echo "Tag management"
 bkmr tags  # list all tags and their frequency

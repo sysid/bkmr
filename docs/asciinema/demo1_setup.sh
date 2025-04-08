@@ -17,6 +17,7 @@ echo "Create configuration"
 mkdir -p /tmp/bkmr
 bkmr --generate-config > /tmp/bkmr/config.toml
 more /tmp/bkmr/config.toml
+clear
 
 echo "Initialize database."
 bkmr create-db /tmp/bkmr/bkmr.db
@@ -26,13 +27,16 @@ echo "Now add some data..."
 bkmr add https://rust-lang.org programming,rust,language
 bkmr add https://github.com programming,git,collaboration
 bkmr add https://news.ycombinator.com news,tech
+clear
 
 echo "List full database content."
 bkmr search
 echo "URL metadata has been fetched automatically. Nice!"
+clear
 
 echo "Show info about bkmr and its configuration"
 bkmr info
+clear
 
 echo "Create pre-loaded demo-database"
 rm -vf /tmp/bkmr/bkmr.db
