@@ -56,7 +56,8 @@ fn create_enhanced_skim_items(bookmarks: &[Bookmark]) -> Vec<Arc<dyn SkimItem>> 
             let action_description = action_service.get_default_action_description(bookmark);
 
             // Format display text with action type
-            let display_text = format!("{}: {} [{}]", id, bookmark.title, action_description);
+            // let display_text = format!("{}: {} [{}]", id, bookmark.title, action_description);
+            let display_text = format!("{}: {}", id, bookmark.title);
 
             // Format preview with colored headers and proper spacing
             let preview = format!(
