@@ -244,6 +244,26 @@ impl Bookmark {
             .cloned()
             .collect()
     }
+
+    /// Check if this bookmark has a specific system tag
+    pub fn is_system_tag(&self, system_tag: SystemTag) -> bool {
+        self.tags.iter().any(|tag| tag.is_system_tag_of(system_tag))
+    }
+
+    /// Check if this bookmark is a URI (no system tags or has URI system tag)
+    pub fn is_uri(&self) -> bool {
+        // If it has any other system tag, it's not a URI
+        !self.is_snippet() && !self.is_system_tag(SystemTag::Text)
+    }
+
+    /// Get the appropriate content based on bookmark type
+    pub fn get_action_content(&self) -> &str {
+        if self.is_snippet() {
+            self.snippet_content() // For snippets, the URL is the actual content
+        } else {
+            &self.url // For URIs and others, use the URL
+        }
+    }
 }
 
 impl fmt::Display for Bookmark {
@@ -619,5 +639,91 @@ mod tests {
         // Set back to false
         bookmark.set_embeddable(false);
         assert!(!bookmark.embeddable);
+    }
+    #[test]
+    fn test_is_system_tag() {
+        let _ = init_test_env();
+
+        // Create a bookmark with the Text system tag
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_imported_").unwrap()); // Text system tag
+
+        let bookmark = Bookmark::new(
+            "https://example.com",
+            "Example Site",
+            "An example website",
+            tags,
+            AppState::read_global().context.embedder.as_ref(),
+        )
+        .unwrap();
+
+        // Test is_system_tag
+        assert!(bookmark.is_system_tag(SystemTag::Text));
+        assert!(!bookmark.is_system_tag(SystemTag::Snippet));
+    }
+
+    #[test]
+    fn test_is_uri() {
+        let _ = init_test_env();
+
+        // Create a regular URI bookmark
+        let tags_uri = HashSet::new();
+        let bookmark_uri = Bookmark::new(
+            "https://example.com",
+            "Example Site",
+            "A website with no system tags",
+            tags_uri,
+            AppState::read_global().context.embedder.as_ref(),
+        )
+        .unwrap();
+
+        // Create a snippet bookmark
+        let mut tags_snippet = HashSet::new();
+        tags_snippet.insert(Tag::new("_snip_").unwrap());
+        let bookmark_snippet = Bookmark::new(
+            "print('Hello world')",
+            "Python Snippet",
+            "A Python code snippet",
+            tags_snippet,
+            AppState::read_global().context.embedder.as_ref(),
+        )
+        .unwrap();
+
+        // Test is_uri
+        assert!(bookmark_uri.is_uri());
+        assert!(!bookmark_snippet.is_uri());
+    }
+
+    #[test]
+    fn test_get_action_content() {
+        let _ = init_test_env();
+
+        // Create a URI bookmark
+        let tags_uri = HashSet::new();
+        let bookmark_uri = Bookmark::new(
+            "https://example.com",
+            "Example Site",
+            "A website",
+            tags_uri,
+            AppState::read_global().context.embedder.as_ref(),
+        )
+        .unwrap();
+
+        // Create a snippet bookmark
+        let mut tags_snippet = HashSet::new();
+        tags_snippet.insert(Tag::new("_snip_").unwrap());
+        let snippet_content = "print('Hello world')";
+        let bookmark_snippet = Bookmark::new(
+            snippet_content,
+            "Python Snippet",
+            "A Python code snippet",
+            tags_snippet,
+            AppState::read_global().context.embedder.as_ref(),
+        )
+        .unwrap();
+
+        // Test get_action_content
+        assert_eq!(bookmark_uri.get_action_content(), "https://example.com");
+        assert_eq!(bookmark_snippet.get_action_content(), snippet_content);
     }
 }

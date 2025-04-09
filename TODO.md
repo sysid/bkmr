@@ -22,6 +22,7 @@ docu fzf actions
 
 ### Proposals
 - new field 'action': instead of prefix "shell" for action selection
+- SOPS integration
 
 
 
