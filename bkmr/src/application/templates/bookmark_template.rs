@@ -99,6 +99,22 @@ impl BookmarkTemplate {
 
                 return template;
             }
+            SystemTag::Markdown => {
+                builder
+                .url("# New Markdown Document\n\n## Introduction\n\nWrite your markdown content here.\n\n## Features\n\n- Lists\n- **Bold text**\n- *Italic text*\n- [Links](https://example.com)\n- Code blocks\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```")
+                .title("New Markdown Document")
+                .comments("Description of the markdown document");
+
+                // Build template first to get the tags
+                let mut template = builder.build().unwrap();
+
+                // Add the _md_ tag
+                if let Ok(tag) = Tag::new(SystemTag::Markdown.as_str()) {
+                    template.tags.insert(tag);
+                }
+
+                return template;
+            }
             SystemTag::Uri => {
                 builder
                     .url("https://")

@@ -325,6 +325,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
             "snip" => SystemTag::Snippet,
             "text" => SystemTag::Text,
             "shell" => SystemTag::Shell,
+            "md" | "markdown" => SystemTag::Markdown,
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 
@@ -1035,6 +1036,22 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
             "Environment Report Shell Script",
             "Shell script that reports environment variables and the current date",
             vec!["bash", "environment", "report", "_shell_"],
+        ),
+
+        // Markdown document
+        (
+            "# Markdown Example\n\n## Features\n\n- **Bold text**\n- *Italic text*\n- Lists\n- Links: [Example](https://example.com)\n\n## Code Snippets\n\n```rust\nfn hello() {\n    println!(\"Hello from Markdown!\");\n}\n```\n\n> This is a blockquote.\n\n![Image placeholder](https://via.placeholder.com/150)",
+            "Markdown Demo Document",
+            "Example of a markdown document with various formatting features",
+            vec!["markdown", "example", "documentation", "_md_"],
+        ),
+
+        // Markdown with interpolation
+        (
+            "# Daily Report: {{ current_date | strftime(\"%B %d, %Y\") }}\n\n## Overview\n\nThis is an automatically generated report for {{ current_date | strftime(\"%Y-%m-%d\") }}.\n\n## Tasks\n\n- Review yesterday's progress\n- Plan today's work\n- Schedule meetings\n\n## Notes\n\n> Add your daily notes here.\n\n## Environment\n\n```\nUser: {{ \"whoami\" | shell }}\nHostname: {{ \"hostname\" | shell }}\n```",
+            "Daily Report Template",
+            "Markdown template for daily reports with date interpolation",
+            vec!["markdown", "template", "report", "_md_"],
         ),
     ];
 

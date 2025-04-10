@@ -263,6 +263,13 @@ impl Bookmark {
             .any(|tag| tag.is_system_tag_of(SystemTag::Shell))
     }
 
+    /// Check if this bookmark is a markdown document
+    pub fn is_markdown(&self) -> bool {
+        self.tags
+            .iter()
+            .any(|tag| tag.is_system_tag_of(SystemTag::Markdown))
+    }
+
     /// Get the appropriate content based on bookmark type
     pub fn get_action_content(&self) -> &str {
         if self.is_snippet() {

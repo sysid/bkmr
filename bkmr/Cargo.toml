@@ -57,6 +57,7 @@ clap_complete = "4.5.47"
 minijinja = "2.8.0"
 dirs = "6.0.0"
 toml = "0.8.20"
+markdown = "1.0.0-alpha.23"
 
 [profile.release]
 codegen-units = 1

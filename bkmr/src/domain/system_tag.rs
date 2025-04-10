@@ -8,6 +8,7 @@ pub enum SystemTag {
     Text,
     Uri,
     Shell,
+    Markdown,
 }
 
 impl SystemTag {
@@ -17,6 +18,7 @@ impl SystemTag {
             Self::Text => "_imported_",  // todo: add a better name
             Self::Uri => "",
             Self::Shell => "_shell_",
+            Self::Markdown => "_md_",
         }
     }
 
@@ -25,7 +27,7 @@ impl SystemTag {
     }
 
     pub fn is_known_system_tag(tag_str: &str) -> bool {
-        matches!(tag_str, "_snip_" | "_imported_")
+        matches!(tag_str, "_snip_" | "_imported_" | "_shell_" | "_md_")
     }
 }
 
