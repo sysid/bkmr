@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use crate::app_state::AppState;
 use crate::application::services::factory::{
-    create_bookmark_service, create_clipboard_service, create_interpolation_service,
+    create_action_service, create_bookmark_service, create_clipboard_service,
+    create_interpolation_service,
 };
 use crate::cli::error::CliResult;
-use crate::cli::process::{delete_bookmarks, edit_bookmarks, open_bookmark};
+use crate::cli::process::{copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks, execute_bookmark_default_action};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crossterm::style::Stylize;
@@ -45,17 +46,22 @@ impl SkimItem for SnippetItem {
 
 /// Format bookmarks for enhanced display and preview
 fn create_enhanced_skim_items(bookmarks: &[Bookmark]) -> Vec<Arc<dyn SkimItem>> {
+    // Get action service to determine action descriptions
+    let action_service = create_action_service();
+
     bookmarks
         .iter()
         .map(|bookmark| {
             let id = bookmark.id.unwrap_or(0).to_string();
+            let action_description = action_service.get_default_action_description(bookmark);
 
-            // Format display text
+            // Format display text with action type
+            // let display_text = format!("{}: {} [{}]", id, bookmark.title, action_description);
             let display_text = format!("{}: {}", id, bookmark.title);
 
             // Format preview with colored headers and proper spacing
             let preview = format!(
-                "{}: {}\n\n{}:\n{}\n\n{}:\n{}",
+                "{}: {}\n\n{}:\n{}\n\n{}:\n{}\n\n{}: {}",
                 "Title".green().bold(),
                 bookmark.title,
                 "Description".yellow().bold(),
@@ -64,8 +70,10 @@ fn create_enhanced_skim_items(bookmarks: &[Bookmark]) -> Vec<Arc<dyn SkimItem>> 
                 } else {
                     &bookmark.description
                 },
-                "URL".cyan().bold(),
-                bookmark.url
+                "URL/Content".cyan().bold(),
+                bookmark.get_action_content(),
+                "Default Action".magenta().bold(),
+                action_description
             );
 
             Arc::new(SnippetItem {
@@ -85,6 +93,10 @@ impl SkimItem for Bookmark {
         let binding = self.formatted_tags();
         let tags_str = binding.trim_matches(',');
 
+        // Get the action description
+        let action_service = create_action_service();
+        let action_description = action_service.get_default_action_description(self);
+
         // Read app settings
         let app_state = AppState::read_global();
         let fzf_opts = &app_state.settings.fzf_opts;
@@ -96,10 +108,14 @@ impl SkimItem for Bookmark {
             String::new()
         };
 
+        // Show action description in display
         let text = if fzf_opts.no_url {
-            format!("{}: {}{}", id, title, tags_display)
+            format!("{}: {} ({}){}", id, title, action_description, tags_display)
         } else {
-            format!("{}: {} <{}>{}", id, title, url, tags_display)
+            format!(
+                "{}: {} <{}> ({}){}",
+                id, title, url, action_description, tags_display
+            )
         };
 
         Cow::Owned(text)
@@ -157,6 +173,17 @@ impl SkimItem for Bookmark {
             attr_segments.push((attr_tags, (start_idx_tags, end_idx_tags)));
         }
 
+        // Add cyan attribute for action description in parentheses
+        let start_idx_action = text.rfind('(').unwrap_or(text.len()) as u32;
+        let end_idx_action = text.rfind(')').unwrap_or(text.len()) as u32 + 1; // +1 for )
+
+        let attr_action = Attr {
+            fg: Color::CYAN,
+            ..Attr::default()
+        };
+
+        attr_segments.push((attr_action, (start_idx_action, end_idx_action)));
+
         AnsiString::new_str(context.text, attr_segments)
     }
 
@@ -168,9 +195,13 @@ impl SkimItem for Bookmark {
         let binding = self.formatted_tags();
         let tags = binding.trim_matches(',');
 
+        // Get the action description
+        let action_service = create_action_service();
+        let action_description = action_service.get_default_action_description(self);
+
         let preview_text = format!(
-            "ID: {}\nTitle: {}\nURL: {}\nDescription: {}\nTags: {}\nAccess Count: {}",
-            id, title, url, description, tags, self.access_count
+            "ID: {}\nTitle: {}\nURL/Content: {}\nDescription: {}\nTags: {}\nAccess Count: {}\nDefault Action: {}",
+            id, title, url, description, tags, self.access_count, action_description
         );
 
         ItemPreview::AnsiText(format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text))
@@ -186,6 +217,10 @@ impl SkimItem for SemanticSearchResult {
         let tags_str = binding.trim_matches(',');
         let similarity = format!("{:.1}%", self.similarity * 100.0);
 
+        // Get the action description
+        let action_service = create_action_service();
+        let action_description = action_service.get_default_action_description(&self.bookmark);
+
         // Read app settings
         let app_state = AppState::read_global();
         let fzf_opts = &app_state.settings.fzf_opts;
@@ -198,11 +233,14 @@ impl SkimItem for SemanticSearchResult {
         };
 
         let text = if fzf_opts.no_url {
-            format!("{}: {} ({}){}", id, title, similarity, tags_display)
+            format!(
+                "{}: {} ({}%) ({}){}",
+                id, title, similarity, action_description, tags_display
+            )
         } else {
             format!(
-                "{}: {} <{}> ({}){}",
-                id, title, url, similarity, tags_display
+                "{}: {} <{}> ({}%) ({}){}",
+                id, title, url, similarity, action_description, tags_display
             )
         };
 
@@ -215,7 +253,7 @@ impl SkimItem for SemanticSearchResult {
 /// Processes bookmarks using the fzf-like selector interface
 ///
 /// Control keys:
-/// - Enter/Ctrl-o: Open the selected bookmark
+/// - Enter/Ctrl-o: Execute default action for the bookmark type (open URI, copy snippet, etc.)
 /// - Ctrl-e: Edit the selected bookmark
 /// - Ctrl-d: Delete the selected bookmark
 #[instrument(skip(bookmarks), level = "debug")]
@@ -245,7 +283,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         options_builder.preview_window("right:70%:wrap".to_string());
     }
 
-    // Add key bindings
+    // Add key bindings - updated help text to reflect default actions
     options_builder.bind(vec![
         "ctrl-o:accept".to_string(),
         "ctrl-y:accept".to_string(),
@@ -326,24 +364,18 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
 
         // Process the selected action based on the key
         match key {
+            // Execute default action for Enter - Use the action service
             Key::Enter => {
-                // Open selected bookmarks
+                // Execute default action for each selected bookmark
                 for bookmark in &selected_bookmarks {
-                    open_bookmark(bookmark)?;
+                    // Use the action service to execute the default action
+                    execute_bookmark_default_action(bookmark)?;
                 }
             }
             Key::Ctrl('y') | Key::Ctrl('o') => {
                 if let Some(bookmark) = selected_bookmarks.first() {
-                    if let Some(id) = bookmark.id {
-                        let service = create_bookmark_service();
-                        service.record_bookmark_access(id)?;
-                    }
-                    // Create interpolation service and render URL
-                    let interpolation_service = create_interpolation_service();
-                    let rendered_url = interpolation_service.render_bookmark_url(bookmark)?;
-
-                    let clipboard_service = create_clipboard_service();
-                    clipboard_service.copy_to_clipboard(rendered_url.as_str())?;
+                    // Copy URL to clipboard with interpolation
+                    copy_bookmark_url_to_clipboard(bookmark)?;
                 }
             }
             Key::Ctrl('e') => {

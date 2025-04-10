@@ -1,13 +1,12 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
-use crate::application::services::factory;
-use crate::application::services::factory::create_bookmark_service;
+use crate::application::services::factory::{create_bookmark_service, create_clipboard_service, create_interpolation_service, create_template_service, create_action_service, create_tag_service};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::fzf::fzf_process;
-use crate::cli::process::{edit_bookmarks, open_bookmark, process};
+use crate::cli::process::{delete_bookmarks, edit_bookmarks, execute_bookmark_default_action, process};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::SortDirection;
 use crate::domain::repositories::repository::BookmarkRepository;
@@ -266,7 +265,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             let ids = get_ids(input.trim().to_string())?;
             for id in ids {
                 if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    open_bookmark(&result.bookmark)?;
+                    execute_bookmark_default_action(&result.bookmark)?;
                 } else {
                     writeln!(stderr, "Bookmark with ID {} not found in results", id)?;
                 }
@@ -280,12 +279,16 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 pub fn open(cli: Cli) -> CliResult<()> {
     if let Commands::Open { ids } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
+        let action_service = create_action_service();
 
         for id in get_ids(ids)? {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
-                // Use open_bookmark instead of direct open_url to ensure access is recorded
-                open_bookmark(&bookmark)?;
-                println!("Opened: {}", bookmark.url);
+                // Use action service to execute default action
+                let action_type = action_service.get_default_action_description(&bookmark);
+                println!("Performing '{}' for: {}", action_type, bookmark.title);
+
+                // Execute default action with access recording handled by action service
+                action_service.execute_default_action(&bookmark)?;
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
@@ -309,8 +312,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
     } = cli.command.unwrap()
     {
         let bookmark_service = create_bookmark_service();
-        let tag_service = factory::create_tag_service();
-        let template_service = factory::create_template_service();
+        let tag_service = create_tag_service();
+        let template_service = create_template_service();
 
         // Convert bookmark_type string to SystemTag
         let system_tag = match bookmark_type.to_lowercase().as_str() {
@@ -471,7 +474,7 @@ pub fn update(cli: Cli) -> CliResult<()> {
     } = cli.command.unwrap()
     {
         let bookmark_service = create_bookmark_service();
-        let tag_service = factory::create_tag_service();
+        let tag_service = create_tag_service();
 
         let id_list = get_ids(ids)?;
 
@@ -545,26 +548,32 @@ pub fn edit(cli: Cli) -> CliResult<()> {
 pub fn show(cli: Cli) -> CliResult<()> {
     if let Commands::Show { ids } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
+        let action_service = create_action_service();
 
         let id_list = get_ids(ids)?;
 
         for id in id_list {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+                // Get the action description
+                let action_description = action_service.get_default_action_description(&bookmark);
+
                 println!(
-                    "{} {} [{}]",
+                    "{} {} [{}] ({})",
                     bookmark
                         .id
                         .map_or("?".to_string(), |id| id.to_string())
                         .blue(),
                     bookmark.title.clone().green(),
-                    bookmark.formatted_tags().yellow()
+                    bookmark.formatted_tags().yellow(),
+                    action_description.cyan()
                 );
-                println!("  URL: {}", bookmark.url);
+                println!("  URL/Content: {}", bookmark.url);
                 println!("  Description: {}", bookmark.description);
                 println!("  Access count: {}", bookmark.access_count);
                 println!("  Created: {}", bookmark.created_at);
                 println!("  Updated: {}", bookmark.updated_at);
                 println!("  Has embedding: {}", bookmark.embedding.is_some());
+                println!("  Default Action: {}", action_description);
                 println!();
             } else {
                 println!("Bookmark with ID {} not found", id);
@@ -578,6 +587,7 @@ pub fn show(cli: Cli) -> CliResult<()> {
 pub fn surprise(cli: Cli) -> CliResult<()> {
     if let Commands::Surprise { n } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
+        let action_service = create_action_service();
 
         // Get random bookmarks
         let count = if n < 1 { 1 } else { n as usize };
@@ -588,12 +598,22 @@ pub fn surprise(cli: Cli) -> CliResult<()> {
             return Ok(());
         }
 
-        println!("Opening {} random bookmarks:", bookmarks.len());
+        println!("Processing {} random bookmarks:", bookmarks.len());
 
         for bookmark in &bookmarks {
-            // Use open_bookmark to ensure access is recorded
-            println!("Opening: {} ({})", bookmark.title, bookmark.url);
-            open_bookmark(bookmark)?;
+            // Get the action description
+            let action_description = action_service.get_default_action_description(bookmark);
+
+            // Show what we're doing
+            println!(
+                "Performing '{}' for: {} ({})",
+                action_description,
+                bookmark.title,
+                bookmark.url
+            );
+
+            // Execute the default action
+            action_service.execute_default_action(bookmark)?;
         }
     }
     Ok(())
@@ -824,8 +844,6 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
     }
     Ok(())
 }
-
-// src/cli/bookmark_commands.rs
 
 #[instrument(skip(cli))]
 pub fn info(cli: Cli) -> CliResult<()> {

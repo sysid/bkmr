@@ -11,8 +11,17 @@ use std::process::Command;
 use std::sync::Arc;
 use tracing::info;
 
+// #[derive(Debug)]
 pub struct MiniJinjaEngine {
     env: Environment<'static>,
+}
+
+impl std::fmt::Debug for MiniJinjaEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MiniJinjaEngine")
+            .field("env", &"<Environment>")
+            .finish()
+    }
 }
 
 impl MiniJinjaEngine {

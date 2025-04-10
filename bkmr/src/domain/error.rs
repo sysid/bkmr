@@ -1,6 +1,7 @@
 // bkmr/src/domain/error.rs
 use crate::domain::bookmark::BookmarkBuilderError;
 use thiserror::Error;
+use crate::domain::interpolation::errors::InterpolationError;
 
 #[derive(Error, Debug)]
 pub enum DomainError {
@@ -43,5 +44,16 @@ pub type DomainResult<T> = Result<T, DomainError>;
 impl From<BookmarkBuilderError> for DomainError {
     fn from(e: BookmarkBuilderError) -> Self {
         DomainError::BookmarkOperationFailed(e.to_string())
+    }
+}
+
+impl From<InterpolationError> for DomainError {
+    fn from(error: InterpolationError) -> Self {
+        match error {
+            InterpolationError::Syntax(msg) => DomainError::Other(format!("Template syntax error: {}", msg)),
+            InterpolationError::Rendering(msg) => DomainError::Other(format!("Template rendering error: {}", msg)),
+            InterpolationError::Context(msg) => DomainError::Other(format!("Template context error: {}", msg)),
+            InterpolationError::Shell(msg) => DomainError::Other(format!("Shell command error: {}", msg)),
+        }
     }
 }

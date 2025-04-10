@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tracing::instrument;
 
 pub struct InterpolationService {
-    interpolation_engine: Arc<dyn InterpolationEngine>,
+    pub(crate) interpolation_engine: Arc<dyn InterpolationEngine>,
 }
 
 impl InterpolationService {

@@ -8,6 +8,10 @@ use crate::application::services::interpolation::InterpolationService;
 use crate::application::services::tag_service::TagService;
 use crate::application::services::template_service::TemplateService;
 use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
+use crate::application::actions::{DefaultAction, SnippetAction, TextAction, UriAction};
+use crate::application::services::action_service::{ActionService, ActionServiceImpl};
+use crate::domain::action::BookmarkAction;
+use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::search::SemanticSearch;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
@@ -83,4 +87,46 @@ pub fn create_interpolation_service() -> InterpolationService {
 
 pub fn create_semantic_search(query: &str, limit: Option<usize>) -> SemanticSearch {
     SemanticSearch::new(query, limit)
+}
+
+// Create an action resolver with default implementations for each system tag
+pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
+    // Create the interpolation engine and clipboard service
+    let interpolation_service = create_interpolation_service();
+    let clipboard_service = create_clipboard_service();
+
+    // Create actions for each system tag
+    let uri_action: Box<dyn BookmarkAction> = Box::new(UriAction::new(
+        Arc::clone(&interpolation_service.interpolation_engine)
+    ));
+
+    let snippet_action: Box<dyn BookmarkAction> = Box::new(SnippetAction::new(
+        Arc::clone(&clipboard_service),
+        Arc::clone(&interpolation_service.interpolation_engine)
+    ));
+
+    let text_action: Box<dyn BookmarkAction> = Box::new(TextAction::new(
+        Arc::clone(&clipboard_service),
+        Arc::clone(&interpolation_service.interpolation_engine)
+    ));
+
+    let default_action: Box<dyn BookmarkAction> = Box::new(DefaultAction::new(
+        Arc::clone(&interpolation_service.interpolation_engine)
+    ));
+
+    // Create and return the resolver
+    Arc::new(SystemTagActionResolver::new(
+        uri_action,
+        snippet_action,
+        text_action,
+        default_action
+    ))
+}
+
+// Create the action service
+pub fn create_action_service() -> Arc<dyn ActionService> {
+    let repository = create_bookmark_repository();
+    let resolver = create_action_resolver();
+
+    Arc::new(ActionServiceImpl::new(resolver, repository))
 }
