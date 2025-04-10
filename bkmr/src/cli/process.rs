@@ -447,6 +447,19 @@ pub fn copy_url_to_clipboard(url: &str) -> CliResult<()> {
     }
 }
 
+#[instrument(level = "debug")]
+pub fn copy_bookmark_url_to_clipboard(bookmark: &Bookmark) -> CliResult<()> {
+    // Get the interpolation service to render the URL with template variables
+    let interpolation_service = create_interpolation_service();
+
+    // Render the URL (apply interpolation)
+    let rendered_url = interpolation_service.render_bookmark_url(bookmark)
+        .map_err(|e| CliError::CommandFailed(format!("Failed to render URL: {}", e)))?;
+
+    // Copy the rendered URL to clipboard
+    copy_url_to_clipboard(&rendered_url)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

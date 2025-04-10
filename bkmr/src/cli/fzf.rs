@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use crate::app_state::AppState;
 use crate::application::services::factory::{
-    create_bookmark_service, create_clipboard_service, create_interpolation_service,
-    create_action_service,
+    create_action_service, create_bookmark_service, create_clipboard_service,
+    create_interpolation_service,
 };
 use crate::cli::error::CliResult;
-use crate::cli::process::{delete_bookmarks, edit_bookmarks, execute_bookmark_default_action};
+use crate::cli::process::{copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks, execute_bookmark_default_action};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crossterm::style::Stylize;
@@ -110,11 +110,12 @@ impl SkimItem for Bookmark {
 
         // Show action description in display
         let text = if fzf_opts.no_url {
-            format!("{}: {} ({}){}",
-                id, title, action_description, tags_display)
+            format!("{}: {} ({}){}", id, title, action_description, tags_display)
         } else {
-            format!("{}: {} <{}> ({}){}",
-                id, title, url, action_description, tags_display)
+            format!(
+                "{}: {} <{}> ({}){}",
+                id, title, url, action_description, tags_display
+            )
         };
 
         Cow::Owned(text)
@@ -232,8 +233,10 @@ impl SkimItem for SemanticSearchResult {
         };
 
         let text = if fzf_opts.no_url {
-            format!("{}: {} ({}%) ({}){}",
-                id, title, similarity, action_description, tags_display)
+            format!(
+                "{}: {} ({}%) ({}){}",
+                id, title, similarity, action_description, tags_display
+            )
         } else {
             format!(
                 "{}: {} <{}> ({}%) ({}){}",
@@ -368,11 +371,11 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                     // Use the action service to execute the default action
                     execute_bookmark_default_action(bookmark)?;
                 }
-            },
+            }
             Key::Ctrl('y') | Key::Ctrl('o') => {
                 if let Some(bookmark) = selected_bookmarks.first() {
-                    // Execute default action for the bookmark
-                    execute_bookmark_default_action(bookmark)?;
+                    // Copy URL to clipboard with interpolation
+                    copy_bookmark_url_to_clipboard(bookmark)?;
                 }
             }
             Key::Ctrl('e') => {
