@@ -199,13 +199,6 @@ impl Bookmark {
         self.url.contains("{{") || self.url.contains("{%")
     }
 
-    /// Check if this bookmark is a snippet
-    pub fn is_snippet(&self) -> bool {
-        self.tags
-            .iter()
-            .any(|tag| tag.is_system_tag_of(SystemTag::Snippet))
-    }
-
     /// Get snippet content (alias for url in case of snippets)
     pub fn snippet_content(&self) -> &str {
         &self.url
@@ -250,10 +243,24 @@ impl Bookmark {
         self.tags.iter().any(|tag| tag.is_system_tag_of(system_tag))
     }
 
+    /// Check if this bookmark is a snippet
+    pub fn is_snippet(&self) -> bool {
+        self.tags
+            .iter()
+            .any(|tag| tag.is_system_tag_of(SystemTag::Snippet))
+    }
+
     /// Check if this bookmark is a URI (no system tags or has URI system tag)
     pub fn is_uri(&self) -> bool {
         // If it has any other system tag, it's not a URI
         !self.is_snippet() && !self.is_system_tag(SystemTag::Text)
+    }
+
+    /// Check if this bookmark is a shell script
+    pub fn is_shell(&self) -> bool {
+        self.tags
+            .iter()
+            .any(|tag| tag.is_system_tag_of(SystemTag::Shell))
     }
 
     /// Get the appropriate content based on bookmark type

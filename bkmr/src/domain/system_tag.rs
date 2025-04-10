@@ -7,14 +7,16 @@ pub enum SystemTag {
     Snippet,
     Text,
     Uri,
+    Shell,
 }
 
 impl SystemTag {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Snippet => "_snip_",
-            Self::Text => "_imported_",
+            Self::Text => "_imported_",  // todo: add a better name
             Self::Uri => "",
+            Self::Shell => "_shell_",
         }
     }
 

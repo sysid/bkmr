@@ -1,15 +1,13 @@
 use std::path::Path;
 // src/application/services/factory.rs
-use std::sync::{Arc, OnceLock};
-use crossterm::style::Stylize;
 use crate::app_state::AppState;
+use crate::application::actions::{DefaultAction, ShellAction, SnippetAction, TextAction, UriAction};
+use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation::InterpolationService;
 use crate::application::services::tag_service::TagService;
 use crate::application::services::template_service::TemplateService;
 use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
-use crate::application::actions::{DefaultAction, SnippetAction, TextAction, UriAction};
-use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::search::SemanticSearch;
@@ -18,6 +16,8 @@ use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
 use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
+use crossterm::style::Stylize;
+use std::sync::{Arc, OnceLock};
 
 // cache repository to avoid multiple migrations
 static REPOSITORY_INSTANCE: OnceLock<Arc<SqliteBookmarkRepository>> = OnceLock::new();
@@ -34,7 +34,9 @@ pub fn create_bookmark_repository() -> Arc<SqliteBookmarkRepository> {
                 eprintln!("{}", "Error: Database not found.".red());
                 eprintln!("No database configured or the configured database does not exist.");
                 eprintln!("Either:");
-                eprintln!("  1. Set BKMR_DB_URL environment variable to point to an existing database");
+                eprintln!(
+                    "  1. Set BKMR_DB_URL environment variable to point to an existing database"
+                );
                 eprintln!("  2. Create a database using 'bkmr create-db <path>'");
                 eprintln!("  3. Ensure the default database at '~/.config/bkmr/bkmr.db' exists");
                 std::process::exit(1);
@@ -96,30 +98,34 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
     let clipboard_service = create_clipboard_service();
 
     // Create actions for each system tag
-    let uri_action: Box<dyn BookmarkAction> = Box::new(UriAction::new(
-        Arc::clone(&interpolation_service.interpolation_engine)
-    ));
+    let uri_action: Box<dyn BookmarkAction> = Box::new(UriAction::new(Arc::clone(
+        &interpolation_service.interpolation_engine,
+    )));
 
     let snippet_action: Box<dyn BookmarkAction> = Box::new(SnippetAction::new(
         Arc::clone(&clipboard_service),
-        Arc::clone(&interpolation_service.interpolation_engine)
+        Arc::clone(&interpolation_service.interpolation_engine),
     ));
 
     let text_action: Box<dyn BookmarkAction> = Box::new(TextAction::new(
         Arc::clone(&clipboard_service),
-        Arc::clone(&interpolation_service.interpolation_engine)
+        Arc::clone(&interpolation_service.interpolation_engine),
     ));
+    let shell_action: Box<dyn BookmarkAction> = Box::new(ShellAction::new(Arc::clone(
+        &interpolation_service.interpolation_engine,
+    )));
 
-    let default_action: Box<dyn BookmarkAction> = Box::new(DefaultAction::new(
-        Arc::clone(&interpolation_service.interpolation_engine)
-    ));
+    let default_action: Box<dyn BookmarkAction> = Box::new(DefaultAction::new(Arc::clone(
+        &interpolation_service.interpolation_engine,
+    )));
 
     // Create and return the resolver
     Arc::new(SystemTagActionResolver::new(
         uri_action,
         snippet_action,
         text_action,
-        default_action
+        shell_action,
+        default_action,
     ))
 }
 

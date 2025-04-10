@@ -1,12 +1,18 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
-use crate::application::services::factory::{create_bookmark_service, create_clipboard_service, create_interpolation_service, create_template_service, create_action_service, create_tag_service};
+use crate::application::services::factory::{
+    create_action_service, create_bookmark_service, create_clipboard_service,
+    create_interpolation_service, create_tag_service, create_template_service,
+};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::fzf::fzf_process;
-use crate::cli::process::{delete_bookmarks, edit_bookmarks, execute_bookmark_default_action, process};
+use crate::cli::process::{
+    delete_bookmarks, edit_bookmarks, execute_bookmark_default_action, process,
+};
+use crate::config::{ConfigSource, Settings};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::SortDirection;
 use crate::domain::repositories::repository::BookmarkRepository;
@@ -28,7 +34,6 @@ use std::path::Path;
 use std::{fs, io};
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::instrument;
-use crate::config::{ConfigSource, Settings};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -319,6 +324,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         let system_tag = match bookmark_type.to_lowercase().as_str() {
             "snip" => SystemTag::Snippet,
             "text" => SystemTag::Text,
+            "shell" => SystemTag::Shell,
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 
@@ -340,8 +346,9 @@ pub fn add(cli: Cli) -> CliResult<()> {
         // Prepare the template - either from clone or new
         let mut template = if let Some(id) = clone_id {
             // Get the bookmark to clone
-            let bookmark = bookmark_service.get_bookmark(id)?
-                .ok_or_else(|| CliError::InvalidInput(format!("No bookmark found with ID {}", id)))?;
+            let bookmark = bookmark_service.get_bookmark(id)?.ok_or_else(|| {
+                CliError::InvalidInput(format!("No bookmark found with ID {}", id))
+            })?;
 
             // Create a template with the bookmark data but without ID
             let mut template = BookmarkTemplate::from_bookmark(&bookmark);
@@ -390,9 +397,9 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
         // Otherwise, open in editor
         // Convert template to a temporary bookmark for editing
-        let temp_bookmark = template.to_bookmark(None).map_err(|e| {
-            CliError::Other(format!("Failed to create temporary bookmark: {}", e))
-        })?;
+        let temp_bookmark = template
+            .to_bookmark(None)
+            .map_err(|e| CliError::Other(format!("Failed to create temporary bookmark: {}", e)))?;
 
         // Open the editor with our prepared template
         match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
@@ -607,9 +614,7 @@ pub fn surprise(cli: Cli) -> CliResult<()> {
             // Show what we're doing
             println!(
                 "Performing '{}' for: {} ({})",
-                action_description,
-                bookmark.title,
-                bookmark.url
+                action_description, bookmark.title, bookmark.url
             );
 
             // Execute the default action
@@ -632,9 +637,14 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
 
                 // Check if we're using default configuration
                 if app_state.settings.config_source == ConfigSource::Default {
-                    eprintln!("{}", "Warning: Using default database path. No configuration found.".yellow());
+                    eprintln!(
+                        "{}",
+                        "Warning: Using default database path. No configuration found.".yellow()
+                    );
                     eprintln!("Default path: {}", configured_path);
-                    eprintln!("Consider creating a configuration file at ~/.config/bkmr/config.toml");
+                    eprintln!(
+                        "Consider creating a configuration file at ~/.config/bkmr/config.toml"
+                    );
                     eprintln!("or setting the BKMR_DB_URL environment variable.");
 
                     // Ask for confirmation when using default configuration
@@ -1010,6 +1020,22 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
             "URL that includes the current username via shell command",
             vec!["dynamic", "shell", "interpolation"],
         ),
+
+        // Shell script (with _shell_ tag)
+        (
+            "#!/bin/bash\n\necho \"Running shell script bookmark...\"\necho \"Current directory: $(pwd)\"\nls -la",
+            "Directory Info Shell Script",
+            "Shell script that shows current directory and lists files",
+            vec!["bash", "script", "shell", "_shell_"],
+        ),
+
+        // Shell script with interpolation
+        (
+            "#!/bin/bash\n\n# Today's date: {{ current_date | strftime(\"%Y-%m-%d\") }}\n\necho \"Report for {{ current_date | strftime(\"%B %d, %Y\") }}\"\necho \"Environment variables:\"\nenv | sort",
+            "Environment Report Shell Script",
+            "Shell script that reports environment variables and the current date",
+            vec!["bash", "environment", "report", "_shell_"],
+        ),
     ];
 
     // Add each entry to the database
@@ -1045,8 +1071,8 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
+    use serial_test::serial;
 
     #[test]
     fn test_get_ids_valid() {
