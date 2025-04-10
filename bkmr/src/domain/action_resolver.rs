@@ -17,6 +17,7 @@ pub struct SystemTagActionResolver {
     uri_action: Box<dyn BookmarkAction>,
     snippet_action: Box<dyn BookmarkAction>,
     text_action: Box<dyn BookmarkAction>,
+    shell_action: Box<dyn BookmarkAction>,
     default_action: Box<dyn BookmarkAction>,
 }
 
@@ -25,12 +26,14 @@ impl SystemTagActionResolver {
         uri_action: Box<dyn BookmarkAction>,
         snippet_action: Box<dyn BookmarkAction>,
         text_action: Box<dyn BookmarkAction>,
+        shell_action: Box<dyn BookmarkAction>,
         default_action: Box<dyn BookmarkAction>,
     ) -> Self {
         Self {
             uri_action,
             snippet_action,
             text_action,
+            shell_action,
             default_action,
         }
     }
@@ -42,6 +45,8 @@ impl ActionResolver for SystemTagActionResolver {
             Box::new(SnippetActionProxy(self.snippet_action.as_ref()))
         } else if bookmark.is_system_tag(SystemTag::Text) {
             Box::new(TextActionProxy(self.text_action.as_ref()))
+        } else if bookmark.is_system_tag(SystemTag::Shell) {  // New condition
+            Box::new(ShellActionProxy(self.shell_action.as_ref()))
         } else if bookmark.is_uri() {
             Box::new(UriActionProxy(self.uri_action.as_ref()))
         } else {
@@ -55,6 +60,8 @@ impl ActionResolver for SystemTagActionResolver {
 struct SnippetActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
 struct TextActionProxy<'a>(&'a dyn BookmarkAction);
+#[derive(Debug)]
+struct ShellActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
 struct UriActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
@@ -71,6 +78,16 @@ impl<'a> BookmarkAction for SnippetActionProxy<'a> {
 }
 
 impl<'a> BookmarkAction for TextActionProxy<'a> {
+    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
+        self.0.execute(bookmark)
+    }
+
+    fn description(&self) -> &'static str {
+        self.0.description()
+    }
+}
+
+impl<'a> BookmarkAction for ShellActionProxy<'a> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }

@@ -83,6 +83,22 @@ impl BookmarkTemplate {
 
                 return template;
             }
+            SystemTag::Shell => {
+                builder
+                    .url("#!/bin/bash\n\n# Your shell script here\necho \"Hello World\"")
+                    .title("New Shell Script")
+                    .comments("Description of the shell script");
+
+                // Build template first to get the tags
+                let mut template = builder.build().unwrap();
+
+                // Add the _shell_ tag
+                if let Ok(tag) = Tag::new(SystemTag::Shell.as_str()) {
+                    template.tags.insert(tag);
+                }
+
+                return template;
+            }
             SystemTag::Uri => {
                 builder
                     .url("https://")
