@@ -6,7 +6,6 @@ use crate::domain::interpolation::interface::InterpolationEngine;
 use markdown::to_html;
 use std::fs::File;
 use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tempfile::Builder;
 use tracing::{debug, instrument};
@@ -41,6 +40,7 @@ impl BookmarkAction for MarkdownAction {
         let html_content = to_html(&rendered_markdown);
 
         // Wrap the HTML content in a proper HTML document with basic styling
+        // Include MathJax for LaTeX rendering
         let full_html = format!(
             r#"<!DOCTYPE html>
 <html>
@@ -89,6 +89,17 @@ impl BookmarkAction for MarkdownAction {
             background-color: #f2f2f2;
         }}
     </style>
+    <!-- MathJax for LaTeX rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+    <script type="text/x-mathjax-config">
+        MathJax.Hub.Config({{
+            tex2jax: {{
+                inlineMath: [['$','$'], ['\\(','\\)']],
+                displayMath: [['$$','$$'], ['\\[','\\]']],
+                processEscapes: true
+            }}
+        }});
+    </script>
 </head>
 <body>
     {}
