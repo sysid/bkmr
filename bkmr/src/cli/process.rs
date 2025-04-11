@@ -5,8 +5,8 @@ use std::io::{self, Write};
 use tracing::{debug, instrument};
 
 use crate::application::services::factory::{
-    create_bookmark_service, create_clipboard_service, create_interpolation_service,
-    create_template_service, create_action_service,
+    create_action_service, create_bookmark_service, create_clipboard_service,
+    create_interpolation_service, create_template_service,
 };
 use crate::cli::display::{show_bookmarks, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
@@ -135,7 +135,10 @@ pub fn execute_bookmark_default_action(bookmark: &Bookmark) -> CliResult<()> {
 
     // Get action description for logging
     let action_description = action_service.get_default_action_description(bookmark);
-    debug!("Executing default action: {} for bookmark: {}", action_description, bookmark.title);
+    debug!(
+        "Executing default action: {} for bookmark: {}",
+        action_description, bookmark.title
+    );
 
     // Execute the default action
     action_service.execute_default_action(bookmark)?;
@@ -146,7 +149,10 @@ pub fn execute_bookmark_default_action(bookmark: &Bookmark) -> CliResult<()> {
 /// Executes default actions for bookmarks by their indices
 #[instrument(skip(bookmarks), level = "debug")]
 fn execute_default_actions_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark]) -> CliResult<()> {
-    debug!("Executing default actions for bookmarks at indices: {:?}", indices);
+    debug!(
+        "Executing default actions for bookmarks at indices: {:?}",
+        indices
+    );
 
     for index in indices {
         match get_bookmark_by_index(index, bookmarks) {
@@ -453,7 +459,8 @@ pub fn copy_bookmark_url_to_clipboard(bookmark: &Bookmark) -> CliResult<()> {
     let interpolation_service = create_interpolation_service();
 
     // Render the URL (apply interpolation)
-    let rendered_url = interpolation_service.render_bookmark_url(bookmark)
+    let rendered_url = interpolation_service
+        .render_bookmark_url(bookmark)
         .map_err(|e| CliError::CommandFailed(format!("Failed to render URL: {}", e)))?;
 
     // Copy the rendered URL to clipboard

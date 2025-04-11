@@ -8,7 +8,10 @@ use crate::application::services::factory::{
     create_interpolation_service,
 };
 use crate::cli::error::CliResult;
-use crate::cli::process::{copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks, execute_bookmark_default_action};
+use crate::cli::process::{
+    copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks,
+    execute_bookmark_default_action,
+};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crossterm::style::Stylize;

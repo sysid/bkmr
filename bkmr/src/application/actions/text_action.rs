@@ -2,8 +2,8 @@
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::services::clipboard::ClipboardService;
 use crate::domain::interpolation::interface::InterpolationEngine;
+use crate::domain::services::clipboard::ClipboardService;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -42,7 +42,8 @@ impl BookmarkAction for TextAction {
         };
 
         // Copy to clipboard
-        self.clipboard_service.copy_to_clipboard(&rendered_content)?;
+        self.clipboard_service
+            .copy_to_clipboard(&rendered_content)?;
 
         Ok(())
     }

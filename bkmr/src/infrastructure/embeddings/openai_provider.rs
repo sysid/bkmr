@@ -84,8 +84,8 @@ impl OpenAiEmbedding {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
     use crate::util::testing::init_test_env;
+    use serial_test::serial;
 
     #[test]
     #[serial]

@@ -102,5 +102,6 @@ values
    ('$HOME/dev/s/public/bkmr/bkmr/tests/resources/bkmr.pptx', 'pptx', ',,', '', 0),
    ('https://example.com/{{ env_USER }}/dashboard', 'Checking jinja', ',,', '', 0),
    ('text with environment varialbe default: {{ env("MY_VAR", "ENV_FALLBACK_VALUE") }}/dashboard', 'env', ',_snip_,', '', 0),
+   ('bkmr/tests/resources/sample_docu.md', 'markdown file', ',_md_,', '', 0),
    ('shell::vim +/"## SqlAlchemy" $HOME/dev/s/public/bkmr/bkmr/tests/resources/sample_docu.md', 'shell open vim', ',,', '', 0)
    ;

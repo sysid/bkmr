@@ -12,8 +12,8 @@ pub mod infrastructure;
 // CLI modules
 pub mod app_state;
 pub mod cli;
-pub mod util;
 pub mod config;
+pub mod util;
 
 #[cfg(test)]
 mod tests {}

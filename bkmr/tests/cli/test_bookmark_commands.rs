@@ -1,4 +1,3 @@
-
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::bookmark_commands::{apply_prefix_tags, parse_tag_string};
 use bkmr::domain::tag::Tag;

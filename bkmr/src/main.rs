@@ -4,6 +4,7 @@ use bkmr::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
 use bkmr::app_state::AppState;
 use bkmr::cli::args::Cli;
 use bkmr::cli::execute_command;
+use bkmr::domain::embedding::Embedder;
 use clap::Parser;
 use crossterm::style::Stylize;
 use std::sync::Arc;
@@ -14,7 +15,6 @@ use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     prelude::*,
 };
-use bkmr::domain::embedding::Embedder;
 
 #[instrument]
 fn main() {

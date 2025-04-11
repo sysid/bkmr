@@ -1,7 +1,9 @@
 use std::path::Path;
 // src/application/services/factory.rs
 use crate::app_state::AppState;
-use crate::application::actions::{DefaultAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction};
+use crate::application::actions::{
+    DefaultAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction,
+};
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation::InterpolationService;
@@ -96,6 +98,7 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
     // Create the interpolation engine and clipboard service
     let interpolation_service = create_interpolation_service();
     let clipboard_service = create_clipboard_service();
+    let repository = create_bookmark_repository();
 
     // Create actions for each system tag
     let uri_action: Box<dyn BookmarkAction> = Box::new(UriAction::new(Arc::clone(
@@ -116,9 +119,14 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
         &interpolation_service.interpolation_engine,
     )));
 
-    let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new(Arc::clone(
-        &interpolation_service.interpolation_engine,
-    )));
+    // Always create MarkdownAction with repository
+    // The action itself will determine whether to update embeddings based on:
+    // 1. OpenAI embeddings being available
+    // 2. The bookmark having embeddable=true
+    let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new_with_repository(
+        Arc::clone(&interpolation_service.interpolation_engine),
+        repository.clone(),
+    ));
 
     let default_action: Box<dyn BookmarkAction> = Box::new(DefaultAction::new(Arc::clone(
         &interpolation_service.interpolation_engine,

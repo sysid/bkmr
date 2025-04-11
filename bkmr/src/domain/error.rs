@@ -50,10 +50,18 @@ impl From<BookmarkBuilderError> for DomainError {
 impl From<InterpolationError> for DomainError {
     fn from(error: InterpolationError) -> Self {
         match error {
-            InterpolationError::Syntax(msg) => DomainError::Other(format!("Template syntax error: {}", msg)),
-            InterpolationError::Rendering(msg) => DomainError::Other(format!("Template rendering error: {}", msg)),
-            InterpolationError::Context(msg) => DomainError::Other(format!("Template context error: {}", msg)),
-            InterpolationError::Shell(msg) => DomainError::Other(format!("Shell command error: {}", msg)),
+            InterpolationError::Syntax(msg) => {
+                DomainError::Other(format!("Template syntax error: {}", msg))
+            }
+            InterpolationError::Rendering(msg) => {
+                DomainError::Other(format!("Template rendering error: {}", msg))
+            }
+            InterpolationError::Context(msg) => {
+                DomainError::Other(format!("Template context error: {}", msg))
+            }
+            InterpolationError::Shell(msg) => {
+                DomainError::Other(format!("Shell command error: {}", msg))
+            }
         }
     }
 }

@@ -32,6 +32,65 @@ pub fn temp_dir() -> PathBuf {
     tempdir.into_path()
 }
 
+/// Checks if the given string is likely a file path rather than a URL or direct markdown
+pub fn is_file_path(content: &str) -> bool {
+    // First trim any whitespace
+    let trimmed = content.trim();
+
+    // Exclude obvious URLs
+    if trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("ftp://")
+        || trimmed.starts_with("file://")
+    {
+        return false;
+    }
+
+    // Check for obvious markdown content (starts with markdown syntax)
+    if trimmed.starts_with('#')
+        || trimmed.starts_with('-')
+        || trimmed.starts_with('*')
+        || trimmed.starts_with('>')
+    {
+        return false;
+    }
+
+    // Check for file path indicators
+    if trimmed.starts_with('/')
+        || trimmed.starts_with('~')
+        || trimmed.starts_with("./")
+        || trimmed.starts_with("../")
+        || trimmed.starts_with("$HOME")
+        || trimmed.starts_with("$")
+    {
+        return true;
+    }
+
+    // Check for file extension
+    if trimmed.contains('.')
+        && !trimmed.contains(' ')
+        && !trimmed.contains('\n')
+        && Path::new(trimmed).extension().is_some()
+    {
+        // Check for known markdown file extensions
+        let extension = Path::new(trimmed)
+            .extension()
+            .unwrap()
+            .to_string_lossy()
+            .to_lowercase();
+        if ["md", "markdown", "txt", "text"].contains(&extension.as_str()) {
+            return true;
+        }
+
+        // If it has forward slashes, it's likely a path
+        if trimmed.contains('/') {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Extract filename from: $HOME/bla/file.md:0
 pub fn extract_filename(input: &str) -> String {
     // Attempt to split the input string by ':' to handle potential line indicators
@@ -50,9 +109,13 @@ pub fn extract_filename(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::interpolation::minijinja_engine::{
+        MiniJinjaEngine, SafeShellExecutor,
+    };
     use std::env;
     use std::fs::{self, File};
     use std::io::Write;
+    use std::sync::Arc;
 
     #[test]
     fn test_abspath_removes_suffix() {
@@ -80,5 +143,27 @@ mod tests {
         let input = "/home/user/docs/report.pdf:0";
         let filename = extract_filename(input);
         assert_eq!(filename, "report.pdf");
+    }
+
+    #[test]
+    fn test_is_file_path_detection() {
+        // Setup
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+
+        // Test cases
+        assert!(is_file_path("/absolute/path/file.md"));
+        assert!(is_file_path("~/relative/to/home.md"));
+        assert!(is_file_path("./relative/path.md"));
+        assert!(is_file_path("../parent/path.md"));
+        assert!(is_file_path("$HOME/documents/file.md"));
+        assert!(is_file_path("file.md")); // Simple filename with extension
+
+        // Not file paths
+        assert!(!is_file_path("# Markdown heading"));
+        assert!(!is_file_path("This is a paragraph of text"));
+        assert!(!is_file_path("https://example.com"));
+        assert!(!is_file_path(" "));
+        assert!(!is_file_path(""));
     }
 }

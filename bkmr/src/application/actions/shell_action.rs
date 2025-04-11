@@ -3,9 +3,9 @@ use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::interpolation::interface::InterpolationEngine;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
-use std::io::{Read, Write};
 use tracing::{debug, instrument};
 
 #[derive(Debug)]
@@ -15,7 +15,9 @@ pub struct ShellAction {
 
 impl ShellAction {
     pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self { interpolation_engine }
+        Self {
+            interpolation_engine,
+        }
     }
 }
 
@@ -39,16 +41,18 @@ impl BookmarkAction for ShellAction {
             .map_err(|e| DomainError::Other(format!("Failed to create temporary file: {}", e)))?;
 
         // Write the script to the temporary file
-        temp_file.write_all(rendered_script.as_bytes())
+        temp_file
+            .write_all(rendered_script.as_bytes())
             .map_err(|e| DomainError::Other(format!("Failed to write to temporary file: {}", e)))?;
 
         // Make the temporary script executable
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let metadata = temp_file.as_file().metadata().map_err(|e| {
-                DomainError::Other(format!("Failed to get file metadata: {}", e))
-            })?;
+            let metadata = temp_file
+                .as_file()
+                .metadata()
+                .map_err(|e| DomainError::Other(format!("Failed to get file metadata: {}", e)))?;
             let mut perms = metadata.permissions();
             perms.set_mode(0o755); // rwx r-x r-x
             std::fs::set_permissions(temp_file.path(), perms).map_err(|e| {
@@ -66,11 +70,13 @@ impl BookmarkAction for ShellAction {
             .map_err(|e| DomainError::Other(format!("Failed to execute shell script: {}", e)))?;
 
         // Print the output to stdout
-        std::io::stdout().write_all(&output.stdout)
+        std::io::stdout()
+            .write_all(&output.stdout)
             .map_err(|e| DomainError::Other(format!("Failed to write stdout: {}", e)))?;
 
         // Print any errors to stderr
-        std::io::stderr().write_all(&output.stderr)
+        std::io::stderr()
+            .write_all(&output.stderr)
             .map_err(|e| DomainError::Other(format!("Failed to write stderr: {}", e)))?;
 
         // Return result based on exit status
@@ -93,7 +99,9 @@ impl BookmarkAction for ShellAction {
 mod tests {
     use super::*;
     use crate::domain::tag::Tag;
-    use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+    use crate::infrastructure::interpolation::minijinja_engine::{
+        MiniJinjaEngine, SafeShellExecutor,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -195,7 +203,10 @@ mod tests {
         // Assert
         assert!(result.is_err(), "Shell action execution should fail");
         if let Err(DomainError::Other(msg)) = result {
-            assert!(msg.contains("non-zero status"), "Error should mention non-zero status");
+            assert!(
+                msg.contains("non-zero status"),
+                "Error should mention non-zero status"
+            );
         } else {
             panic!("Expected DomainError::Other");
         }

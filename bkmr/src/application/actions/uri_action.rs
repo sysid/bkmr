@@ -13,7 +13,9 @@ pub struct UriAction {
 
 impl UriAction {
     pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self { interpolation_engine }
+        Self {
+            interpolation_engine,
+        }
     }
 
     // Helper method to open a URL with proper rendering

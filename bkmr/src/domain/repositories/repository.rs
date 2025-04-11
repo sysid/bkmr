@@ -16,7 +16,7 @@ use std::collections::HashSet;
    Flexibility: Allows switching persistence mechanisms without changing domain code
 */
 /// Repository trait for bookmark persistence operations
-pub trait BookmarkRepository {
+pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// Get a bookmark by its ID
     fn get_by_id(&self, id: i32) -> Result<Option<Bookmark>, DomainError>;
 
