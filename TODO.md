@@ -7,8 +7,6 @@ test coverage and test cases (integration)
 
 json option with embeddings/content_hash
 
-dirs configuration in toml
-
 From trait for errors, simplify/optimize error handling
 
 embedding plugin
@@ -16,13 +14,11 @@ embedding plugin
 docu fzf actions
 
 ## Features
-- markdown text with ankiview visualization
 - rich text with ankiview visualization
-- run payload as script (which shell environment?)
 
 ### Proposals
-- new field 'action': instead of prefix "shell" for action selection
 - SOPS integration
+- https://lib.rs/crates/inlyne
 
 
 

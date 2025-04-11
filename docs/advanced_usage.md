@@ -25,6 +25,66 @@ Prefix filtering enables you to:
 3. **Simplify complex queries**: Combine multiple filtering strategies in shell functions
 4. **Create domain-specific mini-applications**: Build custom tools for different use cases
 
+## Smart Actions in Advanced Workflows
+
+bkmr's content-aware action system can be leveraged in advanced workflows to create powerful automation and knowledge retrieval systems.
+
+### Content Type Filtering with System Tags
+
+System tags like `_snip_`, `_shell_`, `_md_`, and `_imported_` can be used with tag filtering to create type-specific searches:
+
+```bash
+# Find only shell scripts
+bkmr search --tags _shell_ "deployment"
+
+# Find markdown documentation
+bkmr search --tags _md_ "project setup"
+```
+
+### Action-based Workflow Functions
+
+You can create shell functions for specific workflow needs:
+
+```bash
+# Execute shell scripts related to a specific project
+run-project-script() {
+    bkmr search --fzf --tags _shell_,project-"$1"
+}
+
+# View documentation for a technology
+view-docs() {
+    bkmr search --fzf --tags _md_,"$1"
+}
+
+# Get code snippets for a language
+get-snippets() {
+    bkmr search --fzf --tags _snip_,"$1"
+}
+```
+
+### Chaining Actions Together
+
+Create powerful workflows by chaining multiple actions:
+
+```bash
+# Deploy application function
+deploy-app() {
+    # Get database backup script and run it
+    backup_id=$(bkmr search --np --tags _shell_,backup | head -n1)
+    if [[ -n "$backup_id" ]]; then
+        echo "Running database backup..."
+        bkmr open "$backup_id"
+    fi
+    
+    # Get deployment script and run it
+    deploy_id=$(bkmr search --np --tags _shell_,deploy | head -n1)
+    if [[ -n "$deploy_id" ]]; then
+        echo "Running deployment script..."
+        bkmr open "$deploy_id"
+    fi
+}
+```
+
 ## FTS Column Prefix Filtering
 
 bkmr supports column-specific full-text search using the `column:term` syntax. When combined with prefix filtering, this becomes extremely powerful.
@@ -67,47 +127,97 @@ b docker
 b git
 ```
 
-### Example 2: Quick Snippet Creation
+### Example 2: Quick Content Creation by Type
 
 ```bash
-ba() {
+# Quick snippet creation
+bs() {
     bkmr add -e -t snip "$@"
+}
+
+# Quick markdown document creation
+bm() {
+    bkmr add -e -t md "$@"
+}
+
+# Quick shell script creation
+bsh() {
+    bkmr add -e -t shell "$@"
 }
 ```
 
-This function:
-1. Creates a new snippet with `-e` (edit mode)
-2. Automatically tags it with "snip"
-3. Opens your editor to input the snippet content
-
-**Use case**: Quickly save code snippets
-
-```bash
-# Create a new snippet (will open editor)
-ba
-```
+These functions create type-specific content with the appropriate actions.
 
 ### Example 3: Documentation-specific Searches
 
 ```bash
-alias d-="BKMR_DB_URL=$HOME/vimwiki/buku/bm.db bkmr search --Ntags-prefix _snip_,_imported_ --tags-prefix doc"
-alias d-aws="BKMR_DB_URL=$HOME/vimwiki/buku/bm.db bkmr search --fzf --Ntags-prefix _snip_,_imported_ --tags-prefix doc,aws"
+alias d-="BKMR_DB_URL=$HOME/vimwiki/buku/bm.db bkmr search --Ntags-prefix _snip_,_imported_,_shell_,_md_ --tags-prefix doc"
+alias d-aws="BKMR_DB_URL=$HOME/vimwiki/buku/bm.db bkmr search --fzf --Ntags-prefix _snip_,_imported_,_shell_,_md_ --tags-prefix doc,aws"
 ```
 
 These aliases:
 1. Use specific URLs for documentation purposes
-2. Exclude snippets and imported content (only URLs)
+2. Exclude all system-tagged content (only plain URLs)
 3. Include only items tagged with "doc"
 4. For AWS docs, additionally filter for "aws" tag
 
-**Use case**: Maintaining technology or language specific documentation sets
+### Example 4: Dynamic Template Search
 
 ```bash
-# Search all documentation, provide full search syntax
-d-
+# Find templates with dynamic content
+template-search() {
+    bkmr search --fzf "{{ $1 }}"
+}
 
-# Search only AWS documentation with fuzzy finder
-d-aws
+# Usage: template-search "current_date"
+# Finds all bookmarks containing date templates
+```
+
+## Combining Actions and Templates for Development Workflows
+
+### Project Switcher
+
+```bash
+# Creates a project switcher using shell scripts
+create-project-switcher() {
+    bkmr add "#!/bin/bash
+cd {{ env('PROJECTS_DIR', '~/projects') }}/$1
+if [ -f 'package.json' ]; then
+    echo 'Node.js project detected'
+    npm install
+elif [ -f 'requirements.txt' ]; then
+    echo 'Python project detected'
+    python -m venv venv
+    source venv/bin/activate
+    pip install -r requirements.txt
+fi
+echo 'Project $1 ready'" project,setup,automation --type shell
+}
+```
+
+### Environment-Specific Documentation Viewer
+
+```bash
+# Create a documentation viewer that adapts to your environment
+env-docs() {
+    bkmr add "# {{ env('PROJECT_NAME', 'Default') }} Documentation
+
+## Environment: {{ env('ENV', 'development') }}
+
+### Configuration
+- API URL: {{ env('API_URL', 'http://localhost:8000') }}
+- Database: {{ env('DB_NAME', 'local_db') }}
+
+### Setup Instructions
+```bash
+# Clone the repository
+git clone {{ env('REPO_URL', 'https://github.com/example/repo.git') }}
+
+# Install dependencies
+cd {{ env('PROJECT_NAME', 'project') }}
+{{ 'if [ -f package.json ]; then npm install; else pip install -r requirements.txt; fi' | shell }}
+```" documentation,setup --type md
+}
 ```
 
 ## Creating Advanced Search Contexts
@@ -123,6 +233,17 @@ proj-refs() {
 
 # Usage: proj-refs [PROJECT-TAG] [OPTIONAL-SEARCH-TERM]
 # Example: proj-refs frontend "react hooks"
+```
+
+### Language-specific Snippets
+
+```bash
+lang-snippets() {
+    bkmr search --fzf --tags-prefix _snip_ -t "$1" "$2"
+}
+
+# Usage: lang-snippets [LANGUAGE] [OPTIONAL-SEARCH-TERM]
+# Example: lang-snippets python "decorator"
 ```
 
 ## Advanced Filtering Techniques
@@ -157,6 +278,32 @@ bkmr search --descending --limit 10
 bkmr search --ascending --tags needs-review
 ```
 
+## Building a Knowledge Management System
+
+bkmr's combination of tagging, actions, and templates enables building a comprehensive knowledge management system:
+
+### Reference Architecture
+
+1. **URLs**: Web resources and online documentation
+   - Tagged by technology, platform, purpose
+   - Use standard URLs
+
+2. **Snippets**: Reusable code fragments
+   - Tagged by language, purpose, complexity
+   - Use `--type snip` for clipboard action
+
+3. **Shell Scripts**: Automation scripts
+   - Tagged by function, environment, technology
+   - Use `--type shell` for execution action
+
+4. **Markdown Documents**: Comprehensive documentation
+   - Tagged by topic, project, status
+   - Use `--type md` for browser rendering
+
+5. **Templates**: Dynamic content
+   - Tagged by purpose, context
+   - Any content type can use template variables
+
 ### Optimizing Tag Structure
 
 Develop a consistent tagging strategy:
@@ -165,8 +312,7 @@ Develop a consistent tagging strategy:
 2. **Qualities/Properties**: Tags like `tutorial`, `reference`, `example`
 3. **Projects**: Prefix with `project-` like `project-website`, `project-api`
 4. **Status**: Tags like `active`, `archived`, `needs-review`
-
-This structured approach makes prefix filtering even more powerful.
+5. **Content Type**: System tags handle this automatically
 
 ### Balancing Tag Specificity
 
@@ -218,6 +364,7 @@ backup-bkmr() {
 
 If your tag prefixes aren't working as expected:
 - Verify your database contains the expected tags with `bkmr tags`
+- Check if you're using the correct system tags (`_snip_`, `_shell_`, `_md_`, `_imported_`)
 
 ### Debugging Tips
 
@@ -227,8 +374,13 @@ Enable debug output to see what's happening:
 bkmr -d search --tags-prefix project --ntags code
 ```
 
+For action issues:
+```bash
+bkmr -d -d open 123  # Double debug flag for more detailed output
+```
+
 ## Conclusion
 
-By mastering tag prefix filtering and FTS column searches, you can transform bkmr from a simple bookmark manager into a powerful knowledge management system tailored to your specific workflows.
+By mastering tag prefix filtering, content-specific actions, and template interpolation, you can transform bkmr from a simple bookmark manager into a powerful knowledge management system tailored to your specific workflows.
 
-The combination of these features allows you to create specialized search contexts that feel like purpose-built tools, while maintaining a single source of truth for your data.
+The combination of these features allows you to create specialized tools for different development tasks, while maintaining a single source of truth for your technical knowledge.

@@ -12,18 +12,20 @@
 `bkmr` is a blazing-fast, feature-rich command-line tool that extends far beyond traditional bookmark management. Store, organize, find, and interact with:
 
 - Web URLs with automatic metadata extraction
-- Snippets of code or text
+- Code snippets for quick access and reuse
+- Shell commands with execution capabilities
+- Markdown documents with live rendering
+- Plain text with template interpolation
 - Local files and directories
-- Shell commands for automation
-- Documentation with embeddings for semantic search
+- Semantic embeddings for AI-powered search
 
 ## Why bkmr?
 
 - **Lightning-fast**: 20x faster than similar Python tools
-- **Intuitive**: Built for developer workflows with powerful search
-- **Flexible**: Handle any type of content — not just web URLs
+- **Developer-focused**: Integrates seamlessly with your workflow and toolchain
+- **Multifunctional**: Handles any type of content with context-aware actions
 - **Intelligent**: Full-text and semantic search capabilities
-- **Privacy-focused**: Local database, no cloud dependencies
+- **Privacy-focused**: Local database, no cloud dependencies unless enabled
 
 ## Core Features
 
@@ -39,6 +41,12 @@ bkmr add https://example.com tag1,tag2  # title, description, etc will be loaded
 
 # Store code snippets
 bkmr add "SELECT * FROM users WHERE role = 'admin'" sql,snippet --type snip
+
+# Store shell scripts for execution
+bkmr add "#!/bin/bash\necho 'System status:'\ndf -h\nfree -m" sysadmin,utils --type shell
+
+# Store markdown documents with rendering
+bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md
 
 # Execute shell commands via bookmark
 bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,search
@@ -103,36 +111,56 @@ See bkmr in action:
 |---------|-------------|
 | `search` | Search across all content with full-text and tag filtering |
 | `sem-search` | AI-powered semantic search using OpenAI embeddings |
-| `add` | Add new content (URLs, snippets, files, shell commands) |
+| `add` | Add new content (URLs, snippets, files, shell commands, etc.) |
 | `open` | Launch or interact with stored items |
 | `edit` | Modify existing items |
 | `tags` | View and manage your tag taxonomy |
+| `set-embeddable` | Configure items for semantic search |
+
+## Smart Content Actions
+
+`bkmr` intelligently handles different content types with appropriate actions:
+
+| Content Type | Default Action | System Tag |
+|--------------|----------------|------------|
+| URLs | Open in browser | (none) |
+| Snippets | Copy to clipboard | `_snip_` |
+| Shell Scripts | Execute in terminal | `_shell_` |
+| Markdown | Render and view in browser | `_md_` |
+| Text Documents | Copy to clipboard | `_imported_` |
+| Local Files | Open with default application | (none) |
 
 ## Advanced Features
 
 - **Template interpolation**: Use Jinja-style templates in URLs and commands
 - **Content embedding**: Store semantic representations for AI-powered search
-- **Custom actions**: Configure custom behaviors for different content types
+- **Context-aware actions**: Different behaviors based on content type
 - **Multiple output formats**: Terminal display, clipboard, or JSON export
 
 For detailed documentation on advanced features:
 - [Configuration Options](./docs/configuration.md)
 - [Content Types](./docs/content-types.md)
+- [Smart Actions](./docs/smart-actions.md)
 - [Template Interpolation](./docs/template-interpolation.md)
+- [Semantic Search](./docs/semantic-search.md)
 - [Advanced Usage](./docs/advanced_usage.md)
 
-## Workflow Integration
+## Developer Workflow Integration
 
-`bkmr` shines as the central hub for your technical knowledge and daily workflow:
+`bkmr` transforms your terminal into a knowledge hub for development tasks:
 
-1. **Store information once, find it instantly** - Never lose important URLs, commands, or snippets
-2. **Reduce context switching** - Launch applications, files, and commands directly from search
-3. **Build a personal knowledge base** - Accumulate and organize technical references
-4. **Automate repetitive tasks** - Turn complex command sequences into simple bookmarks
+1. **Unified knowledge store** - Access code snippets, documentation, and resources with one command
+2. **Reduced context switching** - Launch applications and execute commands without leaving your workflow
+3. **Smart clipboard management** - Quickly access common snippets without leaving the terminal
+4. **Documentation at your fingertips** - Render markdown and technical notes instantly
+5. **Automation shortcuts** - Turn complex command sequences into reusable bookmarks
 
 ## Upgrading from Previous Versions
 
-If you're upgrading from a previous version, `bkmr` will automatically handle database migration to add support for newer features.
+If you're upgrading from a previous version, `bkmr` will automatically:
+1. Check for necessary database migrations
+2. Create a timestamped backup of your current database
+3. Apply migrations to support newer features
 
 ## Community and Contributions
 
