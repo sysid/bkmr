@@ -84,6 +84,24 @@ The file should be in NDJSON format (one JSON object per line):
 {"id": "doc2.md", "content": "This is the content of document 2."}
 ```
 
+## Markdown File Content Embedding
+
+When working with markdown file references, `bkmr` can automatically embed the file content for semantic search when the file changes:
+
+```bash
+# Add a markdown file reference with embedding enabled
+bkmr --openai add "~/documents/research.md" research,notes --type md
+
+# The content is automatically read, embedded, and a content hash is stored
+```
+
+When you access the bookmark later:
+1. The file is read again
+2. If the content has changed (detected via content hash), a new embedding is generated
+3. The markdown is rendered with the updated content
+
+This ensures your semantic search always uses the latest version of your documents without manual intervention.
+
 ## Developer Workflow Benefits
 
 Semantic search transforms how developers access information:
@@ -92,6 +110,7 @@ Semantic search transforms how developers access information:
 2. **Natural language queries** - Search the way you think, not how you tagged content
 3. **Comprehensive knowledge base** - Build a personal AI-powered documentation system
 4. **Action-ready results** - Results are immediately actionable based on content type
+5. **Up-to-date content** - File content is automatically re-embedded when it changes
 
 ## Technical Details
 
@@ -99,6 +118,7 @@ Semantic search transforms how developers access information:
 - Only portions of bookmarks marked as embeddable are sent to OpenAI for embedding generation
 - Embeddings and content hashes are stored locally in your database
 - Similarity is calculated using cosine similarity between vector representations
+- File content is tracked using content hashes to minimize unnecessary API calls
 
 ## Optimal Content for Embeddings
 
@@ -108,6 +128,7 @@ Not all content types benefit equally from embeddings. Consider enabling embeddi
 - Complex code snippets with explanatory comments
 - Project descriptions and requirements
 - Reference materials and guides
+- Markdown files that change frequently
 
 Content that may not benefit as much:
 - Very short snippets or one-liners

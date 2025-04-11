@@ -43,16 +43,33 @@ bkmr add "shell::find . -name '*.rs' | xargs grep 'fn main'" rust,find
 **System Tag:** `_shell_`
 
 ### Markdown Documents
-Store documentation, notes, or any content using Markdown formatting.
+Store documentation, notes, or any content using Markdown formatting. Markdown can be stored directly or as a reference to a local file.
 
 ```bash
-# Add a markdown document
+# Add a markdown document directly
 bkmr add "# Project Setup\n\n## Requirements\n- Node.js v14+\n- PostgreSQL\n\n## Steps\n1. Clone repo\n2. Run npm install" 
      docs,setup --type md
+
+# Add a reference to a local markdown file
+bkmr add "/path/to/documentation.md" docs,reference --type md
+
+# Add a relative file path
+bkmr add "docs/project/setup.md" docs,reference --type md
+
+# Add with shell variables or tilde expansion
+bkmr add "~/documents/notes.md" notes,personal --type md
+bkmr add "$HOME/documents/notes.md" notes,personal --type md
 ```
 
-**Default Action:** Renders the Markdown to HTML and opens in browser.
+**Default Action:** 
+- For direct markdown content: Renders the Markdown to HTML and opens in browser
+- For file paths: Reads the file content, renders the Markdown to HTML, and opens in browser
+- Supports LaTeX math formulas using MathJax rendering
+
 **System Tag:** `_md_`
+
+**Embedding Support:**
+When using with `--openai` flag, markdown content from files can be automatically embedded for semantic search.
 
 ### Text Documents
 Store plain text content such as notes, documentation, or any textual information.
@@ -105,6 +122,7 @@ Where `TYPE` is one of:
 | Content with shell shebang (`#!/bin/...`) | `shell` |
 | Content starting with Markdown headers (`#`) | `md` |
 | Paths starting with `/` or `~/` | File path |
+| Paths containing `.md` extension | Markdown file |
 
 ## System Tags and Action Resolution
 
@@ -149,7 +167,9 @@ The content-aware system provides several advantages:
 
 ## Content Examples
 
-### Markdown Document Example
+### Markdown Document Examples
+
+#### Direct Markdown Content
 
 ```markdown
 # Project Setup
@@ -165,6 +185,38 @@ The content-aware system provides several advantages:
 
 ## Troubleshooting
 See the [wiki](https://example.com/wiki).
+```
+
+#### Markdown Math Support
+
+Markdown documents with LaTeX math formulas will render properly:
+
+```markdown
+# Binary Classification Metrics
+
+The F1 score is the harmonic mean of precision and recall, giving both metrics equal weight. The formula for the F1 score is:
+
+$$
+F1 = 2 \times \left( \frac{precision \times recall}{precision + recall} \right)
+$$
+
+## Precision
+
+$$
+\text{Precision} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Positives}}
+$$
+
+## Recall
+
+$$
+\text{Recall} = \frac{\text{True Positives (TP)}}{\text{True Positives (TP)} + \text{False Negatives (FN)}}
+$$
+```
+
+#### File Reference 
+
+```
+bkmr add "~/documents/project-notes.md" project,documentation --type md
 ```
 
 ### Shell Script Example
