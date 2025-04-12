@@ -229,7 +229,7 @@ fn print_bookmark_ids(indices: Vec<i32>, bookmarks: &[Bookmark]) -> CliResult<()
     }
 
     if ids.is_empty() {
-        println!("No bookmark IDs found for the specified indices");
+        eprintln!("No bookmark IDs found for the specified indices");
         io::stdout().flush().map_err(CliError::Io)?;
         return Ok(());
     }
@@ -253,13 +253,13 @@ fn print_all_bookmark_ids(bookmarks: &[Bookmark]) -> CliResult<()> {
     let mut ids: Vec<_> = bookmarks.iter().filter_map(|b| b.id).collect();
 
     if ids.is_empty() {
-        println!("No bookmark IDs found");
+        eprintln!("No bookmark IDs found");
         io::stdout().flush().map_err(CliError::Io)?; // todo: check if this is needed
         return Ok(());
     }
 
     // Print the count for verification
-    println!("Found {} bookmark IDs", ids.len());
+    eprintln!("Found {} bookmark IDs", ids.len());
 
     // Sort and print the IDs
     ids.sort();
@@ -307,12 +307,12 @@ pub fn edit_bookmarks(ids: Vec<i32>) -> CliResult<()> {
         if let Ok(Some(bookmark)) = bookmark_service.get_bookmark(*id) {
             bookmarks_to_edit.push(bookmark);
         } else {
-            println!("Bookmark with ID {} not found", id);
+            eprintln!("Bookmark with ID {} not found", id);
         }
     }
 
     if bookmarks_to_edit.is_empty() {
-        println!("No bookmarks found to edit");
+        eprintln!("No bookmarks found to edit");
         return Ok(());
     }
 
@@ -326,7 +326,7 @@ pub fn edit_bookmarks(ids: Vec<i32>) -> CliResult<()> {
 
     // Process each bookmark
     for bookmark in &bookmarks_to_edit {
-        println!(
+        eprintln!(
             "Editing: {} (ID: {})",
             bookmark.title,
             bookmark.id.unwrap_or(0)
@@ -335,7 +335,7 @@ pub fn edit_bookmarks(ids: Vec<i32>) -> CliResult<()> {
         match template_service.edit_bookmark_with_template(Some(bookmark.clone())) {
             Ok((updated_bookmark, was_modified)) => {
                 if !was_modified {
-                    println!("  No changes made, skipping update");
+                    eprintln!("  No changes made, skipping update");
                     continue;
                 }
 
@@ -344,10 +344,10 @@ pub fn edit_bookmarks(ids: Vec<i32>) -> CliResult<()> {
                     // Update existing bookmark
                     match bookmark_service.update_bookmark(updated_bookmark) {
                         Ok(_) => {
-                            println!("  Successfully updated bookmark");
+                            eprintln!("  Successfully updated bookmark");
                             updated_count += 1;
                         }
-                        Err(e) => println!("  Failed to update bookmark: {}", e),
+                        Err(e) => eprintln!("  Failed to update bookmark: {}", e),
                     }
                 } else {
                     // Create new bookmark
@@ -360,18 +360,18 @@ pub fn edit_bookmarks(ids: Vec<i32>) -> CliResult<()> {
                         false, // Don't fetch metadata since we already have everything
                     ) {
                         Ok(_) => {
-                            println!("  Successfully created new bookmark");
+                            eprintln!("  Successfully created new bookmark");
                             updated_count += 1;
                         }
-                        Err(e) => println!("  Failed to create new bookmark: {}", e),
+                        Err(e) => eprintln!("  Failed to create new bookmark: {}", e),
                     }
                 }
             }
-            Err(e) => println!("  Failed to edit bookmark: {}", e),
+            Err(e) => eprintln!("  Failed to edit bookmark: {}", e),
         }
     }
 
-    println!("Updated {} bookmarks", updated_count);
+    eprintln!("Updated {} bookmarks", updated_count);
     Ok(())
 }
 
@@ -408,7 +408,7 @@ pub fn delete_bookmarks(ids: Vec<i32>) -> CliResult<()> {
     }
 
     if bookmarks_to_display.is_empty() {
-        println!("No bookmarks found to delete");
+        eprintln!("No bookmarks found to delete");
         return Ok(());
     }
 
@@ -433,7 +433,7 @@ pub fn delete_bookmarks(ids: Vec<i32>) -> CliResult<()> {
         }
     }
 
-    println!("Deleted {} bookmarks", deleted_count);
+    eprintln!("Deleted {} bookmarks", deleted_count);
     Ok(())
 }
 
@@ -443,7 +443,7 @@ pub fn copy_url_to_clipboard(url: &str) -> CliResult<()> {
 
     match clipboard_service.copy_to_clipboard(url) {
         Ok(_) => {
-            println!("URL copied to clipboard: {}", url);
+            eprintln!("URL copied to clipboard: {}", url);
             Ok(())
         }
         Err(e) => Err(CliError::CommandFailed(format!(

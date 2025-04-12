@@ -17,9 +17,9 @@ pub fn show_tags(cli: Cli) -> CliResult<()> {
                 let related_tags = tag_service.get_related_tags(&parsed_tag)?;
 
                 if related_tags.is_empty() {
-                    println!("No related tags found for '{}'", tag_str.blue());
+                    eprintln!("No related tags found for '{}'", tag_str.blue());
                 } else {
-                    println!("Tags related to '{}':", tag_str.blue());
+                    eprintln!("Tags related to '{}':", tag_str.blue());
 
                     // Sort by count (most frequent first)
                     let mut sorted_tags = related_tags;
@@ -38,9 +38,9 @@ pub fn show_tags(cli: Cli) -> CliResult<()> {
                 let all_tags = tag_service.get_all_tags()?;
 
                 if all_tags.is_empty() {
-                    println!("No tags found");
+                    eprintln!("No tags found");
                 } else {
-                    println!("All tags:");
+                    eprintln!("All tags:");
 
                     // Sort by count (most frequent first)
                     let mut sorted_tags = all_tags;

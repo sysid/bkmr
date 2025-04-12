@@ -262,7 +262,7 @@ impl SkimItem for SemanticSearchResult {
 #[instrument(skip(bookmarks), level = "debug")]
 pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
     if bookmarks.is_empty() {
-        println!("No bookmarks to display");
+        eprintln!("No bookmarks to display");
         return Ok(());
     }
 

@@ -27,7 +27,7 @@ Prefix filtering enables you to:
 
 ## Smart Actions in Advanced Workflows
 
-bkmr's content-aware action system can be leveraged in advanced workflows to create powerful automation and knowledge retrieval systems.
+bkmr's content-aware action system can be leveraged in advanced workflows to create powerful automation.
 
 ### Content Type Filtering with System Tags
 
@@ -70,18 +70,9 @@ Create powerful workflows by chaining multiple actions:
 # Deploy application function
 deploy-app() {
     # Get database backup script and run it
-    backup_id=$(bkmr search --np --tags _shell_,backup | head -n1)
-    if [[ -n "$backup_id" ]]; then
-        echo "Running database backup..."
-        bkmr open "$backup_id"
-    fi
-    
+    bkmr search --np --tags _shell_,backup "script-name"
     # Get deployment script and run it
-    deploy_id=$(bkmr search --np --tags _shell_,deploy | head -n1)
-    if [[ -n "$deploy_id" ]]; then
-        echo "Running deployment script..."
-        bkmr open "$deploy_id"
-    fi
+    bkmr search --np --tags _shell_,deploy "script-name"
 }
 ```
 

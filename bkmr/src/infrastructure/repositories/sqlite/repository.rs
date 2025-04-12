@@ -1231,7 +1231,7 @@ mod tests {
 
         // Initially the table might not exist in a fresh test DB
         // The important thing is that the query executes correctly
-        println!("Schema migrations table exists: {}", exists);
+        eprintln!("Schema migrations table exists: {}", exists);
 
         Ok(())
     }

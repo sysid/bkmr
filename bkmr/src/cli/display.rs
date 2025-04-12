@@ -187,7 +187,7 @@ impl Default for DisplayBookmark {
 /// Display bookmarks with color formatting
 pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
     if bookmarks.is_empty() {
-        println!("No bookmarks to display");
+        eprintln!("No bookmarks to display");
         return;
     }
 

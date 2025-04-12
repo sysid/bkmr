@@ -433,7 +433,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
                     false, // Don't fetch metadata since we've already edited it
                 ) {
                     Ok(bookmark) => {
-                        println!(
+                        eprintln!(
                             "Added bookmark: {} (ID: {})",
                             bookmark.title,
                             bookmark.id.unwrap_or(0)
@@ -467,19 +467,19 @@ pub fn delete(cli: Cli) -> CliResult<()> {
 
         for id in id_list {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
-                println!("Deleting: {} ({})", bookmark.title, bookmark.url);
+                eprintln!("Deleting: {} ({})", bookmark.title, bookmark.url);
 
                 if confirm("Confirm delete?") {
                     match bookmark_service.delete_bookmark(id) {
-                        Ok(true) => println!("Deleted bookmark with ID {}", id),
-                        Ok(false) => println!("Bookmark with ID {} not found", id),
-                        Err(e) => println!("Error deleting bookmark with ID {}: {}", id, e),
+                        Ok(true) => eprintln!("Deleted bookmark with ID {}", id),
+                        Ok(false) => eprintln!("Bookmark with ID {} not found", id),
+                        Err(e) => eprintln!("Error deleting bookmark with ID {}: {}", id, e),
                     }
                 } else {
-                    println!("Deletion cancelled");
+                    eprintln!("Deletion cancelled");
                 }
             } else {
-                println!("Bookmark with ID {} not found", id);
+                eprintln!("Bookmark with ID {} not found", id);
             }
         }
     }
@@ -502,7 +502,7 @@ pub fn update(cli: Cli) -> CliResult<()> {
 
         for id in id_list {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
-                println!("Updating: {} ({})", bookmark.title, bookmark.url);
+                eprintln!("Updating: {} ({})", bookmark.title, bookmark.url);
 
                 if force && tags.is_some() {
                     // Replace all tags
@@ -511,7 +511,7 @@ pub fn update(cli: Cli) -> CliResult<()> {
                     let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
 
                     let updated = bookmark_service.replace_bookmark_tags(id, &tag_set)?;
-                    println!("Tags replaced: {}", updated.formatted_tags());
+                    eprintln!("Tags replaced: {}", updated.formatted_tags());
                 } else {
                     // Add tags if provided
                     if let Some(tag_str) = &tags {
@@ -519,7 +519,7 @@ pub fn update(cli: Cli) -> CliResult<()> {
                         let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
 
                         let updated = bookmark_service.add_tags_to_bookmark(id, &tag_set)?;
-                        println!("Tags added: {}", updated.formatted_tags());
+                        eprintln!("Tags added: {}", updated.formatted_tags());
                     }
 
                     // Remove tags if provided
@@ -528,11 +528,11 @@ pub fn update(cli: Cli) -> CliResult<()> {
                         let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
 
                         let updated = bookmark_service.remove_tags_from_bookmark(id, &tag_set)?;
-                        println!("Tags removed: {}", updated.formatted_tags());
+                        eprintln!("Tags removed: {}", updated.formatted_tags());
                     }
                 }
             } else {
-                println!("Bookmark with ID {} not found", id);
+                eprintln!("Bookmark with ID {} not found", id);
             }
         }
     }
@@ -552,12 +552,12 @@ pub fn edit(cli: Cli) -> CliResult<()> {
             if let Some(bookmark) = bookmark_service.get_bookmark(*id)? {
                 bookmarks_to_edit.push(bookmark);
             } else {
-                println!("Bookmark with ID {} not found", id);
+                eprintln!("Bookmark with ID {} not found", id);
             }
         }
 
         if bookmarks_to_edit.is_empty() {
-            println!("No bookmarks found to edit");
+            eprintln!("No bookmarks found to edit");
             return Ok(());
         }
 
@@ -598,7 +598,7 @@ pub fn show(cli: Cli) -> CliResult<()> {
                 println!("  Default Action: {}", action_description);
                 println!();
             } else {
-                println!("Bookmark with ID {} not found", id);
+                eprintln!("Bookmark with ID {} not found", id);
             }
         }
     }
@@ -616,18 +616,18 @@ pub fn surprise(cli: Cli) -> CliResult<()> {
         let bookmarks = bookmark_service.get_random_bookmarks(count)?;
 
         if bookmarks.is_empty() {
-            println!("No bookmarks found");
+            eprintln!("No bookmarks found");
             return Ok(());
         }
 
-        println!("Processing {} random bookmarks:", bookmarks.len());
+        eprintln!("Processing {} random bookmarks:", bookmarks.len());
 
         for bookmark in &bookmarks {
             // Get the action description
             let action_description = action_service.get_default_action_description(bookmark);
 
             // Show what we're doing
-            println!(
+            eprintln!(
                 "Performing '{}' for: {} ({})",
                 action_description, bookmark.title, bookmark.url
             );
@@ -693,7 +693,7 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
             }
         }
 
-        println!("Creating new database at: {}", db_path);
+        eprintln!("Creating new database at: {}", db_path);
 
         // Create the repository with the new path
         let repository = SqliteBookmarkRepository::from_url(&db_path)?;
@@ -707,13 +707,13 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
         // Clean the bookmark table to ensure we start with an empty database
         repository.empty_bookmark_table()?;
 
-        println!("Database created successfully at: {}", db_path);
+        eprintln!("Database created successfully at: {}", db_path);
 
         // Pre-fill the database with demo entries if requested
         if pre_fill {
-            println!("Pre-filling database with demo entries...");
+            eprintln!("Pre-filling database with demo entries...");
             pre_fill_database(&repository)?;
-            println!("Demo entries added successfully!");
+            eprintln!("Demo entries added successfully!");
         }
     }
     Ok(())
@@ -740,7 +740,7 @@ pub fn set_embeddable(cli: Cli) -> CliResult<()> {
         let embeddable = enable;
         match bookmark_service.set_bookmark_embeddable(id, embeddable) {
             Ok(bookmark) => {
-                println!(
+                eprintln!(
                     "Bookmark '{}' (ID: {}) is now {} for embedding",
                     bookmark.title,
                     bookmark.id.unwrap_or(0),
@@ -772,11 +772,11 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
         let bookmarks = bookmark_service.get_bookmarks_without_embeddings()?;
 
         if bookmarks.is_empty() {
-            println!("No embeddable bookmarks found that need embeddings");
+            eprintln!("No embeddable bookmarks found that need embeddings");
             return Ok(());
         }
 
-        println!(
+        eprintln!(
             "Found {} embeddable bookmarks without embeddings",
             bookmarks.len()
         );
@@ -784,7 +784,7 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
         if dry_run {
             // Just show the bookmarks that would be processed
             for bookmark in &bookmarks {
-                println!(
+                eprintln!(
                     "Would update: {} (ID: {})",
                     bookmark.title,
                     bookmark.id.unwrap_or(0)
@@ -794,14 +794,14 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
             // Process each bookmark
             for bookmark in &bookmarks {
                 if let Some(id) = bookmark.id {
-                    println!("Updating embedding for: {} (ID: {})", bookmark.title, id);
+                    eprintln!("Updating embedding for: {} (ID: {})", bookmark.title, id);
                     match bookmark_service.update_bookmark(bookmark.clone()) {
-                        Ok(_) => println!("  Successfully updated embedding"),
-                        Err(e) => println!("  Failed to update embedding: {}", e),
+                        Ok(_) => eprintln!("  Successfully updated embedding"),
+                        Err(e) => eprintln!("  Failed to update embedding: {}", e),
                     }
                 }
             }
-            println!(
+            eprintln!(
                 "Completed embedding backfill for {} bookmarks",
                 bookmarks.len()
             );
@@ -813,13 +813,13 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
 #[instrument(skip(cli))]
 pub fn load_json(cli: Cli) -> CliResult<()> {
     if let Commands::LoadJson { path, dry_run } = cli.command.unwrap() {
-        println!("Loading bookmarks from JSON array: {}", path);
+        eprintln!("Loading bookmarks from JSON array: {}", path);
 
         let bookmark_service = create_bookmark_service();
 
         if dry_run {
             let count = bookmark_service.load_json_bookmarks(&path, true)?;
-            println!(
+            eprintln!(
                 "Dry run completed - would process {} bookmark entries",
                 count
             );
@@ -828,7 +828,7 @@ pub fn load_json(cli: Cli) -> CliResult<()> {
 
         // Process the bookmarks
         let processed_count = bookmark_service.load_json_bookmarks(&path, false)?;
-        println!(
+        eprintln!(
             "Successfully processed {} bookmark entries",
             processed_count
         );
@@ -852,20 +852,20 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
             ));
         }
 
-        println!("Loading text documents from NDJSON file: {}", path);
-        println!("(Expecting one JSON document per line)");
+        eprintln!("Loading text documents from NDJSON file: {}", path);
+        eprintln!("(Expecting one JSON document per line)");
 
         let bookmark_service = create_bookmark_service();
 
         if dry_run {
             let count = bookmark_service.load_texts(&path, true)?;
-            println!("Dry run completed - would process {} text entries", count);
+            eprintln!("Dry run completed - would process {} text entries", count);
             return Ok(());
         }
 
         // Process the texts
         let processed_count = bookmark_service.load_texts(&path, false)?;
-        println!("Successfully processed {} text entries", processed_count);
+        eprintln!("Successfully processed {} text entries", processed_count);
     }
     Ok(())
 }
@@ -1099,13 +1099,6 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
             "Daily Report Template",
             "Markdown template for daily reports with date interpolation",
             vec!["markdown", "template", "report", "_md_"],
-        ),
-
-        (
-            "https://github.com",
-            "GitHub",
-            "Platform for version control and collaboration",
-            vec!["git", "development", "coding"],
         ),
 
         // Environment variables

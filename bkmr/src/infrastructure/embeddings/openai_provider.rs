@@ -93,7 +93,7 @@ mod tests {
         let _ = init_test_env();
         if env::var("OPENAI_API_KEY").is_err() {
             // exit early if no API key is set
-            println!("OpenAI API_KEY environment variable not set");
+            eprintln!("OpenAI API_KEY environment variable not set");
             return;
         }
 

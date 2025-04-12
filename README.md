@@ -42,8 +42,32 @@ bkmr add https://example.com tag1,tag2  # title, description, etc will be loaded
 # Store code snippets
 bkmr add "SELECT * FROM users WHERE role = 'admin'" sql,snippet --type snip
 
-# Store shell scripts for execution
-bkmr add "#!/bin/bash\necho 'System status:'\ndf -h\nfree -m" sysadmin,utils --type shell
+# Store shell scripts for execution via interactive editor
+bkmr add sysadmin,utils --type shell
+# Bookmark Template
+# Lines starting with '#' are comments and will be ignored.
+# Section markers (---SECTION_NAME---) are required and must not be removed.
+
+---ID---
+
+---URL---
+#!/bin/bash
+echo "Hello World!"
+---TITLE---
+System Status
+---TAGS---
+_shell_
+---COMMENTS---
+Show the system status
+---EMBEDDABLE---
+false
+---END---
+
+# Run the script
+bkmr search -t _shell_ "System Status"
+> Found 1 bookmark: System Status (ID: 22). Executing default action...
+> Hello World!
+
 
 # Store markdown documents with rendering
 bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md

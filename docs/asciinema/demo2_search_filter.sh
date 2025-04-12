@@ -16,8 +16,7 @@ echo "Create pre-filled demo database"
 bkmr create-db --pre-fill /tmp/bkmr/bkmr.db
 clear
 
-echo "Search all except entries with tags _snip_, _imported_"
-bkmr search -N _snip_,_imported_
+bkmr search -N _snip_,_imported_  # Search all except entries with tags _snip_, _imported_
 clear
 
 bkmr search --fzf  # use fuzzy finding
