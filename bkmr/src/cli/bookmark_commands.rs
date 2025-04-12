@@ -184,6 +184,19 @@ fn display_search_results(
     fields: &[DisplayField],
     non_interactive: bool,
 ) -> CliResult<()> {
+    // If there's exactly one result and we're in interactive mode, execute the default action directly
+    if bookmarks.len() == 1 && !non_interactive {
+        let bookmark = &bookmarks[0];
+        writeln!(
+            stderr,
+            "Found 1 bookmark: {} (ID: {}). Executing default action...",
+            bookmark.title.clone().green(),
+            bookmark.id.unwrap_or(0)
+        )?;
+
+        return execute_bookmark_default_action(bookmark);
+    }
+
     // Convert to display bookmarks
     let display_bookmarks: Vec<DisplayBookmark> =
         bookmarks.iter().map(DisplayBookmark::from_domain).collect();
