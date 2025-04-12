@@ -107,6 +107,68 @@ git status
 console.log("Environment: {{ env('NODE_ENV', 'development') }}");
 ```
 
+## Environment Variables with Templates
+
+The `_env_` tag enables powerful environment management with template interpolation:
+
+```bash
+# Create environment variables for development
+bkmr add "# Development environment
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=myapp_dev
+export DB_USER=postgres
+export DB_PASSWORD=postgres
+export API_URL=http://localhost:3000
+export DEBUG=true
+export BUILD_DATE={{ current_date | strftime(\"%Y-%m-%d\") }}
+" development,database --type env
+
+# Create environment variables for production
+bkmr add "# Production environment
+export DB_HOST=db.example.com
+export DB_PORT=5432
+export DB_NAME=myapp_prod
+export DB_USER=app_user
+export DB_PASSWORD={{ env(\"PROD_DB_PASSWORD\", \"default_pwd\") }}
+export API_URL=https://api.example.com
+export DEBUG=false
+export BUILD_DATE={{ current_date | strftime(\"%Y-%m-%d\") }}
+" production,database --type env
+```
+
+### Using Environment Variables
+
+To use environment variables stored in bkmr, you can:
+
+```bash
+# Source the variables directly
+eval "$(bkmr open 123)"
+
+# Or use process substitution
+source <(bkmr open 123)
+
+# Create an alias for quick environment switching
+alias dev-env="eval \$(bkmr search --np -t development,database)"
+alias prod-env="eval \$(bkmr search --np -t production,database)"
+```
+
+### Dynamic Values in Environment Variables
+
+Environment variables can include dynamic content through template interpolation:
+
+```bash
+# Environment variables with dynamic content
+export GIT_BRANCH={{ "git rev-parse --abbrev-ref HEAD" | shell }}
+export GIT_COMMIT={{ "git rev-parse HEAD" | shell }}
+export TIMESTAMP={{ current_date | strftime("%Y%m%d_%H%M%S") }}
+export BUILD_NUMBER={{ env("BUILD_NUMBER", "local") }}
+export USER_NAME={{ "whoami" | shell }}
+```
+
+This approach is similar to how tools like `z.bash` work, allowing you to source environment variables directly from your terminal.
+
+
 ## Conditional Logic in Templates
 
 Use control structures for more complex templates:

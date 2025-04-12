@@ -48,6 +48,9 @@ bkmr add "#!/bin/bash\necho 'System status:'\ndf -h\nfree -m" sysadmin,utils --t
 # Store markdown documents with rendering
 bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md
 
+# Store environment variables for sourcing in a shell
+bkmr add "export DB_USER=dev\nexport DB_PASSWORD=secret\nexport API_KEY=test_key" dev,env --type env
+
 # Execute shell commands via bookmark
 bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,search
 
@@ -121,14 +124,15 @@ See bkmr in action:
 
 `bkmr` intelligently handles different content types with appropriate actions:
 
-| Content Type | Default Action | System Tag |
-|--------------|----------------|------------|
-| URLs | Open in browser | (none) |
-| Snippets | Copy to clipboard | `_snip_` |
-| Shell Scripts | Execute in terminal | `_shell_` |
-| Markdown | Render and view in browser | `_md_` |
-| Text Documents | Copy to clipboard | `_imported_` |
-| Local Files | Open with default application | (none) |
+| Content Type          | Default Action                        | System Tag   |
+|-----------------------|---------------------------------------|--------------|
+| URLs                  | Open in browser                       | (none)       |
+| Snippets              | Copy to clipboard                     | `_snip_`     |
+| Shell Scripts         | Execute in terminal                   | `_shell_`    |
+| Environment Variables | Print to stdout for sourcing in shell | `_env_`      |
+| Markdown              | Render and view in browser            | `_md_`       |
+| Text Documents        | Copy to clipboard                     | `_imported_` |
+| Local Files           | Open with default application         | (none)       |
 
 ## Advanced Features
 

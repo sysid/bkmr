@@ -42,6 +42,20 @@ bkmr add "shell::find . -name '*.rs' | xargs grep 'fn main'" rust,find
 **Default Action:** Executes the script in a shell with proper permissions.
 **System Tag:** `_shell_`
 
+### Environment Variables
+Store environment variables for sourcing in a shell.
+
+```bash
+# Add environment variables
+bkmr add "export DB_USER=dev_user\nexport DB_PASSWORD=dev_pass\nexport API_KEY=test_key" dev,database --type env
+
+# Add with template interpolation
+bkmr add "export DATE_STAMP={{ current_date | strftime(\"%Y%m%d\") }}\nexport USER=$(whoami)" env,dynamic --type env
+```
+
+**Default Action:** Prints to stdout for sourcing in a shell using `eval "$(bkmr open <id>)"` or `source <(bkmr open <id>)`.
+**System Tag:** `_env_`
+
 ### Markdown Documents
 Store documentation, notes, or any content using Markdown formatting. Markdown can be stored directly or as a reference to a local file.
 
@@ -110,6 +124,7 @@ Where `TYPE` is one of:
 - `shell`: Shell scripts for execution
 - `md`: Markdown documents
 - `text`: Plain text content
+- `env`: Environment variables for sourcing
 
 ## Content Type Auto-Detection
 
@@ -123,6 +138,7 @@ Where `TYPE` is one of:
 | Content starting with Markdown headers (`#`) | `md` |
 | Paths starting with `/` or `~/` | File path |
 | Paths containing `.md` extension | Markdown file |
+| Content with multiple `export VAR=value` lines | `env` |
 
 ## System Tags and Action Resolution
 
@@ -132,6 +148,7 @@ Content types are marked with internal system tags, which `bkmr` uses to determi
 2. `_shell_`: Shell scripts are executed in terminal
 3. `_md_`: Markdown is rendered and viewed in browser
 4. `_imported_`: Text documents are copied to clipboard
+5. `_env_`: Environment variables are printed to stdout for sourcing
 
 These system tags are mostly hidden from normal tag operations but can be viewed with detailed display.
 
@@ -154,6 +171,9 @@ bkmr add "# Meeting Notes: {{ current_date | strftime('%B %d, %Y') }}\n\n## Agen
 
 # A shell script with environment variables
 bkmr add "#!/bin/bash\ncd {{ env('PROJECT_DIR', '~/projects') }}\ngit status" git,status --type shell
+
+# Environment variables with dynamic content
+bkmr add "export TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}\nexport GIT_BRANCH={{ \"git branch --show-current\" | shell }}" deploy,env --type env
 ```
 
 ## Benefits for Developer Workflow
@@ -163,9 +183,38 @@ The content-aware system provides several advantages:
 1. **Context-appropriate handling** - Content is processed according to its type
 2. **Workflow acceleration** - Snippets and commands are immediately available
 3. **Documentation on demand** - Markdown renders beautifully when needed
-4. **Unified interface** - All knowledge is accessible through the same commands
+4. **Environment management** - Shell environments can be sourced quickly
+5. **Unified interface** - All knowledge is accessible through the same commands
 
 ## Content Examples
+
+### Environment Variables Example
+
+```bash
+# Development environment variables
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=dev_db
+export DB_USER=dev_user
+export DB_PASSWORD=dev_password
+
+# Set PATH to include project binaries
+export PATH="$HOME/projects/myapp/bin:$PATH"
+
+# Add dynamic timestamp for deployments
+export BUILD_TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}
+
+echo "Development environment loaded"
+```
+
+Usage:
+```bash
+# Source environment variables
+eval "$(bkmr open 123)"
+
+# Or with process substitution
+source <(bkmr open 123)
+```
 
 ### Markdown Document Examples
 

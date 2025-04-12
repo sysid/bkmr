@@ -172,6 +172,193 @@ template-search() {
 # Usage: template-search "current_date"
 # Finds all bookmarks containing date templates
 ```
+## Advanced Environment Variable Management
+
+The `_env_` system tag enables powerful environment management workflows. Here are some advanced usage patterns:
+
+### Project-Specific Environment Switcher
+
+```bash
+# Create a function to switch between project environments
+project-env() {
+    local project=$1
+    local env=${2:-dev}  # Default to dev environment
+    
+    # Search for the right environment bookmark
+    local env_id=$(bkmr search --np --tags-prefix _env_ -t "$project","$env" | head -n1)
+    
+    if [[ -n "$env_id" ]]; then
+        echo "Loading $project $env environment..."
+        eval "$(bkmr open "$env_id")"
+        echo "Environment loaded successfully"
+    else
+        echo "No environment found for $project $env"
+    fi
+}
+
+# Usage: project-env myapp dev
+# Usage: project-env myapp prod
+```
+
+### Chained Environment Loading
+
+You can create a system where environment variables build on each other:
+
+```bash
+# Base environment (common variables)
+bkmr add "export PROJECT_ROOT=\"$HOME/projects/myapp\"
+export PATH=\"\$PROJECT_ROOT/bin:\$PATH\"
+export NODE_ENV=\"development\"
+" base,environment --type env
+
+# Database environment (depends on base)
+bkmr add "# First load base environment
+eval \"\$(bkmr search --np -t base,environment)\"
+
+# Then add database-specific variables
+export DB_HOST=\"localhost\"
+export DB_PORT=\"5432\"
+export DB_NAME=\"myapp_dev\"
+export DB_USER=\"postgres\"
+export DB_PASSWORD=\"postgres\"
+" database,environment --type env
+```
+
+### Dynamic Environment Configuration
+
+Create environment configurations that adapt based on context:
+
+```bash
+# Create dynamic environment variables
+bkmr add "# Dynamic project environment
+export GIT_BRANCH=\"{{ \"git rev-parse --abbrev-ref HEAD\" | shell }}\"
+export IS_MAIN_BRANCH=\"{{ \"test \$(git rev-parse --abbrev-ref HEAD) = 'main'\" | shell }}\"
+export LAST_TAG=\"{{ \"git describe --tags --abbrev=0\" | shell }}\"
+
+# Configure environment based on branch
+if [[ \"\$IS_MAIN_BRANCH\" == \"true\" ]]; then
+  export API_URL=\"https://api.example.com/v1\"
+  export FEATURE_FLAGS=\"stable\"
+else
+  export API_URL=\"https://dev-api.example.com/v1\"
+  export FEATURE_FLAGS=\"experimental\"
+fi
+
+# Set build metadata
+export BUILD_DATE=\"{{ current_date | strftime(\"%Y-%m-%d\") }}\"
+export BUILD_USER=\"{{ \"whoami\" | shell }}\"
+" dynamic,environment --type env
+```
+
+### Environment Management System
+
+Combine these techniques to create a comprehensive environment management system:
+
+```bash
+# Create shell function for environment management
+env-manager() {
+    case "$1" in
+        load)
+            local project=$2
+            local env=${3:-dev}
+            local env_id=$(bkmr search --np --tags-prefix _env_ -t "$project","$env" | head -n1)
+            if [[ -n "$env_id" ]]; then
+                eval "$(bkmr open "$env_id")"
+                echo "Loaded $project $env environment"
+            else
+                echo "No environment found for $project $env"
+                return 1
+            fi
+            ;;
+            
+        save)
+            local project=$2
+            local env=${3:-dev}
+            local description="Environment variables for $project ($env)"
+            
+            # Collect current environment variables
+            local env_vars=$(env | grep -E '^(DB_|API_|APP_|PROJECT_)')
+            
+            if [[ -z "$env_vars" ]]; then
+                echo "No environment variables found to save"
+                return 1
+            fi
+            
+            # Format for bkmr storage
+            local formatted_vars=$(echo "$env_vars" | sed 's/^/export /')
+            
+            # Add timestamp and user information
+            local header="# $project $env environment\n# Saved on $(date)\n# By $(whoami)\n\n"
+            local content="${header}${formatted_vars}"
+            
+            # Save to bkmr
+            bkmr add "$content" "$project","$env",environment --type env
+            echo "Saved current environment as $project $env"
+            ;;
+            
+        list)
+            local project=$2
+            if [[ -n "$project" ]]; then
+                bkmr search -t "$project",environment
+            else
+                bkmr search -t environment
+            fi
+            ;;
+            
+        *)
+            echo "Usage: env-manager [load|save|list] [project] [env]"
+            ;;
+    esac
+}
+
+# Usage examples:
+# env-manager load myapp dev
+# env-manager save myapp prod
+# env-manager list myapp
+```
+
+This function provides a complete environment management system:
+- `load` sources environment variables for a specific project and environment
+- `save` captures current environment variables into a new bookmark
+- `list` displays all available environment configurations
+
+### Integration with Direnv
+
+You can integrate bkmr with direnv for automatic environment loading:
+
+```bash
+# Create a .envrc file that sources bkmr environment variables
+echo 'eval "$(bkmr search --np -t project-name,environment)"' > .envrc
+direnv allow
+```
+
+This approach combines the power of bkmr's environment management with direnv's automatic directory-based activation.
+
+### Cross-Platform Environment Synchronization
+
+Create environment configurations that work across different platforms:
+
+```bash
+# Create platform-adaptive environment variables
+bkmr add "# Cross-platform environment
+# Detect platform
+if [[ \"$(uname)\" == \"Darwin\" ]]; then
+  # macOS specific
+  export PATH=\"/usr/local/bin:/opt/homebrew/bin:\$PATH\"
+  export JAVA_HOME=\"$(/usr/libexec/java_home)\"
+elif [[ \"$(uname)\" == \"Linux\" ]]; then
+  # Linux specific
+  export PATH=\"/usr/local/bin:\$PATH\"
+  export JAVA_HOME=\"/usr/lib/jvm/default-java\"
+fi
+
+# Common variables
+export PROJECT_ROOT=\"{{ env('HOME') }}/projects/myapp\"
+export NODE_ENV=\"development\"
+" cross-platform,environment --type env
+```
+
+This approach ensures consistent environments across different development machines while adapting to platform-specific requirements.
 
 ## Combining Actions and Templates for Development Workflows
 
