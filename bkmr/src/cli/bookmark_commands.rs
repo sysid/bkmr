@@ -910,12 +910,45 @@ pub fn info(cli: Cli) -> CliResult<()> {
             println!("    {} ({})", tag.value(), count);
         }
 
+        // Add system tag statistics
+        println!("\nSystem Tags:");
+        display_system_tag_stats(&repository)?;
+
         // Show schema if requested
         if show_schema {
             println!("\nDatabase Schema:");
             print_db_schema(&repository);
         }
     }
+    Ok(())
+}
+
+fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<()> {
+    // Define known system tags
+    let system_tags = [
+        ("_snip_", "Snippet", "Code snippets that are copied to clipboard"),
+        ("_imported_", "Text", "Imported text documents"),
+        ("_shell_", "Shell", "Shell scripts that are executed"),
+        ("_md_", "Markdown", "Markdown documents that are rendered as HTML"),
+        ("_env_", "Environment", "Environment variables for shell sourcing"),
+    ];
+
+    // Get all bookmarks
+    let bookmarks = repository.get_all()?;
+
+    // Count usage of each system tag
+    for (tag_value, tag_name, description) in &system_tags {
+        let count = bookmarks.iter().filter(|b| {
+            b.tags.iter().any(|t| t.value() == *tag_value)
+        }).count();
+
+        println!("  {} ({}): {} entries - {}",
+            tag_name.cyan(),
+            tag_value.yellow(),
+            count,
+            description);
+    }
+
     Ok(())
 }
 
