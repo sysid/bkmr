@@ -162,7 +162,7 @@ fn execute_default_actions_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark])
                 let action_type = action_service.get_default_action_description(bookmark);
 
                 // Show what we're doing
-                println!(
+                eprintln!(
                     "Executing '{}' for bookmark: {} (ID: {})",
                     action_type,
                     bookmark.title,

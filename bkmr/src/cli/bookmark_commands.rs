@@ -303,7 +303,7 @@ pub fn open(cli: Cli) -> CliResult<()> {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
                 // Use action service to execute default action
                 let action_type = action_service.get_default_action_description(&bookmark);
-                println!("Performing '{}' for: {}", action_type, bookmark.title);
+                eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                 // Execute default action with access recording handled by action service
                 action_service.execute_default_action(&bookmark)?;
@@ -402,7 +402,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
                 !no_web,
             )?;
 
-            println!(
+            eprintln!(
                 "Added bookmark: {} (ID: {})",
                 bookmark.title,
                 bookmark.id.unwrap_or(0)
@@ -420,7 +420,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
             Ok((edited_bookmark, was_modified)) => {
                 if !was_modified {
-                    println!("No changes made in editor. Bookmark not added.");
+                   eprintln!("No changes made in editor. Bookmark not added.");
                     return Ok(());
                 }
 

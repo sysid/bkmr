@@ -417,9 +417,9 @@ fn get_selected_bookmarks(output: &SkimOutput) -> Vec<Bookmark> {
         .collect::<Vec<Bookmark>>();
 
     if !selected_bookmarks.is_empty() {
-        println!("Selected bookmarks:");
+        eprintln!("Selected bookmarks:");
         for bookmark in &selected_bookmarks {
-            println!(" - {}: {}", bookmark.id.unwrap_or(0), bookmark.title);
+            eprintln!(" - {}: {}", bookmark.id.unwrap_or(0), bookmark.title);
         }
     }
 
