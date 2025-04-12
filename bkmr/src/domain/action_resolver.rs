@@ -19,6 +19,7 @@ pub struct SystemTagActionResolver {
     text_action: Box<dyn BookmarkAction>,
     shell_action: Box<dyn BookmarkAction>,
     markdown_action: Box<dyn BookmarkAction>,
+    env_action: Box<dyn BookmarkAction>,
     default_action: Box<dyn BookmarkAction>,
 }
 
@@ -29,6 +30,7 @@ impl SystemTagActionResolver {
         text_action: Box<dyn BookmarkAction>,
         shell_action: Box<dyn BookmarkAction>,
         markdown_action: Box<dyn BookmarkAction>,
+        env_action: Box<dyn BookmarkAction>,
         default_action: Box<dyn BookmarkAction>,
     ) -> Self {
         Self {
@@ -37,6 +39,7 @@ impl SystemTagActionResolver {
             text_action,
             shell_action,
             markdown_action,
+            env_action,
             default_action,
         }
     }
@@ -52,6 +55,8 @@ impl ActionResolver for SystemTagActionResolver {
             Box::new(ShellActionProxy(self.shell_action.as_ref()))
         } else if bookmark.is_system_tag(SystemTag::Markdown) {
             Box::new(MarkdownActionProxy(self.markdown_action.as_ref()))
+        } else if bookmark.is_system_tag(SystemTag::Env) {
+            Box::new(EnvActionProxy(self.env_action.as_ref()))
         } else if bookmark.is_uri() {
             Box::new(UriActionProxy(self.uri_action.as_ref()))
         } else {
@@ -69,6 +74,8 @@ struct TextActionProxy<'a>(&'a dyn BookmarkAction);
 struct ShellActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
 struct MarkdownActionProxy<'a>(&'a dyn BookmarkAction);
+#[derive(Debug)]
+struct EnvActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
 struct UriActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
@@ -105,6 +112,16 @@ impl<'a> BookmarkAction for ShellActionProxy<'a> {
 }
 
 impl<'a> BookmarkAction for MarkdownActionProxy<'a> {
+    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
+        self.0.execute(bookmark)
+    }
+
+    fn description(&self) -> &'static str {
+        self.0.description()
+    }
+}
+
+impl<'a> BookmarkAction for EnvActionProxy<'a> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }

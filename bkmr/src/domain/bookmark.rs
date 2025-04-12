@@ -253,7 +253,11 @@ impl Bookmark {
     /// Check if this bookmark is a URI (no system tags or has URI system tag)
     pub fn is_uri(&self) -> bool {
         // If it has any other system tag, it's not a URI
-        !self.is_snippet() && !self.is_system_tag(SystemTag::Text)
+        !self.is_snippet()
+            && !self.is_system_tag(SystemTag::Text)
+            && !self.is_system_tag(SystemTag::Shell)
+            && !self.is_system_tag(SystemTag::Markdown)
+            && !self.is_system_tag(SystemTag::Env)
     }
 
     /// Check if this bookmark is a shell script
@@ -268,6 +272,13 @@ impl Bookmark {
         self.tags
             .iter()
             .any(|tag| tag.is_system_tag_of(SystemTag::Markdown))
+    }
+
+    /// Check if this bookmark is an environment variables set
+    pub fn is_env(&self) -> bool {
+        self.tags
+            .iter()
+            .any(|tag| tag.is_system_tag_of(SystemTag::Env))
     }
 
     /// Get the appropriate content based on bookmark type

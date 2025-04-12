@@ -1,9 +1,7 @@
 use std::path::Path;
 // src/application/services/factory.rs
 use crate::app_state::AppState;
-use crate::application::actions::{
-    DefaultAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction,
-};
+use crate::application::actions::{DefaultAction, EnvAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction};
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation::InterpolationService;
@@ -128,6 +126,10 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
         repository.clone(),
     ));
 
+    let env_action: Box<dyn BookmarkAction> = Box::new(EnvAction::new(Arc::clone(
+        &interpolation_service.interpolation_engine,
+    )));
+
     let default_action: Box<dyn BookmarkAction> = Box::new(DefaultAction::new(Arc::clone(
         &interpolation_service.interpolation_engine,
     )));
@@ -139,6 +141,7 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
         text_action,
         shell_action,
         markdown_action,
+        env_action,
         default_action,
     ))
 }

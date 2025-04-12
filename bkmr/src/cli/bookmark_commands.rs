@@ -326,6 +326,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
             "text" => SystemTag::Text,
             "shell" => SystemTag::Shell,
             "md" | "markdown" => SystemTag::Markdown,
+            "env" => SystemTag::Env,
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 
@@ -1052,6 +1053,21 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
             "Daily Report Template",
             "Markdown template for daily reports with date interpolation",
             vec!["markdown", "template", "report", "_md_"],
+        ),
+
+        (
+            "https://github.com",
+            "GitHub",
+            "Platform for version control and collaboration",
+            vec!["git", "development", "coding"],
+        ),
+
+        // Environment variables
+        (
+            "# Environment variables for a dev project\nexport PROJECT_ROOT=\"$HOME/projects/myapp\"\nexport DATABASE_URL=\"postgres://localhost/myapp_dev\"\nexport API_KEY=\"dev_key_{{ current_date | strftime(\"%Y%m%d\") }}\"\n\n# Add the project bin to PATH\nexport PATH=\"$PROJECT_ROOT/bin:$PATH\"\n\necho \"Development environment loaded for MyApp\"",
+            "Dev Environment",
+            "Environment variables for the development project",
+            vec!["postgres", "development", "env", "_env_"],
         ),
     ];
 

@@ -115,6 +115,22 @@ impl BookmarkTemplate {
 
                 return template;
             }
+            SystemTag::Env => {
+                builder
+                .url("# Environment variables to be sourced\n# Usage: eval \"$(bkmr open <id>)\" or source <(bkmr open <id>)\n\nexport FOO=bar\nexport BAZ=qux\n\n# You can use interpolation too:\n# export DATE={{ current_date | strftime(\"%Y-%m-%d\") }}")
+                .title("Environment Variables")
+                .comments("Environment variables to be sourced in shell");
+
+                // Build template first to get the tags
+                let mut template = builder.build().unwrap();
+
+                // Add the _env_ tag
+                if let Ok(tag) = Tag::new(SystemTag::Env.as_str()) {
+                    template.tags.insert(tag);
+                }
+
+                return template;
+            }
             SystemTag::Uri => {
                 builder
                     .url("https://")

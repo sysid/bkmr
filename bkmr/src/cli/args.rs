@@ -144,7 +144,7 @@ pub enum Commands {
         #[arg(
             short = 't',
             long = "type",
-            help = "bookmark type (uri, snip, text)",
+            help = "bookmark type (uri, snip, text, shell, md, env)",
             default_value = "uri"
         )]
         bookmark_type: String,
