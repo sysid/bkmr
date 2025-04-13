@@ -58,9 +58,8 @@ test:  ## tests, single-threaded
 run-all: run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search  ## run-all
 
 .PHONY: test-edit-bookmark-with-template
-test-edit-bookmark-with-template:  ## test-edit-bookmark-with-template (file should be updated)
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib application::services::template_service::tests::test_edit_bookmark_with_template -- --exact
-
+test-edit-bookmark-with-template: init  ## test-edit-bookmark-with-template (file should be updated)
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib -- application::services::template_service::tests::test_edit_bookmark_with_template --ignored --nocapture --exact
 
 .PHONY: test-url-details
 test-url-details:  ## test-url-details (charm strang verbose output), expect: "Rust Programming Language", "A language empowering everyone to build reliable and efficient software."

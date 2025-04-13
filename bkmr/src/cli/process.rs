@@ -467,10 +467,77 @@ pub fn copy_bookmark_url_to_clipboard(bookmark: &Bookmark) -> CliResult<()> {
     copy_url_to_clipboard(&rendered_url)
 }
 
+/// Clone a bookmark by ID, opening the editor to modify it before saving
+#[instrument(level = "debug")]
+pub fn clone_bookmark(id: i32) -> CliResult<()> {
+    // Get services needed for cloning
+    let bookmark_service = create_bookmark_service();
+    let template_service = create_template_service();
+
+    // Get the bookmark to clone
+    let bookmark = bookmark_service
+        .get_bookmark(id)?
+        .ok_or_else(|| CliError::InvalidInput(format!("No bookmark found with ID {}", id)))?;
+
+    println!(
+        "Cloning bookmark: {} (ID: {})",
+        bookmark.title,
+        bookmark.id.unwrap_or(0)
+    );
+
+    // Create a template with the bookmark data but WITHOUT ID
+    let mut temp_bookmark = bookmark.clone();
+    // Clear the ID to ensure a new bookmark will be created
+    temp_bookmark.id = None;
+
+    // Open the editor with the prepared template
+    match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
+        Ok((edited_bookmark, was_modified)) => {
+            if !was_modified {
+                println!("No changes made in editor. Bookmark not cloned.");
+                return Ok(());
+            }
+
+            // Add the edited bookmark as a new bookmark
+            match bookmark_service.add_bookmark(
+                &edited_bookmark.url,
+                Some(&edited_bookmark.title),
+                Some(&edited_bookmark.description),
+                Some(&edited_bookmark.tags),
+                false, // Don't fetch metadata since we've already edited it
+            ) {
+                Ok(new_bookmark) => {
+                    println!(
+                        "Added cloned bookmark: {} (ID: {})",
+                        new_bookmark.title,
+                        new_bookmark.id.unwrap_or(0)
+                    );
+                }
+                Err(e) => {
+                    return Err(CliError::CommandFailed(format!(
+                        "Failed to add cloned bookmark: {}",
+                        e
+                    )));
+                }
+            }
+        }
+        Err(e) => {
+            return Err(CliError::CommandFailed(format!(
+                "Failed to edit bookmark: {}",
+                e
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app_state::AppState;
     use crate::domain::tag::Tag;
+    use crate::util::testing::{init_test_env, EnvGuard};
     use serial_test::serial;
     use std::collections::HashSet;
 
@@ -536,4 +603,5 @@ mod tests {
         let bookmark = get_bookmark_by_index(-1, &bookmarks);
         assert!(bookmark.is_none());
     }
+
 }

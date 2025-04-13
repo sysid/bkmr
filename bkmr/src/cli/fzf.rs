@@ -8,10 +8,7 @@ use crate::application::services::factory::{
     create_interpolation_service,
 };
 use crate::cli::error::CliResult;
-use crate::cli::process::{
-    copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks,
-    execute_bookmark_default_action,
-};
+use crate::cli::process::{clone_bookmark, copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks, execute_bookmark_default_action};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crossterm::style::Stylize;
@@ -259,6 +256,7 @@ impl SkimItem for SemanticSearchResult {
 /// - Enter/Ctrl-o: Execute default action for the bookmark type (open URI, copy snippet, etc.)
 /// - Ctrl-e: Edit the selected bookmark
 /// - Ctrl-d: Delete the selected bookmark
+/// - Ctrl-a: Clone the selected bookmark
 #[instrument(skip(bookmarks), level = "debug")]
 pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
     if bookmarks.is_empty() {
@@ -288,6 +286,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
 
     // Add key bindings - updated help text to reflect default actions
     options_builder.bind(vec![
+        "ctrl-a:accept".to_string(),
         "ctrl-o:accept".to_string(),
         "ctrl-y:accept".to_string(),
         "ctrl-e:accept".to_string(),
@@ -388,6 +387,14 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
             Key::Ctrl('d') => {
                 // Delete selected bookmarks
                 delete_bookmarks(ids)?;
+            }
+            Key::Ctrl('a') => {
+                // Clone selected bookmark
+                if let Some(bookmark) = selected_bookmarks.first() {
+                    if let Some(id) = bookmark.id {
+                        clone_bookmark(id)?;
+                    }
+                }
             }
             _ => {
                 debug!("Unhandled key: {:?}", key);

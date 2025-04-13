@@ -15,6 +15,7 @@ docu fzf actions
 
 ## Features
 - rich text with ankiview visualization
+- clone snippet in fzf for new creation
 
 ### Proposals
 - SOPS integration
