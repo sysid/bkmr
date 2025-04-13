@@ -9,7 +9,9 @@
 
 [bkmr reborn](https://sysid.github.io/bkmr-reborn/)
 
-`bkmr` is a blazing-fast, feature-rich command-line tool that extends far beyond traditional bookmark management. Store, organize, find, and interact with:
+`bkmr` is a fast, feature-rich command-line tool that extends far beyond traditional bookmark management.
+
+Store, organize, find, and interact with:
 
 - Web URLs with automatic metadata extraction
 - Code snippets for quick access and reuse
