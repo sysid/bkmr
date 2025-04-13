@@ -60,32 +60,29 @@ impl BookmarkAction for ShellAction {
             })?;
         }
 
-        // Execute the script
+        // Execute the script and capture the output
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
-        let output = Command::new(&shell)
+
+        // Print a header to indicate what's being executed
+        eprintln!("Executing: {}", bookmark.title);
+        eprintln!("---");
+
+        // Execute the command directly with inherited stdio
+        let status = Command::new(&shell)
             .arg(temp_file.path())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
+            .status()
             .map_err(|e| DomainError::Other(format!("Failed to execute shell script: {}", e)))?;
 
-        // Print the output to stdout
-        std::io::stdout()
-            .write_all(&output.stdout)
-            .map_err(|e| DomainError::Other(format!("Failed to write stdout: {}", e)))?;
-
-        // Print any errors to stderr
-        std::io::stderr()
-            .write_all(&output.stderr)
-            .map_err(|e| DomainError::Other(format!("Failed to write stderr: {}", e)))?;
+        // Print a footer after execution
+        eprintln!("---");
 
         // Return result based on exit status
-        if output.status.success() {
+        if status.success() {
             Ok(())
         } else {
             Err(DomainError::Other(format!(
                 "Shell script exited with non-zero status: {:?}",
-                output.status.code()
+                status.code()
             )))
         }
     }

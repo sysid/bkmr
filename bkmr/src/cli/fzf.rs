@@ -1,5 +1,6 @@
 // src/cli/fzf.rs
 
+use std::io::Write;
 use std::sync::Arc;
 
 use crate::app_state::AppState;
@@ -8,7 +9,10 @@ use crate::application::services::factory::{
     create_interpolation_service,
 };
 use crate::cli::error::CliResult;
-use crate::cli::process::{clone_bookmark, copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks, execute_bookmark_default_action};
+use crate::cli::process::{
+    clone_bookmark, copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks,
+    execute_bookmark_default_action,
+};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crossterm::style::Stylize;
@@ -333,7 +337,8 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         // Check if the user pressed ESC - if so, don't process selected items
         if key == Key::ESC {
             debug!("Selection aborted with ESC key");
-            clear_terminal();
+            // clear_terminal();
+            clear_terminal_completely();
             return Ok(());
         }
 
@@ -364,10 +369,14 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
         debug!("Selected bookmark IDs: {:?}", ids);
 
+        // IMPORTANT: Clear the terminal completely BEFORE processing any action
+        clear_terminal_completely();
+
         // Process the selected action based on the key
         match key {
             // Execute default action for Enter - Use the action service
             Key::Enter => {
+                // clear_fzf_artifacts();
                 // Execute default action for each selected bookmark
                 for bookmark in &selected_bookmarks {
                     // Use the action service to execute the default action
@@ -375,20 +384,24 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                 }
             }
             Key::Ctrl('y') | Key::Ctrl('o') => {
+                // clear_fzf_artifacts();
                 if let Some(bookmark) = selected_bookmarks.first() {
                     // Copy URL to clipboard with interpolation
                     copy_bookmark_url_to_clipboard(bookmark)?;
                 }
             }
             Key::Ctrl('e') => {
+                clear_fzf_artifacts();
                 // Edit selected bookmarks
                 edit_bookmarks(ids)?;
             }
             Key::Ctrl('d') => {
+                // clear_fzf_artifacts();
                 // Delete selected bookmarks
                 delete_bookmarks(ids)?;
             }
             Key::Ctrl('a') => {
+                // clear_fzf_artifacts();
                 // Clone selected bookmark
                 if let Some(bookmark) = selected_bookmarks.first() {
                     if let Some(id) = bookmark.id {
@@ -434,11 +447,90 @@ fn get_selected_bookmarks(output: &SkimOutput) -> Vec<Bookmark> {
     selected_bookmarks
 }
 
-/// Clears the terminal screen after an action
+/// Clears the fzf interface from the terminal screen
 fn clear_terminal() {
+    // Try to reset terminal state without completely clearing the screen
     if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
-        if let Err(e) = execute!(stdout, Clear(ClearType::FromCursorDown)) {
-            debug!("Failed to clear terminal: {}", e);
+        // Execute a sequence of terminal operations:
+        // 1. Reset colors to default
+        // 2. Show cursor (in case it was hidden)
+        // 3. Clear from current position to end of screen (preserves any output at the top)
+        if let Err(e) = execute!(
+            stdout,
+            crossterm::style::ResetColor,
+            crossterm::cursor::Show,
+            Clear(ClearType::FromCursorDown)  // this is important !!!
+        ) {
+            debug!("Failed to reset terminal with crossterm: {}", e);
+        }
+
+        // Ensure output is flushed
+        if let Err(e) = stdout.flush() {
+            debug!("Failed to flush terminal: {}", e);
         }
     }
+
+    // Print a single newline to ensure we have a clean prompt
+    println!("");
+}
+
+/// Clears fzf-specific artifacts from the terminal
+/// This is less aggressive than a full clear to preserve command output
+fn clear_fzf_artifacts() {
+    // Gather terminal size information
+    let terminal_size = crossterm::terminal::size().unwrap_or((80, 24));
+    let width = terminal_size.0;
+
+    // Print a sequence of spaces to overwrite the fzf line
+    let spaces = " ".repeat(width as usize);
+
+    // If we can get raw mode, use crossterm to position cursor and clear
+    if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
+        // Move to beginning of line and clear
+        if let Err(e) = execute!(
+            stdout,
+            crossterm::cursor::MoveToColumn(0),
+            crossterm::style::Print(&spaces),
+            crossterm::cursor::MoveToColumn(0)
+        ) {
+            debug!("Failed to clear fzf line: {}", e);
+        }
+
+        // Ensure flush
+        if let Err(e) = stdout.flush() {
+            debug!("Failed to flush terminal: {}", e);
+        }
+    } else {
+        // Fallback: just print a newline
+        println!();
+    }
+}
+
+/// Clear fzf selection UI from the terminal completely
+/// This approach completely resets the terminal state to get rid of all artifacts
+fn clear_terminal_completely() {
+    // Try multiple approaches to ensure terminal is fully reset
+
+    // 1. Use crossterm to attempt a full terminal reset
+    if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
+        // First try to clear everything and reset all attributes
+        let _ = execute!(
+            stdout,
+            Clear(ClearType::All),
+            crossterm::style::ResetColor,
+            crossterm::cursor::MoveTo(0, 0),
+            crossterm::cursor::Show
+        );
+
+        // Make sure changes are flushed
+        let _ = stdout.flush();
+    }
+
+    // 2. As a backup, send ANSI escape codes directly
+    // This sequence: clears screen, moves cursor to home position, and resets attributes
+    print!("\x1B[2J\x1B[H\x1B[0m");
+    std::io::stdout().flush().ok();
+
+    // 3. If all else fails, at least print newlines to push fzf UI off the visible area
+    println!("\n\n\n\n\n\n\n\n");
 }
