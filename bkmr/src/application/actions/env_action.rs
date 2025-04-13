@@ -32,10 +32,17 @@ impl BookmarkAction for EnvAction {
 
         debug!("Printing environment variables to stdout for sourcing");
 
-        // Simply print the content to stdout for sourcing
-        // This allows usage like: eval "$(bkmr open 123)"
-        // or source <(bkmr open 123)
+        // Add a header to indicate what's being printed
+        println!("# Environment variables from: {}", bookmark.title);
+        println!("# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
+            bookmark.id.unwrap_or(0), bookmark.id.unwrap_or(0));
+        println!("# ----- BEGIN ENVIRONMENT VARIABLES -----");
+
+        // Print the content with clean formatting
         println!("{}", rendered_content);
+
+        // Add a footer
+        println!("# ----- END ENVIRONMENT VARIABLES -----");
 
         Ok(())
     }

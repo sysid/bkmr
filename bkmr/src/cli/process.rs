@@ -141,6 +141,7 @@ pub fn execute_bookmark_default_action(bookmark: &Bookmark) -> CliResult<()> {
     );
 
     // Execute the default action
+    // Terminal has already been cleared before this function is called
     action_service.execute_default_action(bookmark)?;
 
     Ok(())
