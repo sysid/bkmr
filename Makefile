@@ -113,7 +113,7 @@ all: clean build install  ## all
 	:
 
 .PHONY: all-fast
-all-fast: clean build-fast install  ## all-fast: no release build
+all-fast: clean build-fast install-debug  ## all-fast: no release build
 	:
 
 .PHONY: generate-ci
@@ -141,19 +141,26 @@ build:  ## build
 build-fast:  ## build-fast
 	pushd $(pkg_src) && cargo build
 
-#.PHONY: install
-#install: uninstall  ## install
-	#@cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)
+.PHONY: install-debug
+install-debug: uninstall  ## install-debug (no release version)
+	@VERSION=$(shell cat VERSION) && \
+		echo "-M- Installing $$VERSION" && \
+		cp -vf bkmr/target/debug/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
+		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
+		~/bin/$(BINARY) completion bash > ~/.bash_completions/bkmr
+
 .PHONY: install
 install: uninstall  ## install
 	@VERSION=$(shell cat VERSION) && \
 		echo "-M- Installing $$VERSION" && \
 		cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
 		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
+		~/bin/$(BINARY) completion bash > ~/.bash_completions/bkmr
 
 .PHONY: uninstall
 uninstall:  ## uninstall
 	-@test -f ~/bin/$(BINARY) && rm -v ~/bin/$(BINARY)
+	rm -vf ~/.bash_completions/bkmr
 
 .PHONY: bump-major
 bump-major:  ## bump-major, tag and push

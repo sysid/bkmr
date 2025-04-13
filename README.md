@@ -11,7 +11,7 @@
 
 `bkmr` is a fast, feature-rich command-line tool that extends far beyond traditional bookmark management.
 
-Store, organize, find, and interact with:
+Store, organize, find, and interact with various content types:
 
 - Web URLs with automatic metadata extraction
 - Code snippets for quick access and reuse
@@ -23,16 +23,16 @@ Store, organize, find, and interact with:
 
 ## Why bkmr?
 
-- **Lightning-fast**: 20x faster than similar Python tools
 - **Developer-focused**: Integrates seamlessly with your workflow and toolchain
-- **Multifunctional**: Handles any type of content with context-aware actions
+- **Multifunctional**: Handles many content types with context-aware actions
 - **Intelligent**: Full-text and semantic search capabilities
 - **Privacy-focused**: Local database, no cloud dependencies unless enabled
+- **Fast**: 20x faster than similar Python tools
 
 ## Core Features
 
 ```bash
-# Quick fuzzy search with interactive selection
+# Quick fuzzy search across your content with interactive selection
 bkmr search --fzf
 
 # Advanced filtering with tags
@@ -87,7 +87,7 @@ bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,se
 bkmr --openai sem-search "containerized application security" --limit 3
 ```
 ### Bookmarks
-<img src="./docs/bkmr4-bookmarks.png" alt="bookmarks" width="600"/>
+<img src="./docs/bkmr4-bookmarks.png" alt="bookmarks" width="800"/>
 
 ### Snippets
 <img src="./docs/bkmr4-fzf-snippets.png" alt="fzf-snippets" width="800"/>
@@ -95,6 +95,8 @@ bkmr --openai sem-search "containerized application security" --limit 3
 ## Demos
 
 See bkmr in action:
+
+- <a href="https://asciinema.org/a/VTsHuw1Ugsbo10EP0tZ3PdpoG?autoplay=1&speed=2&t=3" alt="Overview">Overview</a>
 
 - <a href="https://asciinema.org/a/wpnsTw3Cl7DK2R7jK7WVpp9OR?autoplay=1&speed=2&t=3" alt="Getting Started">Getting Started</a>
 - <a href="https://asciinema.org/a/M97UJMKxw1nxnzO4SaowGZAmb?autoplay=1&speed=2&t=3" alt="Search and Filter">Search and Filter</a>
