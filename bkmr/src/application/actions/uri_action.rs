@@ -4,6 +4,7 @@ use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::interpolation::interface::InterpolationEngine;
 use std::sync::Arc;
+use crossterm::style::Stylize;
 use tracing::{debug, instrument};
 
 #[derive(Debug)]
@@ -26,7 +27,8 @@ impl UriAction {
         if url.starts_with("shell::") {
             // Extract the shell command
             let cmd = url.replace("shell::", "");
-            debug!("Executing shell command: {}", cmd);
+            eprintln!("Executing shell command: {}", cmd);
+            eprintln!("{}", "'shell::' is deprecated. Use SystemTag '_shell_' instead.".yellow());
 
             // Create a child process with inherited stdio
             let mut child = std::process::Command::new("sh")

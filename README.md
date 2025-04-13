@@ -36,13 +36,14 @@ bkmr search --fzf
 # Advanced filtering with tags
 bkmr search -t python,security "authentication"
 
-# Add web URLs with automatic metadata
+# Add web URLs, enrich with metadata automatically
 bkmr add https://example.com tag1,tag2  # title, description, etc will be loaded automatically
 
 # Store code snippets
-bkmr add "SELECT * FROM users WHERE role = 'admin'" sql,snippet --type snip
+bkmr add "SELECT * FROM users WHERE role = 'admin'" sql,snippet --type snip --title "My Sql"
+bkmr search --fzf --fzf-style enhanced -t _snip_  # show interactive selection menu
 
-# Store shell scripts for execution via interactive editor
+# shell scripts, added via interactive editor
 bkmr add sysadmin,utils --type shell
 # Bookmark Template
 # Lines starting with '#' are comments and will be ignored.
@@ -63,23 +64,25 @@ Show the system status
 false
 ---END---
 
-# Run the script
+# Run the script (default action for this content-type is called automatically when search returns excactly one)
 bkmr search -t _shell_ "System Status"
 > Found 1 bookmark: System Status (ID: 22). Executing default action...
 > Hello World!
 
 
-# Store markdown documents with rendering
-bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md
+# Store markdown which will be rendered in the browser
+bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md --title Markdown
+bkmr open <id>  # open it in WEB browser
 
 # Store environment variables for sourcing in a shell
-bkmr add "export DB_USER=dev\nexport DB_PASSWORD=secret\nexport API_KEY=test_key" dev,env --type env
+bkmr add "export DB_USER=dev\nexport DB_PASSWORD=secret\nexport API_KEY=test_key" dev,env --type env --title 'My Environment'
+bkmr search --fzf --fzf-style enhanced -t _env_  # select it for sourcing
 
-# Execute shell commands via bookmark
-bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,search
+# Execute shell commands via bookmark (deprecated, use content-type _shell_ instead)
+bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,search --title 'Search Golang'
 
 # Semantic search with AI
-bkmr --openai sem-search "containerized application security"
+bkmr --openai sem-search "containerized application security" --limit 3
 ```
 ### Bookmarks
 <img src="./docs/bkmr4-bookmarks.png" alt="bookmarks" width="600"/>

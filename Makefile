@@ -112,6 +112,10 @@ BUILDING:  ## ##################################################################
 all: clean build install  ## all
 	:
 
+.PHONY: all-fast
+all-fast: clean build-fast install  ## all-fast: no release build
+	:
+
 .PHONY: generate-ci
 generate-ci:  ## generate-ci
 	maturin generate-ci github --platform macos --platform linux -m bkmr/Cargo.toml
@@ -132,6 +136,10 @@ build-wheel:  ## build-wheel
 .PHONY: build
 build:  ## build
 	pushd $(pkg_src) && cargo build --release
+
+.PHONY: build-fast
+build-fast:  ## build-fast
+	pushd $(pkg_src) && cargo build
 
 #.PHONY: install
 #install: uninstall  ## install

@@ -327,8 +327,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         edit,
         bookmark_type,
         clone_id,
-    } = cli.command.unwrap()
-    {
+    } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
         let tag_service = create_tag_service();
         let template_service = create_template_service();
@@ -367,7 +366,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
             // Create a template with the bookmark data but without ID
             let mut template = BookmarkTemplate::from_bookmark(&bookmark);
-            template.id = None; // Clear ID to treat as new bookmark
+            template.id = None; // Clear ID to ensure a new bookmark will be created
             template
         } else {
             // Create a new template for the specific bookmark type
@@ -376,8 +375,19 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
         // Override with provided values if they exist
         if let Some(url_value) = &url {
-            template.url = url_value.clone();
+            // Process escaped newlines in content when needed
+            let processed_content = if system_tag == SystemTag::Markdown ||
+                                    system_tag == SystemTag::Snippet ||
+                                    system_tag == SystemTag::Text ||
+                                    system_tag == SystemTag::Shell ||
+                                    system_tag == SystemTag::Env {
+                url_value.replace("\\n", "\n")
+            } else {
+                url_value.clone()
+            };
+            template.url = processed_content;
         }
+
         if let Some(title_value) = &title {
             template.title = title_value.clone();
         }
@@ -393,9 +403,21 @@ pub fn add(cli: Cli) -> CliResult<()> {
         // If URL is provided, edit flag is not set, and we're not cloning,
         // use the simple add path without opening editor
         if url.is_some() && !edit && clone_id.is_none() {
-            let url = url.unwrap();
+            let url_value = url.unwrap();
+
+            // Process escaped newlines in content when needed
+            let processed_content = if system_tag == SystemTag::Markdown ||
+                                    system_tag == SystemTag::Snippet ||
+                                    system_tag == SystemTag::Text ||
+                                    system_tag == SystemTag::Shell ||
+                                    system_tag == SystemTag::Env {
+                url_value.replace("\\n", "\n")
+            } else {
+                url_value
+            };
+
             let bookmark = bookmark_service.add_bookmark(
-                &url,
+                &processed_content,
                 title.as_deref(),
                 desc.as_deref(),
                 Some(&tag_set),

@@ -34,6 +34,8 @@ tests fail when ~/.config/bkmr exists and has got wrong config (config tests)
 
 ## Gotcha
 bkmr search grad*  # expands to gradlew if present
+edit with vim does not work when "sourcing" like: source <()>
+skim requires TERM: export TERM=xterm-256color
 
 ## Marketing
 Create technical blog article of how to adreess knowedge management for a software deloper.
