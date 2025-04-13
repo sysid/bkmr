@@ -103,6 +103,7 @@ impl BookmarkTemplate {
                 builder
                 .url("# New Markdown Document\n\n## Introduction\n\nWrite your markdown content here.\n\n## Features\n\n- Lists\n- **Bold text**\n- *Italic text*\n- [Links](https://example.com)\n- Code blocks\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```")
                 .title("New Markdown Document")
+                .embeddable(true)
                 .comments("Description of the markdown document");
 
                 // Build template first to get the tags

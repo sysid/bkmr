@@ -617,6 +617,7 @@ pub fn show(cli: Cli) -> CliResult<()> {
                 println!("  Created: {}", bookmark.created_at);
                 println!("  Updated: {}", bookmark.updated_at);
                 println!("  Has embedding: {}", bookmark.embedding.is_some());
+                println!("  Embeddable: {}", bookmark.embeddable);
                 println!("  Default Action: {}", action_description);
                 println!();
             } else {

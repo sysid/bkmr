@@ -15,7 +15,7 @@ docu fzf actions
 
 ## Features
 - rich text with ankiview visualization
-- clone snippet in fzf for new creation
+- query to view all missing embeddings
 
 ### Proposals
 - SOPS integration

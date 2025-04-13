@@ -528,8 +528,8 @@ fn clear_terminal_completely() {
 
     // 2. As a backup, send ANSI escape codes directly
     // This sequence: clears screen, moves cursor to home position, and resets attributes
-    print!("\x1B[2J\x1B[H\x1B[0m");
-    std::io::stdout().flush().ok();
+    // print!("\x1B[2J\x1B[H\x1B[0m");
+    // std::io::stdout().flush().ok();  // does not work with interactive terminal (source env)
 
     // 3. If all else fails, at least print newlines to push fzf UI off the visible area
     println!("\n\n\n\n\n\n\n\n");
