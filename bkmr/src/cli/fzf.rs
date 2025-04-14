@@ -370,7 +370,8 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         debug!("Selected bookmark IDs: {:?}", ids);
 
         // IMPORTANT: Clear the terminal completely BEFORE processing any action
-        clear_terminal_completely();
+        // clear_terminal_completely();
+        clear_terminal();
 
         // Process the selected action based on the key
         match key {
