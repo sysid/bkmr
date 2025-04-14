@@ -16,6 +16,7 @@ docu fzf actions
 ## Features
 - rich text with ankiview visualization
 - query to view all missing embeddings
+- make prim-key stable
 
 ### Proposals
 - SOPS integration
@@ -29,6 +30,10 @@ sqlite bug: jupy*
 section parsing in edit mode: table like ------------
 
 tests fail when ~/.config/bkmr exists and has got wrong config (config tests)
+
+fix markdown parsing and code highlighting
+
+
 
 
 

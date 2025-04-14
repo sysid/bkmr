@@ -277,6 +277,12 @@ Creating too many specific tags makes it harder to maintain consistency. Strike 
 - Too specific: `python3.9-asyncio-example`, `aws-lambda-python-tutorial`
 - Just right: `python`, `asyncio`, `aws`, `lambda`, `tutorial`
 
+### Bulk Tag Management
+```bash
+# remove tag 'dev' from list of entries, keep only 'doc,java'
+bkmr update -n dev $(bkmr search -t doc,java,dev --np)
+```
+
 ## Extending bkmr
 
 ### Integration with Other Tools

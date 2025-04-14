@@ -532,5 +532,5 @@ fn clear_terminal_completely() {
     // std::io::stdout().flush().ok();  // does not work with interactive terminal (source env)
 
     // 3. If all else fails, at least print newlines to push fzf UI off the visible area
-    println!("\n\n\n\n\n\n\n\n");
+    // println!("\n\n\n\n\n\n\n\n");  // results in cursor jumping
 }
