@@ -155,21 +155,21 @@ impl BookmarkTemplate {
         format!(
             "# Bookmark Template\n\
             # Lines starting with '#' are comments and will be ignored.\n\
-            # Section markers (---SECTION_NAME---) are required and must not be removed.\n\
+            # Section markers (=== SECTION_NAME ===) are required and must not be removed.\n\
             \n\
-            ---ID---\n\
+            === ID ===\n\
             {}\n\
-            ---URL---\n\
+            === URL ===\n\
             {}\n\
-            ---TITLE---\n\
+            === TITLE ===\n\
             {}\n\
-            ---TAGS---\n\
+            === TAGS ===\n\
             {}\n\
-            ---COMMENTS---\n\
+            === COMMENTS ===\n\
             {}\n\
-            ---EMBEDDABLE---\n\
+            === EMBEDDABLE ===\n\
             {}\n\
-            ---END---\n",
+            === END ===\n",
             self.id.map_or("".to_string(), |id| id.to_string()),
             self.url,
             self.title,
@@ -198,6 +198,7 @@ impl BookmarkTemplate {
 
         // Extract URL section
         let binding = String::new();
+        // let url = sections.get("URL").unwrap_or(&binding).trim_matches('\n');
         let url = sections.get("URL").unwrap_or(&binding).trim();
         if url.is_empty() {
             return Err(ApplicationError::Validation(
@@ -283,40 +284,58 @@ impl BookmarkTemplate {
 #[instrument(level = "trace")]
 fn parse_sections(content: &str) -> ApplicationResult<std::collections::HashMap<String, String>> {
     let mut sections = std::collections::HashMap::new();
-    let mut current_section: Option<&str> = None;
-    let mut current_content = String::new();
-    let lines = content.lines();
 
-    for line in lines {
-        // Check if this is a section marker
-        if line.starts_with("---") && line.ends_with("---") {
-            // Extract section name
-            let section_name = line.trim_start_matches("---").trim_end_matches("---");
+    // Use regex to match section markers: === SECTION_NAME ===
+    // The markers must be at the start of a line (^) and must be main section names (ID, URL, etc.)
+    // We restrict it to known section names to avoid matching content that looks like section markers
+    let section_marker_regex = regex::Regex::new(
+        r"(?m)^===\s+(ID|URL|TITLE|TAGS|COMMENTS|EMBEDDABLE|END)\s+===\s*$"
+    ).unwrap();
 
-            // If we were already in a section, save it
-            if let Some(section) = current_section {
-                sections.insert(section.to_string(), current_content);
-                current_content = String::new();
-            }
+    // Find all section markers with their positions
+    let mut markers: Vec<(usize, &str, &str)> = section_marker_regex
+        .captures_iter(content)
+        .map(|cap| {
+            let full_match = cap.get(0).unwrap();
+            let section_name = cap.get(1).unwrap().as_str();
+            (full_match.start(), full_match.as_str(), section_name)
+        })
+        .collect();
 
-            // Set new section (or None if it's the END marker)
-            if section_name == "END" {
-                current_section = None;
-            } else {
-                current_section = Some(section_name);
-            }
-        } else if current_section.is_some() {
-            // Add this line to the current section content
-            if !current_content.is_empty() {
-                current_content.push('\n');
-            }
-            current_content.push_str(line);
+    // Add a virtual end marker at the end of content
+    markers.push((content.len(), "=== VIRTUAL_END ===", "VIRTUAL_END"));
+
+    // Process each section
+    for i in 0..markers.len() - 1 {
+        let (start_pos, marker, section_name) = markers[i];
+        let (next_pos, _, _) = markers[i + 1];
+
+        // Skip END section
+        if section_name == "END" {
+            continue;
         }
-    }
 
-    // Add the final section if we're still in one
-    if let Some(section) = current_section {
-        sections.insert(section.to_string(), current_content);
+        // Calculate the content start position (after the marker)
+        let content_start = start_pos + marker.len();
+
+        // Extract section content
+        if content_start < next_pos {
+            let section_content = &content[content_start..next_pos];
+            // Trim just the leading and trailing newlines, but keep internal formatting
+            // let trimmed = section_content.trim_start_matches('\n');
+            let trimmed = section_content.trim_matches('\n');
+
+            // Check if the section is actually empty
+            if trimmed.is_empty() {
+                sections.insert(section_name.to_string(), String::new());
+            } else {
+                // If not empty, preserve all content including internal newlines
+                sections.insert(section_name.to_string(), trimmed.to_string());
+            }
+        } else {
+            // Empty section
+            sections.insert(section_name.to_string(), String::new());
+        }
     }
 
     Ok(sections)
@@ -333,7 +352,7 @@ mod tests {
     fn test_template_roundtrip() {
         let _ = init_test_env();
 
-        // Create a interpolation
+        // Create a template
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
         tags.insert(Tag::new("example").unwrap());
@@ -370,23 +389,23 @@ mod tests {
 
         let template_str = "\
             # Bookmark Template\n\
-            ---ID---\n\
+            === ID ===\n\
             123\n\
-            ---URL---\n\
+            === URL ===\n\
             https://example.com\n\
-            ---TITLE---\n\
+            === TITLE ===\n\
             Example Site\n\
             \n\
             With empty line\n\
-            ---TAGS---\n\
+            === TAGS ===\n\
             test,example\n\
-            ---COMMENTS---\n\
+            === COMMENTS ===\n\
             This is a comment\n\
             \n\
             with empty lines\n\
             \n\
             in between\n\
-            ---END---\n";
+            === END ===\n";
 
         let parsed = BookmarkTemplate::from_string(template_str).unwrap();
 
@@ -407,17 +426,17 @@ mod tests {
 
         let template_str = "\
             # Bookmark Template\n\
-            ---ID---\n\
+            === ID ===\n\
             \n\
-            ---URL---\n\
+            === URL ===\n\
             https://example.com\n\
-            ---TITLE---\n\
+            === TITLE ===\n\
             Example Site\n\
-            ---TAGS---\n\
+            === TAGS ===\n\
             test\n\
-            ---COMMENTS---\n\
+            === COMMENTS ===\n\
             This is a comment\n\
-            ---END---\n";
+            === END ===\n";
 
         let parsed = BookmarkTemplate::from_string(template_str).unwrap();
 
@@ -432,17 +451,17 @@ mod tests {
 
         let template_str = "\
             # Bookmark Template\n\
-            ---ID---\n\
+            === ID ===\n\
             123\n\
-            ---URL---\n\
+            === URL ===\n\
             https://example.com\n\
-            ---TITLE---\n\
+            === TITLE ===\n\
             Example Site\n\
-            ---TAGS---\n\
+            === TAGS ===\n\
             invalid tag with space\n\
-            ---COMMENTS---\n\
+            === COMMENTS ===\n\
             This is a comment\n\
-            ---END---\n";
+            === END ===\n";
 
         let result = BookmarkTemplate::from_string(template_str);
 
@@ -461,13 +480,13 @@ mod tests {
 
         let template_str = "\
             # Bookmark Template\n\
-            ---ID---\n\
+            === ID ===\n\
             123\n\
-            ---URL---\n\
+            === URL ===\n\
             https://example.com\n\
-            ---TITLE---\n\
+            === TITLE ===\n\
             Example Site\n\
-            ---END---\n"; // Missing TAGS and COMMENTS sections
+            === END ===\n"; // Missing TAGS and COMMENTS sections
 
         let parsed = BookmarkTemplate::from_string(template_str).unwrap();
 
@@ -476,5 +495,179 @@ mod tests {
         assert_eq!(parsed.title, "Example Site");
         assert_eq!(parsed.tags.len(), 0);
         assert_eq!(parsed.comments, "");
+    }
+
+    #[test]
+    #[serial]
+    fn test_complex_markdown_with_dashes() {
+        let _ = init_test_env();
+
+        // Create a template with complex markdown content that includes dashes
+        let template_str = "\
+            # Bookmark Template\n\
+            === ID ===\n\
+            123\n\
+            === URL ===\n\
+            # Markdown with Horizontal Rules\n\
+            \n\
+            This is a paragraph.\n\
+            \n\
+            ---\n\
+            \n\
+            This is another paragraph after a horizontal rule.\n\
+            \n\
+            ## Subheading\n\
+            \n\
+            - List item 1\n\
+            - List item 2\n\
+            - List item with --- dashes\n\
+            \n\
+            ```\n\
+            code block with --- dashes\n\
+            ```\n\
+            === TITLE ===\n\
+            Complex Markdown Test\n\
+            === TAGS ===\n\
+            markdown,test\n\
+            === COMMENTS ===\n\
+            Testing with complex content\n\
+            === END ===\n";
+
+        let parsed = BookmarkTemplate::from_string(template_str).unwrap();
+
+        assert_eq!(parsed.id, Some(123));
+        assert!(parsed.url.contains("---"));
+        assert!(parsed.url.contains("Markdown with Horizontal Rules"));
+        assert_eq!(parsed.title, "Complex Markdown Test");
+        assert_eq!(parsed.tags.len(), 2);
+        assert!(parsed.tags.iter().any(|t| t.value() == "markdown"));
+        assert!(parsed.tags.iter().any(|t| t.value() == "test"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_content_with_section_like_text() {
+        let _ = init_test_env();
+
+        // Create a template with text that might be confused with section markers
+        let template_str = "\
+            # Bookmark Template\n\
+            === ID ===\n\
+            123\n\
+            === URL ===\n\
+            # Document with fake section markers\n\
+            \n\
+            This text has something that looks like === FAKE_SECTION ===\n\
+            But it shouldn't be treated as a section marker.\n\
+            \n\
+            ```\n\
+            === CODE_BLOCK ===\n\
+            This is in a code block\n\
+            ```\n\
+            \n\
+            And here's some more text.\n\
+            === TITLE ===\n\
+            Section Marker Test\n\
+            === TAGS ===\n\
+            test\n\
+            === COMMENTS ===\n\
+            Testing with content that looks like section markers\n\
+            === END ===\n";
+
+        let parsed = BookmarkTemplate::from_string(template_str).unwrap();
+
+        assert_eq!(parsed.id, Some(123));
+        // Verify the content with fake section markers is preserved in the URL field
+        assert!(parsed.url.contains("=== FAKE_SECTION ==="));
+        assert!(parsed.url.contains("CODE_BLOCK"));
+        assert!(parsed.url.contains("This is in a code block"));
+        assert_eq!(parsed.title, "Section Marker Test");
+    }
+
+    #[test]
+    #[serial]
+    fn test_section_marker_at_end_of_file() {
+        let _ = init_test_env();
+
+        // Test with a section marker at the end of the file and no content after it
+        let template_str = "\
+            # Bookmark Template\n\
+            === ID ===\n\
+            123\n\
+            === URL ===\n\
+            https://example.com\n\
+            === TITLE ===\n\
+            End Test\n\
+            === TAGS ===\n\
+            test\n\
+            === COMMENTS ===\n\
+            Testing with END marker\n\
+            === END ===";  // No newline after END marker
+
+        let parsed = BookmarkTemplate::from_string(template_str).unwrap();
+
+        assert_eq!(parsed.id, Some(123));
+        assert_eq!(parsed.url, "https://example.com");
+        assert_eq!(parsed.title, "End Test");
+        assert_eq!(parsed.comments, "Testing with END marker");
+    }
+
+    #[test]
+    #[serial]
+    fn test_empty_sections() {
+        let _ = init_test_env();
+
+        // Test with some empty sections
+        let template_str = "\
+            # Bookmark Template\n\
+            === ID ===\n\
+            123\n\
+            === URL ===\n\
+            https://example.com\n\
+            === TITLE ===\n\
+            \n\
+            === TAGS ===\n\
+            \n\
+            === COMMENTS ===\n\
+            \n\
+            === END ===\n";
+
+        let parsed = BookmarkTemplate::from_string(template_str).unwrap();
+
+        assert_eq!(parsed.id, Some(123));
+        assert_eq!(parsed.url, "https://example.com");
+        assert_eq!(parsed.title, "");
+        assert_eq!(parsed.tags.len(), 0);
+        assert_eq!(parsed.comments, "");
+    }
+
+    #[test]
+    #[serial]
+    fn test_adjacent_sections() {
+        let _ = init_test_env();
+
+        // Test with sections right next to each other
+        let template_str = "\
+            # Bookmark Template\n\
+            === ID ===\n\
+            123\n\
+            === URL ===\n\
+            https://example.com\n\
+            === TITLE ===\n\
+            Adjacent Test\n\
+            === TAGS ===\n\
+            test\n\
+            === COMMENTS ===\n\
+            === EMBEDDABLE ===\n\
+            true\n\
+            === END ===\n";
+
+        let parsed = BookmarkTemplate::from_string(template_str).unwrap();
+
+        assert_eq!(parsed.id, Some(123));
+        assert_eq!(parsed.url, "https://example.com");
+        assert_eq!(parsed.title, "Adjacent Test");
+        assert_eq!(parsed.comments, "");
+        assert!(parsed.embeddable);
     }
 }
