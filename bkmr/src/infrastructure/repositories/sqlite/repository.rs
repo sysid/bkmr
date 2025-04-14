@@ -356,19 +356,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
         // Begin transaction
         conn.transaction::<bool, diesel::result::Error, _>(|conn| {
-            // Delete the bookmark
             let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
-
             if result == 0 {
                 return Ok(false); // No bookmark was deleted
             }
-
-            // Update IDs of remaining bookmarks to maintain sequential IDs
-            sql_query("UPDATE bookmarks SET id = id - 1 WHERE id > ?")
-                .bind::<Integer, _>(id)
-                .execute(conn)?;
-
-            // Return success
             Ok(true)
         })
         .map_err(SqliteRepositoryError::DatabaseError)?;
@@ -815,8 +806,10 @@ mod tests {
         // Directly query all bookmarks to see their state
         let all = repo.get_all()?;
         assert_eq!(all.len(), 2, "Should have 2 bookmarks before deletion");
-        assert_eq!(all[0].id, Some(1), "First bookmark should have ID 11");
-        assert_eq!(all[1].id, Some(2), "Second bookmark should have ID 12");
+
+        // Get the IDs of the bookmarks
+        let id1 = bookmark1.id.unwrap();
+        let id2 = bookmark2.id.unwrap();
 
         // Delete first bookmark
         repo.delete(1)?;
@@ -825,11 +818,11 @@ mod tests {
         let updated = repo.get_all()?;
         assert_eq!(updated.len(), 1, "Should have 1 bookmark after deletion");
 
-        // The remaining bookmark should have ID 1 and be the second bookmark
+        // The remaining bookmark should still have its original ID
         assert_eq!(
             updated[0].id,
-            Some(1),
-            "Remaining bookmark should have ID 1"
+            Some(id2),
+            "Remaining bookmark should keep its original ID"
         );
         assert_eq!(
             updated[0].url, "https://second.com",
@@ -1076,75 +1069,6 @@ mod tests {
     //
     //     Ok(())
     // }
-
-    #[test]
-    #[serial]
-    fn test_database_compaction_after_delete() -> Result<(), DomainError> {
-        let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
-
-        // Create several bookmarks in sequence
-        let mut bm1 = create_test_bookmark("First", "https://first.com", vec!["test"])?;
-        let mut bm2 = create_test_bookmark("Second", "https://second.com", vec!["test"])?;
-        let mut bm3 = create_test_bookmark("Third", "https://third.com", vec!["test"])?;
-        let mut bm4 = create_test_bookmark("Fourth", "https://fourth.com", vec!["test"])?;
-
-        repo.add(&mut bm1)?;
-        repo.add(&mut bm2)?;
-        repo.add(&mut bm3)?;
-        repo.add(&mut bm4)?;
-
-        // Verify IDs are sequential
-        let all_before = repo.get_all()?;
-        let ids_before: Vec<i32> = all_before.iter().filter_map(|b| b.id).collect();
-
-        // Make sure we have at least 4 bookmarks
-        assert!(ids_before.len() >= 4, "Should have at least 4 bookmarks");
-
-        // Delete bookmark with ID 2
-        let id_to_delete = 2;
-        repo.delete(id_to_delete)?;
-
-        // Get all bookmarks again
-        let all_after = repo.get_all()?;
-
-        // Check that IDs have been compacted (no gaps)
-        let ids_after: Vec<i32> = all_after.iter().filter_map(|b| b.id).collect();
-
-        // Should have one fewer bookmark
-        assert_eq!(
-            ids_after.len(),
-            ids_before.len() - 1,
-            "Should have one fewer bookmark"
-        );
-
-        // The IDs should be sequential without gaps
-        for i in 1..=ids_after.len() {
-            assert!(
-                ids_after.contains(&(i as i32)),
-                "Missing ID {} after compaction",
-                i
-            );
-        }
-
-        // Specifically, check that the bookmark that was at ID 3 is now at ID 2
-        let former_id3 = all_before
-            .iter()
-            .find(|b| b.id == Some(3))
-            .map(|b| b.url.to_string());
-
-        let new_id2 = all_after
-            .iter()
-            .find(|b| b.id == Some(2))
-            .map(|b| b.url.to_string());
-
-        assert_eq!(
-            former_id3, new_id2,
-            "Bookmark formerly at ID 3 should now be at ID 2"
-        );
-
-        Ok(())
-    }
 
     #[test]
     #[serial]
