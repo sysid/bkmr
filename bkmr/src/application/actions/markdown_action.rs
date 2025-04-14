@@ -8,7 +8,7 @@ use crate::domain::repositories::repository::BookmarkRepository;
 use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::util::helper::calc_content_hash;
 use crate::util::path::{abspath, is_file_path};
-use markdown::to_html;
+use markdown::{to_html_with_options, Options, ParseOptions};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
@@ -176,57 +176,217 @@ impl BookmarkAction for MarkdownAction {
 
         debug!("Rendering markdown content to HTML");
 
-        // Convert markdown to HTML
-        let html_content = to_html(&rendered_markdown);
+        // Configure markdown options to properly handle tables and other features
+        // let options = Options::default(); // CommonMark
+        let options = Options::gfm(); // GitHub Flavored Markdown
 
-        // Wrap the HTML content in a proper HTML document with basic styling
-        // Include MathJax for LaTeX rendering
+        // Convert markdown to HTML with enhanced options
+        let html_content = to_html_with_options(&rendered_markdown, &options)
+            .map_err(|e| DomainError::Other(format!("Failed to render markdown: {}", e)))?;
+
+        // Wrap the HTML content in a proper HTML document with enhanced styling
         let full_html = format!(
             r#"<!DOCTYPE html>
 <html>
 <head>
     <title>{}</title>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
+        :root {{
+            --background-color: #ffffff;
+            --text-color: #333333;
+            --code-background: #f5f5f5;
+            --blockquote-border: #ddd;
+            --blockquote-color: #666;
+            --link-color: #0366d6;
+            --table-border: #ddd;
+            --table-header-bg: #f2f2f2;
+            --table-row-alt-bg: #f9f9f9;
+            --base-font-size: 16px;
+            --code-font-size: 0.99;
+        }}
+
+        @media (prefers-color-scheme: dark) {{
+            :root {{
+                --background-color: #1e1e1e;
+                --text-color: #e0e0e0;
+                --code-background: #2d2d2d;
+                --blockquote-border: #555;
+                --blockquote-color: #aaa;
+                --link-color: #58a6ff;
+                --table-border: #444;
+                --table-header-bg: #2d2d2d;
+                --table-row-alt-bg: #262626;
+            }}
+        }}
+
         body {{
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             line-height: 1.6;
-            color: #333;
-            max-width: 800px;
+            color: var(--text-color);
+            background-color: var(--background-color);
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
+            font-size: var(--base-font-size);
         }}
+
+        h1, h2, h3, h4, h5, h6 {{
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.25;
+        }}
+
+        h1 {{ font-size: 2em; border-bottom: 1px solid var(--table-border); padding-bottom: 0.3em; }}
+        h2 {{ font-size: 1.5em; border-bottom: 1px solid var(--table-border); padding-bottom: 0.3em; }}
+
+        a {{ color: var(--link-color); text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
+
+        /* Enhanced pre/code styling with syntax highlighting support */
         pre {{
-            background-color: #f5f5f5;
-            padding: 10px;
-            border-radius: 4px;
+            background-color: var(--code-background);
+            padding: 16px;
+            border-radius: 6px;
             overflow-x: auto;
+            margin: 16px 0;
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: var(--code-font-size);
+            line-height: 1.45;
         }}
+
         code {{
-            font-family: Consolas, Monaco, 'Andale Mono', monospace;
-            background-color: #f5f5f5;
-            padding: 2px 4px;
+            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+            background-color: var(--code-background);
+            padding: 0.2em 0.4em;
             border-radius: 3px;
+            font-size: var(--code-font-size);
         }}
+
+        /* Inline code should be slightly larger for better readability */
+        p code, li code, td code {{
+            font-size: calc(var(--code-font-size) * 1.05);
+        }}
+
+        pre code {{
+            padding: 0;
+            background-color: transparent;
+            white-space: pre;
+            word-break: normal;
+            overflow-wrap: normal;
+        }}
+
+        /* Syntax highlighting classes */
+        .hljs-keyword {{ color: #cf222e; }}
+        .hljs-built_in {{ color: #e36209; }}
+        .hljs-type {{ color: #953800; }}
+        .hljs-literal {{ color: #0550ae; }}
+        .hljs-number {{ color: #0550ae; }}
+        .hljs-string {{ color: #0a3069; }}
+        .hljs-comment {{ color: #6e7781; }}
+        .hljs-doctag {{ color: #0550ae; }}
+        .hljs-meta {{ color: #8250df; }}
+        .hljs-function {{ color: #8250df; }}
+
+        @media (prefers-color-scheme: dark) {{
+            .hljs-keyword {{ color: #ff7b72; }}
+            .hljs-built_in {{ color: #ffa657; }}
+            .hljs-type {{ color: #ff7b72; }}
+            .hljs-literal {{ color: #79c0ff; }}
+            .hljs-number {{ color: #79c0ff; }}
+            .hljs-string {{ color: #a5d6ff; }}
+            .hljs-comment {{ color: #8b949e; }}
+            .hljs-doctag {{ color: #79c0ff; }}
+            .hljs-meta {{ color: #d2a8ff; }}
+            .hljs-function {{ color: #d2a8ff; }}
+        }}
+
+        /* Enhanced blockquote styling */
         blockquote {{
             margin: 0;
-            padding-left: 15px;
-            border-left: 4px solid #ddd;
-            color: #666;
+            padding-left: 16px;
+            padding-right: 16px;
+            padding-bottom: 1px;
+            padding-top: 1px;
+            background: rgba(0, 0, 0, 0.05);
+            border-left: 4px solid var(--blockquote-border);
+            color: var(--blockquote-color);
+            margin-bottom: 16px;
         }}
+
+        @media (prefers-color-scheme: dark) {{
+            blockquote {{
+                background: rgba(255, 255, 255, 0.05);
+            }}
+        }}
+
+        /* Enhanced image styling */
         img {{
             max-width: 100%;
+            box-sizing: border-box;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 10px 0;
+            border-radius: 4px;
         }}
+
+        /* Enhanced table styling with explicit font size control */
         table {{
             border-collapse: collapse;
             width: 100%;
+            margin-bottom: 16px;
+            overflow: auto;
+            font-size: 1em; /* Match body font size */
         }}
+
         th, td {{
-            border: 1px solid #ddd;
-            padding: 8px;
+            border: 1px solid var(--table-border);
+            padding: 8px 13px;
+            text-align: left;
+            font-size: 1em; /* Consistent font size */
+            vertical-align: top;
         }}
+
         th {{
-            background-color: #f2f2f2;
+            background-color: var(--table-header-bg);
+            font-weight: 600;
+        }}
+
+        tr {{
+            font-size: 1em; /* Ensure rows maintain consistent font size */
+        }}
+
+        tr:nth-child(even) {{
+            background-color: var(--table-row-alt-bg);
+        }}
+
+        /* Lists styling */
+        ul, ol {{
+            padding-left: 2em;
+            margin-top: 0;
+            margin-bottom: 16px;
+        }}
+
+        li {{
+            margin-top: 0.25em;
+        }}
+
+        /* Task lists */
+        ul.contains-task-list {{
+            list-style-type: none;
+            padding-left: 1em;
+        }}
+
+        .task-list-item {{
+            position: relative;
+            padding-left: 1.5em;
+        }}
+
+        .task-list-item input {{
+            position: absolute;
+            left: 0;
+            top: 0.25em;
         }}
     </style>
     <!-- MathJax for LaTeX rendering -->
@@ -238,6 +398,34 @@ impl BookmarkAction for MarkdownAction {
                 displayMath: [['$$','$$'], ['\\[','\\]']],
                 processEscapes: true
             }}
+        }});
+    </script>
+    <!-- Highlight.js for code syntax highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/rust.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/java.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/typescript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/cpp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/yaml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/sql.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {{
+            document.querySelectorAll('pre code').forEach((block) => {{
+                hljs.highlightBlock(block);
+            }});
+
+            // Add checkbox functionality for task lists
+            document.querySelectorAll('.task-list-item input[type="checkbox"]').forEach(checkbox => {{
+                checkbox.disabled = false;
+                checkbox.addEventListener('change', function() {{
+                    this.parentElement.classList.toggle('completed');
+                }});
+            }});
         }});
     </script>
 </head>
@@ -415,6 +603,96 @@ mod tests {
             url: markdown.to_string(),
             title: "Test Markdown Document".to_string(),
             description: "A test markdown document".to_string(),
+            tags,
+            access_count: 0,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: true,
+        };
+
+        // Execute the action
+        let result = action.execute(&bookmark);
+
+        // In a proper environment this should succeed
+        // In CI it might fail due to no browser
+        if result.is_err() {
+            if let DomainError::Other(msg) = &result.unwrap_err() {
+                // Only consider the test failed if it's not related to browser opening
+                if !msg.contains("Failed to open HTML in browser") {
+                    panic!("Test failed with unexpected error: {}", msg);
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "This test opens a browser which might not be available in CI"]
+    fn test_execute_with_markdown_table() {
+        // Setup
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        let action = MarkdownAction::new(interpolation_engine);
+
+        // Create a test bookmark with markdown table content
+        let markdown = "# Test Table\n\n| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |";
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+
+        let bookmark = Bookmark {
+            id: Some(1),
+            url: markdown.to_string(),
+            title: "Test Table Document".to_string(),
+            description: "A test markdown document with tables".to_string(),
+            tags,
+            access_count: 0,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: true,
+        };
+
+        // Execute the action
+        let result = action.execute(&bookmark);
+
+        // In a proper environment this should succeed
+        // In CI it might fail due to no browser
+        if result.is_err() {
+            if let DomainError::Other(msg) = &result.unwrap_err() {
+                // Only consider the test failed if it's not related to browser opening
+                if !msg.contains("Failed to open HTML in browser") {
+                    panic!("Test failed with unexpected error: {}", msg);
+                }
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "This test opens a browser which might not be available in CI"]
+    fn test_execute_with_code_highlighting() {
+        // Setup
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        let action = MarkdownAction::new(interpolation_engine);
+
+        // Create a test bookmark with code blocks
+        let markdown = "# Code Highlighting\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n\n```python\ndef hello():\n    print(\"Hello, world!\")\n```";
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+
+        let bookmark = Bookmark {
+            id: Some(1),
+            url: markdown.to_string(),
+            title: "Code Highlighting Document".to_string(),
+            description: "A test markdown document with code blocks".to_string(),
             tags,
             access_count: 0,
             created_at: chrono::Utc::now(),
