@@ -21,10 +21,18 @@ pub struct FzfOpts {
     /// Whether to hide URLs in the fuzzy finder (default: false)
     #[serde(default)]
     pub no_url: bool,
+
+    /// Whether to show default action in the fuzzy finder (default: true)
+    #[serde(default = "default_show_action")]
+    pub show_action: bool,
 }
 
 fn default_height() -> String {
     "50%".to_string()
+}
+
+fn default_show_action() -> bool {
+    true
 }
 
 impl Default for FzfOpts {
@@ -34,6 +42,7 @@ impl Default for FzfOpts {
             reverse: false,
             show_tags: false,
             no_url: false,
+            show_action: default_show_action(),
         }
     }
 }
@@ -104,7 +113,7 @@ impl Default for Settings {
     }
 }
 
-// Parse FZF options from a string like "--height 99% --reverse --show-tags"
+// Parse FZF options from a string like "--height 99% --reverse --show-tags --no-action"
 fn parse_fzf_opts(opts_str: &str) -> FzfOpts {
     let mut opts = FzfOpts::default();
 
@@ -124,6 +133,10 @@ fn parse_fzf_opts(opts_str: &str) -> FzfOpts {
             }
             "--no-url" => {
                 opts.no_url = true;
+            }
+            "--no-action" => {
+                // Add handling for the new option
+                opts.show_action = false;
             }
             _ => {} // Ignore unknown options
         }
