@@ -1,6 +1,6 @@
 // src/util/helper.rs
 use md5;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 
 /// Ensure a vector of strings contains only integers
 pub fn ensure_int_vector(vec: &[String]) -> Option<Vec<i32>> {
@@ -30,6 +30,14 @@ pub fn confirm(prompt: &str) -> bool {
         .expect("Failed to read line");
 
     matches!(user_input.trim().to_lowercase().as_str(), "y" | "yes")
+}
+
+pub fn is_stdout_piped() -> bool {
+    !io::stdout().is_terminal()
+}
+
+pub fn is_stderr_piped() -> bool {
+    !io::stderr().is_terminal()
 }
 
 #[cfg(test)]

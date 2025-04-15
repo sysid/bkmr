@@ -3,12 +3,16 @@ use crate::application::services::factory;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::CliResult;
 use crate::domain::tag::Tag;
+use crate::util::helper::{is_stdout_piped, is_stderr_piped};
 use crossterm::style::Stylize;
 use std::fmt::Write;
 
 pub fn show_tags(cli: Cli) -> CliResult<()> {
     if let Commands::Tags { tag } = cli.command.unwrap() {
         let tag_service = factory::create_tag_service();
+
+        // Determine if stdout is being piped to another process
+        let is_piped = is_stdout_piped();
 
         match tag {
             Some(tag_str) => {
@@ -27,10 +31,14 @@ pub fn show_tags(cli: Cli) -> CliResult<()> {
 
                     let mut output = String::new();
                     for (tag, count) in sorted_tags {
-                        writeln!(&mut output, "  {} ({})", tag.value().green(), count).unwrap();
+                        if is_piped {
+                            // Plain text for piping
+                            println!("{} ({})", tag.value(), count);
+                        } else {
+                            // Colored text for terminal
+                            println!("{} ({})", tag.value().green(), count);
+                        }
                     }
-
-                    print!("{}", output);
                 }
             }
             None => {
@@ -48,10 +56,14 @@ pub fn show_tags(cli: Cli) -> CliResult<()> {
 
                     let mut output = String::new();
                     for (tag, count) in sorted_tags {
-                        writeln!(&mut output, "  {} ({})", tag.value().green(), count).unwrap();
+                        if is_piped {
+                            // Plain text for piping
+                            println!("{} ({})", tag.value(), count);
+                        } else {
+                            // Colored text for terminal
+                            println!("{} ({})", tag.value().green(), count);
+                        }
                     }
-
-                    print!("{}", output);
                 }
             }
         }
