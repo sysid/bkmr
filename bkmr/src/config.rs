@@ -471,6 +471,7 @@ mod tests {
                 reverse: true,
                 show_tags: true,
                 no_url: false,
+                show_action: true,
             },
             config_source: ConfigSource::ConfigFile,
         };

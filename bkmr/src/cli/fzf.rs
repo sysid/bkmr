@@ -26,6 +26,7 @@ use skim::{
 };
 use tracing::{debug, instrument};
 use tuikit::{attr::Attr, attr::Color, raw::IntoRawMode};
+use crate::cli::bookmark_commands;
 
 #[derive(Clone)]
 struct SnippetItem {
@@ -355,6 +356,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         "ctrl-y:accept".to_string(),
         "ctrl-e:accept".to_string(),
         "ctrl-d:accept".to_string(),
+        "ctrl-p:accept".to_string(),
         "enter:accept".to_string(),
         "esc:abort".to_string(),
     ]);
@@ -468,6 +470,22 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                     if let Some(id) = bookmark.id {
                         clone_bookmark(id)?;
                     }
+                }
+            },
+            Key::Ctrl('p') => {
+                // Show detailed information for the selected bookmark
+                if let Some(bookmark) = selected_bookmarks.first() {
+                    // Clear screen
+                    clear_terminal();
+
+                    // Use the shared function to show bookmark details
+                    let details = bookmark_commands::show_bookmark_details(bookmark);
+                    print!("{}", details);
+
+                    // Wait for user to press Enter before returning to FZF
+                    // eprintln!("\nPress Enter to continue...");
+                    // let mut input = String::new();
+                    // std::io::stdin().read_line(&mut input)?;
                 }
             }
             _ => {

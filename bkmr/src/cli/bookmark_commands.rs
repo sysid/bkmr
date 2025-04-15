@@ -592,40 +592,51 @@ pub fn edit(cli: Cli) -> CliResult<()> {
 pub fn show(cli: Cli) -> CliResult<()> {
     if let Commands::Show { ids } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
-        let action_service = create_action_service();
 
         let id_list = get_ids(ids)?;
 
         for id in id_list {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
-                // Get the action description
-                let action_description = action_service.get_default_action_description(&bookmark);
-
-                println!(
-                    "{} {} [{}] ({})",
-                    bookmark
-                        .id
-                        .map_or("?".to_string(), |id| id.to_string())
-                        .blue(),
-                    bookmark.title.clone().green(),
-                    bookmark.formatted_tags().yellow(),
-                    action_description.cyan()
-                );
-                println!("  URL/Content: {}", bookmark.url);
-                println!("  Description: {}", bookmark.description);
-                println!("  Access count: {}", bookmark.access_count);
-                println!("  Created: {}", bookmark.created_at);
-                println!("  Updated: {}", bookmark.updated_at);
-                println!("  Has embedding: {}", bookmark.embedding.is_some());
-                println!("  Embeddable: {}", bookmark.embeddable);
-                println!("  Default Action: {}", action_description);
-                println!();
+                // Use the shared function
+                print!("{}", show_bookmark_details(&bookmark));
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
         }
     }
     Ok(())
+}
+
+
+
+
+/// Shows detailed information about a bookmark, can be used by both show command and FZF CTRL-P
+#[instrument(level = "debug")]
+pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
+    // Get the action service
+    let action_service = create_action_service();
+
+    // Get the action description
+    let action_description = action_service.get_default_action_description(bookmark);
+
+    // Format all the bookmark details
+    format!(
+        "{} {} [{}] ({})\n  URL/Content: {}\n  Description: {}\n  Access count: {}\n  Created: {}\n  Updated: {}\n  Has embedding: {}\n  Default Action: {}\n",
+        bookmark
+            .id
+            .map_or("?".to_string(), |id| id.to_string())
+            .blue(),
+        bookmark.title.clone().green(),
+        bookmark.formatted_tags().yellow(),
+        action_description.cyan(),
+        bookmark.url,
+        bookmark.description,
+        bookmark.access_count,
+        bookmark.created_at,
+        bookmark.updated_at,
+        bookmark.embedding.is_some(),
+        action_description
+    )
 }
 
 #[instrument(skip(cli))]

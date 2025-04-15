@@ -95,7 +95,7 @@ pub enum Commands {
 
         #[arg(
             long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, ENTER: open]"
+            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]"
         )]
         is_fuzzy: bool,
 
