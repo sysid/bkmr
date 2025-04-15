@@ -327,7 +327,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
         edit,
         bookmark_type,
         clone_id,
-    } = cli.command.unwrap() {
+    } = cli.command.unwrap()
+    {
         let bookmark_service = create_bookmark_service();
         let tag_service = create_tag_service();
         let template_service = create_template_service();
@@ -376,11 +377,12 @@ pub fn add(cli: Cli) -> CliResult<()> {
         // Override with provided values if they exist
         if let Some(url_value) = &url {
             // Process escaped newlines in content when needed
-            let processed_content = if system_tag == SystemTag::Markdown ||
-                                    system_tag == SystemTag::Snippet ||
-                                    system_tag == SystemTag::Text ||
-                                    system_tag == SystemTag::Shell ||
-                                    system_tag == SystemTag::Env {
+            let processed_content = if system_tag == SystemTag::Markdown
+                || system_tag == SystemTag::Snippet
+                || system_tag == SystemTag::Text
+                || system_tag == SystemTag::Shell
+                || system_tag == SystemTag::Env
+            {
                 url_value.replace("\\n", "\n")
             } else {
                 url_value.clone()
@@ -406,11 +408,12 @@ pub fn add(cli: Cli) -> CliResult<()> {
             let url_value = url.unwrap();
 
             // Process escaped newlines in content when needed
-            let processed_content = if system_tag == SystemTag::Markdown ||
-                                    system_tag == SystemTag::Snippet ||
-                                    system_tag == SystemTag::Text ||
-                                    system_tag == SystemTag::Shell ||
-                                    system_tag == SystemTag::Env {
+            let processed_content = if system_tag == SystemTag::Markdown
+                || system_tag == SystemTag::Snippet
+                || system_tag == SystemTag::Text
+                || system_tag == SystemTag::Shell
+                || system_tag == SystemTag::Env
+            {
                 url_value.replace("\\n", "\n")
             } else {
                 url_value
@@ -442,7 +445,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
             Ok((edited_bookmark, was_modified)) => {
                 if !was_modified {
-                   eprintln!("No changes made in editor. Bookmark not added.");
+                    eprintln!("No changes made in editor. Bookmark not added.");
                     return Ok(());
                 }
 
@@ -606,9 +609,6 @@ pub fn show(cli: Cli) -> CliResult<()> {
     }
     Ok(())
 }
-
-
-
 
 /// Shows detailed information about a bookmark, can be used by both show command and FZF CTRL-P
 #[instrument(level = "debug")]
@@ -960,11 +960,23 @@ pub fn info(cli: Cli) -> CliResult<()> {
 fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<()> {
     // Define known system tags
     let system_tags = [
-        ("_snip_", "Snippet", "Code snippets that are copied to clipboard"),
+        (
+            "_snip_",
+            "Snippet",
+            "Code snippets that are copied to clipboard",
+        ),
         ("_imported_", "Text", "Imported text documents"),
         ("_shell_", "Shell", "Shell scripts that are executed"),
-        ("_md_", "Markdown", "Markdown documents that are rendered as HTML"),
-        ("_env_", "Environment", "Environment variables for shell sourcing"),
+        (
+            "_md_",
+            "Markdown",
+            "Markdown documents that are rendered as HTML",
+        ),
+        (
+            "_env_",
+            "Environment",
+            "Environment variables for shell sourcing",
+        ),
     ];
 
     // Get all bookmarks
@@ -972,15 +984,18 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 
     // Count usage of each system tag
     for (tag_value, tag_name, description) in &system_tags {
-        let count = bookmarks.iter().filter(|b| {
-            b.tags.iter().any(|t| t.value() == *tag_value)
-        }).count();
+        let count = bookmarks
+            .iter()
+            .filter(|b| b.tags.iter().any(|t| t.value() == *tag_value))
+            .count();
 
-        println!("  {} ({}): {} entries - {}",
+        println!(
+            "  {} ({}): {} entries - {}",
             tag_name.cyan(),
             tag_value.yellow(),
             count,
-            description);
+            description
+        );
     }
 
     Ok(())

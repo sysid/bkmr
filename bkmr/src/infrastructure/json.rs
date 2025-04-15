@@ -56,6 +56,7 @@ impl JsonBookmarkView {
 
 /// Converts bookmarks to JSON and writes to standard output
 /// todo: add flag for embeddings
+/// Standard output is used for pipeable content without colors or formatting
 pub fn write_bookmarks_as_json(views: &[JsonBookmarkView]) -> DomainResult<()> {
     let json = serde_json::to_string_pretty(&views).map_err(|e| {
         DomainError::BookmarkOperationFailed(format!(
@@ -64,20 +65,16 @@ pub fn write_bookmarks_as_json(views: &[JsonBookmarkView]) -> DomainResult<()> {
         ))
     })?;
 
-    let stdout = io::stdout();
-    let mut handle = stdout.lock();
-    handle.write_all(json.as_bytes()).map_err(|e| {
-        DomainError::BookmarkOperationFailed(format!("Failed to write JSON to stdout: {}", e))
-    })?;
-    handle.write_all(b"\n").map_err(|e| {
-        DomainError::BookmarkOperationFailed(format!("Failed to write newline to stdout: {}", e))
-    })?;
-    // prevents pycharm from spinning forever
-    handle.flush().map_err(|e| {
+    println!("{}", json);
+
+    // Flush stdout to ensure immediate output
+    std::io::stdout().flush().map_err(|e| {
         DomainError::BookmarkOperationFailed(format!("Failed to flush stdout: {}", e))
     })?;
+
     Ok(())
 }
+
 
 /// Checks the format of a JSON string.
 ///
