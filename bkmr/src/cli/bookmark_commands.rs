@@ -25,7 +25,7 @@ use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
-use crate::util::helper::{confirm, ensure_int_vector};
+use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
 use crossterm::style::Stylize;
 use itertools::Itertools;
 use std::collections::HashSet;
@@ -248,31 +248,44 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             return Ok(());
         }
 
-        // Format and display results with similarity scores
-        for result in &results {
-            writeln!(
-                stderr,
-                "{} {} [{}] ({})",
-                result
-                    .bookmark
-                    .id
-                    .map_or("?".to_string(), |id| id.to_string())
-                    .blue(),
-                result.bookmark.title.clone().green(),
-                result.bookmark.formatted_tags().yellow(),
-                result.similarity_percentage().cyan()
-            )?;
-            writeln!(stderr, "  {}", result.bookmark.url)?;
-            if !result.bookmark.description.is_empty() {
-                writeln!(stderr, "  {}", result.bookmark.description)?;
+        let is_piped = is_stdout_piped();
+
+        if is_piped {
+            // Generate plain-text output for piping
+            for result in &results {
+                println!("{}\t{}\t{}\t{}",
+                    result.bookmark.id.unwrap_or(0),
+                    result.bookmark.title,
+                    result.bookmark.url,
+                    result.similarity_percentage());
             }
-            writeln!(stderr)?;
+        } else {
+            // Format and display results with similarity scores for interactive use
+            for result in &results {
+                writeln!(
+                    stderr,
+                    "{} {} [{}] ({})",
+                    result
+                        .bookmark
+                        .id
+                        .map_or("?".to_string(), |id| id.to_string())
+                        .blue(),
+                    result.bookmark.title.clone().green(),
+                    result.bookmark.formatted_tags().yellow(),
+                    result.similarity_percentage().cyan()
+                )?;
+                writeln!(stderr, "  {}", result.bookmark.url)?;
+                if !result.bookmark.description.is_empty() {
+                    writeln!(stderr, "  {}", result.bookmark.description)?;
+                }
+                writeln!(stderr)?;
+            }
         }
 
         writeln!(stderr, "{} bookmarks found", results.len())?;
 
         // In interactive mode, prompt for actions
-        if !non_interactive && !results.is_empty() && confirm("Open bookmark(s)?") {
+        if !non_interactive && !is_piped && !results.is_empty() && confirm("Open bookmark(s)?") {
             // Prompt for which bookmark to open
             print!("Enter ID(s) to open (comma-separated): ");
             io::stdout().flush()?;
