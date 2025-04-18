@@ -1,7 +1,7 @@
 // bkmr/src/domain/error.rs
 use crate::domain::bookmark::BookmarkBuilderError;
-use thiserror::Error;
 use crate::domain::interpolation::errors::InterpolationError;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DomainError {

@@ -1,7 +1,9 @@
 use std::path::Path;
 // src/application/services/factory.rs
 use crate::app_state::AppState;
-use crate::application::actions::{DefaultAction, EnvAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction};
+use crate::application::actions::{
+    DefaultAction, EnvAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction,
+};
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation::InterpolationService;
@@ -81,12 +83,14 @@ pub fn create_template_service() -> Arc<dyn TemplateService> {
     Arc::new(TemplateServiceImpl::new())
 }
 
+// todo: trait
 pub fn create_interpolation_service() -> InterpolationService {
     let shell_executor = Arc::new(SafeShellExecutor::new());
     let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
     InterpolationService::new(template_engine)
 }
 
+// todo: trait
 pub fn create_semantic_search(query: &str, limit: Option<usize>) -> SemanticSearch {
     SemanticSearch::new(query, limit)
 }

@@ -3,7 +3,7 @@ use crate::application::services::factory;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::CliResult;
 use crate::domain::tag::Tag;
-use crate::util::helper::{is_stdout_piped, is_stderr_piped};
+use crate::util::helper::is_stdout_piped;
 use crossterm::style::Stylize;
 use std::fmt::Write;
 
@@ -29,7 +29,7 @@ pub fn show_tags(cli: Cli) -> CliResult<()> {
                     let mut sorted_tags = related_tags;
                     sorted_tags.sort_by(|(_, count_a), (_, count_b)| count_b.cmp(count_a));
 
-                    let mut output = String::new();
+                    // let output = String::new();
                     for (tag, count) in sorted_tags {
                         if is_piped {
                             // Plain text for piping
@@ -54,7 +54,7 @@ pub fn show_tags(cli: Cli) -> CliResult<()> {
                     let mut sorted_tags = all_tags;
                     sorted_tags.sort_by(|(_, count_a), (_, count_b)| count_b.cmp(count_a));
 
-                    let mut output = String::new();
+                    // let output = String::new();
                     for (tag, count) in sorted_tags {
                         if is_piped {
                             // Plain text for piping

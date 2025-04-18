@@ -26,10 +26,9 @@ docu fzf actions
 ## BUGs
 sqlite bug: jupy*
 
-section parsing in edit mode: table like ------------
-
 tests fail when ~/.config/bkmr exists and has got wrong config (config tests)
 
+inconsistency in service traits (factory)
 
 
 

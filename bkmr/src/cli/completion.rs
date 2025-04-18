@@ -60,8 +60,8 @@ pub fn generate_completion(shell: &str) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
+    use serial_test::serial;
 
     #[test]
     #[serial]

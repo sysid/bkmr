@@ -19,11 +19,11 @@ pub struct Bookmark {
     pub description: String,
     pub tags: HashSet<Tag>,
     pub access_count: i32,
-    pub created_at: DateTime<Utc>,
+    pub created_at: Option<DateTime<Utc>>,
     pub updated_at: DateTime<Utc>,
     pub embedding: Option<Vec<u8>>,
     pub content_hash: Option<Vec<u8>>,
-    #[builder(default = "false")] // Set default value to false
+    #[builder(default = "false")]
     pub embeddable: bool,
 }
 
@@ -51,7 +51,7 @@ impl Bookmark {
             description: description.as_ref().to_string(),
             tags,
             access_count: 0,
-            created_at: now,
+            created_at: Some(now),
             updated_at: now,
             embedding: None,
             content_hash: None,
@@ -78,7 +78,7 @@ impl Bookmark {
         description: String,
         tag_string: String,
         access_count: i32,
-        created_at: DateTime<Utc>,
+        created_at: Option<DateTime<Utc>>,
         updated_at: DateTime<Utc>,
         embedding: Option<Vec<u8>>,
         content_hash: Option<Vec<u8>>,

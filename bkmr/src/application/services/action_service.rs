@@ -1,4 +1,5 @@
 // src/application/services/action_service.rs
+use crate::application::services::factory::create_bookmark_service;
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::ActionResolver;
 use crate::domain::bookmark::Bookmark;
@@ -27,7 +28,10 @@ pub struct ActionServiceImpl<R: BookmarkRepository> {
 
 impl<R: BookmarkRepository> ActionServiceImpl<R> {
     pub fn new(resolver: Arc<dyn ActionResolver>, repository: Arc<R>) -> Self {
-        Self { resolver, repository }
+        Self {
+            resolver,
+            repository,
+        }
     }
 }
 
@@ -49,7 +53,9 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
     #[instrument(skip(self), level = "debug")]
     fn execute_default_action_by_id(&self, id: i32) -> DomainResult<()> {
         // Get the bookmark
-        let bookmark = self.repository.get_by_id(id)?
+        let bookmark = self
+            .repository
+            .get_by_id(id)?
             .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
 
         // Execute the default action
@@ -67,14 +73,13 @@ impl<R: BookmarkRepository> ActionServiceImpl<R> {
     // Record that a bookmark was accessed
     #[instrument(skip(self), level = "trace")]
     fn record_bookmark_access(&self, id: i32) -> DomainResult<()> {
-        // Get the bookmark
-        let mut bookmark = self.repository.get_by_id(id)?
+        let mut bookmark = self
+            .repository
+            .get_by_id(id)?
             .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
 
-        // Record access
         bookmark.record_access();
 
-        // Update in repository
         self.repository.update(&bookmark)?;
 
         Ok(())

@@ -29,7 +29,10 @@ impl SystemTag {
     }
 
     pub fn is_known_system_tag(tag_str: &str) -> bool {
-        matches!(tag_str, "_snip_" | "_imported_" | "_shell_" | "_md_" | "_env_")
+        matches!(
+            tag_str,
+            "_snip_" | "_imported_" | "_shell_" | "_md_" | "_env_"
+        )
     }
 }
 

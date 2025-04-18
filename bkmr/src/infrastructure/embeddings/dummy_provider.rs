@@ -20,8 +20,8 @@ impl Embedder for DummyEmbedding {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
+    use serial_test::serial;
 
     #[test]
     #[serial]

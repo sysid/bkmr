@@ -200,7 +200,7 @@ format:  ## format
 .PHONY: lint
 lint:  ## lint and fix
 	#BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy
-	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy --fix
+	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo clippy --fix  -- -A unused_imports  # avoid errors
 	BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo fix --lib -p bkmr --tests
 
 .PHONY: doc

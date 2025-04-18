@@ -46,6 +46,7 @@ pub const DEFAULT_FIELDS: &[DisplayField] = &[
     DisplayField::Title,
     DisplayField::Description,
     DisplayField::Tags,
+    DisplayField::LastUpdateTs, // shows BOTH timestamps
     DisplayField::Similarity,
 ];
 
@@ -56,7 +57,7 @@ pub const ALL_FIELDS: &[DisplayField] = &[
     DisplayField::Description,
     DisplayField::Tags,
     DisplayField::AccessCount,
-    DisplayField::LastUpdateTs,
+    DisplayField::LastUpdateTs, // shows BOTH timestamps
     DisplayField::Similarity,
     DisplayField::Embedding,
     DisplayField::Embeddable,
@@ -82,6 +83,9 @@ pub struct DisplayBookmark {
 
     #[builder(default = "0")]
     pub access_count: i32,
+
+    #[builder(default)]
+    pub created_at: Option<DateTime<Utc>>,
 
     #[builder(default = "chrono::Utc::now()")]
     pub last_update_ts: DateTime<Utc>,
@@ -116,6 +120,7 @@ impl DisplayBookmark {
             .description(bookmark.description.to_string())
             .tags(bookmark.formatted_tags())
             .access_count(bookmark.access_count)
+            .created_at(bookmark.created_at) // Pass through the Option<DateTime<Utc>>
             .last_update_ts(bookmark.updated_at)
             .embedding(
                 bookmark
@@ -156,6 +161,7 @@ impl DisplayBookmark {
             .description(base.description)
             .tags(base.tags)
             .access_count(base.access_count)
+            .created_at(base.created_at)
             .last_update_ts(base.last_update_ts)
             .embedding(base.embedding)
             .embeddable(base.embeddable)
@@ -176,6 +182,7 @@ impl Default for DisplayBookmark {
             description: String::new(),
             tags: String::new(),
             access_count: 0,
+            created_at: None,
             last_update_ts: Utc::now(),
             similarity: None,
             embedding: String::new(),
@@ -325,15 +332,21 @@ pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
             }
         }
 
-        // Last update timestamp (magenta)
+        // Created and Last update timestamps (magenta)
         if fields.contains(&DisplayField::LastUpdateTs) {
             if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Magenta))) {
                 eprintln!("Error setting color: {}", e);
             }
+            // Format creation date as "null" if not available
+            let created_str = match bm.created_at {
+                Some(created) => created.to_string(),
+                None => "null".to_string(),
+            };
+
             if let Err(e) = writeln!(
                 &mut stderr,
-                "{:first_col_width$}  {}",
-                "", bm.last_update_ts
+                "{:first_col_width$}  Created: {} | Updated: {}",
+                "", created_str, bm.last_update_ts
             ) {
                 eprintln!("Error writing to stderr: {}", e);
             }
@@ -355,6 +368,10 @@ mod display_tests {
     use std::{fs, path::Path};
 
     fn create_test_bookmarks() -> Vec<DisplayBookmark> {
+        // Create a common timestamp for testing
+        let now = Utc::now();
+        let earlier = now - chrono::Duration::days(30);
+
         vec![
             DisplayBookmark {
                 id: 1,
@@ -365,7 +382,8 @@ mod display_tests {
                         .to_string(),
                 tags: ",rust,programming,systems,".to_string(),
                 access_count: 42,
-                last_update_ts: Utc::now(),
+                created_at: Some(earlier), // Created 30 days ago
+                last_update_ts: now,       // Updated now
                 similarity: Some(0.85),
                 embedding: "yes".to_string(),
                 embeddable: true,
@@ -377,7 +395,8 @@ mod display_tests {
                 description: "The Rust Programming Language Book".to_string(),
                 tags: ",book,documentation,rust,learning,".to_string(),
                 access_count: 24,
-                last_update_ts: Utc::now(),
+                created_at: None,    // No creation date
+                last_update_ts: now, // Updated now
                 similarity: None,
                 embedding: "".to_string(),
                 embeddable: false,
@@ -389,7 +408,8 @@ mod display_tests {
                 description: "".to_string(), // Empty description
                 tags: ",crates,registry,".to_string(),
                 access_count: 12,
-                last_update_ts: Utc::now(),
+                created_at: Some(now), // Created now (same as updated)
+                last_update_ts: now,   // Updated now
                 similarity: Some(0.62),
                 embedding: "yes".to_string(),
                 embeddable: true,
@@ -458,7 +478,7 @@ mod display_tests {
 
         // We can't easily redirect the show_bookmarks output since it uses stderr
         // but we can create similar output manually for the table version
-        for (_, field) in DEFAULT_FIELDS.iter().enumerate() {
+        for field in DEFAULT_FIELDS.iter() {
             write!(output_file, "{} ", field)?;
         }
         writeln!(output_file)?;

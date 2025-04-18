@@ -1,11 +1,11 @@
 // src/application/actions/snippet_action.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
 use crate::domain::interpolation::interface::InterpolationEngine;
 use crate::domain::services::clipboard::ClipboardService;
 use std::sync::Arc;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct SnippetAction {

@@ -374,16 +374,13 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
         self.validate_bookmark_id(id)?;
 
-        // Get the existing bookmark
         let mut bookmark = self
             .repository
             .get_by_id(id)?
             .ok_or(ApplicationError::BookmarkNotFound(id))?;
 
-        // Record access
         bookmark.record_access(); // TODO: Implement proper record_access method
 
-        // Save changes
         self.repository.update(&bookmark)?;
 
         Ok(bookmark)

@@ -8,6 +8,7 @@ use crate::application::services::factory::{
     create_action_service, create_bookmark_service, create_clipboard_service,
     create_interpolation_service,
 };
+use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{
     clone_bookmark, copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks,
@@ -26,7 +27,6 @@ use skim::{
 };
 use tracing::{debug, instrument};
 use tuikit::{attr::Attr, attr::Color, raw::IntoRawMode};
-use crate::cli::bookmark_commands;
 
 #[derive(Clone)]
 struct SnippetItem {
@@ -182,7 +182,7 @@ impl SkimItem for Bookmark {
 
         // If showing URL, add yellow attribute for it
         if !fzf_opts.no_url {
-            let url = &self.url;
+            // let url = &self.url;
             let start_idx_url = text.find('<').unwrap_or(0) as u32;
             if start_idx_url > 0 {
                 // Only if '<' is found
@@ -471,7 +471,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                         clone_bookmark(id)?;
                     }
                 }
-            },
+            }
             Key::Ctrl('p') => {
                 // Show detailed information for the selected bookmark
                 if let Some(bookmark) = selected_bookmarks.first() {
@@ -550,7 +550,7 @@ fn clear_terminal() {
     }
 
     // Print a single newline to ensure we have a clean prompt
-    println!("");
+    println!();
 }
 
 /// Clears fzf-specific artifacts from the terminal

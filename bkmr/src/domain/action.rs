@@ -1,6 +1,6 @@
 // src/domain/action.rs
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
 use std::fmt::Debug;
 
 /// Defines an action that can be performed on a bookmark

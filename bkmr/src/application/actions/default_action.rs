@@ -13,7 +13,9 @@ pub struct DefaultAction {
 
 impl DefaultAction {
     pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self { interpolation_engine }
+        Self {
+            interpolation_engine,
+        }
     }
 }
 

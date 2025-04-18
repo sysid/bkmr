@@ -15,7 +15,11 @@ pub struct Cli {
     pub config: Option<PathBuf>,
 
     /// Specify a custom configuration file
-    #[arg(long = "config-file", value_name = "FILE", help = "Use configuration file")]
+    #[arg(
+        long = "config-file",
+        value_name = "FILE",
+        help = "Use configuration file"
+    )]
     pub config_file: Option<PathBuf>,
 
     /// Turn debugging information on
@@ -95,7 +99,7 @@ pub enum Commands {
 
         #[arg(
             long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: open, CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]"
+            help = "use fuzzy finder: [CTRL-O: copy to clipboard, CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]"
         )]
         is_fuzzy: bool,
 

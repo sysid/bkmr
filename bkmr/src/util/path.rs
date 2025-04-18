@@ -109,13 +109,9 @@ pub fn extract_filename(input: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::interpolation::minijinja_engine::{
-        MiniJinjaEngine, SafeShellExecutor,
-    };
     use std::env;
     use std::fs::{self, File};
     use std::io::Write;
-    use std::sync::Arc;
 
     #[test]
     fn test_abspath_removes_suffix() {
@@ -147,10 +143,6 @@ mod tests {
 
     #[test]
     fn test_is_file_path_detection() {
-        // Setup
-        let shell_executor = Arc::new(SafeShellExecutor::new());
-        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-
         // Test cases
         assert!(is_file_path("/absolute/path/file.md"));
         assert!(is_file_path("~/relative/to/home.md"));

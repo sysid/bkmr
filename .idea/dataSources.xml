@@ -87,5 +87,12 @@
         </library>
       </libraries>
     </data-source>
+    <data-source source="LOCAL" name="bm.db" uuid="99136407-86c7-4933-9f2c-7722f10e0d73">
+      <driver-ref>sqlite.xerial</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/../../private/vimwiki/buku/bm.db</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
   </component>
 </project>

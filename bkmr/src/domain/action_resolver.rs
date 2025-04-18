@@ -1,7 +1,7 @@
 // src/domain/action_resolver.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
 use crate::domain::system_tag::SystemTag;
 use std::fmt::Debug;
 
@@ -81,7 +81,7 @@ struct UriActionProxy<'a>(&'a dyn BookmarkAction);
 #[derive(Debug)]
 struct DefaultActionProxy<'a>(&'a dyn BookmarkAction);
 
-impl<'a> BookmarkAction for SnippetActionProxy<'a> {
+impl BookmarkAction for SnippetActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }
@@ -91,7 +91,7 @@ impl<'a> BookmarkAction for SnippetActionProxy<'a> {
     }
 }
 
-impl<'a> BookmarkAction for TextActionProxy<'a> {
+impl BookmarkAction for TextActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }
@@ -101,7 +101,7 @@ impl<'a> BookmarkAction for TextActionProxy<'a> {
     }
 }
 
-impl<'a> BookmarkAction for ShellActionProxy<'a> {
+impl BookmarkAction for ShellActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }
@@ -111,7 +111,7 @@ impl<'a> BookmarkAction for ShellActionProxy<'a> {
     }
 }
 
-impl<'a> BookmarkAction for MarkdownActionProxy<'a> {
+impl BookmarkAction for MarkdownActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }
@@ -121,7 +121,7 @@ impl<'a> BookmarkAction for MarkdownActionProxy<'a> {
     }
 }
 
-impl<'a> BookmarkAction for EnvActionProxy<'a> {
+impl BookmarkAction for EnvActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }
@@ -131,7 +131,7 @@ impl<'a> BookmarkAction for EnvActionProxy<'a> {
     }
 }
 
-impl<'a> BookmarkAction for UriActionProxy<'a> {
+impl BookmarkAction for UriActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }
@@ -141,7 +141,7 @@ impl<'a> BookmarkAction for UriActionProxy<'a> {
     }
 }
 
-impl<'a> BookmarkAction for DefaultActionProxy<'a> {
+impl BookmarkAction for DefaultActionProxy<'_> {
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         self.0.execute(bookmark)
     }

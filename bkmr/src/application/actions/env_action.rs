@@ -13,7 +13,9 @@ pub struct EnvAction {
 
 impl EnvAction {
     pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self { interpolation_engine }
+        Self {
+            interpolation_engine,
+        }
     }
 }
 
@@ -34,8 +36,11 @@ impl BookmarkAction for EnvAction {
 
         // Add a header to indicate what's being printed
         println!("# Environment variables from: {}", bookmark.title);
-        println!("# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
-            bookmark.id.unwrap_or(0), bookmark.id.unwrap_or(0));
+        println!(
+            "# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
+            bookmark.id.unwrap_or(0),
+            bookmark.id.unwrap_or(0)
+        );
         println!("# ----- BEGIN ENVIRONMENT VARIABLES -----");
 
         // Print the content with clean formatting
@@ -56,7 +61,9 @@ impl BookmarkAction for EnvAction {
 mod tests {
     use super::*;
     use crate::domain::tag::Tag;
-    use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+    use crate::infrastructure::interpolation::minijinja_engine::{
+        MiniJinjaEngine, SafeShellExecutor,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -78,7 +85,7 @@ mod tests {
             description: "A test set of environment variables".to_string(),
             tags,
             access_count: 0,
-            created_at: chrono::Utc::now(),
+            created_at: Some(chrono::Utc::now()),
             updated_at: chrono::Utc::now(),
             embedding: None,
             content_hash: None,
@@ -112,7 +119,7 @@ mod tests {
             description: "A test set of environment variables with interpolation".to_string(),
             tags,
             access_count: 0,
-            created_at: chrono::Utc::now(),
+            created_at: Some(chrono::Utc::now()),
             updated_at: chrono::Utc::now(),
             embedding: None,
             content_hash: None,

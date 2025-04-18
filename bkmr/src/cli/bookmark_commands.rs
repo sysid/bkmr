@@ -1,18 +1,15 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
 use crate::application::services::factory::{
-    create_action_service, create_bookmark_service, create_clipboard_service,
-    create_interpolation_service, create_tag_service, create_template_service,
+    create_action_service, create_bookmark_service, create_tag_service, create_template_service,
 };
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::fzf::fzf_process;
-use crate::cli::process::{
-    delete_bookmarks, edit_bookmarks, execute_bookmark_default_action, process,
-};
-use crate::config::{ConfigSource, Settings};
+use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action, process};
+use crate::config::ConfigSource;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::SortDirection;
 use crate::domain::repositories::repository::BookmarkRepository;
@@ -253,11 +250,13 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         if is_piped {
             // Generate plain-text output for piping
             for result in &results {
-                println!("{}\t{}\t{}\t{}",
+                println!(
+                    "{}\t{}\t{}\t{}",
                     result.bookmark.id.unwrap_or(0),
                     result.bookmark.title,
                     result.bookmark.url,
-                    result.similarity_percentage());
+                    result.similarity_percentage()
+                );
             }
         } else {
             // Format and display results with similarity scores for interactive use
@@ -612,9 +611,9 @@ pub fn show(cli: Cli) -> CliResult<()> {
         let id_list = get_ids(ids)?;
 
         for id in id_list {
-            if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
-                // Use the shared function
-                print!("{}", show_bookmark_details(&bookmark));
+            if let Some(_bookmark) = bookmark_service.get_bookmark(id)? {
+                let updated_bookmark = bookmark_service.record_bookmark_access(id)?;
+                print!("{}", show_bookmark_details(&updated_bookmark));
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
@@ -645,7 +644,7 @@ pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
         bookmark.url,
         bookmark.description,
         bookmark.access_count,
-        bookmark.created_at,
+        bookmark.created_at.map_or("N/A".to_string(), |dt| dt.to_string()),
         bookmark.updated_at,
         bookmark.embedding.is_some(),
         action_description

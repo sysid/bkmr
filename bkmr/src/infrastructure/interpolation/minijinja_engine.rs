@@ -81,10 +81,18 @@ impl MiniJinjaEngine {
             context.insert("tags".to_string(), Value::from(tags));
 
             context.insert("access_count".to_string(), Value::from(bm.access_count));
-            context.insert(
-                "created_at".to_string(),
-                Value::from(bm.created_at.to_rfc3339()),
-            );
+
+            // Handle the optional created_at
+            if let Some(created_at) = bm.created_at {
+                context.insert(
+                    "created_at".to_string(),
+                    Value::from(created_at.to_rfc3339()),
+                );
+            } else {
+                // If created_at is None, use null value
+                context.insert("created_at".to_string(), Value::from(()));
+            }
+
             context.insert(
                 "updated_at".to_string(),
                 Value::from(bm.updated_at.to_rfc3339()),

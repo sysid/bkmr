@@ -2,13 +2,13 @@
 use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
+use std::path::Path;
 use std::sync::{Arc, OnceLock, RwLock};
 use std::{env, fmt};
-use std::path::Path;
 use tracing::{debug, instrument};
 
 // Import our new config module
-use crate::config::{Settings, FzfOpts, load_settings};
+use crate::config::{load_settings, FzfOpts, Settings};
 
 /** Global AppState (“Service Locator” Style)
 Global State Management:

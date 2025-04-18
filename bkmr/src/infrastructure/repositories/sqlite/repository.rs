@@ -89,11 +89,12 @@ impl SqliteBookmarkRepository {
     /// Convert a database model to a domain entity
     #[instrument(skip_all, level = "trace")]
     fn to_domain_model(&self, db_bookmark: DbBookmark) -> SqliteResult<Bookmark> {
-        // Convert stored timestamp to DateTime<Utc>
-        let created_at =
-            DateTime::<Utc>::from_naive_utc_and_offset(db_bookmark.last_update_ts, Utc);
         let updated_at =
             DateTime::<Utc>::from_naive_utc_and_offset(db_bookmark.last_update_ts, Utc);
+
+        let created_at = db_bookmark
+            .created_ts
+            .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
 
         // Create bookmark from storage data
         Bookmark::from_storage(
@@ -126,9 +127,9 @@ impl SqliteBookmarkRepository {
             tags: bookmark.formatted_tags(),
             desc: bookmark.description.to_string(),
             flags: bookmark.access_count,
-            embedding: bookmark.embedding.clone(), // Get embedding from domain entity
-            content_hash: bookmark.content_hash.clone(), // Get content hash from domain entity
-            created_ts: Some(bookmark.created_at.naive_utc()),
+            embedding: bookmark.embedding.clone(),
+            content_hash: bookmark.content_hash.clone(),
+            created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
             embeddable: bookmark.embeddable,
         }
     }
@@ -298,7 +299,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 flags: bookmark.access_count,
                 embedding: bookmark.embedding.clone(),
                 content_hash: bookmark.content_hash.clone(),
-                created_ts: Some(bookmark.created_at.naive_utc()),
+                created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
                 embeddable: bookmark.embeddable,
             };
             debug!("Inserting bookmark: {}", db_bookmark);
@@ -808,7 +809,7 @@ mod tests {
         assert_eq!(all.len(), 2, "Should have 2 bookmarks before deletion");
 
         // Get the IDs of the bookmarks
-        let id1 = bookmark1.id.unwrap();
+        // let id1 = bookmark1.id.unwrap();
         let id2 = bookmark2.id.unwrap();
 
         // Delete first bookmark

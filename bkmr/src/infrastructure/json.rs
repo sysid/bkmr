@@ -7,7 +7,7 @@ use crate::domain::tag::Tag;
 use crate::util::path::extract_filename;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 
 #[derive(Serialize, Deserialize)]
@@ -25,7 +25,7 @@ pub struct JsonBookmarkView {
     pub description: String,
     pub tags: Vec<String>,
     pub access_count: i32,
-    pub created_at: String,
+    pub created_at: Option<String>,
     pub updated_at: String,
 }
 
@@ -43,7 +43,7 @@ impl JsonBookmarkView {
                 .map(|tag| tag.value().to_string())
                 .collect(),
             access_count: bookmark.access_count,
-            created_at: bookmark.created_at.to_rfc3339(),
+            created_at: bookmark.created_at.map(|dt| dt.to_rfc3339()),
             updated_at: bookmark.updated_at.to_rfc3339(),
         }
     }
@@ -74,7 +74,6 @@ pub fn write_bookmarks_as_json(views: &[JsonBookmarkView]) -> DomainResult<()> {
 
     Ok(())
 }
-
 
 /// Checks the format of a JSON string.
 ///

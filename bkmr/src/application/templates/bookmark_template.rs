@@ -260,7 +260,7 @@ impl BookmarkTemplate {
             .title(&self.title)
             .description(&self.comments)
             .tags(self.tags.clone())
-            .created_at(original.map_or_else(chrono::Utc::now, |b| b.created_at))
+            .created_at(original.and_then(|b| b.created_at))
             .updated_at(chrono::Utc::now())
             .access_count(original.map_or(0, |b| b.access_count))
             .embeddable(self.embeddable);
@@ -288,9 +288,9 @@ fn parse_sections(content: &str) -> ApplicationResult<std::collections::HashMap<
     // Use regex to match section markers: === SECTION_NAME ===
     // The markers must be at the start of a line (^) and must be main section names (ID, URL, etc.)
     // We restrict it to known section names to avoid matching content that looks like section markers
-    let section_marker_regex = regex::Regex::new(
-        r"(?m)^===\s+(ID|URL|TITLE|TAGS|COMMENTS|EMBEDDABLE|END)\s+===\s*$"
-    ).unwrap();
+    let section_marker_regex =
+        regex::Regex::new(r"(?m)^===\s+(ID|URL|TITLE|TAGS|COMMENTS|EMBEDDABLE|END)\s+===\s*$")
+            .unwrap();
 
     // Find all section markers with their positions
     let mut markers: Vec<(usize, &str, &str)> = section_marker_regex
@@ -602,7 +602,7 @@ mod tests {
             test\n\
             === COMMENTS ===\n\
             Testing with END marker\n\
-            === END ===";  // No newline after END marker
+            === END ==="; // No newline after END marker
 
         let parsed = BookmarkTemplate::from_string(template_str).unwrap();
 

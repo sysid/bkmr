@@ -536,9 +536,7 @@ pub fn clone_bookmark(id: i32) -> CliResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::domain::tag::Tag;
-    use crate::util::testing::{init_test_env, EnvGuard};
     use serial_test::serial;
     use std::collections::HashSet;
 
@@ -568,7 +566,7 @@ mod tests {
             description: "An example site".to_string(),
             tags: tags.clone(),
             access_count: 0,
-            created_at: chrono::Utc::now(),
+            created_at: Some(chrono::Utc::now()),
             updated_at: chrono::Utc::now(),
             embedding: None,
             content_hash: None,
@@ -582,7 +580,7 @@ mod tests {
             description: "A test site".to_string(),
             tags,
             access_count: 0,
-            created_at: chrono::Utc::now(),
+            created_at: Some(chrono::Utc::now()),
             updated_at: chrono::Utc::now(),
             embedding: None,
             content_hash: None,
@@ -604,5 +602,4 @@ mod tests {
         let bookmark = get_bookmark_by_index(-1, &bookmarks);
         assert!(bookmark.is_none());
     }
-
 }

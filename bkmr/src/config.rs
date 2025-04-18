@@ -62,16 +62,12 @@ pub struct Settings {
     pub config_source: ConfigSource,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Default)]
 pub enum ConfigSource {
+    #[default]
     Default,
     ConfigFile,
     Environment,
-}
-impl Default for ConfigSource {
-    fn default() -> Self {
-        ConfigSource::Default
-    }
 }
 
 fn default_db_path() -> String {
@@ -457,11 +453,10 @@ mod tests {
         no_url = false
         "#;
 
-        let (temp_dir, config_path) = create_temp_config_file(config_content);
+        let (temp_dir, _config_path) = create_temp_config_file(config_content);
 
-        // Mock the config dir location for testing
-        let original_config_dir = dirs::config_dir();
-        // Note: In a real test, you'd need to mock dirs::config_dir to return your temp dir
+        let _original_config_dir = dirs::config_dir();
+        // todo: In a real test, you'd need to mock dirs::config_dir to return your temp dir
         // For this example, we'll skip actually loading from the file
 
         let settings = Settings {
@@ -507,9 +502,7 @@ mod tests {
         no_url = false
         "#;
 
-        let (temp_dir, config_path) = create_temp_config_file(config_content);
-
-        // Mock the config dir location for testing (same note as above)
+        let (temp_dir, _config_path) = create_temp_config_file(config_content);
 
         // Simulate loading with environment variables overriding config file
         let settings = load_settings(None).unwrap();
