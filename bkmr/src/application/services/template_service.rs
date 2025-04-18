@@ -9,7 +9,7 @@ use std::process::Command;
 use tempfile::NamedTempFile;
 use tracing::{debug, instrument};
 
-pub trait TemplateService {
+pub trait TemplateService: Send + Sync {
     fn edit_bookmark_with_template(
         &self,
         bookmark: Option<Bookmark>,

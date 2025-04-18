@@ -5,9 +5,10 @@ use crate::domain::repositories::query::SortDirection;
 use crate::domain::search::{SemanticSearch, SemanticSearchResult};
 use crate::domain::tag::Tag;
 use std::collections::HashSet;
+use std::fmt::Debug;
 
 /// Service interface for bookmark-related operations
-pub trait BookmarkService {
+pub trait BookmarkService: Send + Sync + Debug {
     /// Add a new bookmark
     fn add_bookmark(
         &self,

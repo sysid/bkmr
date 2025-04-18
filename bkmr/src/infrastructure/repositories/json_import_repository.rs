@@ -23,6 +23,7 @@ struct JsonBookmark {
     tags: Vec<String>,
 }
 
+#[derive(Debug)]
 pub struct JsonImportRepository;
 
 impl Default for JsonImportRepository {

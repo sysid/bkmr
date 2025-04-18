@@ -3,7 +3,7 @@ use crate::application::error::ApplicationResult;
 use crate::domain::tag::Tag;
 
 /// Service interface for tag-related operations
-pub trait TagService {
+pub trait TagService: Send + Sync {
     /// Get all tags with their usage counts
     fn get_all_tags(&self) -> ApplicationResult<Vec<(Tag, usize)>>;
 

@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::fmt::Debug;
 // bkmr/src/domain/embedding.rs
 use crate::domain::error::{DomainError, DomainResult};
 use ndarray::Array1;
@@ -15,7 +16,7 @@ use tracing::instrument;
 /// dyn Embedder by default doesn’t extend Any. So .type_id() sees the trait object’s ID, not DummyEmbedding’s.
 /// To fix this, you need to extend Any on the trait and implement as_any() to return a reference to self.
 /// This way, you can downcast to the concrete type and check its TypeId.
-pub trait Embedder: Send + Sync {
+pub trait Embedder: Send + Sync + Debug {
     /// Embeds text into a vector of floats
     fn embed(&self, text: &str) -> DomainResult<Option<Vec<f32>>>;
     fn as_any(&self) -> &dyn Any; // for downcasting

@@ -15,6 +15,7 @@ use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
 use tracing::{debug, instrument, warn};
 
+#[derive(Debug)]
 pub struct BookmarkServiceImpl<R: BookmarkRepository> {
     repository: Arc<R>,
     embedder: Arc<dyn Embedder>,

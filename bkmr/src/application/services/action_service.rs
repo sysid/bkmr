@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tracing::{debug, instrument};
 
 /// Service for executing actions on bookmarks
-pub trait ActionService {
+pub trait ActionService: Send + Sync {
     /// Executes the default action for a bookmark
     fn execute_default_action(&self, bookmark: &Bookmark) -> DomainResult<()>;
 

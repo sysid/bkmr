@@ -2,20 +2,18 @@
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::interpolation::interface::InterpolationEngine;
 use std::sync::Arc;
 use tracing::{debug, instrument};
+use crate::application::services::interpolation::InterpolationService;
 
 #[derive(Debug)]
 pub struct EnvAction {
-    interpolation_engine: Arc<dyn InterpolationEngine>,
+    interpolation_service: Arc<dyn InterpolationService>,
 }
 
 impl EnvAction {
-    pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self {
-            interpolation_engine,
-        }
+    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
+        Self { interpolation_service }
     }
 }
 
@@ -27,7 +25,8 @@ impl BookmarkAction for EnvAction {
 
         // Apply any interpolation if the content contains template variables
         let rendered_content = if env_content.contains("{{") || env_content.contains("{%") {
-            self.interpolation_engine.render_bookmark_url(bookmark)?
+            self.interpolation_service.render_bookmark_url(bookmark)
+                .map_err(|e| DomainError::Other(format!("Failed to render environment variables: {}", e)))?
         } else {
             env_content.to_string()
         };
@@ -36,11 +35,8 @@ impl BookmarkAction for EnvAction {
 
         // Add a header to indicate what's being printed
         println!("# Environment variables from: {}", bookmark.title);
-        println!(
-            "# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
-            bookmark.id.unwrap_or(0),
-            bookmark.id.unwrap_or(0)
-        );
+        println!("# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
+            bookmark.id.unwrap_or(0), bookmark.id.unwrap_or(0));
         println!("# ----- BEGIN ENVIRONMENT VARIABLES -----");
 
         // Print the content with clean formatting
@@ -61,9 +57,8 @@ impl BookmarkAction for EnvAction {
 mod tests {
     use super::*;
     use crate::domain::tag::Tag;
-    use crate::infrastructure::interpolation::minijinja_engine::{
-        MiniJinjaEngine, SafeShellExecutor,
-    };
+    use crate::application::services::interpolation::InterpolationServiceImpl;
+    use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
     use std::collections::HashSet;
 
     #[test]
@@ -71,7 +66,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let action = EnvAction::new(interpolation_engine);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = EnvAction::new(interpolation_service);
 
         // Create a simple environment variables content
         let env_content = "export FOO=bar\nexport BAZ=qux";
@@ -105,7 +101,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let action = EnvAction::new(interpolation_engine);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = EnvAction::new(interpolation_service);
 
         // Create env content with interpolation
         let env_content = "export DATE={{ current_date | strftime(\"%Y-%m-%d\") }}\nexport USER={{ \"whoami\" | shell }}";

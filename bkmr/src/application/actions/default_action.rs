@@ -2,20 +2,18 @@
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::interpolation::interface::InterpolationEngine;
 use std::sync::Arc;
 use tracing::{debug, instrument};
+use crate::application::services::interpolation::InterpolationService;
 
 #[derive(Debug)]
 pub struct DefaultAction {
-    interpolation_engine: Arc<dyn InterpolationEngine>,
+    interpolation_service: Arc<dyn InterpolationService>,
 }
 
 impl DefaultAction {
-    pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self {
-            interpolation_engine,
-        }
+    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
+        Self { interpolation_service }
     }
 }
 
@@ -25,7 +23,8 @@ impl BookmarkAction for DefaultAction {
         // Default action falls back to treating the bookmark as a URI
 
         // Render the URL with interpolation if needed
-        let rendered_url = self.interpolation_engine.render_bookmark_url(bookmark)?;
+        let rendered_url = self.interpolation_service.render_bookmark_url(bookmark)
+            .map_err(|e| DomainError::Other(format!("Failed to render URL: {}", e)))?;
 
         // Open the URL in default browser/application
         debug!("Opening with default application: {}", rendered_url);

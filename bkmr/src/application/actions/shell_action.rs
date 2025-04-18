@@ -2,7 +2,7 @@
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::interpolation::interface::InterpolationEngine;
+use crate::application::services::interpolation::InterpolationService;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 use std::sync::Arc;
@@ -10,13 +10,13 @@ use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub struct ShellAction {
-    interpolation_engine: Arc<dyn InterpolationEngine>,
+    interpolation_service: Arc<dyn InterpolationService>,
 }
 
 impl ShellAction {
-    pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
+    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
         Self {
-            interpolation_engine,
+            interpolation_service,
         }
     }
 }
@@ -29,7 +29,8 @@ impl BookmarkAction for ShellAction {
 
         // Apply any interpolation if the script contains template variables
         let rendered_script = if script.contains("{{") || script.contains("{%") {
-            self.interpolation_engine.render_bookmark_url(bookmark)?
+            self.interpolation_service.render_bookmark_url(bookmark)
+                .map_err(|e| DomainError::Other(format!("Failed to render shell script: {}", e)))?
         } else {
             script.to_string()
         };
@@ -96,6 +97,7 @@ impl BookmarkAction for ShellAction {
 mod tests {
     use super::*;
     use crate::domain::tag::Tag;
+    use crate::application::services::interpolation::InterpolationServiceImpl;
     use crate::infrastructure::interpolation::minijinja_engine::{
         MiniJinjaEngine, SafeShellExecutor,
     };
@@ -106,7 +108,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let action = ShellAction::new(interpolation_engine);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new(interpolation_service);
 
         // Create a simple shell script that outputs a message
         let script = "echo 'Hello from shell script'";
@@ -140,7 +143,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor.clone()));
-        let action = ShellAction::new(interpolation_engine);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new(interpolation_service);
 
         // Create a shell script with interpolation
         let script = "echo 'Current date: {{ current_date | strftime(\"%Y-%m-%d\") }}'";
@@ -173,7 +177,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let action = ShellAction::new(interpolation_engine);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new(interpolation_service);
 
         // Create a shell script that will fail
         let script = "exit 1";
