@@ -1,6 +1,6 @@
 [project]
 name = "bkmr"
-version = "4.19.2"
+version = "4.19.3"
 description = "Super fast bookmark manager with semantic full text search'"
 authors = [
     {name = "sysid", email = "sysid@gmx.de"},
@@ -42,7 +42,7 @@ allow-direct-references = true
 packages = ["py"]
 
 [tool.bumpversion]
-current_version = "4.19.2"
+current_version = "4.19.3"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 #search = "{current_version}"
