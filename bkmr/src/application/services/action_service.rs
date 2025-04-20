@@ -1,6 +1,4 @@
 // src/application/services/action_service.rs
-use crate::application::services::factory::create_bookmark_service;
-use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::ActionResolver;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};

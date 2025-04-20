@@ -8,7 +8,6 @@ use crate::application::services::factory::{
     create_action_service, create_bookmark_service, create_clipboard_service,
     create_interpolation_service, create_template_service,
 };
-use crate::application::services::interpolation::InterpolationService;
 use crate::cli::display::{show_bookmarks, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
 use crate::domain::bookmark::Bookmark;

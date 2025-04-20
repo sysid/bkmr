@@ -1,11 +1,11 @@
+use crate::application::services::interpolation::InterpolationService;
 // src/application/actions/text_action.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::application::services::interpolation::InterpolationService;
 use crate::domain::services::clipboard::ClipboardService;
 use std::sync::Arc;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct TextAction {

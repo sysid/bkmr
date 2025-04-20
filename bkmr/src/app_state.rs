@@ -8,7 +8,7 @@ use std::{env, fmt};
 use tracing::{debug, instrument};
 
 // Import our new config module
-use crate::config::{load_settings, FzfOpts, Settings};
+use crate::config::{load_settings, Settings};
 
 /** Global AppState (“Service Locator” Style)
 Global State Management:

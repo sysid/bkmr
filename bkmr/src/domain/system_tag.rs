@@ -51,12 +51,11 @@ impl Tag {
 }
 
 mod tests {
-    use crate::app_state::AppState;
-    use crate::domain::bookmark::Bookmark;
-    use crate::domain::system_tag::SystemTag;
-    use crate::domain::tag::Tag;
+    use super::*;
     use crate::util::testing::init_test_env;
     use std::collections::HashSet;
+    use crate::app_state::AppState;
+    use crate::domain::bookmark::Bookmark;
 
     #[test]
     fn given_tag_when_checking_is_known_system_tag_then_returns_correctly() {

@@ -1,6 +1,5 @@
 use bkmr::app_state::AppState;
 use bkmr::application::error::ApplicationResult;
-use bkmr::application::services::bookmark_service::BookmarkService;
 use bkmr::application::services::factory;
 use bkmr::domain::repositories::repository::BookmarkRepository;
 use bkmr::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;

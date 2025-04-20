@@ -1,14 +1,14 @@
 // src/application/actions/markdown_action.rs
 use crate::app_state::AppState;
+use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::application::services::interpolation::InterpolationService;
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::util::helper::calc_content_hash;
 use crate::util::path::{abspath, is_file_path};
-use markdown::{to_html_with_options, Options, ParseOptions};
+use markdown::{to_html_with_options, Options};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
@@ -479,8 +479,8 @@ impl BookmarkAction for MarkdownAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::tag::Tag;
     use crate::application::services::interpolation::InterpolationServiceImpl;
+    use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
         MiniJinjaEngine, SafeShellExecutor,
     };

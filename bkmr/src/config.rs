@@ -1,6 +1,5 @@
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::{DomainResult};
 use serde::{Deserialize, Serialize};
-use serial_test::serial;
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument, trace, warn};
 
@@ -186,7 +185,7 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
     ];
 
     // Load from config files if they exist
-    let mut found_config = false;
+    // let mut found_config = false;
     for config_path in config_sources.iter().flatten() {
         if config_path.exists() {
             trace!("Loading config from: {:?}", config_path);
@@ -196,7 +195,7 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
                     // Update settings with values from file and mark as loaded
                     file_settings.config_source = ConfigSource::ConfigFile;
                     settings = file_settings;
-                    found_config = true;
+                    // found_config = true;
                     break; // Use the first found configuration file
                 }
             }

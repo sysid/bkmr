@@ -4,10 +4,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use crate::app_state::AppState;
-use crate::application::services::factory::{
-    create_action_service, create_bookmark_service, create_clipboard_service,
-    create_interpolation_service,
-};
+use crate::application::services::factory::create_action_service;
 use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{

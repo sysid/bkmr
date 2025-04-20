@@ -1,4 +1,3 @@
-use std::path::Path;
 // src/application/services/factory.rs
 use crate::app_state::AppState;
 use crate::application::actions::{
@@ -12,13 +11,13 @@ use crate::application::services::template_service::TemplateService;
 use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
-use crate::domain::search::SemanticSearch;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
 use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crossterm::style::Stylize;
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
 // cache repository to avoid multiple migrations

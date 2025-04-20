@@ -1,10 +1,10 @@
 // src/application/actions/shell_action.rs
+use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::application::services::interpolation::InterpolationService;
-use std::io::{Read, Write};
-use std::process::{Command, Stdio};
+use std::io::{Write};
+use std::process::{Command};
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -96,8 +96,8 @@ impl BookmarkAction for ShellAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::tag::Tag;
     use crate::application::services::interpolation::InterpolationServiceImpl;
+    use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
         MiniJinjaEngine, SafeShellExecutor,
     };
