@@ -1,6 +1,5 @@
 use crate::domain::error::{DomainError, DomainResult};
 use serde::{Deserialize, Serialize};
-use serial_test::serial;
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument, trace, warn};
 
