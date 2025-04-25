@@ -9,9 +9,9 @@
 
 [bkmr reborn](https://sysid.github.io/bkmr-reborn/)
 
-`bkmr` is a fast, feature-rich command-line tool that extends far beyond traditional bookmark management.
+`bkmr` - selected [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - is a fast, feature-rich command-line tool that extends far beyond traditional bookmark management.
 
-Store, organize, find, and interact with various content types:
+**Organize**, **find**, and **apply** your various content types:
 
 - Web URLs with automatic metadata extraction
 - Code snippets for quick access and reuse
