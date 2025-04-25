@@ -27,6 +27,7 @@ pub fn process(bookmarks: &[Bookmark]) -> CliResult<()> {
        d <n1> <n2>:    delete selection
        e <n1> <n2>:    edit selection
        t <n1> <n2>:    touch selection (update timestamp)
+       y <n1> <n2>:    yank/copy URL(s) to clipboard
        q | ENTER:      quit
        h:              help
    "#;
@@ -85,6 +86,15 @@ pub fn process(bookmarks: &[Bookmark]) -> CliResult<()> {
                 }
                 break;
             }
+            "y" => {
+                if let Some(indices) = ensure_int_vector(&tokens[1..]) {
+                    yank_bookmark_urls_by_indices(indices, bookmarks)?;
+                } else {
+                    eprintln!("Invalid input, only numbers allowed");
+                    continue;
+                }
+                break;
+            }
             "h" => println!("{}", help_text),
             "q" => break,
             s if regex.is_match(s) => {
@@ -126,6 +136,40 @@ fn get_bookmark_by_index(index: i32, bookmarks: &[Bookmark]) -> Option<&Bookmark
         return None;
     }
     Some(&bookmarks[index as usize - 1])
+}
+
+#[instrument(skip(bookmarks), level = "debug")]
+fn yank_bookmark_urls_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark]) -> CliResult<()> {
+    debug!(
+        "Yanking (copying) URLs for bookmarks at indices: {:?}",
+        indices
+    );
+    let interpolation_service = create_interpolation_service();
+    let clipboard_service = create_clipboard_service();
+
+    for index in indices {
+        match get_bookmark_by_index(index, bookmarks) {
+            Some(bookmark) => {
+                // Render the URL with template variables if needed
+                let rendered_url = match interpolation_service.render_bookmark_url(bookmark) {
+                    Ok(url) => url,
+                    Err(e) => {
+                        eprintln!("Error rendering URL for bookmark {}: {}", index, e);
+                        continue;
+                    }
+                };
+
+                // Copy to clipboard
+                match clipboard_service.copy_to_clipboard(&rendered_url) {
+                    Ok(_) => eprintln!("Copied to clipboard: {}", rendered_url),
+                    Err(e) => eprintln!("Error copying to clipboard: {}", e),
+                }
+            }
+            None => eprintln!("Index {} out of range", index),
+        }
+    }
+
+    Ok(())
 }
 
 /// Executes the default action for a bookmark
@@ -539,6 +583,7 @@ mod tests {
     use crate::domain::tag::Tag;
     use serial_test::serial;
     use std::collections::HashSet;
+    use crate::util::testing::init_test_env;
 
     #[test]
     #[serial]
@@ -601,5 +646,53 @@ mod tests {
         // Negative index (invalid)
         let bookmark = get_bookmark_by_index(-1, &bookmarks);
         assert!(bookmark.is_none());
+    }
+
+    #[test]
+    #[serial]
+    fn test_yank_bookmark_urls_by_indices() {
+        // Arrange
+        let _ = init_test_env();
+
+        // Create test bookmarks
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("test").unwrap());
+
+        let bookmark1 = Bookmark {
+            id: Some(10),
+            url: "https://example.com".to_string(),
+            title: "Example".to_string(),
+            description: "An example site".to_string(),
+            tags: tags.clone(),
+            access_count: 0,
+            created_at: Some(chrono::Utc::now()),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: false,
+        };
+
+        let bookmark2 = Bookmark {
+            id: Some(20),
+            url: "https://test.com".to_string(),
+            title: "Test".to_string(),
+            description: "A test site".to_string(),
+            tags,
+            access_count: 0,
+            created_at: Some(chrono::Utc::now()),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: false,
+        };
+
+        let bookmarks = vec![bookmark1, bookmark2];
+
+        // Act - test that the function executes without errors
+        // We can't easily test clipboard content in unit tests
+        let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks);
+
+        // Assert
+        assert!(result.is_ok(), "Yank operation should succeed");
     }
 }
