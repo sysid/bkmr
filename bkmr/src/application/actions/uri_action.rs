@@ -1,11 +1,11 @@
 // src/application/actions/uri_action.rs
+use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use std::sync::Arc;
 use crossterm::style::Stylize;
+use std::sync::Arc;
 use tracing::{debug, instrument};
-use crate::application::services::interpolation::InterpolationService;
 
 #[derive(Debug)]
 pub struct UriAction {
@@ -28,7 +28,10 @@ impl UriAction {
             // Extract the shell command
             let cmd = url.replace("shell::", "");
             eprintln!("Executing shell command: {}", cmd);
-            eprintln!("{}", "'shell::' is deprecated. Use SystemTag '_shell_' instead.".yellow());
+            eprintln!(
+                "{}",
+                "'shell::' is deprecated. Use SystemTag '_shell_' instead.".yellow()
+            );
 
             // Create a child process with inherited stdio
             let mut child = std::process::Command::new("sh")
@@ -90,7 +93,9 @@ impl BookmarkAction for UriAction {
         // We'll add this to the action service
 
         // Render the URL with interpolation if needed
-        let rendered_url = self.interpolation_service.render_bookmark_url(bookmark)
+        let rendered_url = self
+            .interpolation_service
+            .render_bookmark_url(bookmark)
             .map_err(|e| DomainError::Other(format!("Failed to render URL: {}", e)))?;
 
         // Open the URL

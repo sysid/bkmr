@@ -96,23 +96,21 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
     let repository = create_bookmark_repository();
 
     // Create actions for each system tag
-    let uri_action: Box<dyn BookmarkAction> = Box::new(UriAction::new(
-        Arc::clone(&interpolation_service)
-    ));
+    let uri_action: Box<dyn BookmarkAction> =
+        Box::new(UriAction::new(Arc::clone(&interpolation_service)));
 
     let snippet_action: Box<dyn BookmarkAction> = Box::new(SnippetAction::new(
         Arc::clone(&clipboard_service),
-        Arc::clone(&interpolation_service)
+        Arc::clone(&interpolation_service),
     ));
 
     let text_action: Box<dyn BookmarkAction> = Box::new(TextAction::new(
         Arc::clone(&clipboard_service),
-        Arc::clone(&interpolation_service)
+        Arc::clone(&interpolation_service),
     ));
 
-    let shell_action: Box<dyn BookmarkAction> = Box::new(ShellAction::new(
-        Arc::clone(&interpolation_service)
-    ));
+    let shell_action: Box<dyn BookmarkAction> =
+        Box::new(ShellAction::new(Arc::clone(&interpolation_service)));
 
     // Always create MarkdownAction with repository
     // The action itself will determine whether to update embeddings based on:
@@ -123,13 +121,11 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
         repository.clone(),
     ));
 
-    let env_action: Box<dyn BookmarkAction> = Box::new(EnvAction::new(
-        Arc::clone(&interpolation_service)
-    ));
+    let env_action: Box<dyn BookmarkAction> =
+        Box::new(EnvAction::new(Arc::clone(&interpolation_service)));
 
-    let default_action: Box<dyn BookmarkAction> = Box::new(DefaultAction::new(
-        Arc::clone(&interpolation_service)
-    ));
+    let default_action: Box<dyn BookmarkAction> =
+        Box::new(DefaultAction::new(Arc::clone(&interpolation_service)));
 
     // Create and return the resolver
     Arc::new(SystemTagActionResolver::new(

@@ -2,9 +2,9 @@
 use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
+use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, OnceLock, RwLock};
-use std::{env, fmt};
 use tracing::{debug, instrument};
 
 // Import our new config module
@@ -146,6 +146,7 @@ mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, EnvGuard};
     use serial_test::serial;
+    use std::env;
 
     /// Helper for environment variable cleanup
     // struct EnvGuard {

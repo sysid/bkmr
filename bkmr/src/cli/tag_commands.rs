@@ -5,7 +5,6 @@ use crate::cli::error::CliResult;
 use crate::domain::tag::Tag;
 use crate::util::helper::is_stdout_piped;
 use crossterm::style::Stylize;
-use std::fmt::Write;
 
 pub fn show_tags(cli: Cli) -> CliResult<()> {
     if let Commands::Tags { tag } = cli.command.unwrap() {

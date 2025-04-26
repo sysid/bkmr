@@ -1,4 +1,4 @@
-use crate::domain::error::{DomainResult};
+use crate::domain::error::DomainResult;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument, trace, warn};

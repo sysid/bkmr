@@ -50,12 +50,14 @@ impl Tag {
     }
 }
 
+#[cfg(test)]
+
 mod tests {
     use super::*;
-    use crate::util::testing::init_test_env;
-    use std::collections::HashSet;
     use crate::app_state::AppState;
     use crate::domain::bookmark::Bookmark;
+    use crate::util::testing::init_test_env;
+    use std::collections::HashSet;
 
     #[test]
     fn given_tag_when_checking_is_known_system_tag_then_returns_correctly() {

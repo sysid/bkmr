@@ -1,10 +1,10 @@
 // src/application/actions/env_action.rs
+use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use std::sync::Arc;
 use tracing::{debug, instrument};
-use crate::application::services::interpolation::InterpolationService;
 
 #[derive(Debug)]
 pub struct EnvAction {
@@ -13,7 +13,9 @@ pub struct EnvAction {
 
 impl EnvAction {
     pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
-        Self { interpolation_service }
+        Self {
+            interpolation_service,
+        }
     }
 }
 
@@ -25,8 +27,11 @@ impl BookmarkAction for EnvAction {
 
         // Apply any interpolation if the content contains template variables
         let rendered_content = if env_content.contains("{{") || env_content.contains("{%") {
-            self.interpolation_service.render_bookmark_url(bookmark)
-                .map_err(|e| DomainError::Other(format!("Failed to render environment variables: {}", e)))?
+            self.interpolation_service
+                .render_bookmark_url(bookmark)
+                .map_err(|e| {
+                    DomainError::Other(format!("Failed to render environment variables: {}", e))
+                })?
         } else {
             env_content.to_string()
         };
@@ -35,8 +40,11 @@ impl BookmarkAction for EnvAction {
 
         // Add a header to indicate what's being printed
         println!("# Environment variables from: {}", bookmark.title);
-        println!("# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
-            bookmark.id.unwrap_or(0), bookmark.id.unwrap_or(0));
+        println!(
+            "# Usage: eval \"$(bkmr open {})\" or source <(bkmr open {})",
+            bookmark.id.unwrap_or(0),
+            bookmark.id.unwrap_or(0)
+        );
         println!("# ----- BEGIN ENVIRONMENT VARIABLES -----");
 
         // Print the content with clean formatting
@@ -56,9 +64,11 @@ impl BookmarkAction for EnvAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::tag::Tag;
     use crate::application::services::interpolation::InterpolationServiceImpl;
-    use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+    use crate::domain::tag::Tag;
+    use crate::infrastructure::interpolation::minijinja_engine::{
+        MiniJinjaEngine, SafeShellExecutor,
+    };
     use std::collections::HashSet;
 
     #[test]

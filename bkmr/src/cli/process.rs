@@ -581,9 +581,9 @@ pub fn clone_bookmark(id: i32) -> CliResult<()> {
 mod tests {
     use super::*;
     use crate::domain::tag::Tag;
+    use crate::util::testing::init_test_env;
     use serial_test::serial;
     use std::collections::HashSet;
-    use crate::util::testing::init_test_env;
 
     #[test]
     #[serial]

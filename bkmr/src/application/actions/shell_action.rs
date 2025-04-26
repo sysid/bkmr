@@ -3,8 +3,8 @@ use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use std::io::{Write};
-use std::process::{Command};
+use std::io::Write;
+use std::process::Command;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -29,7 +29,8 @@ impl BookmarkAction for ShellAction {
 
         // Apply any interpolation if the script contains template variables
         let rendered_script = if script.contains("{{") || script.contains("{%") {
-            self.interpolation_service.render_bookmark_url(bookmark)
+            self.interpolation_service
+                .render_bookmark_url(bookmark)
                 .map_err(|e| DomainError::Other(format!("Failed to render shell script: {}", e)))?
         } else {
             script.to_string()

@@ -36,7 +36,8 @@ impl BookmarkAction for TextAction {
 
         // Apply any interpolation if the text contains template variables
         let rendered_content = if content.contains("{{") || content.contains("{%") {
-            self.interpolation_service.render_bookmark_url(bookmark)
+            self.interpolation_service
+                .render_bookmark_url(bookmark)
                 .map_err(|e| DomainError::Other(format!("Failed to render text: {}", e)))?
         } else {
             content.to_string()

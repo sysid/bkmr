@@ -22,6 +22,7 @@ pub struct MarkdownAction {
 }
 
 impl MarkdownAction {
+    #[allow(dead_code)]
     pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
         Self {
             interpolation_service,
@@ -161,12 +162,14 @@ impl BookmarkAction for MarkdownAction {
         };
 
         // Apply any interpolation if the markdown contains template variables
-        let rendered_markdown = if markdown_content.contains("{{") || markdown_content.contains("{%") {
-            self.interpolation_service.render_bookmark_url(bookmark)
-                .map_err(|e| DomainError::Other(format!("Failed to render markdown: {}", e)))?
-        } else {
-            markdown_content.clone()
-        };
+        let rendered_markdown =
+            if markdown_content.contains("{{") || markdown_content.contains("{%") {
+                self.interpolation_service
+                    .render_bookmark_url(bookmark)
+                    .map_err(|e| DomainError::Other(format!("Failed to render markdown: {}", e)))?
+            } else {
+                markdown_content.clone()
+            };
 
         // Update embedding if possible
         if let Err(e) = self.update_embedding(bookmark, &markdown_content) {
@@ -525,7 +528,8 @@ mod tests {
 
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine.clone()));
+        let interpolation_service =
+            Arc::new(InterpolationServiceImpl::new(interpolation_engine.clone()));
 
         // Action without repository
         let action_no_repo = MarkdownAction::new(interpolation_service.clone());
