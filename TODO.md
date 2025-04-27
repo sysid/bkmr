@@ -16,7 +16,7 @@ docu fzf actions
 ## Features
 - rich text with ankiview visualization
 - query to view all missing embeddings
-- add "y"ank to bbb
+- sort fzf list
 
 ### Proposals
 - SOPS integration

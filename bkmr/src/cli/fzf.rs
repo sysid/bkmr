@@ -326,6 +326,12 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         return Ok(());
     }
 
+    // Sort bookmarks by title (case-insensitive)
+    let mut sorted_bookmarks = bookmarks.to_vec();
+    sorted_bookmarks.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+
+    // Use sorted_bookmarks instead of bookmarks from here on
+
     // Read app settings
     let app_state = AppState::read_global();
     let fzf_opts = &app_state.settings.fzf_opts;
@@ -367,7 +373,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
 
     // Send bookmarks to skim based on style
     if style == "enhanced" {
-        let skim_items = create_enhanced_skim_items(bookmarks);
+        let skim_items = create_enhanced_skim_items(&sorted_bookmarks);
         for item in skim_items {
             tx_item.send(item).map_err(|_| {
                 crate::cli::error::CliError::CommandFailed(
@@ -377,7 +383,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         }
     } else {
         // Original style
-        for bookmark in bookmarks {
+        for bookmark in &sorted_bookmarks {
             debug!("Sending bookmark to skim: {}", bookmark.title);
             tx_item.send(Arc::new(bookmark.clone())).map_err(|_| {
                 crate::cli::error::CliError::CommandFailed(
