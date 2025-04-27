@@ -16,7 +16,6 @@ docu fzf actions
 ## Features
 - rich text with ankiview visualization
 - query to view all missing embeddings
-- sort fzf list
 
 ### Proposals
 - SOPS integration
@@ -27,16 +26,10 @@ docu fzf actions
 ## BUGs
 sqlite bug: jupy*
 
-tests fail when ~/.config/bkmr exists and has got wrong config (config tests)
-
-inconsistency in service traits (factory)
-
-
-
 
 ## Gotcha
-bkmr search grad*  # expands to gradlew if present
-edit with vim does not work when "sourcing" like: source <()>
+bkmr search grad*  # shell expands to gradlew if present
+edit with vim does not work when "sourcing" like: source <()> because of terminal
 skim requires TERM: export TERM=xterm-256color
 
 ## Marketing

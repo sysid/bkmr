@@ -113,8 +113,7 @@ See bkmr in action:
    pip install bkmr
 
    # or via brew
-   brew tap sysid/bkmr
-   brew info bkmr
+   brew install bkmr
 
    ```
 
