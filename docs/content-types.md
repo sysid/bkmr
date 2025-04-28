@@ -33,10 +33,7 @@ Store executable shell scripts or command sequences.
 
 ```bash
 # Add a shell script
-bkmr add "#!/bin/bash\necho 'Hello World'\nls -la" shell,scripts --type shell
-
-# Can also be added with shell:: prefix
-bkmr add "shell::find . -name '*.rs' | xargs grep 'fn main'" rust,find
+bkmr add '#!/bin/bash\necho "Hello World"\nls -la' shell,scripts --type shell
 ```
 
 **Default Action:** Executes the script in a shell with proper permissions.
@@ -133,7 +130,6 @@ Where `TYPE` is one of:
 | Pattern | Detected Type |
 |---------|--------------|
 | URLs starting with `http://` or `https://` | `uri` |
-| URLs starting with `shell::` | Shell command |
 | Content with shell shebang (`#!/bin/...`) | `shell` |
 | Content starting with Markdown headers (`#`) | `md` |
 | Paths starting with `/` or `~/` | File path |
@@ -166,15 +162,20 @@ All content types support template interpolation (see [Template Interpolation](.
 
 ```bash
 # A markdown document with dynamic date
-bkmr add "# Meeting Notes: {{ current_date | strftime('%B %d, %Y') }}\n\n## Agenda\n1. Project status\n2. Next steps" 
-     meeting,notes --type md
+bkmr add "# Meeting Notes: {{ current_date | strftime('%B %d, %Y') }}\n\n## Agenda\n1. Project status\n2. Next steps" meeting,notes --type md --title "Meeting Notes"
 
-# A shell script with environment variables
-bkmr add "#!/bin/bash\ncd {{ env('PROJECT_DIR', '~/projects') }}\ngit status" git,status --type shell
+# A shell script with environment variables (auto-detected as SystemTag `_shell_`)
+bkmr add '#!/bin/bash\ncd {{ env("PROJECT_DIR", "~/projects") }}\ngit status' git,status --type shell --title "Git Status"
 
 # Environment variables with dynamic content
-bkmr add "export TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}\nexport GIT_BRANCH={{ \"git branch --show-current\" | shell }}" deploy,env --type env
+bkmr add "export TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}\nexport GIT_BRANCH={{ \"git branch --show-current\" | shell }}" deploy,env --type env --title "Deployment Environment"
 ```
+Of course more convenient is to use the interactive, editor-based input:
+```
+bkmr add --help
+bkmr add -e -t uri|snip|text|shell|md|env
+```
+
 
 ## Benefits for Developer Workflow
 
