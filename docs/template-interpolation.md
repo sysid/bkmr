@@ -11,6 +11,8 @@ Templates are processed when content is accessed (through `open`, `search --fzf`
 Templates use a Jinja2-inspired syntax:
 - `{{ expression }}` - For outputting values
 - `{% statement %}` - For control structures like conditionals
+- escape backslash `\` with `\\` 
+- to not parse content which contains `{{`, enclose it in: `{% raw %}...{% endraw %}`
 
 ## Available Variables and Context
 

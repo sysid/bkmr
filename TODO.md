@@ -16,6 +16,7 @@ docu fzf actions
 ## Features
 - rich text with ankiview visualization
 - query to view all missing embeddings
+- failed to add bookmark: Bookmark with this URL already exists: add ID
 
 ### Proposals
 - SOPS integration

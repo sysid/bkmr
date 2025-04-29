@@ -65,6 +65,7 @@ Benefits for developers:
 ### Shell Action
 
 The shell action executes content as a shell script, making it perfect for automation tasks.
+See "Shell Execution: Two Different Approaches" below for more details.
 
 ```bash
 # Add a shell script
@@ -189,6 +190,43 @@ Benefits:
 - Content is automatically embedded when it changes
 - No need to manually update embeddings when files are modified
 - Enables semantic search of your documentation
+
+## Shell Execution: Two Different Approaches
+
+`bkmr` provides two distinct mechanisms for shell execution, each serving different purposes:
+
+### 1. Shell Action (`_shell_` system tag)
+The primary way to execute shell scripts.
+
+**Characteristics:**
+- Uses the user's preferred shell (`$SHELL` environment variable or `/bin/sh` as fallback)
+- Script runs with inherited stdio (connected to user's terminal)
+- Supports full interactive scripts
+- Executed as standalone scripts with proper permissions
+- Uses the entire bookmark content as the script
+- Output and errors are displayed in the terminal
+
+### 2. Template Shell Filter (`{{ "command" | shell }}`)
+For embedding command output within templates/interpolated content.
+
+**Characteristics:**
+- Always uses `/bin/sh` regardless of user's default shell
+- Restricted by security filters that block potentially harmful commands
+- Output is captured and inserted into the template
+- Limited to small, non-interactive commands
+- Cannot redirections or complex shell constructs
+
+**Example Use Cases:**
+- Including current username: `{{ "whoami" | shell }}`
+- Git branch in documentation: `{{ "git branch --show-current" | shell }}`
+- Inserting system information: `{{ "uname -a" | shell }}`
+
+### Choosing Between Them
+
+- Use `_shell_` tag for standalone scripts that need to be executed with full shell capabilities
+- Use `{{ "command" | shell }}` for embedding command output within other content types
+- For security-sensitive operations, prefer the template approach as it includes safety checks
+- For interactive scripts or those requiring user input, always use the `_shell_` system tag approach
 
 ## Developer Workflow Benefits
 

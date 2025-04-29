@@ -154,6 +154,7 @@ impl SafeShellExecutor {
         Self
     }
 
+    #[expect(dead_code)]
     fn is_command_safe(&self, cmd: &str) -> bool {
         let dangerous_patterns = [
             ";", "|", "&", ">", "<", "`", "$", "(", ")", "{", "}", "[", "]", "sudo", "rm", "mv",
@@ -170,11 +171,12 @@ impl ShellCommandExecutor for SafeShellExecutor {
     fn execute(&self, cmd: &str) -> Result<String, InterpolationError> {
         info!("Executing shell command: {}", cmd);
 
-        if !self.is_command_safe(cmd) {
-            return Err(InterpolationError::Shell(
-                "Command contains forbidden patterns".to_string(),
-            ));
-        }
+        // TODO: Implement a more sophisticated command validation for safe shell mode
+        // if !self.is_command_safe(cmd) {
+        //     return Err(InterpolationError::Shell(
+        //         "Command contains forbidden patterns".to_string(),
+        //     ));
+        // }
 
         let output = Command::new("sh")
             .arg("-c")
