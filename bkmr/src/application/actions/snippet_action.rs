@@ -40,6 +40,7 @@ impl BookmarkAction for SnippetAction {
             content.to_string()
         };
 
+        eprintln!("Copied to clipboard:\n{}", rendered_content);
         // Copy to clipboard
         self.clipboard_service
             .copy_to_clipboard(&rendered_content)?;
