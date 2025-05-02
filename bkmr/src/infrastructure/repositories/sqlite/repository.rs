@@ -642,8 +642,16 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         Ok(ids)
     }
 
-    fn exists_by_url(&self, url: &str) -> Result<bool, DomainError> {
-        self.get_by_url(url).map(|result| result.is_some())
+    #[instrument(skip(self))]
+    fn exists_by_url(&self, url: &str) -> Result<i32, DomainError> {
+        let bookmark = self.get_by_url(url)?;
+
+        match bookmark {
+            Some(bm) => bm
+                .id
+                .ok_or_else(|| DomainError::BookmarkNotFound("Bookmark ID is None".to_string())),
+            None => Ok(-1),
+        }
     }
 
     #[instrument(skip_all, level = "debug")]
@@ -1024,11 +1032,11 @@ mod tests {
 
         // Check existing URL
         let exists = repo.exists_by_url("https://exists-test.com")?;
-        assert!(exists);
+        assert_eq!(exists, 1);
 
         // Check non-existing URL
         let not_exists = repo.exists_by_url("https://does-not-exist.com")?;
-        assert!(!not_exists);
+        assert_eq!(not_exists, -1);
 
         Ok(())
     }

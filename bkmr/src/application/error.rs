@@ -8,8 +8,8 @@ pub enum ApplicationError {
     #[error("Bookmark not found with ID {0}")]
     BookmarkNotFound(i32),
 
-    #[error("Bookmark with this URL already exists: {0}")]
-    BookmarkExists(String),
+    #[error("Bookmark already exists: Id {0}: {1}")]
+    BookmarkExists(i32, String),
 
     #[error("Domain error occurred: {0}")]
     Domain(#[from] DomainError),

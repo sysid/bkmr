@@ -71,7 +71,7 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     fn get_bookmarks_fts(&self, fts_query: &str) -> SqliteResult<Vec<i32>>;
 
     /// Check if bookmark exists by URL
-    fn exists_by_url(&self, url: &str) -> Result<bool, DomainError>;
+    fn exists_by_url(&self, url: &str) -> Result<i32, DomainError>;
 
     /// Get bookmarks that are marked as embeddable but don't have embeddings yet
     fn get_embeddable_without_embeddings(&self) -> Result<Vec<Bookmark>, DomainError>;

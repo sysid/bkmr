@@ -57,8 +57,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         fetch_metadata: bool,
     ) -> ApplicationResult<Bookmark> {
         // Check if bookmark with URL already exists
-        if self.repository.exists_by_url(url)? {
-            return Err(ApplicationError::BookmarkExists(url.to_string()));
+        let existing_id = self.repository.exists_by_url(url)?;
+        if existing_id != -1 {
+            return Err(ApplicationError::BookmarkExists(
+                existing_id,
+                url.to_string(),
+            ));
         }
 
         let (title_str, desc_str, keywords) =
@@ -402,8 +406,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         for import in imports {
             // Check if bookmark with URL already exists
-            if self.repository.exists_by_url(&import.url)? {
-                debug!("Bookmark with URL {} already exists, skipping", import.url);
+            let existing_id = self.repository.exists_by_url(&import.url)?;
+            if existing_id != -1 {
+                debug!(
+                    "Bookmark with URL {} already exists (ID: {}), skipping",
+                    import.url, existing_id
+                );
                 continue;
             }
 
@@ -670,8 +678,11 @@ mod tests {
         // Assert
         assert!(result.is_err(), "Adding duplicate URL should fail");
         match result {
-            Err(ApplicationError::BookmarkExists(url)) => {
-                assert_eq!(url, existing_url);
+            Err(ApplicationError::BookmarkExists(_, url)) => {
+                assert_eq!(
+                    url, existing_url,
+                    "Error message should contain the existing URL"
+                );
             }
             _ => panic!("Expected a BookmarkExists error"),
         }
