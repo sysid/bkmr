@@ -163,6 +163,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         } else if !bookmark.embeddable {
             // Clear embedding if not embeddable
             bookmark.embedding = None;
+            bookmark.content_hash = None;
         }
 
         bookmark.record_access();
@@ -468,6 +469,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     updated.title = import.title;
                     updated.description = String::new(); // Don't store content, only embeddings
                     updated.embedding = embedding;
+                    updated.embeddable = true;
                     updated.content_hash = Some(new_hash);
 
                     self.repository.update(&updated)?;
@@ -495,6 +497,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     .access_count(0)
                     .created_at(chrono::Utc::now())
                     .updated_at(chrono::Utc::now())
+                    .embeddable(true)
                     .embedding(embedding)
                     .content_hash(content_hash)
                     .build()

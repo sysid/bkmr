@@ -659,8 +659,12 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let mut conn = self.get_connection()?;
 
         // Query for bookmarks that are embeddable but don't have embeddings
+        // Only check if embedding is NULL, ignore content_hash
         let db_bookmarks = dsl::bookmarks
-            .filter(dsl::embedding.is_null().and(dsl::embeddable.eq(true)))
+            .filter(
+                dsl::embeddable.eq(true)
+                    .and(dsl::embedding.is_null())
+            )
             .load::<DbBookmark>(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;
 

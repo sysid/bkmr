@@ -801,7 +801,7 @@ pub fn set_embeddable(cli: Cli) -> CliResult<()> {
     }
 }
 
-#[instrument(skip(cli))]
+#[instrument(skip(cli), level = "debug")]
 pub fn backfill(cli: Cli) -> CliResult<()> {
     if let Commands::Backfill { dry_run } = cli.command.unwrap() {
         let app_state = AppState::read_global();

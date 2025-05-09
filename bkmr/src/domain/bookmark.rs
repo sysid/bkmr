@@ -61,11 +61,16 @@ impl Bookmark {
         // Get content for embedding using the structured method
         let content = bookmark.get_content_for_embedding();
 
-        bookmark.content_hash = Some(calc_content_hash(&content));
-        bookmark.embedding = embedder
+        let embedding_result = embedder
             .embed(&content)?
             .map(serialize_embedding)
             .transpose()?;
+
+        // Only set content_hash if an embedding is created
+        if embedding_result.is_some() {
+            bookmark.embedding = embedding_result;
+            bookmark.content_hash = Some(calc_content_hash(&content));
+        }
 
         Ok(bookmark)
     }
