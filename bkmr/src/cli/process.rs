@@ -69,7 +69,10 @@ pub fn process(bookmarks: &[Bookmark]) -> CliResult<()> {
                 break;
             }
             "e" => {
-                if let Some(indices) = ensure_int_vector(&tokens[1..]) {
+                if tokens.len() == 1 {
+                    // Just "e" command with no indices - edit all bookmarks
+                    edit_all_bookmarks(bookmarks)?;
+                } else if let Some(indices) = ensure_int_vector(&tokens[1..]) {
                     edit_bookmarks_by_indices(indices, bookmarks)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
@@ -318,6 +321,26 @@ fn print_all_bookmark_ids(bookmarks: &[Bookmark]) -> CliResult<()> {
     io::stdout().flush().map_err(CliError::Io)?; // todo: check if this is needed
 
     Ok(())
+}
+
+/// Edit all bookmarks in the list
+#[instrument(skip(bookmarks), level = "debug")]
+fn edit_all_bookmarks(bookmarks: &[Bookmark]) -> CliResult<()> {
+    // Get IDs from all bookmarks
+    let mut bookmark_ids = Vec::new();
+    for bookmark in bookmarks {
+        if let Some(id) = bookmark.id {
+            bookmark_ids.push(id);
+        }
+    }
+
+    if bookmark_ids.is_empty() {
+        eprintln!("No bookmarks to edit");
+        return Ok(());
+    }
+
+    // Call the edit function with all IDs
+    edit_bookmarks(bookmark_ids)
 }
 
 /// Edit bookmarks by their indices
