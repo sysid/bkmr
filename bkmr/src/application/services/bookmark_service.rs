@@ -89,5 +89,5 @@ pub trait BookmarkService: Send + Sync + Debug {
     fn load_json_bookmarks(&self, path: &str, dry_run: bool) -> ApplicationResult<usize>;
 
     /// Load texts from NDJSON file and create embeddings for semantic search
-    fn load_texts(&self, path: &str, dry_run: bool) -> ApplicationResult<usize>;
+    fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize>;
 }

@@ -1,8 +1,8 @@
-use std::any::Any;
-use std::fmt::Debug;
 // bkmr/src/domain/embedding.rs
 use crate::domain::error::{DomainError, DomainResult};
 use ndarray::Array1;
+use std::any::Any;
+use std::fmt::Debug;
 use std::io::Cursor;
 use tracing::instrument;
 
@@ -39,13 +39,18 @@ pub fn cosine_similarity(vec1: &Array1<f32>, vec2: &Array1<f32>) -> f32 {
 /// Deserialize bytes into float vector
 #[instrument(skip_all)]
 pub fn deserialize_embedding(bytes: Vec<u8>) -> Result<Vec<f32>, DomainError> {
-    bincode::deserialize(&bytes).map_err(|e| DomainError::DeserializationError(e.to_string()))
+    // In bincode 2.0, we use the decode method from bincode directly
+    bincode::decode_from_slice::<Vec<f32>, _>(&bytes, bincode::config::legacy())
+        .map(|(result, _)| result)
+        .map_err(|e| DomainError::DeserializationError(e.to_string()))
 }
 
 /// Serialize float vector into bytes
 #[instrument(skip_all)]
 pub fn serialize_embedding(embedding: Vec<f32>) -> Result<Vec<u8>, DomainError> {
-    bincode::serialize(&embedding).map_err(|e| DomainError::SerializationError(e.to_string()))
+    // In bincode 2.0, we use the encode method from bincode directly
+    bincode::encode_to_vec(&embedding, bincode::config::legacy())
+        .map_err(|e| DomainError::SerializationError(e.to_string()))
 }
 
 /// Convert byte array to ndarray

@@ -818,12 +818,12 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
         let bookmarks = bookmark_service.get_bookmarks_without_embeddings()?;
 
         if bookmarks.is_empty() {
-            eprintln!("No embeddable bookmarks found that need embeddings");
+            eprintln!("No embeddable bookmarks found that need embeddings (excluding bookmarks with '_imported_' tag)");
             return Ok(());
         }
 
         eprintln!(
-            "Found {} embeddable bookmarks without embeddings",
+            "Found {} embeddable bookmarks without embeddings (excluding bookmarks with '_imported_' tag)",
             bookmarks.len()
         );
 
@@ -882,9 +882,14 @@ pub fn load_json(cli: Cli) -> CliResult<()> {
     Ok(())
 }
 
-#[instrument(skip(cli))]
+#[instrument(skip(cli), level = "debug")]
 pub fn load_texts(cli: Cli) -> CliResult<()> {
-    if let Commands::LoadTexts { dry_run, path } = cli.command.unwrap() {
+    if let Commands::LoadTexts {
+        dry_run,
+        force,
+        path,
+    } = cli.command.unwrap()
+    {
         let app_state = AppState::read_global();
         if app_state.context.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
         {
@@ -904,13 +909,13 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
         let bookmark_service = create_bookmark_service();
 
         if dry_run {
-            let count = bookmark_service.load_texts(&path, true)?;
+            let count = bookmark_service.load_texts(&path, true, force)?;
             eprintln!("Dry run completed - would process {} text entries", count);
             return Ok(());
         }
 
         // Process the texts
-        let processed_count = bookmark_service.load_texts(&path, false)?;
+        let processed_count = bookmark_service.load_texts(&path, false, force)?;
         eprintln!("Successfully processed {} text entries", processed_count);
     }
     Ok(())

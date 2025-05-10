@@ -230,6 +230,13 @@ pub enum Commands {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
 
+        #[arg(
+            short = 'f',
+            long = "force",
+            help = "force update embeddings even if content has not changed"
+        )]
+        force: bool,
+
         /// Path to NDJSON file containing text documents (one per line)
         #[arg(help = "Path to NDJSON file with text documents (one JSON object per line)")]
         path: String,

@@ -9,6 +9,9 @@ From trait for errors, simplify/optimize error handling
 
 embedding sqlite plugin
 
+## Chore
+- check whether arboard can be replaced with crossterm CopyToClipboard
+
 ## Features
 - rich text with ankiview visualization
 

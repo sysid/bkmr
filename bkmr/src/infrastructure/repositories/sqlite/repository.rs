@@ -662,8 +662,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // Only check if embedding is NULL, ignore content_hash
         let db_bookmarks = dsl::bookmarks
             .filter(
-                dsl::embeddable.eq(true)
+                dsl::embeddable
+                    .eq(true)
                     .and(dsl::embedding.is_null())
+                    .and(dsl::tags.not_like("%,_imported_,%")),
             )
             .load::<DbBookmark>(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;

@@ -436,7 +436,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn load_texts(&self, path: &str, dry_run: bool) -> ApplicationResult<usize> {
+    fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize> {
         let imports = self
             .import_repository
             .import_text_documents(path)
@@ -455,7 +455,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 let content = get_content_for_embedding(&import);
                 let new_hash = calc_content_hash(&content);
 
-                if existing.content_hash.as_ref() != Some(&new_hash) {
+                // Only update if force is true or the content has changed
+                if force || existing.content_hash.as_ref() != Some(&new_hash) {
                     eprintln!("Processing import: {}", import.url);
                     // Generate embedding
                     let embedding = self
@@ -474,6 +475,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
                     self.repository.update(&updated)?;
                     processed_count += 1;
+                } else {
+                    debug!("Skipping import: {} (content unchanged)", import.url);
                 }
             } else {
                 // Create new bookmark with embedding
