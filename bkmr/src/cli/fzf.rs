@@ -22,8 +22,9 @@ use skim::{
     prelude::*, AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem,
     SkimItemReceiver, SkimItemSender,
 };
+use skim::tuikit::attr::{Attr, Color};
+use skim::tuikit::raw::IntoRawMode;
 use tracing::{debug, instrument};
-use tuikit::{attr::Attr, attr::Color, raw::IntoRawMode};
 
 #[derive(Clone)]
 struct SnippetItem {
