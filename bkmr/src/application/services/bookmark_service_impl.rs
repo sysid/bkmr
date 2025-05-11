@@ -134,16 +134,29 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .get_by_id(id)?
             .ok_or(ApplicationError::BookmarkNotFound(id))?;
 
-        // Set the embeddable flag
         bookmark.set_embeddable(embeddable);
 
-        // Update bookmark in repository
-        self.update_bookmark(bookmark)
+        // If embeddable is being turned off, explicitly clear the embeddings
+        if !embeddable {
+            debug!("Setting bookmark {} to non-embeddable", id);
+            bookmark.embedding = None;
+            bookmark.content_hash = None;
+
+            // No need to force embedding creation since we're turning it off
+            self.update_bookmark(bookmark, false)
+        } else {
+            // If embeddable is being turned on, force the creation of embeddings
+            self.update_bookmark(bookmark, true)
+        }
     }
 
     // todo: should be domain service
     #[instrument(skip(self), level = "debug")]
-    fn update_bookmark(&self, mut bookmark: Bookmark) -> ApplicationResult<Bookmark> {
+    fn update_bookmark(
+        &self,
+        mut bookmark: Bookmark,
+        force_embedding: bool,
+    ) -> ApplicationResult<Bookmark> {
         self.validate_bookmark_id(bookmark.id.ok_or_else(|| {
             ApplicationError::Validation("Bookmark ID is required for update".to_string())
         })?)?;
@@ -152,15 +165,26 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         let new_hash = calc_content_hash(&content);
 
         // Only update embedding if embeddable flag is true
-        if bookmark.embeddable && bookmark.content_hash.as_ref() != Some(&new_hash) {
-            // Generate new embedding
-            if let Ok(Some(embedding_vector)) = self.embedder.embed(&content) {
-                if let Ok(serialized) = serialize_embedding(embedding_vector) {
-                    bookmark.embedding = Some(serialized);
-                    bookmark.content_hash = Some(new_hash);
+        if bookmark.embeddable {
+            // Generate new embedding if forced or content has changed
+            if force_embedding || bookmark.content_hash.as_ref() != Some(&new_hash) {
+                debug!(
+                    "Generating new embedding (force={}, content_changed={})",
+                    force_embedding,
+                    bookmark.content_hash.as_ref() != Some(&new_hash)
+                );
+
+                // Generate new embedding
+                if let Ok(Some(embedding_vector)) = self.embedder.embed(&content) {
+                    if let Ok(serialized) = serialize_embedding(embedding_vector) {
+                        bookmark.embedding = Some(serialized);
+                        bookmark.content_hash = Some(new_hash);
+                    }
                 }
+            } else {
+                debug!("Skipping embedding generation - content unchanged and not forced");
             }
-        } else if !bookmark.embeddable {
+        } else {
             // Clear embedding if not embeddable
             bookmark.embedding = None;
             bookmark.content_hash = None;
@@ -183,7 +207,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         for tag in tags {
             bookmark.add_tag(tag.clone())?;
         }
-        self.update_bookmark(bookmark)
+        self.update_bookmark(bookmark, false)
     }
 
     #[instrument(skip(self, tags))]
@@ -202,7 +226,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         for tag in tags {
             let _ = bookmark.remove_tag(tag);
         }
-        self.update_bookmark(bookmark)
+        self.update_bookmark(bookmark, false)
     }
 
     #[instrument(skip(self, tags))]
@@ -215,7 +239,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .ok_or(ApplicationError::BookmarkNotFound(id))?;
 
         bookmark.set_tags(tags.clone())?;
-        self.update_bookmark(bookmark)
+        self.update_bookmark(bookmark, false)
     }
 
     #[instrument(skip(self))]
@@ -367,6 +391,21 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn get_random_bookmarks(&self, count: usize) -> ApplicationResult<Vec<Bookmark>> {
         let bookmarks = self.repository.get_random(count)?;
         Ok(bookmarks)
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn get_bookmarks_for_forced_backfill(&self) -> ApplicationResult<Vec<Bookmark>> {
+        let all_bookmarks = self.repository.get_all()?;
+
+        // Filter to only embeddable bookmarks that don't have the _imported_ tag
+        let filtered_bookmarks = all_bookmarks
+            .into_iter()
+            .filter(|bookmark| {
+                bookmark.embeddable && !bookmark.tags.iter().any(|tag| tag.value() == "_imported_")
+            })
+            .collect();
+
+        Ok(filtered_bookmarks)
     }
 
     #[instrument(skip(self), level = "debug")]

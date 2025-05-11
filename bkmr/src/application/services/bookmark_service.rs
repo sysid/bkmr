@@ -28,7 +28,11 @@ pub trait BookmarkService: Send + Sync + Debug {
     fn set_bookmark_embeddable(&self, id: i32, embeddable: bool) -> ApplicationResult<Bookmark>;
 
     /// Update a bookmark's title and description
-    fn update_bookmark(&self, bookmark: Bookmark) -> ApplicationResult<Bookmark>;
+    fn update_bookmark(
+        &self,
+        bookmark: Bookmark,
+        force_embedding: bool,
+    ) -> ApplicationResult<Bookmark>;
 
     /// Add tags to a bookmark
     fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
@@ -78,6 +82,9 @@ pub trait BookmarkService: Send + Sync + Debug {
 
     /// Get random bookmarks
     fn get_random_bookmarks(&self, count: usize) -> ApplicationResult<Vec<Bookmark>>;
+
+    /// Get bookmarks for forced backfill (all embeddable bookmarks except those with _imported_ tag)
+    fn get_bookmarks_for_forced_backfill(&self) -> ApplicationResult<Vec<Bookmark>>;
 
     /// Check if bookmarks need embedding backfilling
     fn get_bookmarks_without_embeddings(&self) -> ApplicationResult<Vec<Bookmark>>;

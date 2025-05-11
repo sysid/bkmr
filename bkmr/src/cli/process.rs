@@ -410,7 +410,7 @@ pub fn edit_bookmarks(ids: Vec<i32>) -> CliResult<()> {
                 // Check if it's an update or a new bookmark
                 if updated_bookmark.id.is_some() {
                     // Update existing bookmark
-                    match bookmark_service.update_bookmark(updated_bookmark) {
+                    match bookmark_service.update_bookmark(updated_bookmark, false) {
                         Ok(_) => {
                             eprintln!("  Successfully updated bookmark");
                             updated_count += 1;

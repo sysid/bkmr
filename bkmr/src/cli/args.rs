@@ -213,6 +213,13 @@ pub enum Commands {
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
+
+        #[arg(
+            short = 'f',
+            long = "force",
+            help = "force recompute of all embeddings (except _imported_)"
+        )]
+        force: bool,
     },
     /// Load bookmarks from JSON array file
     LoadJson {

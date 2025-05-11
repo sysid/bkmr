@@ -7,8 +7,6 @@ use diesel::sql_types::{Integer, Text};
 use std::collections::HashSet;
 use tracing::{debug, error, info, instrument};
 
-use diesel::QueryableByName;
-
 use super::connection::{ConnectionPool, PooledConnection};
 use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
@@ -22,6 +20,7 @@ use crate::infrastructure::repositories::sqlite::model::{
     DbBookmark, DbBookmarkChanges, IdResult, NewBookmark, TagsFrequency,
 };
 use crate::infrastructure::repositories::sqlite::schema::bookmarks::dsl;
+use diesel::QueryableByName;
 
 #[derive(Debug, QueryableByName)]
 struct TableSchema {
@@ -121,7 +120,8 @@ impl SqliteBookmarkRepository {
     /// Convert a domain entity to a database model
     #[instrument(skip_all, level = "debug")]
     fn to_db_model(&self, bookmark: &Bookmark) -> DbBookmarkChanges {
-        DbBookmarkChanges {
+        // Create the changes with explicit Option types to ensure NULL values are handled correctly
+        let changes = DbBookmarkChanges {
             url: bookmark.url.to_string(),
             metadata: bookmark.title.to_string(),
             tags: bookmark.formatted_tags(),
@@ -131,7 +131,15 @@ impl SqliteBookmarkRepository {
             content_hash: bookmark.content_hash.clone(),
             created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
             embeddable: bookmark.embeddable,
-        }
+        };
+
+        debug!(
+            "Created DB model changes: embedding is null: {}, content_hash is null: {}",
+            changes.embedding.is_none(),
+            changes.content_hash.is_none()
+        );
+
+        changes
     }
 }
 
@@ -335,8 +343,8 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             SqliteRepositoryError::OperationFailed("Bookmark has no ID".to_string())
         })?;
 
-        // Create the update data
         let changes = self.to_db_model(bookmark);
+        // debug!("Updating bookmark with ID {}: {:?}", id, changes);  // logs entire embedding
 
         // Update the bookmark
         let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))

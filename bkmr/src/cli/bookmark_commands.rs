@@ -803,7 +803,7 @@ pub fn set_embeddable(cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli), level = "debug")]
 pub fn backfill(cli: Cli) -> CliResult<()> {
-    if let Commands::Backfill { dry_run } = cli.command.unwrap() {
+    if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         let app_state = AppState::read_global();
         if app_state.context.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
         {
@@ -814,8 +814,12 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
         }
         let bookmark_service = create_bookmark_service();
 
-        // Get bookmarks without embeddings but with embeddable=true
-        let bookmarks = bookmark_service.get_bookmarks_without_embeddings()?;
+        // Get bookmarks to process based on force flag
+        let bookmarks = if force {
+            bookmark_service.get_bookmarks_for_forced_backfill()?
+        } else {
+            bookmark_service.get_bookmarks_without_embeddings()?
+        };
 
         if bookmarks.is_empty() {
             eprintln!("No embeddable bookmarks found that need embeddings (excluding bookmarks with '_imported_' tag)");
@@ -823,8 +827,9 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
         }
 
         eprintln!(
-            "Found {} embeddable bookmarks without embeddings (excluding bookmarks with '_imported_' tag)",
-            bookmarks.len()
+            "Found {} bookmarks to process{}",
+            bookmarks.len(),
+            if force { " (force mode)" } else { "" }
         );
 
         if dry_run {
@@ -841,7 +846,7 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
             for bookmark in &bookmarks {
                 if let Some(id) = bookmark.id {
                     eprintln!("Updating embedding for: {} (ID: {})", bookmark.title, id);
-                    match bookmark_service.update_bookmark(bookmark.clone()) {
+                    match bookmark_service.update_bookmark(bookmark.clone(), force) {
                         Ok(_) => eprintln!("  Successfully updated embedding"),
                         Err(e) => eprintln!("  Failed to update embedding: {}", e),
                     }

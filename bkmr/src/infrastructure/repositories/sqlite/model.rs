@@ -76,7 +76,9 @@ pub struct DbBookmarkChanges {
     pub tags: String,
     pub desc: String,
     pub flags: i32,
+    #[diesel(treat_none_as_null = true)]
     pub embedding: Option<Vec<u8>>,
+    #[diesel(treat_none_as_null = true)]
     pub content_hash: Option<Vec<u8>>,
     pub created_ts: Option<NaiveDateTime>,
     pub embeddable: bool,

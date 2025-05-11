@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::fmt;
 
 /// Represents a bookmark domain entity
-#[derive(Builder, Debug, Clone, PartialEq)]
+#[derive(Builder, Clone, PartialEq)]
 #[builder(setter(into))]
 pub struct Bookmark {
     pub id: Option<i32>,
@@ -306,6 +306,24 @@ impl fmt::Display for Bookmark {
             self.url,
             Tag::format_tags(&self.tags)
         )
+    }
+}
+
+impl fmt::Debug for Bookmark {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Bookmark")
+            .field("id", &self.id)
+            .field("url", &self.url)
+            .field("title", &self.title)
+            .field("description", &self.description)
+            .field("tags", &self.tags)
+            .field("access_count", &self.access_count)
+            .field("created_at", &self.created_at)
+            .field("updated_at", &self.updated_at)
+            .field("embedding", &self.embedding.as_ref().map(|_| "[...]"))
+            .field("content_hash", &self.content_hash)
+            .field("embeddable", &self.embeddable)
+            .finish()
     }
 }
 
