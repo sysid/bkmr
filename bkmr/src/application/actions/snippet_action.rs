@@ -1,11 +1,11 @@
-use crate::application::services::interpolation::InterpolationService;
 // src/application/actions/snippet_action.rs
+use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::services::clipboard::ClipboardService;
 use std::sync::Arc;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub struct SnippetAction {
@@ -18,6 +18,7 @@ impl SnippetAction {
         clipboard_service: Arc<dyn ClipboardService>,
         interpolation_service: Arc<dyn InterpolationService>,
     ) -> Self {
+        debug!("Creating new SnippetAction");
         Self {
             clipboard_service,
             interpolation_service,
@@ -26,7 +27,8 @@ impl SnippetAction {
 }
 
 impl BookmarkAction for SnippetAction {
-    #[instrument(skip(self, bookmark), level = "debug")]
+    #[instrument(skip(self, bookmark), level = "debug", 
+               fields(bookmark_id = ?bookmark.id, bookmark_title = %bookmark.title))]
     fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
         // Get the snippet content - this is stored in the URL field for snippet bookmarks
         let content = bookmark.snippet_content();

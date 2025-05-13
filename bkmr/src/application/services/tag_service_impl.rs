@@ -5,7 +5,7 @@ use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::tag_service::TagService;
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::tag::Tag;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 pub struct TagServiceImpl<R: BookmarkRepository> {
     repository: Arc<R>,
@@ -13,24 +13,25 @@ pub struct TagServiceImpl<R: BookmarkRepository> {
 
 impl<R: BookmarkRepository> TagServiceImpl<R> {
     pub fn new(repository: Arc<R>) -> Self {
+        debug!("Creating new TagServiceImpl");
         Self { repository }
     }
 }
 
 impl<R: BookmarkRepository> TagService for TagServiceImpl<R> {
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "debug", fields(repo_type = std::any::type_name::<R>()))]
     fn get_all_tags(&self) -> ApplicationResult<Vec<(Tag, usize)>> {
         let tags = self.repository.get_all_tags()?;
         Ok(tags)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "debug", fields(tag = %tag.value()))]
     fn get_related_tags(&self, tag: &Tag) -> ApplicationResult<Vec<(Tag, usize)>> {
         let related_tags = self.repository.get_related_tags(tag)?;
         Ok(related_tags)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "debug", fields(tag_str = %tag_str))]
     fn parse_tag_string(&self, tag_str: &str) -> ApplicationResult<Vec<Tag>> {
         if tag_str.is_empty() {
             return Ok(Vec::new());

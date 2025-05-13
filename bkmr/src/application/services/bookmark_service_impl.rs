@@ -1,4 +1,4 @@
-// src/application/services/impl/bookmark_service_impl.rs
+// src/application/services/bookmark_service_impl.rs
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -35,6 +35,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         }
     }
 
+    #[instrument(skip(self), level = "trace")]
     fn validate_bookmark_id(&self, id: i32) -> ApplicationResult<()> {
         if id <= 0 {
             return Err(ApplicationError::Validation(format!(
@@ -47,7 +48,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 }
 
 impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
-    #[instrument(skip(self, tags))]
+    #[instrument(skip(self, tags), level = "debug", 
+               fields(url = %url, title = %title.unwrap_or("None"), fetch_metadata = %fetch_metadata))]
     fn add_bookmark(
         &self,
         url: &str,
@@ -96,14 +98,16 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         // Add keywords as tags if they are valid
         if !keywords.is_empty() {
+            debug!("Processing keywords as tags: {}", keywords);
             if let Ok(keyword_tags) = Tag::parse_tags(&keywords) {
                 all_tags.extend(keyword_tags);
             }
         }
 
         // Create and save bookmark
-        let mut bookmark =
-            Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())?;
+        debug!("Creating bookmark: '{}' with {} tags", title_str, all_tags.len());
+        let mut bookmark = Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())?;
+        
         self.repository.add(&mut bookmark)?;
 
         Ok(bookmark)
@@ -195,7 +199,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(bookmark)
     }
 
-    #[instrument(skip(self, tags))]
+    #[instrument(skip(self, tags), level = "debug")]
     fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
         self.validate_bookmark_id(id)?;
 
@@ -210,7 +214,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         self.update_bookmark(bookmark, false)
     }
 
-    #[instrument(skip(self, tags))]
+    #[instrument(skip(self, tags), level = "debug")]
     fn remove_tags_from_bookmark(
         &self,
         id: i32,
@@ -229,7 +233,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         self.update_bookmark(bookmark, false)
     }
 
-    #[instrument(skip(self, tags))]
+    #[instrument(skip(self, tags), level = "debug")]
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
         self.validate_bookmark_id(id)?;
 
@@ -242,11 +246,13 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         self.update_bookmark(bookmark, false)
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self), level = "debug")]
     fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
         let bookmarks = self.repository.search_by_text(query)?;
         Ok(bookmarks)
     }
+    
+    #[instrument(skip_all, level = "debug")]
     fn search_bookmarks(
         &self,
         query: Option<&str>,
