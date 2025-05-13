@@ -1,5 +1,6 @@
 select * from bookmarks
-WHERE embeddable = 0 and not content_hash IS NULL;
+WHERE embeddable = 1 and tags
+-- WHERE embeddable = 0 and not content_hash IS NULL;
 
 UPDATE bookmarks
 SET content_hash = NULL
