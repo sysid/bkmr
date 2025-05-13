@@ -1,5 +1,5 @@
 // src/infrastructure/repositories/sqlite/error.rs
-
+use crate::domain::error::{DomainError, RepositoryError};
 use diesel::r2d2;
 use diesel::result::Error as DieselError;
 use thiserror::Error;
@@ -30,11 +30,26 @@ pub enum SqliteRepositoryError {
     #[error("Migration error: {0}")]
     MigrationError(String),
 
-    #[error("Repository operation failed: {0}")]
+    #[error("{0}")]
     OperationFailed(String),
 }
 
 pub type SqliteResult<T> = Result<T, SqliteRepositoryError>;
+
+// Add a context method to SqliteRepositoryError
+impl SqliteRepositoryError {
+    pub fn context<C: Into<String>>(self, context: C) -> Self {
+        match self {
+            SqliteRepositoryError::OperationFailed(msg) => {
+                SqliteRepositoryError::OperationFailed(format!("{}: {}", context.into(), msg))
+            }
+            SqliteRepositoryError::ConversionError(msg) => {
+                SqliteRepositoryError::ConversionError(format!("{}: {}", context.into(), msg))
+            }
+            err => SqliteRepositoryError::OperationFailed(format!("{}: {}", context.into(), err)),
+        }
+    }
+}
 
 impl From<r2d2::Error> for SqliteRepositoryError {
     fn from(err: r2d2::Error) -> Self {
@@ -42,74 +57,46 @@ impl From<r2d2::Error> for SqliteRepositoryError {
     }
 }
 
-impl From<SqliteRepositoryError> for crate::domain::error::DomainError {
+// Convert SQLite errors to domain RepositoryError
+impl From<SqliteRepositoryError> for RepositoryError {
     fn from(err: SqliteRepositoryError) -> Self {
         match err {
             SqliteRepositoryError::BookmarkNotFound(id) => {
-                crate::domain::error::DomainError::BookmarkNotFound(id.to_string())
+                RepositoryError::NotFound(format!("Bookmark with ID {}", id))
             }
             SqliteRepositoryError::DatabaseError(diesel_err) => match diesel_err {
-                DieselError::NotFound => crate::domain::error::DomainError::BookmarkNotFound(
-                    "Resource not found".to_string(),
-                ),
-                DieselError::DatabaseError(_, info) => {
-                    crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                        "Database error: {}",
-                        info.message()
-                    ))
+                DieselError::NotFound => {
+                    RepositoryError::NotFound("Resource not found".to_string())
                 }
-                _ => crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "Database error: {}",
-                    diesel_err
-                )),
+                DieselError::DatabaseError(_, info) => {
+                    RepositoryError::Database(format!("Database error: {}", info.message()))
+                }
+                _ => RepositoryError::Database(format!("Database error: {}", diesel_err)),
             },
             SqliteRepositoryError::ConnectionError(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "Database connection error: {}",
-                    e
-                ))
+                RepositoryError::Connection(format!("Database connection error: {}", e))
             }
             SqliteRepositoryError::ConnectionPoolError(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "Connection pool error: {}",
-                    e
-                ))
+                RepositoryError::Connection(format!("Connection pool error: {}", e))
             }
             SqliteRepositoryError::ConversionError(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "Data conversion error: {}",
-                    e
-                ))
+                RepositoryError::Other(format!("Data conversion error: {}", e))
             }
             SqliteRepositoryError::InvalidParameter(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "Invalid parameter: {}",
-                    e
-                ))
+                RepositoryError::Other(format!("Invalid parameter: {}", e))
             }
-            SqliteRepositoryError::IoError(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "IO error: {}",
-                    e
-                ))
-            }
+            SqliteRepositoryError::IoError(e) => RepositoryError::Other(format!("IO error: {}", e)),
             SqliteRepositoryError::MigrationError(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(format!(
-                    "Migration error: {}",
-                    e
-                ))
+                RepositoryError::Other(format!("Migration error: {}", e))
             }
-            SqliteRepositoryError::OperationFailed(e) => {
-                crate::domain::error::DomainError::BookmarkOperationFailed(e)
-            }
+            SqliteRepositoryError::OperationFailed(e) => RepositoryError::Other(e),
         }
     }
 }
 
-// This implementation is no longer needed since we have a more specific one above
-// but keeping it for completeness to avoid breaking other code that might depend on it
-impl From<crate::domain::error::DomainError> for SqliteRepositoryError {
-    fn from(err: crate::domain::error::DomainError) -> Self {
-        SqliteRepositoryError::ConversionError(err.to_string())
+// Simplified conversion from SqliteRepositoryError to DomainError
+impl From<SqliteRepositoryError> for DomainError {
+    fn from(err: SqliteRepositoryError) -> Self {
+        DomainError::RepositoryError(err.into())
     }
 }

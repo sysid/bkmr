@@ -10,7 +10,7 @@ use tracing::{debug, error, info, instrument};
 use super::connection::{ConnectionPool, PooledConnection};
 use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::DomainError;
+use crate::domain::error::{DomainError, RepositoryError};
 use crate::domain::repositories::query::{
     AllTagsSpecification, AnyTagSpecification, BookmarkQuery, SortDirection,
 };
@@ -560,7 +560,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // );
         // self.search(&query)
         self.get_bookmarks(text).map_err(|e| {
-            DomainError::RepositoryError(format!("Failed to search bookmarks by text: {}", e))
+            DomainError::RepositoryError(RepositoryError::Other(format!(
+                "Failed to search bookmarks by text: {}",
+                e
+            )))
         })
     }
 

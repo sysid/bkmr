@@ -2,31 +2,43 @@
 use crate::domain::error::DomainError;
 use thiserror::Error;
 
-/// High-level errors for the application layer.
 #[derive(Error, Debug)]
 pub enum ApplicationError {
+    #[error("Domain error: {0}")]
+    Domain(#[from] DomainError),
+
     #[error("Bookmark not found with ID {0}")]
     BookmarkNotFound(i32),
 
     #[error("Bookmark already exists: Id {0}: {1}")]
     BookmarkExists(i32, String),
 
-    #[error("Domain error occurred: {0}")]
-    Domain(#[from] DomainError),
-
     #[error("Validation failed: {0}")]
     Validation(String),
 
-    #[error("Other application error: {0}")]
+    #[error("{0}")]
     Other(String),
 }
 
-/// Result alias for application services.
-pub type ApplicationResult<T> = Result<T, ApplicationError>;
+// Add a context method for ApplicationError
+impl ApplicationError {
+    pub fn context<C: Into<String>>(self, context: C) -> Self {
+        match self {
+            ApplicationError::Other(msg) => {
+                ApplicationError::Other(format!("{}: {}", context.into(), msg))
+            }
+            ApplicationError::Domain(err) => ApplicationError::Domain(err.context(context)),
+            ApplicationError::Validation(msg) => {
+                ApplicationError::Validation(format!("{}: {}", context.into(), msg))
+            }
+            err => ApplicationError::Other(format!("{}: {}", context.into(), err)),
+        }
+    }
+}
 
 impl From<std::io::Error> for ApplicationError {
     fn from(err: std::io::Error) -> Self {
-        ApplicationError::Other(format!("IO error: {}", err))
+        ApplicationError::Domain(DomainError::Io(err))
     }
 }
 
@@ -35,3 +47,5 @@ impl From<std::time::SystemTimeError> for ApplicationError {
         ApplicationError::Other(format!("System time error: {}", err))
     }
 }
+
+pub type ApplicationResult<T> = Result<T, ApplicationError>;

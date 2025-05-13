@@ -1,11 +1,8 @@
 // src/cli/error.rs
-
-use std::io;
-use thiserror::Error;
-
 use crate::application::error::ApplicationError;
 use crate::domain::error::DomainError;
-use crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError;
+use std::io;
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum CliError {
@@ -21,41 +18,47 @@ pub enum CliError {
     #[error("Operation aborted by user")]
     OperationAborted,
 
-    #[error("Repository error: {0}")]
-    RepositoryError(String),
-
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
-
     #[error("Application error: {0}")]
     Application(#[from] ApplicationError),
 
-    #[error("Domain error: {0}")]
-    Domain(#[from] DomainError),
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
 
-    #[error("SQLite error: {0}")]
-    Sqlite(#[from] SqliteRepositoryError),
-
-    #[error("Other error: {0}")]
+    #[error("{0}")]
     Other(String),
 }
 
-pub type CliResult<T> = Result<T, CliError>;
+// Add context method to CliError
+impl CliError {
+    pub fn context<C: Into<String>>(self, context: C) -> Self {
+        match self {
+            CliError::CommandFailed(msg) => {
+                CliError::CommandFailed(format!("{}: {}", context.into(), msg))
+            }
+            CliError::InvalidInput(msg) => {
+                CliError::InvalidInput(format!("{}: {}", context.into(), msg))
+            }
+            CliError::Application(err) => CliError::Application(err.context(context)),
+            CliError::Other(msg) => CliError::Other(format!("{}: {}", context.into(), msg)),
+            err => CliError::Other(format!("{}: {}", context.into(), err)),
+        }
+    }
+}
 
-// impl From<DomainError> for CliError {
-//     fn from(err: DomainError) -> Self {
-//         CliError::Domain(err)
-//     }
-// }
-//
-// impl From<ApplicationError> for CliError {
-//     fn from(err: ApplicationError) -> Self {
-//         CliError::Application(err)
-//     }
-// }
-//
-// impl From<SqliteRepositoryError> for CliError {
-//     fn from(err: SqliteRepositoryError) -> Self {
-//         CliError::Sqlite(err)
-//     }
-// }
+// Direct conversion from DomainError to CliError (via ApplicationError)
+impl From<DomainError> for CliError {
+    fn from(err: DomainError) -> Self {
+        CliError::Application(ApplicationError::Domain(err))
+    }
+}
+
+impl From<crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError> for CliError {
+    fn from(
+        err: crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError,
+    ) -> Self {
+        // Convert via DomainError which already has a From implementation for SqliteRepositoryError
+        CliError::Application(ApplicationError::Domain(err.into()))
+    }
+}
+
+pub type CliResult<T> = Result<T, CliError>;

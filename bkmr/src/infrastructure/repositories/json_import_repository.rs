@@ -1,5 +1,6 @@
 // src/infrastructure/repositories/json_import_repository.rs
-use crate::domain::error::{DomainError, DomainResult};
+
+use crate::domain::error::{DomainError, DomainResult, RepositoryError};
 use crate::domain::repositories::import_repository::{BookmarkImportData, ImportRepository};
 use crate::domain::tag::Tag;
 use crate::util::path::extract_filename;
@@ -60,15 +61,18 @@ impl ImportRepository for JsonImportRepository {
         let mut reader = BufReader::new(file);
         let mut content = String::new();
         reader.read_to_string(&mut content).map_err(|e| {
-            DomainError::RepositoryError(format!("Failed to read file content: {}", e))
+            DomainError::RepositoryError(RepositoryError::Other(format!(
+                "Failed to read file content: {}",
+                e
+            )))
         })?;
 
         // Parse as a JSON array
         let json_bookmarks: Vec<JsonBookmark> = serde_json::from_str(&content).map_err(|e| {
-            DomainError::RepositoryError(format!(
+            DomainError::RepositoryError(RepositoryError::Other(format!(
                 "Failed to parse JSON: {}. Expected a JSON array of bookmark objects.",
                 e
-            ))
+            )))
         })?;
 
         let mut imports = Vec::new();
@@ -115,7 +119,11 @@ impl ImportRepository for JsonImportRepository {
 
         for (i, line) in reader.lines().enumerate() {
             let line = line.map_err(|e| {
-                DomainError::RepositoryError(format!("Failed to read line {}: {}", i + 1, e))
+                DomainError::RepositoryError(RepositoryError::Other(format!(
+                    "Failed to read line {}: {}",
+                    i + 1,
+                    e
+                )))
             })?;
 
             // Skip empty lines
@@ -127,11 +135,11 @@ impl ImportRepository for JsonImportRepository {
             self.check_text_document_format(&line)?;
 
             let record: TextDocument = serde_json::from_str(&line).map_err(|e| {
-                DomainError::RepositoryError(format!(
+                DomainError::RepositoryError(RepositoryError::Other(format!(
                     "Failed to parse JSON at line {}: {}",
                     i + 1,
                     e
-                ))
+                )))
             })?;
 
             let id = record.id;

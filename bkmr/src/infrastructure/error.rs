@@ -1,4 +1,5 @@
-use crate::domain::error::DomainError;
+// src/infrastructure/error.rs
+use crate::domain::error::{DomainError, RepositoryError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,29 +17,40 @@ pub enum InfrastructureError {
     FileSystem(String),
 
     #[error("Repository error: {0}")]
-    Repository(String),
+    Repository(#[from] RepositoryError),
 }
 
-// Implement conversion from infrastructure errors to domain errors
-impl From<InfrastructureError> for DomainError {
-    fn from(error: InfrastructureError) -> Self {
-        match error {
-            InfrastructureError::Database(msg) => DomainError::BookmarkOperationFailed(msg),
-            InfrastructureError::Network(msg) => DomainError::CannotFetchMetadata(msg),
-            InfrastructureError::Serialization(msg) => DomainError::BookmarkOperationFailed(msg),
-            InfrastructureError::FileSystem(msg) => DomainError::BookmarkOperationFailed(msg),
-            InfrastructureError::Repository(msg) => DomainError::RepositoryError(msg),
+// Add context method
+impl InfrastructureError {
+    pub fn context<C: Into<String>>(self, context: C) -> Self {
+        match self {
+            InfrastructureError::Database(msg) => {
+                InfrastructureError::Database(format!("{}: {}", context.into(), msg))
+            }
+            InfrastructureError::Network(msg) => {
+                InfrastructureError::Network(format!("{}: {}", context.into(), msg))
+            }
+            InfrastructureError::Repository(err) => {
+                InfrastructureError::Repository(err.context(context))
+            }
+            err => InfrastructureError::Database(format!("{}: {}", context.into(), err)),
         }
     }
 }
 
-// Add conversions from specific repository errors
-impl From<crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError>
-    for InfrastructureError
-{
-    fn from(
-        error: crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError,
-    ) -> Self {
-        InfrastructureError::Database(error.to_string())
+// Convert to domain errors
+impl From<InfrastructureError> for DomainError {
+    fn from(error: InfrastructureError) -> Self {
+        match error {
+            InfrastructureError::Database(msg) => {
+                DomainError::RepositoryError(RepositoryError::Database(msg))
+            }
+            InfrastructureError::Network(msg) => DomainError::CannotFetchMetadata(msg),
+            InfrastructureError::Serialization(msg) => DomainError::SerializationError(msg),
+            InfrastructureError::FileSystem(msg) => {
+                DomainError::Io(std::io::Error::new(std::io::ErrorKind::Other, msg))
+            }
+            InfrastructureError::Repository(err) => DomainError::RepositoryError(err),
+        }
     }
 }

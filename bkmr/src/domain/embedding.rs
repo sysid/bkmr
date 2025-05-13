@@ -54,7 +54,7 @@ pub fn serialize_embedding(embedding: Vec<f32>) -> Result<Vec<u8>, DomainError> 
 }
 
 /// Convert byte array to ndarray
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 pub fn bytes_to_array(bytes: &[u8]) -> Result<Array1<f32>, DomainError> {
     let mut cursor = Cursor::new(bytes);
     let num_floats = bytes.len() / 4;
@@ -63,7 +63,7 @@ pub fn bytes_to_array(bytes: &[u8]) -> Result<Array1<f32>, DomainError> {
     for _ in 0..num_floats {
         match byteorder::ReadBytesExt::read_f32::<byteorder::LittleEndian>(&mut cursor) {
             Ok(value) => values.push(value),
-            Err(e) => return Err(DomainError::IoError(e)),
+            Err(e) => return Err(DomainError::Io(e)),
         }
     }
 
@@ -71,14 +71,14 @@ pub fn bytes_to_array(bytes: &[u8]) -> Result<Array1<f32>, DomainError> {
 }
 
 /// Convert ndarray to byte array
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 pub fn array_to_bytes(array: &Array1<f32>) -> Result<Vec<u8>, DomainError> {
     let mut buffer = Vec::with_capacity(array.len() * 4);
 
     for &value in array.iter() {
         match byteorder::WriteBytesExt::write_f32::<byteorder::LittleEndian>(&mut buffer, value) {
             Ok(_) => {}
-            Err(e) => return Err(DomainError::IoError(e)),
+            Err(e) => return Err(DomainError::Io(e)),
         }
     }
 
