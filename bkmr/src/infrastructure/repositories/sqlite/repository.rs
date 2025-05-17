@@ -186,59 +186,83 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     }
 
     #[instrument(skip_all, level = "debug")]
-        fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError> {
+    fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError> {
         let mut conn = self.get_connection()?;
-        
-        // Start with a simple query to get all bookmarks
-        let mut bookmarks = Vec::new();
-        
-        // If there's a text query, use FTS
-        if let Some(text_query) = &query.text_query {
+
+        // First, handle text query with FTS if present
+        let bookmark_ids = if let Some(text_query) = &query.text_query {
             if !text_query.is_empty() {
-                // Use FTS to get IDs
-                let ids = self.get_bookmarks_fts(text_query)?;
-                
-                // Fetch the matching bookmarks
-                for id in ids {
-                    if let Ok(Some(bookmark)) = self.get_by_id(id) {
-                        bookmarks.push(bookmark);
-                    }
-                }
+                // Use FTS to get matching bookmark IDs
+                debug!("Using FTS search for query: {}", text_query);
+                self.get_bookmarks_fts(text_query)?
             } else {
-                // Empty text query, get all bookmarks
-                bookmarks = dsl::bookmarks
-                    .load::<DbBookmark>(&mut conn)
-                    .map_err(SqliteRepositoryError::DatabaseError)?
-                    .into_iter()
-                    .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
-                        Ok(bookmark) => Some(bookmark),
-                        Err(e) => {
-                            error!("Failed to convert bookmark: {}", e);
-                            None
-                        }
-                    })
-                    .collect();
+                // Empty text query, get all IDs
+                debug!("Empty text query, retrieving all bookmark IDs");
+                self.get_all_bookmark_ids(&mut conn)?
             }
         } else {
-            // No text query, get all bookmarks
-            bookmarks = dsl::bookmarks
-                .load::<DbBookmark>(&mut conn)
-                .map_err(SqliteRepositoryError::DatabaseError)?
-                .into_iter()
-                .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
-                    Ok(bookmark) => Some(bookmark),
-                    Err(e) => {
-                        error!("Failed to convert bookmark: {}", e);
-                        None
-                    }
-                })
-                .collect();
+            // No text query, get all IDs
+            debug!("No text query, retrieving all bookmark IDs");
+            self.get_all_bookmark_ids(&mut conn)?
+        };
+
+        // If we have no IDs after FTS, return empty result quickly
+        if bookmark_ids.is_empty() {
+            debug!("No matching bookmarks found for text query");
+            return Ok(Vec::new());
         }
-        
-        // Apply all filters from the query
-        let filtered_bookmarks = query.apply_filters(&bookmarks);
-        
+
+        // Fetch the complete bookmark objects for the matching IDs
+        let bookmarks = self.get_bookmarks_by_ids(&bookmark_ids)?;
+
+        // Apply all other filters from the query
+        let filtered_bookmarks = query.apply_non_text_filters(&bookmarks);
+
+        debug!(
+            "After filtering: {} bookmarks match the query",
+            filtered_bookmarks.len()
+        );
         Ok(filtered_bookmarks)
+    }
+
+    #[instrument(skip_all, level = "trace")]
+    fn get_all_bookmark_ids(
+        &self,
+        conn: &mut PooledConnection,
+    ) -> Result<Vec<i32>, SqliteRepositoryError> {
+        let ids = dsl::bookmarks
+            .select(dsl::id)
+            .load::<i32>(conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        Ok(ids)
+    }
+
+    #[instrument(skip_all, level = "trace")]
+    fn get_bookmarks_by_ids(&self, ids: &[i32]) -> Result<Vec<Bookmark>, DomainError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut conn = self.get_connection()?;
+
+        let db_bookmarks = dsl::bookmarks
+            .filter(dsl::id.eq_any(ids))
+            .load::<DbBookmark>(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        let bookmarks = db_bookmarks
+            .into_iter()
+            .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
+                Ok(bookmark) => Some(bookmark),
+                Err(e) => {
+                    error!("Failed to convert bookmark: {}", e);
+                    None
+                }
+            })
+            .collect();
+
+        Ok(bookmarks)
     }
 
     #[instrument(skip_all, level = "debug")]
@@ -1196,5 +1220,342 @@ mod tests {
         let repo = setup_test_db();
         assert!(repo.get_connection().is_ok());
         print_db_schema(&repo);
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_all_bookmark_ids() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+        let mut conn = repo.get_connection()?;
+
+        // Act
+        let ids = repo.get_all_bookmark_ids(&mut conn)?;
+
+        // Assert
+        assert!(!ids.is_empty(), "Should return at least some bookmark IDs");
+
+        // Verify count matches total bookmarks
+        let all_bookmarks = repo.get_all()?;
+        assert_eq!(
+            ids.len(),
+            all_bookmarks.len(),
+            "Number of IDs should match number of bookmarks"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_bookmarks_by_ids_with_valid_ids() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+        let mut conn = repo.get_connection()?;
+
+        // Get a subset of IDs (first 3)
+        let all_ids = repo.get_all_bookmark_ids(&mut conn)?;
+        let subset_ids: Vec<i32> = all_ids.into_iter().take(3).collect();
+
+        // Act
+        let bookmarks = repo.get_bookmarks_by_ids(&subset_ids)?;
+
+        // Assert
+        assert_eq!(
+            bookmarks.len(),
+            subset_ids.len(),
+            "Should return exactly the number of bookmarks for the provided IDs"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_bookmarks_by_ids_with_empty_ids() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+        let empty_ids: Vec<i32> = Vec::new();
+
+        // Act
+        let bookmarks = repo.get_bookmarks_by_ids(&empty_ids)?;
+
+        // Assert
+        assert!(
+            bookmarks.is_empty(),
+            "Should return empty vector for empty IDs list"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_bookmarks_by_ids_with_nonexistent_ids() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+        let nonexistent_ids = vec![99999, 99998, 99997]; // IDs that shouldn't exist
+
+        // Act
+        let bookmarks = repo.get_bookmarks_by_ids(&nonexistent_ids)?;
+
+        // Assert
+        assert!(
+            bookmarks.is_empty(),
+            "Should return empty vector for nonexistent IDs"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_get_bookmarks_by_ids_with_mixed_ids() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+        let mut conn = repo.get_connection()?;
+
+        // Get some valid IDs
+        let valid_ids: Vec<i32> = repo
+            .get_all_bookmark_ids(&mut conn)?
+            .into_iter()
+            .take(2)
+            .collect();
+
+        // Create a list with both valid and invalid IDs
+        let mut mixed_ids = valid_ids.clone();
+        mixed_ids.push(99999); // Add a nonexistent ID
+
+        // Act
+        let bookmarks = repo.get_bookmarks_by_ids(&mixed_ids)?;
+
+        // Assert
+        assert_eq!(
+            bookmarks.len(),
+            valid_ids.len(),
+            "Should return only bookmarks for valid IDs"
+        );
+
+        // Check that each returned bookmark has one of the valid IDs
+        for bookmark in &bookmarks {
+            assert!(
+                valid_ids.contains(&bookmark.id.unwrap()),
+                "Returned bookmark should have a valid ID"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_search_with_text_query_only() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+
+        // Create a query with just a text search
+        let query = BookmarkQuery::new().with_text_query(Some("Google"));
+
+        // Act
+        let results = repo.search(&query)?;
+
+        // Assert
+        assert!(
+            !results.is_empty(),
+            "Should find bookmarks matching text query"
+        );
+
+        // Every result should contain "Google" somewhere
+        // Note: This is an approximation since FTS might use stemming, etc.
+        let has_match = results
+            .iter()
+            .any(|b| b.title.contains("Google") || b.url.contains("google"));
+
+        assert!(
+            has_match,
+            "At least one result should contain the search text"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_search_with_empty_text_query() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+
+        // Create a query with an empty text search
+        let query = BookmarkQuery::new().with_text_query(Some(""));
+
+        // Act
+        let results = repo.search(&query)?;
+
+        // Assert
+        assert!(
+            !results.is_empty(),
+            "Empty text query should return all bookmarks"
+        );
+
+        // Results should match get_all
+        let all_bookmarks = repo.get_all()?;
+        assert_eq!(
+            results.len(),
+            all_bookmarks.len(),
+            "Empty text query should return all bookmarks"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_search_with_no_text_query() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+
+        // Create a query with no text search
+        let query = BookmarkQuery::new();
+
+        // Act
+        let results = repo.search(&query)?;
+
+        // Assert
+        assert!(
+            !results.is_empty(),
+            "No text query should return all bookmarks"
+        );
+
+        // Results should match get_all
+        let all_bookmarks = repo.get_all()?;
+        assert_eq!(
+            results.len(),
+            all_bookmarks.len(),
+            "No text query should return all bookmarks"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_search_with_text_and_tag_filters() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+
+        // Create a tag that exists in sample data
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("aaa")?);
+
+        // Create a query with both text and tag filters
+        let query = BookmarkQuery::new()
+            .with_text_query(Some("TEST"))
+            .with_tags_all(Some(&tags));
+
+        // Act
+        let results = repo.search(&query)?;
+
+        // Assert
+        // Each result should have the specified tag
+        for bookmark in &results {
+            assert!(
+                bookmark.tags.contains(&Tag::new("aaa")?),
+                "Search results should respect tag filtering"
+            );
+        }
+
+        // Compare with results from a query with just the text
+        let text_only_query = BookmarkQuery::new().with_text_query(Some("TEST"));
+        let text_only_results = repo.search(&text_only_query)?;
+
+        // The filtered results should be a subset of the text-only results
+        assert!(
+            results.len() <= text_only_results.len(),
+            "Adding tag filters should return same or fewer results"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_search_with_nonmatching_text_query() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+
+        // Create a query with a text search that shouldn't match anything
+        let query =
+            BookmarkQuery::new().with_text_query(Some("ThisShouldNotMatchAnything12345XYZ"));
+
+        // Act
+        let results = repo.search(&query)?;
+
+        // Assert
+        assert!(
+            results.is_empty(),
+            "Non-matching text query should return empty results"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn test_search_with_mixed_filters() -> Result<(), DomainError> {
+        // Arrange
+        let repo = setup_test_db();
+
+        // Create a complex query with multiple filter types
+        let mut all_tags = HashSet::new();
+        all_tags.insert(Tag::new("aaa")?);
+
+        let mut any_tags = HashSet::new();
+        any_tags.insert(Tag::new("bbb")?);
+        any_tags.insert(Tag::new("xxx")?);
+
+        let query = BookmarkQuery::new()
+            .with_text_query(Some("TEST"))
+            .with_tags_all(Some(&all_tags))
+            .with_tags_any(Some(&any_tags))
+            .with_sort_by_date(SortDirection::Descending)
+            .with_limit(5);
+
+        // Act
+        let results = repo.search(&query)?;
+
+        // Assert
+        // Each result should match all filter criteria
+        for bookmark in &results {
+            // Should have the "all" tag
+            assert!(
+                bookmark.tags.contains(&Tag::new("aaa")?),
+                "Results should have the 'all' tag"
+            );
+
+            // Should have at least one of the "any" tags
+            assert!(
+                bookmark.tags.contains(&Tag::new("bbb")?)
+                    || bookmark.tags.contains(&Tag::new("xxx")?),
+                "Results should have at least one of the 'any' tags"
+            );
+        }
+
+        // Should respect the limit
+        assert!(
+            results.len() <= 5,
+            "Results should respect the limit parameter"
+        );
+
+        // If there are multiple results, they should be in descending order
+        if results.len() > 1 {
+            for i in 0..results.len() - 1 {
+                assert!(
+                    results[i].updated_at >= results[i + 1].updated_at,
+                    "Results should be sorted in descending order"
+                );
+            }
+        }
+
+        Ok(())
     }
 }

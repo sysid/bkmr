@@ -4,7 +4,8 @@ use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainError;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::tag::Tag;
-use crate::infrastructure::repositories::sqlite::error::SqliteResult;
+use crate::infrastructure::repositories::sqlite::connection::PooledConnection;
+use crate::infrastructure::repositories::sqlite::error::{SqliteRepositoryError, SqliteResult};
 use std::collections::HashSet;
 /*
    Repository Interface
@@ -24,7 +25,7 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     fn get_by_url(&self, url: &str) -> Result<Option<Bookmark>, DomainError>;
 
     /// Search for bookmarks using a query specification
-    fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError>;
+    fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError>; // Helper method to get all bookmark IDs
 
     /// Get all bookmarks
     fn get_all(&self) -> Result<Vec<Bookmark>, DomainError>;
@@ -75,4 +76,9 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
 
     /// Get bookmarks that are marked as embeddable but don't have embeddings yet
     fn get_embeddable_without_embeddings(&self) -> Result<Vec<Bookmark>, DomainError>;
+    fn get_bookmarks_by_ids(&self, ids: &[i32]) -> Result<Vec<Bookmark>, DomainError>;
+    fn get_all_bookmark_ids(
+        &self,
+        conn: &mut PooledConnection,
+    ) -> Result<Vec<i32>, SqliteRepositoryError>;
 }

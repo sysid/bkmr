@@ -372,34 +372,12 @@ impl BookmarkQuery {
     }
 
     // Add a new method to apply all filters to a collection of bookmarks
-    pub fn apply_filters(&self, bookmarks: &[Bookmark]) -> Vec<Bookmark> {
+    pub fn apply_non_text_filters(&self, bookmarks: &[Bookmark]) -> Vec<Bookmark> {
         let mut filtered = bookmarks.to_vec();
 
         // Apply specification if present
         if let Some(spec) = &self.specification {
             filtered.retain(|bookmark| spec.is_satisfied_by(bookmark));
-        }
-
-        // Apply text search if present
-        if let Some(query) = &self.text_query {
-            if !query.is_empty() {
-                let query_lower = query.to_lowercase();
-                filtered.retain(|bookmark| {
-                    let content = format!(
-                        "{} {} {} {}",
-                        bookmark.title.to_lowercase(),
-                        bookmark.description.to_lowercase(),
-                        bookmark.url.to_lowercase(),
-                        bookmark
-                            .tags
-                            .iter()
-                            .map(|t| t.value().to_lowercase())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    );
-                    content.contains(&query_lower)
-                });
-            }
         }
 
         // Apply exact tag matching
