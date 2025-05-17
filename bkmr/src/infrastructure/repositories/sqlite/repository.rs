@@ -539,7 +539,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     ) -> Result<Vec<Bookmark>, DomainError> {
         let mut query = BookmarkQuery::new().with_sort_by_date(direction);
         if let Some(limit) = limit {
-            query = query.with_limit(limit);
+            query = query.with_limit(Option::from(limit));
         }
         self.search(&query)
     }
@@ -1518,7 +1518,7 @@ mod tests {
             .with_tags_all(Some(&all_tags))
             .with_tags_any(Some(&any_tags))
             .with_sort_by_date(SortDirection::Descending)
-            .with_limit(5);
+            .with_limit(Some(5));
 
         // Act
         let results = repo.search(&query)?;

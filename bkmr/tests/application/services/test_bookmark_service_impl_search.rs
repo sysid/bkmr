@@ -53,7 +53,7 @@ fn search_bookmarks(
         .with_sort_by_date(sort_direction);
 
     let query_with_limit = if let Some(lim) = limit {
-        query.with_limit(lim)
+        query.with_limit(Option::from(lim))
     } else {
         query
     };

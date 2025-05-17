@@ -142,6 +142,16 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             parse_tag_string(&tags_any_not_prefix),
         );
 
+        let limit_usize = match limit {
+            Some(l) if l <= 0 => {
+                return Err(CliError::InvalidInput(
+                    "Limit must be a positive integer".to_string(),
+                ))
+            }
+            Some(l) => Some(l as usize),
+            None => None,
+        };
+
         // Create a query object instead of directly calling search_bookmarks
         let query = BookmarkQuery::new()
             .with_text_query(fts_query.as_deref())
@@ -151,11 +161,7 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             .with_tags_any(any_tags.as_ref())
             .with_tags_any_not(any_not_tags.as_ref())
             .with_sort_by_date(sort_direction)
-            .with_limit(
-                limit
-                    .map(|v| v as usize)
-                    .expect("Limit must be a positive integer"),
-            );
+            .with_limit(limit_usize);
 
         // Use the new search method
         let bookmarks = service.search_bookmarks(&query)?;

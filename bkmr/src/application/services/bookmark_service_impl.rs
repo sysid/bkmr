@@ -297,7 +297,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             None => {
                 let mut query = BookmarkQuery::new();
                 if let Some(limit_val) = limit {
-                    query = query.with_limit(limit_val);
+                    query = query.with_limit(Some(limit_val));
                 }
                 self.repository.search(&query)?
             }

@@ -359,8 +359,8 @@ impl BookmarkQuery {
         self
     }
 
-    pub fn with_limit(mut self, limit: usize) -> Self {
-        self.limit = Some(limit);
+    pub fn with_limit(mut self, limit: Option<usize>) -> Self {
+        self.limit = limit;
         self
     }
 
@@ -676,7 +676,7 @@ mod tests {
         let query = BookmarkQuery::new()
             .with_specification(TextSearchSpecification::new("rust".to_string()))
             .with_sort_by_date(SortDirection::Descending)
-            .with_limit(10);
+            .with_limit(Some(10));
 
         assert!(query.matches(&bookmark));
         assert_eq!(query.sort_by_date, Some(SortDirection::Descending));
@@ -830,7 +830,7 @@ mod tests {
         assert_eq!(results8[2].id, Some(3)); // Oldest last
 
         // Test 9: Limit results
-        let query9 = BookmarkQuery::new().with_limit(2);
+        let query9 = BookmarkQuery::new().with_limit(Some(2));
         let results9 = query9.apply_non_text_filters(&bookmarks);
 
         assert_eq!(results9.len(), 2);
@@ -848,7 +848,7 @@ mod tests {
             .with_tags_all(Some(&all_tags))
             .with_tags_any_not(Some(&any_not_tags))
             .with_sort_by_date(SortDirection::Descending)
-            .with_limit(1);
+            .with_limit(Some(1));
 
         let combined_results = combined_query.apply_non_text_filters(&bookmarks);
 
@@ -889,7 +889,7 @@ mod tests {
         let query = BookmarkQuery::new()
             .with_tags_all(Some(&tags))
             .with_sort_by_date(SortDirection::Descending)
-            .with_limit(10);
+            .with_limit(Some(10));
 
         // Apply filters to empty collection
         let results = query.apply_non_text_filters(&bookmarks);
