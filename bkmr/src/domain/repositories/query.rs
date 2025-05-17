@@ -263,7 +263,12 @@ pub trait SpecificationExt<T: std::fmt::Debug>: Specification<T> {
 }
 
 /// Implement SpecificationExt for all Specification implementors
-impl<T, S> SpecificationExt<T> for S where S: Specification<T>, T: std::fmt::Debug {}
+impl<T, S> SpecificationExt<T> for S
+where
+    S: Specification<T>,
+    T: std::fmt::Debug,
+{
+}
 
 /// A query object that encapsulates specification and sorting
 #[derive(Debug)]
@@ -676,5 +681,267 @@ mod tests {
         assert!(query.matches(&bookmark));
         assert_eq!(query.sort_by_date, Some(SortDirection::Descending));
         assert_eq!(query.limit, Some(10));
+    }
+
+    #[test]
+    fn test_apply_non_text_filters() {
+        let _ = init_test_env();
+
+        // Create test bookmarks with various properties
+        let app_state = AppState::read_global();
+        let embedder = &*app_state.context.embedder;
+
+        // Create some test bookmarks
+        let now = chrono::Utc::now();
+        let one_day_ago = now - chrono::Duration::days(1);
+        let two_days_ago = now - chrono::Duration::days(2);
+
+        // Bookmark 1: has tags "rust", "programming"
+        let mut tags1 = HashSet::new();
+        tags1.insert(Tag::new("rust").unwrap());
+        tags1.insert(Tag::new("programming").unwrap());
+        let mut bookmark1 = Bookmark::new(
+            "https://example.com/rust",
+            "Rust Programming",
+            "Learn Rust programming",
+            tags1,
+            embedder,
+        )
+        .unwrap();
+        bookmark1.id = Some(1);
+        bookmark1.updated_at = now;
+
+        // Bookmark 2: has tags "python", "programming", "web"
+        let mut tags2 = HashSet::new();
+        tags2.insert(Tag::new("python").unwrap());
+        tags2.insert(Tag::new("programming").unwrap());
+        tags2.insert(Tag::new("web").unwrap());
+        let mut bookmark2 = Bookmark::new(
+            "https://example.com/python",
+            "Python Web Development",
+            "Learn Python web development",
+            tags2,
+            embedder,
+        )
+        .unwrap();
+        bookmark2.id = Some(2);
+        bookmark2.updated_at = one_day_ago;
+
+        // Bookmark 3: has tags "java", "enterprise"
+        let mut tags3 = HashSet::new();
+        tags3.insert(Tag::new("java").unwrap());
+        tags3.insert(Tag::new("enterprise").unwrap());
+        let mut bookmark3 = Bookmark::new(
+            "https://example.com/java",
+            "Java Enterprise",
+            "Enterprise Java development",
+            tags3,
+            embedder,
+        )
+        .unwrap();
+        bookmark3.id = Some(3);
+        bookmark3.updated_at = two_days_ago;
+
+        // Create a collection of bookmarks
+        let bookmarks = vec![bookmark1.clone(), bookmark2.clone(), bookmark3.clone()];
+
+        // Test 1: Filter by exact tags
+        let mut exact_tags = HashSet::new();
+        exact_tags.insert(Tag::new("rust").unwrap());
+        exact_tags.insert(Tag::new("programming").unwrap());
+
+        let query1 = BookmarkQuery::new().with_tags_exact(Some(&exact_tags));
+        let results1 = query1.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results1.len(), 1);
+        assert_eq!(results1[0].id, Some(1));
+
+        // Test 2: Filter by all tags
+        let mut all_tags = HashSet::new();
+        all_tags.insert(Tag::new("programming").unwrap());
+
+        let query2 = BookmarkQuery::new().with_tags_all(Some(&all_tags));
+        let results2 = query2.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results2.len(), 2);
+        assert!(results2.iter().any(|b| b.id == Some(1)));
+        assert!(results2.iter().any(|b| b.id == Some(2)));
+
+        // Test 3: Filter by any tags
+        let mut any_tags = HashSet::new();
+        any_tags.insert(Tag::new("enterprise").unwrap());
+        any_tags.insert(Tag::new("rust").unwrap());
+
+        let query3 = BookmarkQuery::new().with_tags_any(Some(&any_tags));
+        let results3 = query3.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results3.len(), 2);
+        assert!(results3.iter().any(|b| b.id == Some(1)));
+        assert!(results3.iter().any(|b| b.id == Some(3)));
+
+        // Test 4: Filter by tags all not
+        let mut all_not_tags = HashSet::new();
+        all_not_tags.insert(Tag::new("programming").unwrap());
+
+        let query4 = BookmarkQuery::new().with_tags_all_not(Some(&all_not_tags));
+        let results4 = query4.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results4.len(), 1);
+        assert_eq!(results4[0].id, Some(3));
+
+        // Test 5: Filter by tags any not
+        let mut any_not_tags = HashSet::new();
+        any_not_tags.insert(Tag::new("web").unwrap());
+        any_not_tags.insert(Tag::new("enterprise").unwrap());
+
+        let query5 = BookmarkQuery::new().with_tags_any_not(Some(&any_not_tags));
+        let results5 = query5.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results5.len(), 1);
+        assert_eq!(results5[0].id, Some(1));
+
+        // Test 6: Filter by tag prefix
+        let mut prefix_tags = HashSet::new();
+        prefix_tags.insert(Tag::new("pro").unwrap()); // Should match "programming"
+
+        let query6 = BookmarkQuery::new().with_tags_prefix(Some(&prefix_tags));
+        let results6 = query6.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results6.len(), 2);
+        assert!(results6.iter().any(|b| b.id == Some(1)));
+        assert!(results6.iter().any(|b| b.id == Some(2)));
+
+        // Test 7: Sorting by date (ascending)
+        let query7 = BookmarkQuery::new().with_sort_by_date(SortDirection::Ascending);
+        let results7 = query7.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results7.len(), 3);
+        assert_eq!(results7[0].id, Some(3)); // Oldest first
+        assert_eq!(results7[1].id, Some(2));
+        assert_eq!(results7[2].id, Some(1)); // Newest last
+
+        // Test 8: Sorting by date (descending)
+        let query8 = BookmarkQuery::new().with_sort_by_date(SortDirection::Descending);
+        let results8 = query8.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results8.len(), 3);
+        assert_eq!(results8[0].id, Some(1)); // Newest first
+        assert_eq!(results8[1].id, Some(2));
+        assert_eq!(results8[2].id, Some(3)); // Oldest last
+
+        // Test 9: Limit results
+        let query9 = BookmarkQuery::new().with_limit(2);
+        let results9 = query9.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results9.len(), 2);
+
+        // Test 10: Offset results
+        let query10 = BookmarkQuery::new().with_offset(1);
+        let results10 = query10.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results10.len(), 2);
+        assert!(results10.iter().any(|b| b.id == Some(2)));
+        assert!(results10.iter().any(|b| b.id == Some(3)));
+
+        // Test 11: Combining multiple filters
+        let combined_query = BookmarkQuery::new()
+            .with_tags_all(Some(&all_tags))
+            .with_tags_any_not(Some(&any_not_tags))
+            .with_sort_by_date(SortDirection::Descending)
+            .with_limit(1);
+
+        let combined_results = combined_query.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(combined_results.len(), 1);
+        assert_eq!(combined_results[0].id, Some(1));
+
+        // Test 12: Empty tags set
+        let empty_tags = HashSet::new();
+        let query12 = BookmarkQuery::new().with_tags_all(Some(&empty_tags));
+        let results12 = query12.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(
+            results12.len(),
+            3,
+            "Empty tag set should not filter anything"
+        );
+
+        // Test 13: Specification filter
+        let spec = TextSearchSpecification::new("rust".to_string());
+        let query13 = BookmarkQuery::new().with_specification(spec);
+        let results13 = query13.apply_non_text_filters(&bookmarks);
+
+        assert_eq!(results13.len(), 1);
+        assert_eq!(results13[0].id, Some(1));
+    }
+
+    #[test]
+    fn test_apply_non_text_filters_empty_bookmarks() {
+        let _ = init_test_env();
+
+        // Create an empty collection of bookmarks
+        let bookmarks: Vec<Bookmark> = Vec::new();
+
+        // Create a query with various filters
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("test").unwrap());
+
+        let query = BookmarkQuery::new()
+            .with_tags_all(Some(&tags))
+            .with_sort_by_date(SortDirection::Descending)
+            .with_limit(10);
+
+        // Apply filters to empty collection
+        let results = query.apply_non_text_filters(&bookmarks);
+
+        // Should still be empty
+        assert!(
+            results.is_empty(),
+            "Filtering empty collection should return empty results"
+        );
+    }
+
+    #[test]
+    fn test_specification_boxed() {
+        let _ = init_test_env();
+
+        // Create test bookmarks
+        let tags = HashSet::new();
+        let app_state = AppState::read_global();
+        let embedder = &*app_state.context.embedder;
+
+        let bookmark = Bookmark::new(
+            "https://example.com",
+            "Test Bookmark",
+            "This is a test",
+            tags,
+            embedder,
+        )
+        .unwrap();
+
+        // Create a specification
+        let spec = TextSearchSpecification::new("test".to_string());
+
+        // Convert to boxed specification
+        let boxed_spec: Box<dyn Specification<Bookmark>> = Box::new(spec);
+
+        // Create a query with the boxed specification
+        let query = BookmarkQuery::new().with_specification_boxed(boxed_spec);
+
+        // Test that the specification works through the query
+        assert!(query.matches(&bookmark), "Boxed specification should match");
+
+        // Create a specification that shouldn't match
+        let non_matching_spec = TextSearchSpecification::new("nonexistent".to_string());
+        let boxed_non_matching: Box<dyn Specification<Bookmark>> = Box::new(non_matching_spec);
+
+        // Create a query with the non-matching specification
+        let non_matching_query = BookmarkQuery::new().with_specification_boxed(boxed_non_matching);
+
+        // Test that it correctly doesn't match
+        assert!(
+            !non_matching_query.matches(&bookmark),
+            "Non-matching boxed specification should not match"
+        );
     }
 }

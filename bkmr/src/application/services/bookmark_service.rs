@@ -48,7 +48,7 @@ pub trait BookmarkService: Send + Sync + Debug {
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
 
     fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>>;
-        // Add a convenience method to create a query for text search
+    // Add a convenience method to create a query for text search
 
     // Replace the complex search_bookmarks method with a simpler interface
     fn search_bookmarks(&self, query: &BookmarkQuery) -> ApplicationResult<Vec<Bookmark>>;

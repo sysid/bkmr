@@ -151,7 +151,11 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             .with_tags_any(any_tags.as_ref())
             .with_tags_any_not(any_not_tags.as_ref())
             .with_sort_by_date(sort_direction)
-            .with_limit(limit.map(|v| v as usize).expect("Limit must be a positive integer"));
+            .with_limit(
+                limit
+                    .map(|v| v as usize)
+                    .expect("Limit must be a positive integer"),
+            );
 
         // Use the new search method
         let bookmarks = service.search_bookmarks(&query)?;
