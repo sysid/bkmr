@@ -190,7 +190,7 @@ create-release: check-github-token  ## create a release on GitHub via the gh cli
 		exit 1; \
 	else \
 		echo "Creating GitHub release for v$(VERSION)"; \
-		gh release create "v$(VERSION)" --generate-notes; \
+		gh release create "v$(VERSION)" --generate-notes --latest; \
 	fi
 
 .PHONY: check-github-token
