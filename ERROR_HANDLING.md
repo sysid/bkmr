@@ -1,80 +1,112 @@
-## The Role of `SqliteRepositoryError`
+# Error Handling Guidelines for BKMR Project
 
-1. **Infrastructure-Specific Details**: It captures SQLite-specific error cases that the domain layer shouldn't need to know about (connection issues, query failures, etc.)
-
-2. **Error Context**: It can add SQLite-specific context to errors before they're converted to domain errors
-
-3. **Error Isolation**: It keeps infrastructure implementation details isolated from your domain model
-
-## Error Conversion Flow
+## Error Type Hierarchy
 
 ```
-Infrastructure Errors → Domain Errors → Application Errors → Presentation Errors
+Infrastructure → Domain → Application → Presentation (CLI)
 ```
 
-For `SqliteRepositoryError`, the flow should be:
+### Key Error Types
 
-1. **Low-level failures** (Diesel errors, connection errors) → `SqliteRepositoryError`
-2. `SqliteRepositoryError` → `DomainError` (when crossing to domain layer)
-3. `DomainError` → `ApplicationError` (when crossing to application layer)
-4. `ApplicationError` → `CliError` (when presenting to the user)
+1. **Infrastructure Layer**
+   - `SqliteRepositoryError`: Database-specific errors
+   - `InfrastructureError`: General infrastructure failures
+   - `InterpolationError`: Template rendering failures
 
-## Implementation Example
+2. **Domain Layer**
+   - `DomainError`: Core business logic errors
+   - `RepositoryError`: Abstract repository interface errors
+
+3. **Application Layer**
+   - `ApplicationError`: Service-level errors
+
+4. **Presentation Layer**
+   - `CliError`: Command-line interface errors
+
+## Core Error Handling Principles
+
+1. **Error Context Enhancement**
+   - All error types implement a `context()` method for adding context
+   - Context should clarify where and why the error occurred
+
+   ```rust
+   // Example: Adding context to an error
+   repository.get_by_id(id)
+       .map_err(|e| e.context(format!("Failed to retrieve bookmark {}", id)))?
+   ```
+
+2. **Explicit Error Conversion**
+   - Use `From` traits to convert between error types at layer boundaries
+   - More specific conversions for important cases, fallback for others
+
+   ```rust
+   // Example: Converting SqliteRepositoryError to DomainError
+   impl From<SqliteRepositoryError> for DomainError {
+       fn from(err: SqliteRepositoryError) -> Self {
+           match err {
+               SqliteRepositoryError::BookmarkNotFound(id) => 
+                   DomainError::BookmarkNotFound(id.to_string()),
+               SqliteRepositoryError::DatabaseError(e) => 
+                   DomainError::RepositoryError(RepositoryError::Database(e.to_string())),
+               // Other specific mappings...
+               _ => DomainError::RepositoryError(RepositoryError::Other(err.to_string())),
+           }
+       }
+   }
+   ```
+
+3. **Error Propagation with `?` Operator**
+   - Use the `?` operator for clean error propagation
+   - Convert error types at layer boundaries with `.map_err()`
+
+   ```rust
+   fn add_bookmark(&self, ...) -> ApplicationResult<Bookmark> {
+       // Convert domain errors to application errors implicitly with ?
+       let bookmark = self.repository.add(&mut bookmark)?;
+       
+       // Or explicitly with map_err
+       self.repository.add(&mut bookmark)
+           .map_err(|e| ApplicationError::Domain(e))?;
+   }
+   ```
+
+4. **Error Type Patterns**
+   - Use `thiserror` for defining structured error enums
+   - Include helpful error messages in the `#[error("...")]` attributes
+   - Provide serialized field values in error messages
+
+   ```rust
+   #[derive(Error, Debug)]
+   pub enum DomainError {
+       #[error("Bookmark not found: {0}")]
+       BookmarkNotFound(String),
+       
+       #[error("Repository error: {0}")]
+       RepositoryError(#[from] RepositoryError),
+       
+       // Other error variants...
+   }
+   ```
+
+5. **Result Type Aliases**
+   - Define `Result` type aliases for each layer
+
+   ```rust
+   pub type DomainResult<T> = Result<T, DomainError>;
+   pub type ApplicationResult<T> = Result<T, ApplicationError>;
+   pub type CliResult<T> = Result<T, CliError>;
+   pub type SqliteResult<T> = Result<T, SqliteRepositoryError>;
+   ```
+
+## Error Presentation
+
+- CLI errors should be user-friendly with actionable information
+- Use color in terminal output (via `crossterm` crate) to highlight errors
+- Include suggestions for resolution when possible
 
 ```rust
-// Converting SqliteRepositoryError to DomainError
-impl From<SqliteRepositoryError> for DomainError {
-    fn from(err: SqliteRepositoryError) -> Self {
-        match err {
-            SqliteRepositoryError::BookmarkNotFound(id) => {
-                DomainError::BookmarkNotFound(id.to_string())
-            }
-            _ => DomainError::BookmarkOperationFailed(err.to_string()),
-        }
-    }
-}
-
-// Converting DomainError to ApplicationError
-impl From<DomainError> for ApplicationError {
-    fn from(err: DomainError) -> Self {
-        ApplicationError::Domain(err)
-    }
-}
+eprintln!("{}", "Error: Database not found.".red());
+eprintln!("Either:");
+eprintln!("  1. Set BKMR_DB_URL environment variable to point to an existing database");
+eprintln!("  2. Create a database using 'bkmr create-db <path>'");
 ```
-
-## Best Practices
-
-1. **Keep Infrastructure Errors**: `SqliteRepositoryError` for infrastructure-specific error details
-
-2. **Explicit Conversions**: `From` implementations for converting between error types
-
-3. **Error Mapping in Repositories**: map SQLite errors to domain errors when crossing boundary:
-
-```rust
-fn get_by_id(&self, id: i32) -> Result<Option<Bookmark>, DomainError> {
-    self.get_connection()
-        .map_err(DomainError::from)?  // SqliteRepositoryError → DomainError
-        .find_by_id(id)
-        .map_err(|e| DomainError::from(e))?  // SqliteRepositoryError → DomainError
-}
-```
-
-4. **Error Enrichment**: Add context when converting errors:
-
-```rust
-// Better error conversion with context
-fn from(err: SqliteRepositoryError) -> DomainError {
-    match err {
-        SqliteRepositoryError::ConnectionError(msg) => 
-            DomainError::BookmarkOperationFailed(format!("Database connection failed: {}", msg)),
-        // Other cases...
-    }
-}
-```
-
-## Summary
-
-1. **Repository Layer**: Convert Diesel/database errors to `SqliteRepositoryError`
-2. **Domain Boundary**: Convert `SqliteRepositoryError` to `DomainError`  
-3. **Application Boundary**: Convert `DomainError` to `ApplicationError`
-4. **Presentation Boundary**: Convert `ApplicationError` to `CliError` or other presentation errors

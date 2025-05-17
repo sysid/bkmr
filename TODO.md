@@ -13,7 +13,6 @@ embedding sqlite plugin
 - check whether arboard can be replaced with crossterm CopyToClipboard
 
 ## Features
-- rich text with ankiview visualization
 
 ### Proposals
 - SOPS integration
@@ -24,9 +23,9 @@ sqlite bug: jupy*
 
 
 ## Gotcha
-bkmr search grad*  # shell expands to gradlew if present
-edit with vim does not work when "sourcing" like: source <()> because of terminal
-skim requires TERM: export TERM=xterm-256color
+- bkmr search grad*  # shell expands to gradlew if present
+- edit with vim does not work when "sourcing" like: source <()> because of terminal
+- skim requires TERM: export TERM=xterm-256color
 
 
 ## Advanced
