@@ -27,7 +27,10 @@ pub trait Specification<T> {
 impl<T> Specification<T> for Box<dyn Specification<T>> {
     fn is_satisfied_by(&self, entity: &T) -> bool {
         // Delegate to the inner specification
-        (**self).is_satisfied_by(entity)
+        // *self dereferences the Box into a trait object.
+        // **self gives a reference to the trait object (i.e., &dyn Specification<T>).
+        // (**self).is_satisfied_by(entity)
+        self.as_ref().is_satisfied_by(entity)  // idiomatic way to call method on trait object
     }
 }
 
