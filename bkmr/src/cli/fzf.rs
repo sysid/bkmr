@@ -4,7 +4,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use crate::app_state::AppState;
-use crate::application::services::factory::create_action_service;
+use crate::application::services::factory::{create_action_service, create_interpolation_service};
 use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{
@@ -215,6 +215,9 @@ fn create_enhanced_skim_items(
 ) -> Vec<Arc<dyn SkimItem>> {
     // Get action service to determine action descriptions
     let action_service = create_action_service();
+    
+    // Get interpolation service to render URLs
+    let interpolation_service = create_interpolation_service();
 
     // Get app settings to respect configuration
     let app_state = AppState::read_global();
@@ -228,6 +231,16 @@ fn create_enhanced_skim_items(
 
             // Format display text with action type and proper alignment
             let display_text = format!("{:>width$}: {}", id, bookmark.title, width = max_id_width);
+
+            // Apply interpolation if the URL contains template variables
+            let rendered_url = if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
+                match interpolation_service.render_bookmark_url(bookmark) {
+                    Ok(url) => url,
+                    Err(_) => bookmark.url.clone(), // Fallback if rendering fails
+                }
+            } else {
+                bookmark.url.clone()
+            };
 
             // Format preview with proper spacing and respecting show_action config
             let preview = if fzf_opts.show_action {
@@ -243,7 +256,7 @@ fn create_enhanced_skim_items(
                         &bookmark.description
                     },
                     "URL/Content".cyan().bold(),
-                    bookmark.get_action_content(),
+                    rendered_url, // Use the rendered URL instead of raw URL
                     "Default Action".magenta().bold(),
                     action_description
                 )
@@ -260,7 +273,7 @@ fn create_enhanced_skim_items(
                         &bookmark.description
                     },
                     "URL/Content".cyan().bold(),
-                    bookmark.get_action_content()
+                    rendered_url // Use the rendered URL instead of raw URL
                 )
             };
 
