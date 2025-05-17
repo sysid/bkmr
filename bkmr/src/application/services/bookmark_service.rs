@@ -1,7 +1,7 @@
 // src/application/services/bookmark_service.rs
 use crate::application::error::ApplicationResult;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::repositories::query::SortDirection;
+use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::search::{SemanticSearch, SemanticSearchResult};
 use crate::domain::tag::Tag;
 use std::collections::HashSet;
@@ -48,21 +48,10 @@ pub trait BookmarkService: Send + Sync + Debug {
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
 
     fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>>;
+        // Add a convenience method to create a query for text search
 
-    //noinspection RsExternalLinter
-    /// Perform a complex search using multiple criteria
-    fn search_bookmarks(
-        &self,
-        query: Option<&str>,
-        tags_exact: Option<&HashSet<Tag>>,
-        tags_all: Option<&HashSet<Tag>>,
-        tags_all_not: Option<&HashSet<Tag>>,
-        tags_any: Option<&HashSet<Tag>>,
-        tags_any_not: Option<&HashSet<Tag>>,
-        tags_prefix: Option<&HashSet<Tag>>, // This will be set to None in our updated search function
-        sort_direction: SortDirection,
-        limit: Option<usize>,
-    ) -> ApplicationResult<Vec<Bookmark>>;
+    // Replace the complex search_bookmarks method with a simpler interface
+    fn search_bookmarks(&self, query: &BookmarkQuery) -> ApplicationResult<Vec<Bookmark>>;
 
     /// Perform semantic search with the given parameters
     fn semantic_search(

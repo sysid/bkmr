@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 */
 
 /// The Specification trait defines a predicate that determines if an entity matches criteria
-pub trait Specification<T> {
+pub trait Specification<T>: std::fmt::Debug {
     /// Check if an entity satisfies this specification
     fn is_satisfied_by(&self, entity: &T) -> bool;
 }
@@ -30,13 +30,15 @@ impl<T> Specification<T> for Box<dyn Specification<T>> {
         // *self dereferences the Box into a trait object.
         // **self gives a reference to the trait object (i.e., &dyn Specification<T>).
         // (**self).is_satisfied_by(entity)
-        self.as_ref().is_satisfied_by(entity)  // idiomatic way to call method on trait object
+        self.as_ref().is_satisfied_by(entity) // idiomatic way to call method on trait object
     }
 }
 
 /// Combines specifications with logical AND
+#[derive(Debug)]
 pub struct AndSpecification<T, A, B>
 where
+    T: std::fmt::Debug,
     A: Specification<T>,
     B: Specification<T>,
 {
@@ -47,6 +49,7 @@ where
 
 impl<T, A, B> AndSpecification<T, A, B>
 where
+    T: std::fmt::Debug,
     A: Specification<T>,
     B: Specification<T>,
 {
@@ -61,6 +64,7 @@ where
 
 impl<T, A, B> Specification<T> for AndSpecification<T, A, B>
 where
+    T: std::fmt::Debug,
     A: Specification<T>,
     B: Specification<T>,
 {
@@ -70,8 +74,10 @@ where
 }
 
 /// Combines specifications with logical OR
+#[derive(Debug)]
 pub struct OrSpecification<T, A, B>
 where
+    T: std::fmt::Debug,
     A: Specification<T>,
     B: Specification<T>,
 {
@@ -82,6 +88,7 @@ where
 
 impl<T, A, B> OrSpecification<T, A, B>
 where
+    T: std::fmt::Debug,
     A: Specification<T>,
     B: Specification<T>,
 {
@@ -96,6 +103,7 @@ where
 
 impl<T, A, B> Specification<T> for OrSpecification<T, A, B>
 where
+    T: std::fmt::Debug,
     A: Specification<T>,
     B: Specification<T>,
 {
@@ -105,8 +113,10 @@ where
 }
 
 /// Negates a specification
+#[derive(Debug)]
 pub struct NotSpecification<T, S>
 where
+    T: std::fmt::Debug,
     S: Specification<T>,
 {
     spec: S,
@@ -115,6 +125,7 @@ where
 
 impl<T, S> NotSpecification<T, S>
 where
+    T: std::fmt::Debug,
     S: Specification<T>,
 {
     pub fn new(spec: S) -> Self {
@@ -127,6 +138,7 @@ where
 
 impl<T, S> Specification<T> for NotSpecification<T, S>
 where
+    T: std::fmt::Debug,
     S: Specification<T>,
 {
     fn is_satisfied_by(&self, entity: &T) -> bool {
@@ -135,6 +147,7 @@ where
 }
 
 /// Specification for filtering bookmarks by tag (all tags must match)
+#[derive(Debug)]
 pub struct AllTagsSpecification {
     tags: HashSet<Tag>,
 }
@@ -152,6 +165,7 @@ impl Specification<Bookmark> for AllTagsSpecification {
 }
 
 /// Specification for filtering bookmarks by tag (any tag may match)
+#[derive(Debug)]
 pub struct AnyTagSpecification {
     tags: HashSet<Tag>,
 }
@@ -169,6 +183,7 @@ impl Specification<Bookmark> for AnyTagSpecification {
 }
 
 /// Specification for filtering bookmarks by exact tag match
+#[derive(Debug)]
 pub struct ExactTagsSpecification {
     tags: HashSet<Tag>,
 }
@@ -186,6 +201,7 @@ impl Specification<Bookmark> for ExactTagsSpecification {
 }
 
 /// Specification for filtering bookmarks by text content
+#[derive(Debug)]
 pub struct TextSearchSpecification {
     query: String,
 }
@@ -220,7 +236,7 @@ impl Specification<Bookmark> for TextSearchSpecification {
 }
 
 /// Extension trait to make combining specifications more readable
-pub trait SpecificationExt<T>: Specification<T> {
+pub trait SpecificationExt<T: std::fmt::Debug>: Specification<T> {
     /// Combine with another specification using AND
     fn and<S: Specification<T>>(self, other: S) -> AndSpecification<T, Self, S>
     where
@@ -247,14 +263,24 @@ pub trait SpecificationExt<T>: Specification<T> {
 }
 
 /// Implement SpecificationExt for all Specification implementors
-impl<T, S> SpecificationExt<T> for S where S: Specification<T> {}
+impl<T, S> SpecificationExt<T> for S where S: Specification<T>, T: std::fmt::Debug {}
 
 /// A query object that encapsulates specification and sorting
+#[derive(Debug)]
 pub struct BookmarkQuery {
     pub specification: Option<Box<dyn Specification<Bookmark>>>,
     pub sort_by_date: Option<SortDirection>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
+
+    // New fields for direct filter support
+    pub text_query: Option<String>,
+    pub tags_exact: Option<HashSet<Tag>>,
+    pub tags_all: Option<HashSet<Tag>>,
+    pub tags_all_not: Option<HashSet<Tag>>,
+    pub tags_any: Option<HashSet<Tag>>,
+    pub tags_any_not: Option<HashSet<Tag>>,
+    pub tags_prefix: Option<HashSet<Tag>>,
 }
 
 impl BookmarkQuery {
@@ -264,7 +290,50 @@ impl BookmarkQuery {
             sort_by_date: None,
             limit: None,
             offset: None,
+            text_query: None,
+            tags_exact: None,
+            tags_all: None,
+            tags_all_not: None,
+            tags_any: None,
+            tags_any_not: None,
+            tags_prefix: None,
         }
+    }
+
+    // Enhanced builder methods
+    pub fn with_text_query(mut self, query: Option<&str>) -> Self {
+        self.text_query = query.map(|s| s.to_string());
+        self
+    }
+
+    pub fn with_tags_exact(mut self, tags: Option<&HashSet<Tag>>) -> Self {
+        self.tags_exact = tags.cloned();
+        self
+    }
+
+    pub fn with_tags_all(mut self, tags: Option<&HashSet<Tag>>) -> Self {
+        self.tags_all = tags.cloned();
+        self
+    }
+
+    pub fn with_tags_all_not(mut self, tags: Option<&HashSet<Tag>>) -> Self {
+        self.tags_all_not = tags.cloned();
+        self
+    }
+
+    pub fn with_tags_any(mut self, tags: Option<&HashSet<Tag>>) -> Self {
+        self.tags_any = tags.cloned();
+        self
+    }
+
+    pub fn with_tags_any_not(mut self, tags: Option<&HashSet<Tag>>) -> Self {
+        self.tags_any_not = tags.cloned();
+        self
+    }
+
+    pub fn with_tags_prefix(mut self, tags: Option<&HashSet<Tag>>) -> Self {
+        self.tags_prefix = tags.cloned();
+        self
     }
 
     pub fn with_specification<S>(mut self, spec: S) -> Self
@@ -300,6 +369,115 @@ impl BookmarkQuery {
             Some(spec) => spec.is_satisfied_by(bookmark),
             None => true,
         }
+    }
+
+    // Add a new method to apply all filters to a collection of bookmarks
+    pub fn apply_filters(&self, bookmarks: &[Bookmark]) -> Vec<Bookmark> {
+        let mut filtered = bookmarks.to_vec();
+
+        // Apply specification if present
+        if let Some(spec) = &self.specification {
+            filtered.retain(|bookmark| spec.is_satisfied_by(bookmark));
+        }
+
+        // Apply text search if present
+        if let Some(query) = &self.text_query {
+            if !query.is_empty() {
+                let query_lower = query.to_lowercase();
+                filtered.retain(|bookmark| {
+                    let content = format!(
+                        "{} {} {} {}",
+                        bookmark.title.to_lowercase(),
+                        bookmark.description.to_lowercase(),
+                        bookmark.url.to_lowercase(),
+                        bookmark
+                            .tags
+                            .iter()
+                            .map(|t| t.value().to_lowercase())
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    );
+                    content.contains(&query_lower)
+                });
+            }
+        }
+
+        // Apply exact tag matching
+        if let Some(tags) = &self.tags_exact {
+            if !tags.is_empty() {
+                filtered.retain(|bookmark| bookmark.matches_exact_tags(tags));
+            }
+        }
+
+        // Apply all tags filter
+        if let Some(tags) = &self.tags_all {
+            if !tags.is_empty() {
+                filtered.retain(|bookmark| bookmark.matches_all_tags(tags));
+            }
+        }
+
+        // Apply all-not tags filter
+        if let Some(tags) = &self.tags_all_not {
+            if !tags.is_empty() {
+                filtered.retain(|bookmark| !bookmark.matches_all_tags(tags));
+            }
+        }
+
+        // Apply any tags filter
+        if let Some(tags) = &self.tags_any {
+            if !tags.is_empty() {
+                filtered.retain(|bookmark| bookmark.matches_any_tag(tags));
+            }
+        }
+
+        // Apply any-not tags filter
+        if let Some(tags) = &self.tags_any_not {
+            if !tags.is_empty() {
+                filtered.retain(|bookmark| !bookmark.matches_any_tag(tags));
+            }
+        }
+
+        // Apply tag prefix filtering
+        if let Some(prefixes) = &self.tags_prefix {
+            if !prefixes.is_empty() {
+                filtered.retain(|bookmark| {
+                    prefixes.iter().any(|prefix| {
+                        let prefix_str = prefix.value();
+                        bookmark
+                            .tags
+                            .iter()
+                            .any(|tag| tag.value().starts_with(prefix_str))
+                    })
+                });
+            }
+        }
+
+        // Apply sorting if specified
+        if let Some(direction) = &self.sort_by_date {
+            match direction {
+                SortDirection::Ascending => {
+                    filtered.sort_by(|a, b| a.updated_at.cmp(&b.updated_at));
+                }
+                SortDirection::Descending => {
+                    filtered.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+                }
+            }
+        }
+
+        // Apply limit and offset
+        if let Some(offset) = self.offset {
+            if offset < filtered.len() {
+                filtered = filtered.into_iter().skip(offset).collect();
+            } else {
+                filtered.clear();
+            }
+        }
+
+        if let Some(limit) = self.limit {
+            filtered.truncate(limit);
+        }
+
+        filtered
     }
 }
 

@@ -48,7 +48,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 }
 
 impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
-    #[instrument(skip(self, tags), level = "debug", 
+    #[instrument(skip(self, tags), level = "debug",
                fields(url = %url, title = %title.unwrap_or("None"), fetch_metadata = %fetch_metadata))]
     fn add_bookmark(
         &self,
@@ -105,9 +105,14 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         }
 
         // Create and save bookmark
-        debug!("Creating bookmark: '{}' with {} tags", title_str, all_tags.len());
-        let mut bookmark = Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())?;
-        
+        debug!(
+            "Creating bookmark: '{}' with {} tags",
+            title_str,
+            all_tags.len()
+        );
+        let mut bookmark =
+            Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())?;
+
         self.repository.add(&mut bookmark)?;
 
         Ok(bookmark)
@@ -246,114 +251,22 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         self.update_bookmark(bookmark, false)
     }
 
-    #[instrument(skip(self), level = "debug")]
-    fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
-        let bookmarks = self.repository.search_by_text(query)?;
+    #[instrument(skip_all, level = "debug")]
+    fn search_bookmarks(&self, query: &BookmarkQuery) -> ApplicationResult<Vec<Bookmark>> {
+        debug!("Searching bookmarks with query: {:?}", query);
+
+        let bookmarks = self.repository.search(query)?;
         Ok(bookmarks)
     }
-    
+
+    // Implement the convenience method for text search
     #[instrument(skip_all, level = "debug")]
-    fn search_bookmarks(
-        &self,
-        query: Option<&str>,
-        tags_exact: Option<&HashSet<Tag>>,
-        tags_all: Option<&HashSet<Tag>>,
-        tags_all_not: Option<&HashSet<Tag>>,
-        tags_any: Option<&HashSet<Tag>>,
-        tags_any_not: Option<&HashSet<Tag>>,
-        tags_prefix: Option<&HashSet<Tag>>,
-        sort_direction: SortDirection,
-        limit: Option<usize>,
-    ) -> ApplicationResult<Vec<Bookmark>> {
-        // todo: tags_prefix is now always None, kept for compatibility
-        debug!("complex search: query={:?}, tags_exact={:?}, tags_all={:?}, tags_all_not={:?}, tags_any={:?}, tags_any_not={:?}, tags_prefix={:?}, sort_direction={:?}, limit={:?}",
-               query, tags_exact, tags_all, tags_all_not, tags_any, tags_any_not, tags_prefix, sort_direction, limit);
+    fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
+        let query = BookmarkQuery::new()
+            .with_text_query(Some(query))
+            .with_sort_by_date(SortDirection::Descending);
 
-        // Start with text search if query provided, otherwise get all bookmarks
-        let mut bookmarks = if let Some(q) = query {
-            if !q.is_empty() {
-                self.search_bookmarks_by_text(q)?
-            } else {
-                self.get_all_bookmarks(Some(sort_direction), None)?
-            }
-        } else {
-            self.get_all_bookmarks(Some(sort_direction), None)?
-        };
-
-        debug!("Initial result count before filtering: {}", bookmarks.len());
-
-        // Apply filters in order of most restrictive first to optimize performance
-
-        // 1. Exact tag matches (most restrictive)
-        if let Some(tags) = tags_exact {
-            if !tags.is_empty() {
-                bookmarks.retain(|bookmark| bookmark.matches_exact_tags(tags));
-                debug!("After exact tag filtering: {} bookmarks", bookmarks.len());
-            }
-        }
-
-        // 2. All tags must match (very restrictive)
-        if let Some(tags) = tags_all {
-            if !tags.is_empty() {
-                bookmarks.retain(|bookmark| bookmark.matches_all_tags(tags));
-                debug!("After all tags filtering: {} bookmarks", bookmarks.len());
-            }
-        }
-
-        // 3. Negative all tags (no bookmark should have ALL these tags)
-        if let Some(tags) = tags_all_not {
-            if !tags.is_empty() {
-                bookmarks.retain(|bookmark| !bookmark.matches_all_tags(tags));
-                debug!(
-                    "After all-not tags filtering: {} bookmarks",
-                    bookmarks.len()
-                );
-            }
-        }
-
-        // 4. Any tags (less restrictive)
-        if let Some(tags) = tags_any {
-            if !tags.is_empty() {
-                bookmarks.retain(|bookmark| bookmark.matches_any_tag(tags));
-                debug!("After any tags filtering: {} bookmarks", bookmarks.len());
-            }
-        }
-
-        // 5. Negative any tags (no bookmark should have ANY of these tags)
-        if let Some(tags) = tags_any_not {
-            if !tags.is_empty() {
-                bookmarks.retain(|bookmark| !bookmark.matches_any_tag(tags));
-                debug!(
-                    "After any-not tags filtering: {} bookmarks",
-                    bookmarks.len()
-                );
-            }
-        }
-
-        // 6. Tag prefix filtering (special case)
-        if let Some(prefixes) = tags_prefix {
-            if !prefixes.is_empty() {
-                bookmarks.retain(|bookmark| {
-                    // For each prefix, check if any bookmark tag starts with it
-                    prefixes.iter().any(|prefix| {
-                        let prefix_str = prefix.value();
-                        bookmark
-                            .tags
-                            .iter()
-                            .any(|tag| tag.value().starts_with(prefix_str))
-                    })
-                });
-                debug!("After prefix tags filtering: {} bookmarks", bookmarks.len());
-            }
-        }
-
-        // Apply limit if provided (after all filtering)
-        if let Some(limit_val) = limit {
-            bookmarks.truncate(limit_val);
-            debug!("After applying limit: {} bookmarks", bookmarks.len());
-        }
-
-        Ok(bookmarks)
+        self.search_bookmarks(&query)
     }
 
     #[instrument(skip(self, search), level = "debug")]

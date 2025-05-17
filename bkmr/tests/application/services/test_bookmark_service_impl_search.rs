@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use bkmr::application::services::bookmark_service::BookmarkService;
 use bkmr::application::BookmarkServiceImpl;
-use bkmr::domain::repositories::query::SortDirection;
+use bkmr::domain::repositories::query::{BookmarkQuery, SortDirection};
 use bkmr::domain::tag::Tag;
 use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::infrastructure::repositories::json_import_repository::JsonImportRepository;
@@ -28,6 +28,39 @@ fn parse_tags(tag_str: &str) -> HashSet<Tag> {
     Tag::parse_tags(tag_str).unwrap_or_else(|_| HashSet::new())
 }
 
+// Create an adapter function to maintain backward compatibility for tests
+fn search_bookmarks(
+    service: &impl BookmarkService,
+    text_query: Option<&str>,
+    tags_exact: Option<&HashSet<Tag>>,
+    tags_all: Option<&HashSet<Tag>>,
+    tags_all_not: Option<&HashSet<Tag>>,
+    tags_any: Option<&HashSet<Tag>>,
+    tags_any_not: Option<&HashSet<Tag>>,
+    tags_prefix: Option<&HashSet<Tag>>,
+    sort_direction: SortDirection,
+    limit: Option<usize>,
+) -> Result<Vec<bkmr::domain::bookmark::Bookmark>, bkmr::application::error::ApplicationError> {
+    // Create a BookmarkQuery object
+    let query = BookmarkQuery::new()
+        .with_text_query(text_query)
+        .with_tags_exact(tags_exact)
+        .with_tags_all(tags_all)
+        .with_tags_all_not(tags_all_not)
+        .with_tags_any(tags_any)
+        .with_tags_any_not(tags_any_not)
+        .with_tags_prefix(tags_prefix)
+        .with_sort_by_date(sort_direction);
+
+    let query_with_limit = if let Some(lim) = limit {
+        query.with_limit(lim)
+    } else {
+        query
+    };
+
+    service.search_bookmarks(&query_with_limit)
+}
+
 #[test]
 #[serial]
 fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_results() {
@@ -45,19 +78,19 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
 
     // Case 1: All tags must be "aaa" AND "bbb"
     let tags_all = parse_tags("aaa,bbb");
-    let results = service
-        .search_bookmarks(
-            None,
-            None,
-            Some(&tags_all),
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results = search_bookmarks(
+        &service,
+        None,
+        None,
+        Some(&tags_all),
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Assert all results have both tags
     for bookmark in &results {
@@ -67,19 +100,19 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
 
     // Case 2: Any tag must be "xxx" OR "yyy"
     let tags_any = parse_tags("xxx,yyy");
-    let results_any = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            Some(&tags_any),
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results_any = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        Some(&tags_any),
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Assert each result has at least one of the tags
     for bookmark in &results_any {
@@ -92,19 +125,19 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
     // Case 3: Complex - (has "aaa" AND "bbb") but NOT "ccc"
     let tags_all = parse_tags("aaa,bbb");
     let tags_all_not = parse_tags("ccc");
-    let results_complex = service
-        .search_bookmarks(
-            None,
-            None,
-            Some(&tags_all),
-            Some(&tags_all_not),
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results_complex = search_bookmarks(
+        &service,
+        None,
+        None,
+        Some(&tags_all),
+        Some(&tags_all_not),
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Assert correct filtering
     for bookmark in &results_complex {
@@ -126,19 +159,19 @@ fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filte
     let query = "TEST";
     let tags_all = parse_tags("aaa");
 
-    let results = service
-        .search_bookmarks(
-            Some(query),
-            None,
-            Some(&tags_all),
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results = search_bookmarks(
+        &service,
+        Some(query),
+        None,
+        Some(&tags_all),
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Assert both text and tag filters were applied
     for bookmark in &results {
@@ -163,19 +196,19 @@ fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filte
     }
 
     // Compare with results from just tag filter
-    let tag_only_results = service
-        .search_bookmarks(
-            None,
-            None,
-            Some(&tags_all),
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let tag_only_results = search_bookmarks(
+        &service,
+        None,
+        None,
+        Some(&tags_all),
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Should be fewer or equal results when combining filters
     assert!(results.len() <= tag_only_results.len());
@@ -192,19 +225,19 @@ fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only()
     // Choose a combination that exists in the test data
     let tags_exact = parse_tags("aaa,bbb");
 
-    let results = service
-        .search_bookmarks(
-            None,
-            Some(&tags_exact),
-            None,
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results = search_bookmarks(
+        &service,
+        None,
+        Some(&tags_exact),
+        None,
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Check results - each bookmark should have EXACTLY these tags, no more, no less
     for bookmark in &results {
@@ -214,19 +247,19 @@ fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only()
     }
 
     // Compare with "all tags" (which allows additional tags)
-    let all_tags_results = service
-        .search_bookmarks(
-            None,
-            None,
-            Some(&tags_exact),
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let all_tags_results = search_bookmarks(
+        &service,
+        None,
+        None,
+        Some(&tags_exact),
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // There should be more or equal results with "all tags" than with "exact tags"
     assert!(all_tags_results.len() >= results.len());
@@ -245,19 +278,19 @@ fn given_tag_prefix_when_search_bookmarks_then_returns_matching_prefixed_tags() 
     let mut prefix_tags = HashSet::new();
     prefix_tags.insert(Tag::new("a").unwrap()); // Should match "aaa"
 
-    let results = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&prefix_tags),
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(&prefix_tags),
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Check that all results have at least one tag starting with the prefix
     for bookmark in &results {
@@ -284,19 +317,19 @@ fn given_negated_tag_filters_when_search_bookmarks_then_excludes_correctly() {
     // Exclude bookmarks with tag "ccc"
     let tags_any_not = parse_tags("ccc");
 
-    let results = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some(&tags_any_not),
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        None,
+        Some(&tags_any_not),
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Verify no results have the excluded tag
     for bookmark in &results {
@@ -328,34 +361,34 @@ fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_a
     let service = create_test_service();
 
     // Get all bookmarks sorted descending (newest first)
-    let desc_results = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let desc_results = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Get all bookmarks sorted ascending (oldest first)
-    let _ = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Ascending,
-            None,
-        )
-        .unwrap();
+    let _ = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Ascending,
+        None,
+    )
+    .unwrap();
 
     // todo: fix this test
     // NOT WORKING: test db all same timestamp
@@ -370,19 +403,19 @@ fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_a
 
     // Test with limit
     let limit = 3;
-    let limited_results = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            Some(limit),
-        )
-        .unwrap();
+    let limited_results = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        Some(limit),
+    )
+    .unwrap();
 
     // Should respect the limit
     assert!(limited_results.len() <= limit);
@@ -413,19 +446,19 @@ fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_a
     let tags_any_not = parse_tags("xxx");
     let limit = 2;
 
-    let results = service
-        .search_bookmarks(
-            Some(query),
-            None,
-            Some(&tags_all),
-            None,
-            None,
-            Some(&tags_any_not),
-            None,
-            SortDirection::Descending,
-            Some(limit),
-        )
-        .unwrap();
+    let results = search_bookmarks(
+        &service,
+        Some(query),
+        None,
+        Some(&tags_all),
+        None,
+        None,
+        Some(&tags_any_not),
+        None,
+        SortDirection::Descending,
+        Some(limit),
+    )
+    .unwrap();
 
     // Verify all filters were applied
     for bookmark in &results {
@@ -454,19 +487,19 @@ fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_a
 
     // Also verify we get the same results with filters applied in different order
     // First apply text filter and tag filters
-    let intermediate_results = service
-        .search_bookmarks(
-            Some(query),
-            None,
-            Some(&tags_all),
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let intermediate_results = search_bookmarks(
+        &service,
+        Some(query),
+        None,
+        Some(&tags_all),
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Then manually apply the negative tag filter
     let manually_filtered: Vec<_> = intermediate_results
@@ -494,19 +527,19 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     let service = create_test_service();
 
     // Case 1: All filters None except sort (should return all bookmarks sorted)
-    let results_default = service
-        .search_bookmarks(
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results_default = search_bookmarks(
+        &service,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     // Should match get_all_bookmarks
     let all_bookmarks = service
@@ -515,37 +548,37 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     assert_eq!(results_default.len(), all_bookmarks.len());
 
     // Case 2: Empty text query (should be treated as no text query)
-    let results_empty_query = service
-        .search_bookmarks(
-            Some(""),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results_empty_query = search_bookmarks(
+        &service,
+        Some(""),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     assert_eq!(results_empty_query.len(), all_bookmarks.len());
 
     // Case 3: Empty tag sets (should be treated as no tag filter)
     let empty_tags = HashSet::new();
-    let results_empty_tags = service
-        .search_bookmarks(
-            None,
-            Some(&empty_tags),
-            Some(&empty_tags),
-            Some(&empty_tags),
-            Some(&empty_tags),
-            Some(&empty_tags),
-            Some(&empty_tags),
-            SortDirection::Descending,
-            None,
-        )
-        .unwrap();
+    let results_empty_tags = search_bookmarks(
+        &service,
+        None,
+        Some(&empty_tags),
+        Some(&empty_tags),
+        Some(&empty_tags),
+        Some(&empty_tags),
+        Some(&empty_tags),
+        Some(&empty_tags),
+        SortDirection::Descending,
+        None,
+    )
+    .unwrap();
 
     assert_eq!(results_empty_tags.len(), all_bookmarks.len());
 }

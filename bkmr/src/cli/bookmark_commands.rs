@@ -11,7 +11,7 @@ use crate::cli::fzf::fzf_process;
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action, process};
 use crate::config::ConfigSource;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::repositories::query::SortDirection;
+use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
@@ -142,18 +142,19 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             parse_tag_string(&tags_any_not_prefix),
         );
 
-        // Use the service to perform the search
-        let bookmarks = service.search_bookmarks(
-            fts_query.as_deref(),
-            exact_tags.as_ref(),
-            all_tags.as_ref(),
-            all_not_tags.as_ref(),
-            any_tags.as_ref(),
-            any_not_tags.as_ref(),
-            None, // We don't use tags_prefix in the service call anymore
-            sort_direction,
-            limit.map(|v| v as usize),
-        )?;
+        // Create a query object instead of directly calling search_bookmarks
+        let query = BookmarkQuery::new()
+            .with_text_query(fts_query.as_deref())
+            .with_tags_exact(exact_tags.as_ref())
+            .with_tags_all(all_tags.as_ref())
+            .with_tags_all_not(all_not_tags.as_ref())
+            .with_tags_any(any_tags.as_ref())
+            .with_tags_any_not(any_not_tags.as_ref())
+            .with_sort_by_date(sort_direction)
+            .with_limit(limit.map(|v| v as usize).expect("Limit must be a positive integer"));
+
+        // Use the new search method
+        let bookmarks = service.search_bookmarks(&query)?;
 
         // Handle different output modes
         match (is_fuzzy, is_json) {

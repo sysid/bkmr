@@ -186,92 +186,59 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     }
 
     #[instrument(skip_all, level = "debug")]
-    fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError> {
+        fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError> {
         let mut conn = self.get_connection()?;
-
-        // If there's a specification, we need more complex handling
-        if query.specification.is_some() {
-            // Get all bookmarks and filter them in-memory using the specification
-            let all_bookmarks = self.get_all()?;
-
-            let filtered = all_bookmarks
+        
+        // Start with a simple query to get all bookmarks
+        let mut bookmarks = Vec::new();
+        
+        // If there's a text query, use FTS
+        if let Some(text_query) = &query.text_query {
+            if !text_query.is_empty() {
+                // Use FTS to get IDs
+                let ids = self.get_bookmarks_fts(text_query)?;
+                
+                // Fetch the matching bookmarks
+                for id in ids {
+                    if let Ok(Some(bookmark)) = self.get_by_id(id) {
+                        bookmarks.push(bookmark);
+                    }
+                }
+            } else {
+                // Empty text query, get all bookmarks
+                bookmarks = dsl::bookmarks
+                    .load::<DbBookmark>(&mut conn)
+                    .map_err(SqliteRepositoryError::DatabaseError)?
+                    .into_iter()
+                    .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
+                        Ok(bookmark) => Some(bookmark),
+                        Err(e) => {
+                            error!("Failed to convert bookmark: {}", e);
+                            None
+                        }
+                    })
+                    .collect();
+            }
+        } else {
+            // No text query, get all bookmarks
+            bookmarks = dsl::bookmarks
+                .load::<DbBookmark>(&mut conn)
+                .map_err(SqliteRepositoryError::DatabaseError)?
                 .into_iter()
-                .filter(|bookmark| query.matches(bookmark))
-                .collect::<Vec<_>>();
-
-            // Apply sorting
-            let mut sorted = filtered;
-            if let Some(sort_direction) = query.sort_by_date {
-                match sort_direction {
-                    SortDirection::Ascending => {
-                        sorted.sort_by_key(|a| a.updated_at);
+                .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
+                    Ok(bookmark) => Some(bookmark),
+                    Err(e) => {
+                        error!("Failed to convert bookmark: {}", e);
+                        None
                     }
-                    SortDirection::Descending => {
-                        sorted.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
-                    }
-                }
-            }
-
-            // Apply offset and limit
-            let mut result = sorted;
-            if let Some(offset) = query.offset {
-                if offset < result.len() {
-                    result = result.into_iter().skip(offset).collect();
-                } else {
-                    result = Vec::new();
-                }
-            }
-
-            if let Some(limit) = query.limit {
-                result = result.into_iter().take(limit).collect();
-            }
-
-            return Ok(result);
+                })
+                .collect();
         }
-
-        // If no specification, just apply sorting and pagination
-        // Build a query using the BoxedSelectStatement
-        let mut query_builder = dsl::bookmarks.into_boxed();
-
-        // Apply sorting
-        if let Some(sort_direction) = query.sort_by_date {
-            match sort_direction {
-                SortDirection::Ascending => {
-                    query_builder = query_builder.order(dsl::last_update_ts.asc());
-                }
-                SortDirection::Descending => {
-                    query_builder = query_builder.order(dsl::last_update_ts.desc());
-                }
-            }
-        }
-
-        // Apply pagination
-        if let Some(limit) = query.limit {
-            query_builder = query_builder.limit(limit as i64);
-        }
-
-        if let Some(offset) = query.offset {
-            query_builder = query_builder.offset(offset as i64);
-        }
-
-        // Execute query
-        let db_bookmarks = query_builder
-            .load::<DbBookmark>(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
-
-        // Convert to domain models
-        let bookmarks = db_bookmarks
-            .into_iter()
-            .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
-                Ok(bookmark) => Some(bookmark),
-                Err(e) => {
-                    error!("Failed to convert bookmark: {}", e);
-                    None
-                }
-            })
-            .collect();
-
-        Ok(bookmarks)
+        
+        // Apply all filters from the query
+        let filtered_bookmarks = query.apply_filters(&bookmarks);
+        
+        Ok(filtered_bookmarks)
     }
 
     #[instrument(skip_all, level = "debug")]
