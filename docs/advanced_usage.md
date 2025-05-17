@@ -75,6 +75,26 @@ deploy-app() {
     bkmr search --np --tags _shell_,deploy "script-name"
 }
 ```
+### File Quickview with metadata Enrichment
+1. Add file as interpolation snippet like:
+```bash
+=== ID ===
+2919
+=== URL ===
+{{ "cat $HOME/dev/binx/py/llm-json-schema-generate.py" | shell }}
+=== TITLE ===
+llm-json-schema-generate
+=== TAGS ===
+_snip_
+=== COMMENTS ===
+Arbitrary addtional metadata, e.g.
+Source: https://simonwillison.net/2025/Feb/28/llm-schemas/
+=== EMBEDDABLE ===
+false
+=== END ===
+```
+2. view it as snippet.
+
 
 ## FTS Column Prefix Filtering
 
