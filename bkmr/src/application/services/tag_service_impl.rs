@@ -33,15 +33,14 @@ impl<R: BookmarkRepository> TagService for TagServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug", fields(tag_str = %tag_str))]
     fn parse_tag_string(&self, tag_str: &str) -> ApplicationResult<Vec<Tag>> {
-        if tag_str.is_empty() {
-            return Ok(Vec::new());
+        match Tag::parse_tag_str(tag_str) {
+            Ok(Some(tag_set)) => Ok(tag_set.into_iter().collect()),
+            Ok(None) => Ok(Vec::new()),
+            Err(e) => Err(ApplicationError::Validation(format!(
+                "Invalid tag string: {}",
+                e
+            ))),
         }
-
-        let tag_set = Tag::parse_tags(tag_str)
-            .map_err(|e| ApplicationError::Validation(format!("Invalid tag string: {}", e)))?;
-
-        let tags: Vec<Tag> = tag_set.into_iter().collect();
-        Ok(tags)
     }
 }
 

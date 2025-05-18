@@ -49,6 +49,37 @@ impl Tag {
         Ok(result)
     }
 
+    /// Parse an optional string into an `Option<HashSet<Tag>>`.
+    /// 
+    /// Returns `None` if the input is `None` or an empty string.
+    /// Otherwise, parses the string into a `HashSet<Tag>` and wraps it in `Some`.
+    pub fn parse_tag_option(
+        tag_str: Option<impl AsRef<str>>,
+    ) -> DomainResult<Option<HashSet<Tag>>> {
+        match tag_str {
+            None => Ok(None),
+            Some(s) => {
+                let s = s.as_ref();
+                if s.is_empty() {
+                    Ok(None)
+                } else {
+                    Tag::parse_tags(s).map(Some)
+                }
+            }
+        }
+    }
+
+    /// Parse a string reference into a HashSet of tags.
+    /// Returns `None` if the input string is empty.
+    pub fn parse_tag_str(tag_str: impl AsRef<str>) -> DomainResult<Option<HashSet<Tag>>> {
+        let s = tag_str.as_ref();
+        if s.is_empty() {
+            Ok(None)
+        } else {
+            Tag::parse_tags(s).map(Some)
+        }
+    }
+
     /// Format a set of tags into a normalized tag string
     pub fn format_tags(tags: &HashSet<Tag>) -> String {
         let mut tag_values: Vec<_> = tags.iter().map(|tag| tag.value.clone()).collect();
@@ -178,5 +209,57 @@ mod tests {
         // Should return false for empty needles
         let needles = HashSet::new();
         assert!(!Tag::contains_any(&haystack, &needles));
+    }
+
+    #[test]
+    fn test_parse_tag_option_with_valid_string() {
+        let result = Tag::parse_tag_option(Some("tag1,tag2,tag3")).unwrap();
+        assert!(result.is_some());
+        let tags = result.unwrap();
+        assert_eq!(tags.len(), 3);
+        assert!(tags.contains(&Tag::new("tag1").unwrap()));
+        assert!(tags.contains(&Tag::new("tag2").unwrap()));
+        assert!(tags.contains(&Tag::new("tag3").unwrap()));
+    }
+
+    #[test]
+    fn test_parse_tag_option_with_empty_string() {
+        let result = Tag::parse_tag_option(Some("")).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_tag_option_with_none() {
+        let result = Tag::parse_tag_option(None::<&str>).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_tag_option_with_invalid_string() {
+        let result = Tag::parse_tag_option(Some("invalid tag with space"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_tag_str_with_valid_string() {
+        let result = Tag::parse_tag_str("tag1,tag2,tag3").unwrap();
+        assert!(result.is_some());
+        let tags = result.unwrap();
+        assert_eq!(tags.len(), 3);
+        assert!(tags.contains(&Tag::new("tag1").unwrap()));
+        assert!(tags.contains(&Tag::new("tag2").unwrap()));
+        assert!(tags.contains(&Tag::new("tag3").unwrap()));
+    }
+
+    #[test]
+    fn test_parse_tag_str_with_empty_string() {
+        let result = Tag::parse_tag_str("").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_parse_tag_str_with_invalid_string() {
+        let result = Tag::parse_tag_str("invalid tag with space");
+        assert!(result.is_err());
     }
 }
