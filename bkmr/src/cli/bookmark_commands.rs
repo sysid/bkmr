@@ -30,7 +30,7 @@ use std::io::Write;
 use std::path::Path;
 use std::{fs, io};
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -44,12 +44,9 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
 // Parse a tag string into a HashSet of Tag objects
 #[instrument(level = "trace")]
 pub fn parse_tag_string(tag_str: &Option<String>) -> Option<HashSet<Tag>> {
-    tag_str.as_ref().and_then(|s| {
-        if s.is_empty() {
-            None
-        } else {
-            Tag::parse_tags(s).ok()
-        }
+    Tag::parse_tag_option(tag_str.as_ref().map(|s| s.as_str())).unwrap_or_else(|e| {
+        debug!("Failed to parse tags: {}", e);
+        None
     })
 }
 
@@ -353,7 +350,6 @@ pub fn add(cli: Cli) -> CliResult<()> {
     } = cli.command.unwrap()
     {
         let bookmark_service = create_bookmark_service();
-        let tag_service = create_tag_service();
         let template_service = create_template_service();
 
         // Convert bookmark_type string to SystemTag
@@ -366,14 +362,12 @@ pub fn add(cli: Cli) -> CliResult<()> {
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 
-        // Parse tags if provided
-        let mut tag_set = if let Some(tag_str) = tags {
-            let parsed_tags = tag_service.parse_tag_string(&tag_str)?;
-            parsed_tags.into_iter().collect::<HashSet<_>>()
-        } else {
-            HashSet::new()
+        // Parse tags if provided - using our new centralized function
+        let mut tag_set = match Tag::parse_tag_option(tags.as_deref()) {
+            Ok(Some(tags)) => tags,
+            Ok(None) => HashSet::new(),
+            Err(e) => return Err(CliError::InvalidInput(format!("Failed to parse tags: {}", e))),
         };
-
         // Add the system tag if it's not Uri (which has an empty string as_str)
         if system_tag != SystemTag::Uri {
             if let Ok(system_tag_value) = Tag::new(system_tag.as_str()) {
@@ -1277,6 +1271,18 @@ mod tests {
     fn given_none_tag_string_when_parse_tag_string_then_returns_none() {
         // Arrange
         let tag_str: Option<String> = None;
+
+        // Act
+        let result = parse_tag_string(&tag_str);
+
+        // Assert
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn given_invalid_tag_string_when_parse_tag_string_then_returns_none() {
+        // Arrange
+        let tag_str = Some("invalid tag with space".to_string());
 
         // Act
         let result = parse_tag_string(&tag_str);
