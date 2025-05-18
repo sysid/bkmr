@@ -168,7 +168,7 @@ pub fn setup_temp_dir() -> PathBuf {
     fs_extra::copy_items(&env_data.resources, "../db", &options)
         .expect("Failed to copy test resources into ../db");
 
-    tempdir.into_path()
+    tempdir.keep()
 }
 
 /// Removes the temp directory if NO_CLEANUP is not set; otherwise leaves artifacts.

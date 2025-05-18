@@ -29,7 +29,7 @@ pub fn temp_dir() -> PathBuf {
     )
     .expect("Failed to copy test project directory");
 
-    tempdir.into_path()
+    tempdir.keep()
 }
 
 /// Checks if the given string is likely a file path rather than a URL or direct markdown

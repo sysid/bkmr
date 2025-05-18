@@ -71,6 +71,3 @@ filename = "pyproject.toml"
 
 [[tool.bumpversion.files]]
 filename = "bkmr/Cargo.toml"
-
-[[tool.bumpversion.files]]
-filename = "bkmr/Cargo.lock"
