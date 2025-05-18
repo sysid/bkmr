@@ -178,7 +178,7 @@ bump-minor:  check-github-token  ## bump-minor, tag and push
 
 .PHONY: bump-patch
 bump-patch:  check-github-token  ## bump-patch, tag and push
-	bump-my-version bump --commit --tag patch
+	bump-my-version bump --no-commit --tag patch
 	git push
 	git push --tags
 	@$(MAKE) create-release
@@ -200,6 +200,15 @@ check-github-token:  ## Check if GITHUB_TOKEN is set
 		exit 1; \
 	fi
 	@echo "GITHUB_TOKEN is set"
+
+
+.PHONY: fix-version
+fix-version:  ## fix-version of Cargo.toml
+	git add bkmr/Cargo.lock
+	git commit --amend --no-edit
+	git tag -f "v$(VERSION)"
+	git push --force-with-lease
+	git push --tags --force
 
 .PHONY: format
 format:  ## format
