@@ -172,10 +172,8 @@ bump-major:  check-github-token  ## bump-major, tag and push
 .PHONY: bump-minor
 bump-minor:  check-github-token  ## bump-minor, tag and push
 	bump-my-version bump --commit --tag minor
-	git caa
-	git tag -f "v$(VERSION)"
-	git push --force-with-lease
-	git push --tags --force
+	git push
+	git push --tags
 	@$(MAKE) create-release
 
 .PHONY: bump-patch
@@ -202,11 +200,11 @@ check-github-token:  ## Check if GITHUB_TOKEN is set
 		exit 1; \
 	fi
 	@echo "GITHUB_TOKEN is set"
-	@$(MAKE) fix-version
+	#@$(MAKE) fix-version  # not working: rustrover deleay
 
 
 .PHONY: fix-version
-fix-version:  ## fix-version of Cargo.toml
+fix-version:  ## fix-version of Cargo.toml, re-connect with HEAD
 	git add bkmr/Cargo.lock
 	git commit --amend --no-edit
 	git tag -f "v$(VERSION)"
