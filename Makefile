@@ -172,15 +172,16 @@ bump-major:  check-github-token  ## bump-major, tag and push
 .PHONY: bump-minor
 bump-minor:  check-github-token  ## bump-minor, tag and push
 	bump-my-version bump --commit --tag minor
-	git push
-	git push --tags
+	git caa
+	git tag -f "v$(VERSION)"
+	git push --force-with-lease
+	git push --tags --force
 	@$(MAKE) create-release
 
 .PHONY: bump-patch
 bump-patch:  check-github-token  ## bump-patch, tag and push
-	bump-my-version bump --no-commit --tag patch
-	git caa
-	git pf
+	bump-my-version bump --commit --tag patch
+	git push
 	git push --tags
 	@$(MAKE) create-release
 
@@ -201,6 +202,7 @@ check-github-token:  ## Check if GITHUB_TOKEN is set
 		exit 1; \
 	fi
 	@echo "GITHUB_TOKEN is set"
+	@$(MAKE) fix-version
 
 
 .PHONY: fix-version
