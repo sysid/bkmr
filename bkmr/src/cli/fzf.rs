@@ -242,10 +242,14 @@ fn create_enhanced_skim_items(
                 bookmark.url.clone()
             };
 
+            // Format tags for display
+            let tags_str = bookmark.formatted_tags().replace(',', " ").trim().to_string();
+            let has_tags = !tags_str.is_empty();
+
             // Format preview with proper spacing and respecting show_action config
             let preview = if fzf_opts.show_action {
-                // Include the default action in preview
-                format!(
+                // Include the default action in preview and tags at the bottom
+                let mut preview_text = format!(
                     "{}: {}\n\n{}:\n{}\n\n{}:\n{}\n\n{}: {}",
                     "Title".green().bold(),
                     bookmark.title,
@@ -259,10 +263,17 @@ fn create_enhanced_skim_items(
                     rendered_url, // Use the rendered URL instead of raw URL
                     "Default Action".magenta().bold(),
                     action_description
-                )
+                );
+                
+                // Add tags section if there are any tags
+                if has_tags {
+                    preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
+                }
+                
+                preview_text
             } else {
-                // Omit the default action in preview
-                format!(
+                // Omit the default action in preview but still include tags at the bottom
+                let mut preview_text = format!(
                     "{}: {}\n\n{}:\n{}\n\n{}:\n{}",
                     "Title".green().bold(),
                     bookmark.title,
@@ -274,7 +285,14 @@ fn create_enhanced_skim_items(
                     },
                     "URL/Content".cyan().bold(),
                     rendered_url // Use the rendered URL instead of raw URL
-                )
+                );
+                
+                // Add tags section if there are any tags
+                if has_tags {
+                    preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
+                }
+                
+                preview_text
             };
 
             Arc::new(SnippetItem {
