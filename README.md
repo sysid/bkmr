@@ -5,7 +5,7 @@
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 [![Build Status][build-image]][build-url]
 
-# Beyond Bookmarks: A CLI Knowledge Management System
+# Beyond Bookmarks and Snippets: A CLI Knowledge Management System
 
 [bkmr reborn](https://sysid.github.io/bkmr-reborn/)
 
