@@ -179,7 +179,8 @@ bump-minor:  check-github-token  ## bump-minor, tag and push
 .PHONY: bump-patch
 bump-patch:  check-github-token  ## bump-patch, tag and push
 	bump-my-version bump --no-commit --tag patch
-	git push
+	git caa
+	git pf
 	git push --tags
 	@$(MAKE) create-release
 
