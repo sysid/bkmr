@@ -1,6 +1,5 @@
 // src/cli/display.rs
 
-use crate::application::services::factory::create_interpolation_service;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use chrono::{DateTime, Utc};
@@ -102,16 +101,7 @@ pub struct DisplayBookmark {
 
 impl DisplayBookmark {
     pub fn from_domain(bookmark: &Bookmark) -> Self {
-        // Try to render the URL if it contains interpolation markers
-        let interpolation_service = create_interpolation_service();
-        let url = if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
-            match interpolation_service.render_bookmark_url(bookmark) {
-                Ok(rendered) => rendered,
-                Err(_) => bookmark.url.clone(), // Fallback to original URL if rendering fails
-            }
-        } else {
-            bookmark.url.clone()
-        };
+        let url = bookmark.url.clone();
 
         DisplayBookmarkBuilder::default()
             .id(bookmark.id.unwrap_or(0))
