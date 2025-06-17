@@ -10,9 +10,6 @@ use tracing::instrument;
 pub trait InterpolationService: Send + Sync + Debug {
     /// Render an interpolated URL within the context of a bookmark
     fn render_bookmark_url(&self, bookmark: &Bookmark) -> ApplicationResult<String>;
-
-    /// Render an interpolated URL without any specific context
-    fn render_url(&self, url: &str) -> ApplicationResult<String>;  // todo: consider removing this method, not used in the codebase
 }
 
 /// Implementation of InterpolationService using a template engine
@@ -34,13 +31,6 @@ impl InterpolationService for InterpolationServiceImpl {
     fn render_bookmark_url(&self, bookmark: &Bookmark) -> ApplicationResult<String> {
         self.interpolation_engine
             .render_bookmark_url(bookmark)
-            .map_err(|e| ApplicationError::Other(format!("Template rendering error: {}", e)))
-    }
-
-    #[instrument(level = "debug", skip(self))]
-    fn render_url(&self, url: &str) -> ApplicationResult<String> {
-        self.interpolation_engine
-            .render_url(url)
             .map_err(|e| ApplicationError::Other(format!("Template rendering error: {}", e)))
     }
 }
