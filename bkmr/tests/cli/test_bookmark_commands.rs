@@ -51,6 +51,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
             fzf_style: None,
             is_json: true, // Use JSON output for easier testing
             limit: None,
+            interpolate: false,
         }),
     };
 
@@ -115,6 +116,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
             fzf_style: None,
             is_json: true,
             limit: None,
+            interpolate: false,
         }),
     };
 
@@ -128,4 +130,134 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
 
     // Assert
     // Verify the search_bookmarks method was called with exact_tags containing both tag1 and prefix1
+}
+
+#[test]
+#[serial]
+fn test_search_interpolate_flag_parsing() {
+    // Arrange
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+
+    // Test that CLI properly parses the --interpolate flag
+    use clap::Parser;
+
+    // Test with interpolate flag
+    let args = vec![
+        "bkmr",
+        "search",
+        "--json",
+        "--interpolate",
+        "-t",
+        "_snip_",
+        "test query",
+    ];
+
+    let cli = Cli::try_parse_from(args).unwrap();
+
+    if let Some(Commands::Search { interpolate, .. }) = cli.command {
+        assert!(interpolate, "interpolate flag should be true");
+    } else {
+        panic!("Expected Search command");
+    }
+
+    // Test without interpolate flag (should default to false)
+    let args = vec!["bkmr", "search", "--json", "-t", "_snip_", "test query"];
+
+    let cli = Cli::try_parse_from(args).unwrap();
+
+    if let Some(Commands::Search { interpolate, .. }) = cli.command {
+        assert!(!interpolate, "interpolate flag should default to false");
+    } else {
+        panic!("Expected Search command");
+    }
+}
+
+#[test]
+#[serial]
+fn test_search_command_structure_with_interpolate() {
+    // Arrange
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+
+    // Create a CLI command with interpolate flag set
+    let cli = Cli {
+        name: None,
+        config: None,
+        config_file: None,
+        debug: 0,
+        openai: false,
+        generate_config: false,
+        command: Some(Commands::Search {
+            fts_query: Some("test query".to_string()),
+            tags_exact: None,
+            tags_exact_prefix: None,
+            tags_all: Some("_snip_".to_string()),
+            tags_all_prefix: None,
+            tags_all_not: None,
+            tags_all_not_prefix: None,
+            tags_any: None,
+            tags_any_prefix: None,
+            tags_any_not: None,
+            tags_any_not_prefix: None,
+            order_desc: false,
+            order_asc: false,
+            non_interactive: true,
+            is_fuzzy: false,
+            fzf_style: None,
+            is_json: true,
+            limit: Some(50),
+            interpolate: true, // Test with interpolation enabled
+        }),
+    };
+
+    // Extract the command and verify structure
+    if let Some(Commands::Search {
+        interpolate,
+        tags_all,
+        is_json,
+        limit,
+        ..
+    }) = cli.command
+    {
+        assert!(interpolate, "interpolate should be true");
+        assert!(is_json, "is_json should be true");
+        assert_eq!(tags_all, Some("_snip_".to_string()));
+        assert_eq!(limit, Some(50));
+    } else {
+        panic!("Expected Search command");
+    }
+}
+
+#[test]
+#[serial]
+fn test_interpolation_conditions() {
+    // Test the conditions for when interpolation should be applied
+    let test_cases = vec![
+        ("regular url", false),
+        ("{{ 'pwd' | shell }}", true),
+        ("{% set var = 'value' %}", true),
+        ("no templates here", false),
+        ("{{ current_date | strftime('%Y-%m-%d') }}", true),
+        (
+            "mixed content {{ 'whoami' | shell }} and regular text",
+            true,
+        ),
+        ("{%- comment -%}test{%- endcomment -%}", true),
+    ];
+
+    for (content, should_interpolate) in test_cases {
+        let has_template = content.contains("{{") || content.contains("{%");
+        assert_eq!(
+            has_template,
+            should_interpolate,
+            "Content '{}' should {} interpolation",
+            content,
+            if should_interpolate {
+                "trigger"
+            } else {
+                "not trigger"
+            }
+        );
+    }
 }

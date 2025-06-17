@@ -12,7 +12,7 @@ pub trait InterpolationService: Send + Sync + Debug {
     fn render_bookmark_url(&self, bookmark: &Bookmark) -> ApplicationResult<String>;
 
     /// Render an interpolated URL without any specific context
-    fn render_url(&self, url: &str) -> ApplicationResult<String>;
+    fn render_url(&self, url: &str) -> ApplicationResult<String>;  // todo: consider removing this method, not used in the codebase
 }
 
 /// Implementation of InterpolationService using a template engine

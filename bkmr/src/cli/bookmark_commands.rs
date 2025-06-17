@@ -1,8 +1,6 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
-use crate::application::services::factory::{
-    create_action_service, create_bookmark_service, create_tag_service, create_template_service,
-};
+use crate::application::services::factory::{create_action_service, create_bookmark_service, create_interpolation_service, create_tag_service, create_template_service};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField, DEFAULT_FIELDS};
@@ -30,7 +28,7 @@ use std::io::Write;
 use std::path::Path;
 use std::{fs, io};
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -99,6 +97,7 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
         fzf_style,
         is_json,
         limit,
+        interpolate,  // Add this line to extract the interpolate flag
     } = cli.command.unwrap()
     {
         let mut fields = DEFAULT_FIELDS.to_vec();
@@ -161,7 +160,31 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             .with_limit(limit_usize);
 
         // Use the new search method
-        let bookmarks = service.search_bookmarks(&query)?;
+        let mut bookmarks = service.search_bookmarks(&query)?;
+
+        // Handle interpolation if requested
+        if interpolate {
+            let interpolation_service = create_interpolation_service();
+
+            // Process each bookmark's URL through interpolation
+            for bookmark in &mut bookmarks {
+                if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
+                    match interpolation_service.render_bookmark_url(bookmark) {
+                        Ok(rendered_url) => {
+                            bookmark.url = rendered_url;
+                        }
+                        Err(e) => {
+                            // Log error but continue with original content
+                            warn!(
+                                "Failed to interpolate bookmark {}: {}",
+                                bookmark.id.unwrap_or(0),
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        }
 
         // Handle different output modes
         match (is_fuzzy, is_json) {
@@ -366,7 +389,12 @@ pub fn add(cli: Cli) -> CliResult<()> {
         let mut tag_set = match Tag::parse_tag_option(tags.as_deref()) {
             Ok(Some(tags)) => tags,
             Ok(None) => HashSet::new(),
-            Err(e) => return Err(CliError::InvalidInput(format!("Failed to parse tags: {}", e))),
+            Err(e) => {
+                return Err(CliError::InvalidInput(format!(
+                    "Failed to parse tags: {}",
+                    e
+                )))
+            }
         };
         // Add the system tag if it's not Uri (which has an empty string as_str)
         if system_tag != SystemTag::Uri {

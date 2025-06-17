@@ -115,6 +115,12 @@ pub enum Commands {
 
         #[arg(short = 'l', long = "limit", help = "limit number of results")]
         limit: Option<i32>,
+
+        #[arg(
+            long = "interpolate",
+            help = "process template interpolation in snippet content before output"
+        )]
+        interpolate: bool,
     },
     /// Semantic Search with OpenAI
     SemSearch {
