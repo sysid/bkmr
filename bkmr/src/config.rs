@@ -47,6 +47,25 @@ impl Default for FzfOpts {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ShellOpts {
+    /// Whether to use interactive mode for shell script execution (default: true)
+    #[serde(default = "default_interactive")]
+    pub interactive: bool,
+}
+
+fn default_interactive() -> bool {
+    true
+}
+
+impl Default for ShellOpts {
+    fn default() -> Self {
+        Self {
+            interactive: default_interactive(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
     /// Path to the SQLite database file
     #[serde(default = "default_db_path")]
@@ -55,6 +74,10 @@ pub struct Settings {
     /// Options for the fuzzy finder interface
     #[serde(default)]
     pub fzf_opts: FzfOpts,
+
+    /// Options for shell script execution
+    #[serde(default)]
+    pub shell_opts: ShellOpts,
 
     /// Tracks configuration source (not serialized)
     #[serde(skip)]
@@ -103,6 +126,7 @@ impl Default for Settings {
         Self {
             db_url: default_db_path(),
             fzf_opts: FzfOpts::default(),
+            shell_opts: ShellOpts::default(),
             config_source: ConfigSource::Default,
         }
     }
@@ -226,6 +250,12 @@ fn apply_env_overrides(settings: &mut Settings) {
     if let Ok(fzf_opts) = std::env::var("BKMR_FZF_OPTS") {
         trace!("Using BKMR_FZF_OPTS from environment: {}", fzf_opts);
         settings.fzf_opts = parse_fzf_opts(&fzf_opts);
+        used_env_vars = true;
+    }
+
+    if let Ok(shell_interactive) = std::env::var("BKMR_SHELL_INTERACTIVE") {
+        trace!("Using BKMR_SHELL_INTERACTIVE from environment: {}", shell_interactive);
+        settings.shell_opts.interactive = shell_interactive.to_lowercase() == "true";
         used_env_vars = true;
     }
 
@@ -467,6 +497,9 @@ mod tests {
                 no_url: false,
                 show_action: true,
             },
+            shell_opts: ShellOpts {
+                interactive: true,
+            },
             config_source: ConfigSource::ConfigFile,
         };
 
@@ -522,5 +555,29 @@ mod tests {
         // Test the default path generation
         let path = default_db_path();
         assert!(path.contains("bkmr.db"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_shell_interactive_environment_override() {
+        let _guard = EnvGuard::new();
+        
+        // Set environment variable to disable interactive mode
+        env::set_var("BKMR_SHELL_INTERACTIVE", "false");
+        env::remove_var("BKMR_DB_URL");
+        env::remove_var("BKMR_FZF_OPTS");
+        
+        let settings = load_settings(None).unwrap();
+        
+        // Check that shell interactive was overridden
+        assert!(!settings.shell_opts.interactive, "Should disable interactive mode via environment");
+        
+        // Set environment variable to enable interactive mode
+        env::set_var("BKMR_SHELL_INTERACTIVE", "true");
+        
+        let settings = load_settings(None).unwrap();
+        
+        // Check that shell interactive was overridden
+        assert!(settings.shell_opts.interactive, "Should enable interactive mode via environment");
     }
 }

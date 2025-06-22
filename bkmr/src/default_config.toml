@@ -13,3 +13,10 @@ reverse = false
 show_tags = false
 no_url = false
 show_action = true
+
+# Shell script execution options
+[shell_opts]
+# Whether to use interactive mode for shell script execution (default: true)
+# When true, shell scripts are presented for editing before execution
+# When false, shell scripts are executed directly without interaction
+interactive = true

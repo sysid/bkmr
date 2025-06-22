@@ -109,8 +109,11 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
         Arc::clone(&interpolation_service),
     ));
 
-    let shell_action: Box<dyn BookmarkAction> =
-        Box::new(ShellAction::new(Arc::clone(&interpolation_service)));
+    let app_state = AppState::read_global();
+    let shell_action: Box<dyn BookmarkAction> = Box::new(ShellAction::new(
+        Arc::clone(&interpolation_service),
+        app_state.settings.shell_opts.interactive,
+    ));
 
     // Always create MarkdownAction with repository
     // The action itself will determine whether to update embeddings based on:

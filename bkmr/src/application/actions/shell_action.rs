@@ -16,18 +16,18 @@ pub struct ShellAction {
 }
 
 impl ShellAction {
-    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
+    pub fn new(interpolation_service: Arc<dyn InterpolationService>, interactive: bool) -> Self {
         Self {
             interpolation_service,
-            // todo: make this configurable via CLI or environment variable
-            interactive: true, // Default to interactive mode
+            interactive,
         }
     }
+    
     #[allow(dead_code)]
     pub fn new_direct(interpolation_service: Arc<dyn InterpolationService>) -> Self {
         Self {
             interpolation_service,
-            interactive: false, // Default to non-interactive/legacy mode
+            interactive: false, // Direct execution without interaction
         }
     }
 
@@ -345,11 +345,11 @@ mod tests {
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         
         // Act
-        let interactive_action = ShellAction::new(interpolation_service.clone());
+        let interactive_action = ShellAction::new(interpolation_service.clone(), true);
         let direct_action = ShellAction::new_direct(interpolation_service);
         
         // Assert
-        assert!(interactive_action.interactive, "new() should default to interactive mode");
+        assert!(interactive_action.interactive, "new() with true should set interactive mode");
         assert!(!direct_action.interactive, "new_direct() should set non-interactive mode");
     }
 
@@ -390,7 +390,7 @@ mod tests {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new(interpolation_service);
+        let action = ShellAction::new(interpolation_service, true);
         
         // Act
         let edit_mode = action.detect_edit_mode();
@@ -409,7 +409,7 @@ mod tests {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new(interpolation_service);
+        let action = ShellAction::new(interpolation_service, true);
         
         // Act
         let history_path = action.get_history_file_path();
@@ -424,7 +424,7 @@ mod tests {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new(interpolation_service);
+        let action = ShellAction::new(interpolation_service, true);
         
         // Act
         let result = action.create_configured_editor();
