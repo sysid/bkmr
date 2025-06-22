@@ -32,6 +32,10 @@ height = "70%"
 reverse = true
 show_tags = true
 no_url = false
+
+# Shell script execution options
+[shell_opts]
+interactive = true
 ```
 
 ### Generating a Default Config
@@ -57,6 +61,7 @@ bkmr --config-file /path/to/your/custom-config.toml search
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BKMR_DB_URL` | Path to SQLite database file | `~/.config/bkmr/bkmr.db` |
+| `BKMR_SHELL_INTERACTIVE` | Enable/disable interactive shell editing | `true` |
 | `OPENAI_API_KEY` | API key for OpenAI (needed for semantic search) | None |
 | `EDITOR` | Text editor for editing bookmarks | `vim` |
 
@@ -82,11 +87,72 @@ Add these to your shell profile (`.bashrc`, `.zshrc`, etc.):
 ```bash
 # Core bkmr configuration
 export BKMR_DB_URL="$HOME/.local/share/bkmr/bookmarks.db"
+export BKMR_SHELL_INTERACTIVE="true"  # Enable interactive shell editing (default)
 export OPENAI_API_KEY="your-openai-key"  # Only if using semantic search
 export EDITOR="code -w"  # Use VS Code for editing
 
 # FZF display options
 export BKMR_FZF_OPTS="--height 70% --reverse --show-tags"
+```
+
+## Shell Script Configuration
+
+`bkmr` provides special configuration options for shell script execution behavior.
+
+### Interactive Shell Editing
+
+By default, shell scripts (`_shell_` content type) present an interactive editor before execution. This allows you to:
+
+- Add parameters to the command
+- Modify the script on-the-fly
+- Review the command before execution
+
+### Configuration Options
+
+#### Via Configuration File
+
+```toml
+[shell_opts]
+# Enable interactive editing (default: true)
+interactive = true
+```
+
+#### Via Environment Variable
+
+```bash
+# Enable interactive mode (default)
+export BKMR_SHELL_INTERACTIVE=true
+
+# Disable interactive mode for direct execution
+export BKMR_SHELL_INTERACTIVE=false
+```
+
+### Editor Features
+
+When interactive mode is enabled, the shell editor provides:
+
+- **Automatic editor detection**: Detects vim or emacs mode from your shell configuration
+- **Readline compatibility**: Supports `.inputrc` settings
+- **History persistence**: Commands saved to `~/.config/bkmr/shell_history.txt`
+- **Shell integration**: Respects `$ZSH_VI_MODE`, `$BASH_VI_MODE` environment variables
+
+### Use Cases
+
+**Interactive Mode (Default)**: Best for development and exploration
+```bash
+# Execute shell bookmark - presents editor first
+bkmr search -t _shell_ "deploy script"
+Execute: ./deploy.sh production
+# Edit to: ./deploy.sh staging --dry-run
+# Press Enter to execute
+```
+
+**Direct Mode**: Best for automation and scripts
+```bash
+export BKMR_SHELL_INTERACTIVE=false
+# Execute shell bookmark - runs immediately without editing
+bkmr search -t _shell_ "deploy script"
+# Executes: ./deploy.sh production (no editing interface)
 ```
 
 ## Command-Line Options
@@ -159,8 +225,9 @@ By default, `bkmr` uses the following directory structure:
 
 ```
 $HOME/.config/bkmr/
-├── config.toml    # Configuration file
-└── bkmr.db        # Main database file (default location)
+├── config.toml         # Configuration file
+├── bkmr.db             # Main database file (default location)
+└── shell_history.txt   # Shell command history (when interactive mode is enabled)
 ```
 
 If the home directory is not available, `bkmr` will fall back to:

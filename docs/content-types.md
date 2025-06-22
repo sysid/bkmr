@@ -36,7 +36,7 @@ Store executable shell scripts or command sequences.
 bkmr add '#!/bin/bash\necho "Hello World"\nls -la' shell,scripts --type shell
 ```
 
-**Default Action:** Executes the script in a shell with proper permissions.
+**Default Action:** Presents an interactive editor for adding parameters before execution. Uses vim/emacs bindings based on your shell configuration.
 **System Tag:** `_shell_`
 
 ### Environment Variables
@@ -141,7 +141,7 @@ Where `TYPE` is one of:
 Content types are marked with internal system tags, which `bkmr` uses to determine the appropriate action:
 
 1. `_snip_`: Snippets are copied to clipboard
-2. `_shell_`: Shell scripts are executed in terminal
+2. `_shell_`: Shell scripts present interactive editor before execution
 3. `_md_`: Markdown is rendered and viewed in browser
 4. `_imported_`: Text documents are copied to clipboard
 5. `_env_`: Environment variables are printed to stdout for sourcing
@@ -278,6 +278,48 @@ bkmr add "~/documents/project-notes.md" project,documentation --type md
 echo "Starting backup..."
 pg_dump mydb > ~/backups/mydb_$(date +%Y%m%d).sql
 echo "Backup complete!"
+```
+
+### Interactive Shell Script Execution
+
+When you execute a shell script bookmark, `bkmr` presents an interactive editor by default:
+
+```bash
+# Execute a shell script bookmark
+bkmr search -t _shell_ "backup script"
+Execute: pg_dump mydb > ~/backups/mydb_20250622.sql
+
+# You can edit the command to add parameters:
+Execute: pg_dump mydb > ~/backups/mydb_20250622_prod.sql --verbose
+
+# Features available:
+# - Vim bindings (if you use vim mode in your shell)
+# - Emacs bindings (if you use emacs mode)
+# - Command history saved to ~/.config/bkmr/shell_history.txt
+# - Tab completion and other readline features
+# - Ctrl-C to cancel execution
+```
+
+#### Editor Mode Detection
+
+`bkmr` automatically detects your preferred editor mode from:
+
+- `~/.inputrc` file (`set editing-mode vi`)
+- `$ZSH_VI_MODE` environment variable
+- `$BASH_VI_MODE` environment variable
+- `$INPUTRC` file location
+
+#### Disabling Interactive Mode
+
+For automation or direct execution, you can disable interactive mode:
+
+```bash
+# Via environment variable
+export BKMR_SHELL_INTERACTIVE=false
+
+# Via configuration file
+[shell_opts]
+interactive = false
 ```
 
 ### Code Snippet Example

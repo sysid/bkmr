@@ -66,9 +66,12 @@ Show the system status
 false
 ---END---
 
-# Run the script (default action for this content-type is called automatically when search returns excactly one)
+# Run the script (default action for this content-type is called automatically when search returns exactly one)
 bkmr search -t _shell_ "System Status"
 > Found 1 bookmark: System Status (ID: 22). Executing default action...
+> Execute: #!/bin/bash
+echo "Hello World!"
+# Edit the command if needed, press Enter to execute, or Ctrl-C to cancel
 > Hello World!
 
 
@@ -158,7 +161,7 @@ See bkmr in action:
 |-----------------------|---------------------------------------|--------------|
 | URLs                  | Open in browser                       | (none)       |
 | Snippets              | Copy to clipboard                     | `_snip_`     |
-| Shell Scripts         | Execute in terminal                   | `_shell_`    |
+| Shell Scripts         | Interactive edit then execute in terminal | `_shell_`    |
 | Environment Variables | Print to stdout for sourcing in shell | `_env_`      |
 | Markdown              | Render and view in browser            | `_md_`       |
 | Text Documents        | Copy to clipboard                     | `_imported_` |
@@ -166,10 +169,35 @@ See bkmr in action:
 
 ## Advanced Features
 
+- **Interactive shell editing**: Shell scripts present an interactive editor with vim/emacs bindings before execution
 - **Template interpolation**: Use Jinja-style templates in URLs and commands
 - **Content embedding**: Store semantic representations for AI-powered search
 - **Context-aware actions**: Different behaviors based on content type
 - **Multiple output formats**: Terminal display, clipboard, or JSON export
+
+### Shell Script Interaction
+
+Shell scripts (`_shell_` content type) provide an interactive editing experience:
+
+- **Pre-filled editing**: Original script appears ready for modification
+- **Vim/Emacs bindings**: Automatically detects your shell's edit mode from `.inputrc`, `$ZSH_VI_MODE`, etc.
+- **Parameter support**: Add arguments, modify commands, or combine multiple commands
+- **History integration**: Commands are saved to `~/.config/bkmr/shell_history.txt`
+- **Configurable behavior**: Can be disabled via configuration for direct execution
+
+```bash
+# Interactive mode (default) - edit before execution
+bkmr search -t _shell_ "backup script"
+Execute: rsync -av /home/user/docs /backup/
+# Edit to add parameters: rsync -av /home/user/docs /backup/$(date +%Y%m%d)/
+# Press Enter to execute
+
+# Disable interactive mode via configuration
+export BKMR_SHELL_INTERACTIVE=false
+# or in ~/.config/bkmr/config.toml:
+# [shell_opts]
+# interactive = false
+```
 
 For detailed documentation on advanced features:
 - [Configuration Options](./docs/configuration.md)

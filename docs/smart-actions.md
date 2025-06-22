@@ -12,7 +12,7 @@ Smart actions are the behaviors triggered when you "open" or interact with a boo
 |-------------|-------------|-----------|
 | Web Browser | Opens URLs in your default browser | URLs and web resources |
 | Copy to Clipboard | Copies content for easy pasting | Code snippets and text documents |
-| Shell Execution | Runs the content as a shell script | Shell commands and scripts |
+| Shell Execution | Interactive editor then runs as shell script | Shell commands and scripts |
 | Markdown Rendering | Converts Markdown to HTML and displays | Documentation and notes |
 | File Opening | Launches with appropriate application | Local files and directories |
 
@@ -64,19 +64,24 @@ Benefits for developers:
 
 ### Shell Action
 
-The shell action executes content as a shell script, making it perfect for automation tasks.
+The shell action presents an interactive editor before executing content as a shell script, making it perfect for automation tasks with runtime customization.
 See "Shell Execution: Two Different Approaches" below for more details.
 
 ```bash
 # Add a shell script
 bkmr add "#!/bin/bash\necho 'Generating report...'\nls -la | grep '.log' > ~/report.txt" reports,logs --type shell
 
-# Execute it (runs the script)
+# Execute it (presents interactive editor first)
 bkmr open 3
+Execute: #!/bin/bash
+echo 'Generating report...'
+ls -la | grep '.log' > ~/report.txt
+# Edit command to add parameters, then press Enter to execute
 ```
 
 Benefits:
 - Execute complex command sequences with a single action
+- Add parameters or modify commands at runtime
 - Store environment setup scripts for different projects
 - Standardize common operational tasks
 
@@ -199,12 +204,16 @@ Benefits:
 The primary way to execute shell scripts.
 
 **Characteristics:**
+- Presents interactive editor before execution (configurable)
+- Uses vim/emacs bindings based on your shell configuration (detected from `.inputrc`, etc.)
+- Commands saved to `~/.config/bkmr/shell_history.txt` for reuse
 - Uses the user's preferred shell (`$SHELL` environment variable or `/bin/sh` as fallback)
 - Script runs with inherited stdio (connected to user's terminal)
 - Supports full interactive scripts
 - Executed as standalone scripts with proper permissions
 - Uses the entire bookmark content as the script
 - Output and errors are displayed in the terminal
+- Can be configured for direct execution via `BKMR_SHELL_INTERACTIVE=false`
 
 ### 2. Template Shell Filter (`{{ "command" | shell }}`)
 For embedding command output within templates/interpolated content.
