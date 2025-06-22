@@ -39,6 +39,7 @@ rand = "0.9.1"
 regex = "1.11.1"
 reqwest = {version = "0.12.15", features = ["blocking", "json"] }
 rusqlite = { version = "0.35.0", features = ["bundled"] }  # https://github.com/sysid/bkmr/issues/6#issuecomment-1435966997
+rustyline = "15.0.0"
 select = "0.6.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_derive = "1.0.219"
