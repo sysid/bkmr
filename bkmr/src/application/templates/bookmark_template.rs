@@ -85,7 +85,7 @@ impl BookmarkTemplate {
             }
             SystemTag::Shell => {
                 builder
-                    .url("#!/bin/bash\n\n# Your shell script here\necho \"Hello World\"")
+                    .url("#!/usr/bin/env bash\n\n# Your shell script here\necho \"Hello World\"")
                     .title("New Shell Script")
                     .comments("Description of the shell script");
 
