@@ -131,6 +131,9 @@ impl SqliteBookmarkRepository {
             content_hash: bookmark.content_hash.clone(),
             created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
             embeddable: bookmark.embeddable,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         debug!(
@@ -300,6 +303,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 content_hash: bookmark.content_hash.clone(),
                 created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
                 embeddable: bookmark.embeddable,
+                file_path: None,
+                file_mtime: None,
+                file_hash: None,
             };
             debug!("Inserting bookmark: {}", db_bookmark);
 
