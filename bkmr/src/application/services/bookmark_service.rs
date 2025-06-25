@@ -86,4 +86,13 @@ pub trait BookmarkService: Send + Sync + Debug {
 
     /// Load texts from NDJSON file and create embeddings for semantic search
     fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize>;
+
+    /// Import files from directories, parsing frontmatter metadata
+    fn import_files(
+        &self,
+        paths: &[String],
+        update: bool,
+        delete_missing: bool,
+        dry_run: bool,
+    ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
 }

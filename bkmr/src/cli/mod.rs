@@ -33,6 +33,7 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
         Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli),
         Some(Commands::LoadTexts { .. }) => bookmark_commands::load_texts(cli),
         Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli),
+        Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli),
         Some(Commands::Completion { shell }) => handle_completion(shell),
         Some(Commands::Xxx { ids, tags }) => {

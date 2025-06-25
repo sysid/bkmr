@@ -5,6 +5,7 @@ use bkmr::app_state::AppState;
 use bkmr::cli::args::Cli;
 use bkmr::cli::execute_command;
 use bkmr::domain::embedding::Embedder;
+use bkmr::exitcode;
 use clap::Parser;
 use crossterm::style::Stylize;
 use std::sync::Arc;
@@ -41,13 +42,13 @@ fn main() {
 
     if let Err(e) = result {
         eprintln!("{}: {}", "Failed to initialize AppState".red(), e);
-        std::process::exit(1);
+        std::process::exit(exitcode::USAGE);
     }
 
     // Execute the command
     if let Err(e) = execute_command(stderr, cli) {
         eprintln!("{}", format!("Error: {}", e).red());
-        std::process::exit(1);
+        std::process::exit(exitcode::USAGE);
     }
 }
 

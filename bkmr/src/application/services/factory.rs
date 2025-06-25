@@ -14,7 +14,7 @@ use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
-use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
+use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crossterm::style::Stylize;
 use std::path::Path;
@@ -62,7 +62,7 @@ pub fn create_bookmark_service() -> Arc<dyn BookmarkService> {
     Arc::new(BookmarkServiceImpl::new(
         repository.clone(),
         embedder,
-        Arc::new(JsonImportRepository::new()),
+        Arc::new(FileImportRepository::new()),
     ))
 }
 
