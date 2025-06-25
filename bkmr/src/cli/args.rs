@@ -255,6 +255,29 @@ pub enum Commands {
         path: String,
     },
 
+    /// Import files from directories, parsing frontmatter metadata
+    ImportFiles {
+        /// Directories or files to import
+        #[arg(help = "Directories or files to import")]
+        paths: Vec<String>,
+
+        #[arg(
+            short = 'u', 
+            long = "update", 
+            help = "Update existing bookmarks when content differs"
+        )]
+        update: bool,
+
+        #[arg(
+            long = "delete-missing", 
+            help = "Delete bookmarks whose source files no longer exist"
+        )]
+        delete_missing: bool,
+
+        #[arg(short = 'd', long = "dry-run", help = "Show what would be done without making changes")]
+        dry_run: bool,
+    },
+
     /// Show program information and configuration details
     Info {
         #[arg(short = 's', long = "schema", help = "Show database schema")]

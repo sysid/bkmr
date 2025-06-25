@@ -13,6 +13,7 @@ pub mod infrastructure;
 pub mod app_state;
 pub mod cli;
 pub mod config;
+pub mod exitcode;
 pub mod util;
 
 #[cfg(test)]

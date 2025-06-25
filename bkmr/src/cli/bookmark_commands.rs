@@ -1244,6 +1244,48 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
     Ok(())
 }
 
+pub fn import_files(cli: Cli) -> CliResult<()> {
+    use crate::application::error::ApplicationError;
+    use crate::exitcode;
+    
+    if let Some(Commands::ImportFiles {
+        paths,
+        update,
+        delete_missing,
+        dry_run,
+    }) = cli.command
+    {
+        let service = create_bookmark_service();
+        
+        if dry_run {
+            println!("{}", "Dry run mode - showing what would be done:".green());
+        }
+        
+        match service.import_files(&paths, update, delete_missing, dry_run) {
+            Ok((added, updated, deleted)) => {
+                if dry_run {
+                    println!("Would add: {}, update: {}, delete: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
+                } else {
+                    println!("Added: {}, Updated: {}, Deleted: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
+                }
+                Ok(())
+            }
+            Err(ApplicationError::DuplicateName { name, existing_id, file_path }) => {
+                eprintln!("{}", format!("Error: Duplicate name '{}' found in {}", name, file_path).red());
+                eprintln!("Existing bookmark with same name already exists (ID: {})", existing_id);
+                eprintln!("Use --update flag to overwrite existing bookmarks with changed content");
+                std::process::exit(exitcode::DUP);
+            }
+            Err(e) => {
+                eprintln!("{}", format!("Import failed: {}", e).red());
+                std::process::exit(exitcode::USAGE);
+            }
+        }
+    } else {
+        Err(CliError::InvalidInput("Expected ImportFiles command".to_string()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

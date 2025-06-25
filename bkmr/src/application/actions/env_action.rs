@@ -96,6 +96,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Act
@@ -131,6 +134,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Act
