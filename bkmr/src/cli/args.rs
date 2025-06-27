@@ -280,6 +280,12 @@ pub enum Commands {
 
         #[arg(short = 'd', long = "dry-run", help = "Show what would be done without making changes")]
         dry_run: bool,
+
+        #[arg(
+            long = "base-path", 
+            help = "Base path variable name from config (e.g., SCRIPTS_HOME). Paths must be relative to the base path location."
+        )]
+        base_path: Option<String>,
     },
 
     /// Show program information and configuration details

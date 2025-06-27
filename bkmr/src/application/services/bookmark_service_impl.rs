@@ -480,11 +480,35 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         update: bool,
         delete_missing: bool,
         dry_run: bool,
+        base_path_name: Option<&str>,
     ) -> ApplicationResult<(usize, usize, usize)> {
         use crate::domain::repositories::import_repository::ImportOptions;
 
-        debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}", 
-               paths, update, delete_missing, dry_run);
+        debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}, base_path={:?}", 
+               paths, update, delete_missing, dry_run, base_path_name);
+
+        // Load settings for base path resolution
+        let settings = crate::config::load_settings(None)
+            .map_err(|e| ApplicationError::Other(format!("Failed to load settings: {}", e)))?;
+
+        // Resolve actual scan paths based on base path
+        let actual_scan_paths = if let Some(base_name) = base_path_name {
+            if let Some(base_value) = settings.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(&settings, base_value);
+                // Convert relative paths to absolute paths under the base
+                paths.iter()
+                    .map(|relative_path| {
+                        let full_path = std::path::Path::new(&expanded_base).join(relative_path);
+                        full_path.to_string_lossy().to_string()
+                    })
+                    .collect()
+            } else {
+                return Err(ApplicationError::Other(format!("Base path '{}' not found in configuration", base_name)));
+            }
+        } else {
+            // No base path - use paths as provided
+            paths.to_vec()
+        };
 
         let options = ImportOptions {
             update,
@@ -492,10 +516,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             dry_run,
         };
 
-        // Get file data from repository
+        // Get file data from repository using resolved paths
         let file_imports = self
             .import_repository
-            .import_files(paths, &options)
+            .import_files(&actual_scan_paths, &options)
             .map_err(|e| ApplicationError::Other(format!("Failed to scan files: {}", e)))?;
 
         debug!("Found {} files to process", file_imports.len());
@@ -527,14 +551,14 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
                 // Update existing bookmark
                 if !dry_run {
-                    self.update_bookmark_from_file(&existing, file_data)?;
+                    self.update_bookmark_from_file(&existing, file_data, &settings, base_path_name)?;
                 }
                 updated_count += 1;
                 debug!("Updated bookmark: {}", file_data.name);
             } else {
                 // Create new bookmark
                 if !dry_run {
-                    self.create_bookmark_from_file(file_data)?;
+                    self.create_bookmark_from_file(file_data, &settings, base_path_name)?;
                 }
                 added_count += 1;
                 debug!("Added bookmark: {}", file_data.name);
@@ -580,7 +604,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     }
 
     /// Create a new bookmark from file data
-    fn create_bookmark_from_file(&self, file_data: &FileImportData) -> ApplicationResult<Bookmark> {
+    fn create_bookmark_from_file(&self, file_data: &FileImportData, settings: &crate::config::Settings, base_path_name: Option<&str>) -> ApplicationResult<Bookmark> {
         use crate::domain::system_tag::SystemTag;
         
         // Convert content type to system tag
@@ -613,8 +637,32 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             .build()
             .map_err(|e| ApplicationError::Other(format!("Failed to build bookmark: {}", e)))?;
 
-        // Set file metadata
-        bookmark.file_path = Some(file_data.file_path.display().to_string());
+        // Set file metadata with base path handling
+        let file_path_str = if let Some(base_name) = base_path_name {
+            // User provided base path - store as relative path with base path variable
+            if let Some(base_value) = settings.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(settings, base_value);
+                let absolute_file_path = file_data.file_path.display().to_string();
+                
+                // Since we resolved the scan paths, files should be under the base path
+                if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
+                    let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
+                    crate::config::create_file_path_with_base(base_name, relative_path)
+                } else {
+                    return Err(ApplicationError::Other(format!(
+                        "File {} is not under base path {} ({})", 
+                        absolute_file_path, base_name, expanded_base
+                    )));
+                }
+            } else {
+                return Err(ApplicationError::Other(format!("Base path '{}' not found in configuration", base_name)));
+            }
+        } else {
+            // No base path specified - store absolute path
+            file_data.file_path.display().to_string()
+        };
+        
+        bookmark.file_path = Some(file_path_str);
         bookmark.file_mtime = Some(file_data.file_mtime as i32);
         bookmark.file_hash = Some(file_data.file_hash.clone());
 
@@ -637,12 +685,38 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     }
 
     /// Update existing bookmark from file data
-    fn update_bookmark_from_file(&self, existing: &Bookmark, file_data: &FileImportData) -> ApplicationResult<Bookmark> {
+    fn update_bookmark_from_file(&self, existing: &Bookmark, file_data: &FileImportData, settings: &crate::config::Settings, base_path_name: Option<&str>) -> ApplicationResult<Bookmark> {
         let mut updated = existing.clone();
         
         // Update content and metadata
         updated.description = file_data.content.clone();
-        updated.file_path = Some(file_data.file_path.display().to_string());
+        
+        // Update file path with base path handling
+        let file_path_str = if let Some(base_name) = base_path_name {
+            // User provided base path - store as relative path with base path variable
+            if let Some(base_value) = settings.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(settings, base_value);
+                let absolute_file_path = file_data.file_path.display().to_string();
+                
+                // Since we resolved the scan paths, files should be under the base path
+                if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
+                    let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
+                    crate::config::create_file_path_with_base(base_name, relative_path)
+                } else {
+                    return Err(ApplicationError::Other(format!(
+                        "File {} is not under base path {} ({})", 
+                        absolute_file_path, base_name, expanded_base
+                    )));
+                }
+            } else {
+                return Err(ApplicationError::Other(format!("Base path '{}' not found in configuration", base_name)));
+            }
+        } else {
+            // No base path specified - store absolute path
+            file_data.file_path.display().to_string()
+        };
+        
+        updated.file_path = Some(file_path_str);
         updated.file_mtime = Some(file_data.file_mtime as i32);
         updated.file_hash = Some(file_data.file_hash.clone());
         

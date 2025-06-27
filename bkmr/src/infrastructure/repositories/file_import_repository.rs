@@ -172,12 +172,16 @@ impl FileImportRepository {
         hasher.update(clean_content.as_bytes());
         let file_hash = format!("{:x}", hasher.finalize());
 
+        // Ensure we always store absolute paths
+        let absolute_path = file_path.canonicalize()
+            .unwrap_or_else(|_| file_path.to_path_buf());
+
         Ok(FileImportData {
             name,
             tags,
             content_type,
             content: clean_content,
-            file_path: file_path.to_path_buf(),
+            file_path: absolute_path,
             file_mtime,
             file_hash,
         })

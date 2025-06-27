@@ -1,5 +1,6 @@
 use crate::domain::error::DomainResult;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, instrument, trace, warn};
 
@@ -79,6 +80,10 @@ pub struct Settings {
     #[serde(default)]
     pub shell_opts: ShellOpts,
 
+    /// Base paths for file imports (e.g., SCRIPTS_HOME="$HOME/scripts")
+    #[serde(default)]
+    pub base_paths: HashMap<String, String>,
+
     /// Tracks configuration source (not serialized)
     #[serde(skip)]
     pub config_source: ConfigSource,
@@ -127,6 +132,7 @@ impl Default for Settings {
             db_url: default_db_path(),
             fzf_opts: FzfOpts::default(),
             shell_opts: ShellOpts::default(),
+            base_paths: HashMap::new(),
             config_source: ConfigSource::Default,
         }
     }
@@ -271,6 +277,41 @@ pub fn generate_default_config() -> String {
     let default_settings = Settings::default();
     toml::to_string_pretty(&default_settings)
         .unwrap_or_else(|_| "# Error generating default configuration".to_string())
+}
+
+/// Get the path to the user's config file
+pub fn get_config_file_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|p| p.join(".config/bkmr/config.toml"))
+}
+
+/// Check if a base path exists in configuration
+pub fn has_base_path(settings: &Settings, name: &str) -> bool {
+    settings.base_paths.contains_key(name)
+}
+
+/// Resolve a file path with base path variables
+pub fn resolve_file_path(settings: &Settings, path: &str) -> String {
+    let mut resolved = path.to_string();
+    
+    // Replace base path variables
+    for (name, base_path) in &settings.base_paths {
+        let var_pattern = format!("${}", name);
+        if resolved.contains(&var_pattern) {
+            let expanded_base = shellexpand::full(base_path).unwrap_or(std::borrow::Cow::Borrowed(base_path));
+            resolved = resolved.replace(&var_pattern, &expanded_base);
+        }
+    }
+    
+    // Also handle standard environment variables
+    match shellexpand::full(&resolved) {
+        Ok(expanded) => expanded.to_string(),
+        Err(_) => resolved,
+    }
+}
+
+/// Create a file path with base path variable
+pub fn create_file_path_with_base(base_path_name: &str, relative_path: &str) -> String {
+    format!("${}/{}", base_path_name, relative_path)
 }
 
 // At the end of config.rs file
@@ -500,6 +541,7 @@ mod tests {
             shell_opts: ShellOpts {
                 interactive: true,
             },
+            base_paths: HashMap::new(),
             config_source: ConfigSource::ConfigFile,
         };
 

@@ -1261,21 +1261,37 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
 pub fn import_files(cli: Cli) -> CliResult<()> {
     use crate::application::error::ApplicationError;
     use crate::exitcode;
+    use crate::config::{load_settings, has_base_path};
     
     if let Some(Commands::ImportFiles {
         paths,
         update,
         delete_missing,
         dry_run,
+        base_path,
     }) = cli.command
     {
+        // Validate base path if provided
+        if let Some(ref base_path_name) = base_path {
+            let settings = load_settings(cli.config.as_deref())
+                .map_err(|e| CliError::Other(format!("Failed to load configuration: {}", e)))?;
+            
+            if !has_base_path(&settings, base_path_name) {
+                eprintln!("{}", format!("Error: Base path '{}' not found in configuration", base_path_name).red());
+                eprintln!("Add it to your config.toml under [base_paths]:");
+                eprintln!("  [base_paths]");
+                eprintln!("  {} = \"$HOME/your/path\"", base_path_name);
+                std::process::exit(exitcode::USAGE);
+            }
+        }
+        
         let service = create_bookmark_service();
         
         if dry_run {
             println!("{}", "Dry run mode - showing what would be done:".green());
         }
         
-        match service.import_files(&paths, update, delete_missing, dry_run) {
+        match service.import_files(&paths, update, delete_missing, dry_run, base_path.as_deref()) {
             Ok((added, updated, deleted)) => {
                 if dry_run {
                     println!("Would add: {}, update: {}, delete: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
