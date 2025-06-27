@@ -625,7 +625,7 @@ pub fn update(cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn edit(cli: Cli) -> CliResult<()> {
-    if let Commands::Edit { ids } = cli.command.unwrap() {
+    if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
 
         let id_list = get_ids(ids)?;
@@ -645,7 +645,7 @@ pub fn edit(cli: Cli) -> CliResult<()> {
             return Ok(());
         }
 
-        edit_bookmarks(id_list)?;
+        edit_bookmarks(id_list, force_db)?;
     }
     Ok(())
 }

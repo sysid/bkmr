@@ -104,7 +104,7 @@ impl FileImportRepository {
     }
 
     /// Process a single file and extract its metadata
-    fn process_file(&self, file_path: &Path) -> DomainResult<FileImportData> {
+    pub fn process_file(&self, file_path: &Path) -> DomainResult<FileImportData> {
         debug!("Processing file: {}", file_path.display());
 
         // Read file content

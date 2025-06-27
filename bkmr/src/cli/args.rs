@@ -185,6 +185,8 @@ pub enum Commands {
     Edit {
         /// Edit bookmarks, list of ids, separated by comma, no blanks
         ids: String,
+        #[arg(long = "force-db", help = "force edit database content instead of source file for file-imported bookmarks")]
+        force_db: bool,
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
     Show { ids: String },

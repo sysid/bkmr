@@ -49,8 +49,8 @@ fn test_base_path_usage_examples() {
     };
     
     // Simulate how the system resolves paths
-    let base_expanded = resolve_file_path(&settings, "$HOME/scripts");
-    let user_provided_path = "backup";  // User provides relative path
+    let _ = resolve_file_path(&settings, "$HOME/scripts");
+    let _ = "backup";  // User provides relative path
     
     // The FileImportRepository would combine these to scan files
     // Full scan path would be: base_expanded + "/" + user_provided_path
