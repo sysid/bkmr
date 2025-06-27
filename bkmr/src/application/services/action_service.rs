@@ -1,8 +1,9 @@
 // src/application/services/action_service.rs
 use crate::domain::action_resolver::ActionResolver;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
 use crate::domain::repositories::repository::BookmarkRepository;
+use crate::util::validation::ValidationHelper;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -55,10 +56,7 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
     #[instrument(skip(self), level = "debug")]
     fn execute_default_action_by_id(&self, id: i32) -> DomainResult<()> {
         // Get the bookmark
-        let bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
+        let bookmark = ValidationHelper::validate_and_get_bookmark_domain(id, &*self.repository)?;
 
         // Execute the default action
         self.execute_default_action(&bookmark)
@@ -104,10 +102,7 @@ impl<R: BookmarkRepository> ActionServiceImpl<R> {
     // Record that a bookmark was accessed
     #[instrument(skip(self), level = "trace")]
     fn record_bookmark_access(&self, id: i32) -> DomainResult<()> {
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark_domain(id, &*self.repository)?;
 
         bookmark.record_access();
 
