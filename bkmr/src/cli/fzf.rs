@@ -518,7 +518,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
             Key::Ctrl('e') => {
                 clear_fzf_artifacts();
                 // Edit selected bookmarks
-                edit_bookmarks(ids)?;
+                edit_bookmarks(ids, false)?;
             }
             Key::Ctrl('d') => {
                 // clear_fzf_artifacts();

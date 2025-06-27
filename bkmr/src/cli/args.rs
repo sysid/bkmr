@@ -185,6 +185,8 @@ pub enum Commands {
     Edit {
         /// Edit bookmarks, list of ids, separated by comma, no blanks
         ids: String,
+        #[arg(long = "force-db", help = "force edit database content instead of source file for file-imported bookmarks")]
+        force_db: bool,
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
     Show { ids: String },
@@ -280,6 +282,12 @@ pub enum Commands {
 
         #[arg(short = 'd', long = "dry-run", help = "Show what would be done without making changes")]
         dry_run: bool,
+
+        #[arg(
+            long = "base-path", 
+            help = "Base path variable name from config (e.g., SCRIPTS_HOME). Paths must be relative to the base path location."
+        )]
+        base_path: Option<String>,
     },
 
     /// Show program information and configuration details

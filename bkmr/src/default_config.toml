@@ -20,3 +20,13 @@ show_action = true
 # When true, shell scripts are presented for editing before execution
 # When false, shell scripts are executed directly without interaction
 interactive = true
+
+# Base paths for file imports - use these to store portable relative paths
+# When importing files with --base-path option, paths are stored as variables
+# Environment variable expansion is supported (e.g., $HOME)
+[base_paths]
+# Example configurations:
+# SCRIPTS_HOME = "$HOME/scripts"
+# DOCS_HOME = "$HOME/documents"
+# WORK_SCRIPTS = "/work/automation/scripts"
+# PROJECT_NOTES = "$HOME/projects/notes"

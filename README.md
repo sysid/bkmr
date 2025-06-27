@@ -83,6 +83,10 @@ bkmr open <id>  # open it in WEB browser
 bkmr add "export DB_USER=dev\nexport DB_PASSWORD=secret\nexport API_KEY=test_key" dev,env --type env --title 'My Environment'
 bkmr search --fzf --fzf-style enhanced -t _env_  # select it for sourcing
 
+# Import files with frontmatter parsing and base path support
+bkmr import-files ~/scripts/backup.sh --base-path SCRIPTS_HOME
+bkmr edit 123  # Smart editing: opens source file for file-imported bookmarks
+
 # Execute shell commands via bookmark (deprecated, use content-type _shell_ instead)
 bkmr add "shell::find ~/projects -name '*.go' | xargs grep 'func main'" tools,search --title 'Search Golang'
 
@@ -149,7 +153,8 @@ See bkmr in action:
 | `sem-search` | AI-powered semantic search using OpenAI embeddings |
 | `add` | Add new content (URLs, snippets, files, shell commands, etc.) |
 | `open` | Launch or interact with stored items |
-| `edit` | Modify existing items |
+| `edit` | Smart editing: auto-detects file-imported bookmarks for source file editing |
+| `import-files` | Import files/directories with frontmatter parsing and base path support |
 | `tags` | View and manage your tag taxonomy |
 | `set-embeddable` | Configure items for semantic search |
 
@@ -169,6 +174,8 @@ See bkmr in action:
 
 ## Advanced Features
 
+- **Smart editing system**: Automatically detects file-imported bookmarks and edits source files directly
+- **File import with base paths**: Import files with portable path storage using configurable base path variables
 - **Interactive shell editing**: Shell scripts present an interactive editor with vim/emacs bindings before execution
 - **Template interpolation**: Use Jinja-style templates in URLs and commands
 - **Content embedding**: Store semantic representations for AI-powered search
@@ -199,7 +206,47 @@ export BKMR_SHELL_INTERACTIVE=false
 # interactive = false
 ```
 
+### File Import and Smart Editing
+
+`bkmr` supports importing files with structured metadata and provides intelligent editing capabilities:
+
+```bash
+# Import files with frontmatter parsing
+bkmr import-files ~/scripts/backup.sh ~/docs/notes.md
+
+# Import with base path configuration for portable storage
+bkmr import-files scripts/backup.sh --base-path SCRIPTS_HOME
+
+# Smart editing automatically detects file-imported bookmarks
+bkmr edit 123  # Opens source file in $EDITOR if file-imported, database editor otherwise
+
+# Force database content editing
+bkmr edit 123 --force-db
+```
+
+**File Import Features:**
+- **Frontmatter parsing**: Supports YAML (`---` delimited) and hash-style (`# key: value`) metadata
+- **Base path configuration**: Store portable paths using configurable base path variables
+- **Incremental updates**: SHA-256 hash tracking for efficient re-imports
+- **Directory traversal**: Recursive processing with `.gitignore` support
+
+**Smart Editing Features:**
+- **Automatic detection**: Identifies file-imported vs regular bookmarks
+- **Source file editing**: Opens original files in your `$EDITOR` for file-imported bookmarks
+- **Metadata synchronization**: Changes to frontmatter automatically sync to database
+- **Path resolution**: Handles base path variables and environment expansion
+
+**Configuration Example:**
+```toml
+# ~/.config/bkmr/config.toml
+[base_paths]
+SCRIPTS_HOME = "$HOME/scripts"
+DOCS_HOME = "$HOME/documents"
+WORK_SCRIPTS = "/work/automation/scripts"
+```
+
 For detailed documentation on advanced features:
+- [File Import and Smart Editing](./docs/file-import-smart-editing.md)
 - [Configuration Options](./docs/configuration.md)
 - [Content Types](./docs/content-types.md)
 - [Smart Actions](./docs/smart-actions.md)
