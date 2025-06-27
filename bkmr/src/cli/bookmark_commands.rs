@@ -20,6 +20,7 @@ use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
+use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
 use crossterm::style::Stylize;
 use itertools::Itertools;
@@ -28,7 +29,7 @@ use std::io::Write;
 use std::path::Path;
 use std::{fs, io};
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use tracing::{debug, instrument, warn};
+use tracing::{instrument, warn};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -39,31 +40,6 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
         .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
 }
 
-// Parse a tag string into a HashSet of Tag objects
-#[instrument(level = "trace")]
-pub fn parse_tag_string(tag_str: &Option<String>) -> Option<HashSet<Tag>> {
-    Tag::parse_tag_option(tag_str.as_ref().map(|s| s.as_str())).unwrap_or_else(|e| {
-        debug!("Failed to parse tags: {}", e);
-        None
-    })
-}
-
-// Apply prefix tags to base tags, returning a new set with all tags
-#[instrument(level = "trace")]
-pub fn apply_prefix_tags(
-    base_tags: Option<HashSet<Tag>>,
-    prefix_tags: Option<HashSet<Tag>>,
-) -> Option<HashSet<Tag>> {
-    match (base_tags, prefix_tags) {
-        (None, None) => None,
-        (Some(base), None) => Some(base),
-        (None, Some(prefix)) => Some(prefix),
-        (Some(mut base), Some(prefix)) => {
-            base.extend(prefix);
-            Some(base)
-        }
-    }
-}
 
 // Determine sort direction based on order flags
 #[instrument(level = "trace")]
@@ -112,30 +88,18 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             fields.push(DisplayField::LastUpdateTs);
         }
 
-        // Parse all tag sets and apply prefixes
-        let exact_tags = apply_prefix_tags(
-            parse_tag_string(&tags_exact),
-            parse_tag_string(&tags_exact_prefix),
-        );
-
-        let all_tags = apply_prefix_tags(
-            parse_tag_string(&tags_all),
-            parse_tag_string(&tags_all_prefix),
-        );
-
-        let all_not_tags = apply_prefix_tags(
-            parse_tag_string(&tags_all_not),
-            parse_tag_string(&tags_all_not_prefix),
-        );
-
-        let any_tags = apply_prefix_tags(
-            parse_tag_string(&tags_any),
-            parse_tag_string(&tags_any_prefix),
-        );
-
-        let any_not_tags = apply_prefix_tags(
-            parse_tag_string(&tags_any_not),
-            parse_tag_string(&tags_any_not_prefix),
+        // Process all tag parameters using centralized logic
+        let search_tags = ArgumentProcessor::process_search_tag_parameters(
+            &tags_exact,
+            &tags_exact_prefix,
+            &tags_all,
+            &tags_all_prefix,
+            &tags_all_not,
+            &tags_all_not_prefix,
+            &tags_any,
+            &tags_any_prefix,
+            &tags_any_not,
+            &tags_any_not_prefix,
         );
 
         let limit_usize = match limit {
@@ -148,14 +112,14 @@ pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             None => None,
         };
 
-        // Create a query object instead of directly calling search_bookmarks
+        // Create a query object using the processed tag parameters
         let query = BookmarkQuery::new()
             .with_text_query(fts_query.as_deref())
-            .with_tags_exact(exact_tags.as_ref())
-            .with_tags_all(all_tags.as_ref())
-            .with_tags_all_not(all_not_tags.as_ref())
-            .with_tags_any(any_tags.as_ref())
-            .with_tags_any_not(any_not_tags.as_ref())
+            .with_tags_exact(search_tags.exact_tags.as_ref())
+            .with_tags_all(search_tags.all_tags.as_ref())
+            .with_tags_all_not(search_tags.all_not_tags.as_ref())
+            .with_tags_any(search_tags.any_tags.as_ref())
+            .with_tags_any_not(search_tags.any_not_tags.as_ref())
             .with_sort_by_date(sort_direction)
             .with_limit(limit_usize);
 
@@ -358,7 +322,18 @@ pub fn open(cli: Cli) -> CliResult<()> {
     Ok(())
 }
 
-// TODO: simplify redundant code
+/// Helper function to process content based on bookmark type
+fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
+    if matches!(
+        system_tag,
+        SystemTag::Markdown | SystemTag::Snippet | SystemTag::Text | SystemTag::Shell | SystemTag::Env
+    ) {
+        content.replace("\\n", "\n")
+    } else {
+        content.to_string()
+    }
+}
+
 #[instrument(skip(cli))]
 pub fn add(cli: Cli) -> CliResult<()> {
     if let Commands::Add {
@@ -386,17 +361,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 
-        // Parse tags if provided - using our new centralized function
-        let mut tag_set = match Tag::parse_tag_option(tags.as_deref()) {
-            Ok(Some(tags)) => tags,
-            Ok(None) => HashSet::new(),
-            Err(e) => {
-                return Err(CliError::InvalidInput(format!(
-                    "Failed to parse tags: {}",
-                    e
-                )))
-            }
-        };
+        // Parse tags using centralized argument processor
+        let mut tag_set = ArgumentProcessor::parse_tags_with_error_handling(&tags)?;
         // Add the system tag if it's not Uri (which has an empty string as_str)
         if system_tag != SystemTag::Uri {
             if let Ok(system_tag_value) = Tag::new(system_tag.as_str()) {
@@ -435,18 +401,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
         // Override with provided values if they exist
         if let Some(url_value) = &final_url {
-            // Process escaped newlines in content when needed
-            let processed_content = if system_tag == SystemTag::Markdown
-                || system_tag == SystemTag::Snippet
-                || system_tag == SystemTag::Text
-                || system_tag == SystemTag::Shell
-                || system_tag == SystemTag::Env
-            {
-                url_value.replace("\\n", "\n")
-            } else {
-                url_value.clone()
-            };
-            template.url = processed_content;
+            template.url = process_content_for_type(url_value, system_tag);
         }
 
         if let Some(title_value) = &title {
@@ -465,18 +420,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         // use the simple add path without opening editor
         if final_url.is_some() && !edit && clone_id.is_none() {
             let url_value = final_url.unwrap();
-
-            // Process escaped newlines in content when needed
-            let processed_content = if system_tag == SystemTag::Markdown
-                || system_tag == SystemTag::Snippet
-                || system_tag == SystemTag::Text
-                || system_tag == SystemTag::Shell
-                || system_tag == SystemTag::Env
-            {
-                url_value.replace("\\n", "\n")
-            } else {
-                url_value
-            };
+            let processed_content = process_content_for_type(&url_value, system_tag);
 
             let bookmark = bookmark_service.add_bookmark(
                 &processed_content,
@@ -1338,127 +1282,13 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn given_valid_tag_string_when_parse_tag_string_then_returns_tag_set() {
-        // Arrange
-        let tag_str = Some("tag1,tag2,tag3".to_string());
 
-        // Act
-        let result = parse_tag_string(&tag_str);
 
-        // Assert
-        assert!(result.is_some());
-        let tags = result.unwrap();
-        assert_eq!(tags.len(), 3);
-        assert!(tags.contains(&Tag::new("tag1").unwrap()));
-        assert!(tags.contains(&Tag::new("tag2").unwrap()));
-        assert!(tags.contains(&Tag::new("tag3").unwrap()));
-    }
 
-    #[test]
-    fn given_empty_tag_string_when_parse_tag_string_then_returns_none() {
-        // Arrange
-        let tag_str = Some("".to_string());
 
-        // Act
-        let result = parse_tag_string(&tag_str);
 
-        // Assert
-        assert!(result.is_none());
-    }
 
-    #[test]
-    fn given_none_tag_string_when_parse_tag_string_then_returns_none() {
-        // Arrange
-        let tag_str: Option<String> = None;
 
-        // Act
-        let result = parse_tag_string(&tag_str);
-
-        // Assert
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn given_invalid_tag_string_when_parse_tag_string_then_returns_none() {
-        // Arrange
-        let tag_str = Some("invalid tag with space".to_string());
-
-        // Act
-        let result = parse_tag_string(&tag_str);
-
-        // Assert
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn given_base_and_prefix_when_apply_prefix_tags_then_returns_combined() {
-        // Arrange
-        let mut base_tags = HashSet::new();
-        base_tags.insert(Tag::new("base1").unwrap());
-        base_tags.insert(Tag::new("base2").unwrap());
-
-        let mut prefix_tags = HashSet::new();
-        prefix_tags.insert(Tag::new("prefix1").unwrap());
-        prefix_tags.insert(Tag::new("prefix2").unwrap());
-
-        // Act
-        let result = apply_prefix_tags(Some(base_tags), Some(prefix_tags));
-
-        // Assert
-        assert!(result.is_some());
-        let combined = result.unwrap();
-        assert_eq!(combined.len(), 4);
-        assert!(combined.contains(&Tag::new("base1").unwrap()));
-        assert!(combined.contains(&Tag::new("base2").unwrap()));
-        assert!(combined.contains(&Tag::new("prefix1").unwrap()));
-        assert!(combined.contains(&Tag::new("prefix2").unwrap()));
-    }
-
-    #[test]
-    fn given_only_base_when_apply_prefix_tags_then_returns_base() {
-        // Arrange
-        let mut base_tags = HashSet::new();
-        base_tags.insert(Tag::new("base1").unwrap());
-        base_tags.insert(Tag::new("base2").unwrap());
-
-        // Act
-        let result = apply_prefix_tags(Some(base_tags), None);
-
-        // Assert
-        assert!(result.is_some());
-        let tags = result.unwrap();
-        assert_eq!(tags.len(), 2);
-        assert!(tags.contains(&Tag::new("base1").unwrap()));
-        assert!(tags.contains(&Tag::new("base2").unwrap()));
-    }
-
-    #[test]
-    fn given_only_prefix_when_apply_prefix_tags_then_returns_prefix() {
-        // Arrange
-        let mut prefix_tags = HashSet::new();
-        prefix_tags.insert(Tag::new("prefix1").unwrap());
-        prefix_tags.insert(Tag::new("prefix2").unwrap());
-
-        // Act
-        let result = apply_prefix_tags(None, Some(prefix_tags));
-
-        // Assert
-        assert!(result.is_some());
-        let tags = result.unwrap();
-        assert_eq!(tags.len(), 2);
-        assert!(tags.contains(&Tag::new("prefix1").unwrap()));
-        assert!(tags.contains(&Tag::new("prefix2").unwrap()));
-    }
-
-    #[test]
-    fn given_none_for_both_when_apply_prefix_tags_then_returns_none() {
-        // Act
-        let result = apply_prefix_tags(None, None);
-
-        // Assert
-        assert!(result.is_none());
-    }
 
     #[test]
     fn given_desc_flag_when_determine_sort_direction_then_returns_descending() {

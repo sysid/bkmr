@@ -146,7 +146,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         }
     }
 
-    // todo: should be domain service
+    // Note: This embedding logic could be moved to a dedicated domain service
+    // to better separate concerns between bookmark persistence and embedding computation
     #[instrument(skip(self), level = "debug")]
     fn update_bookmark(
         &self,
@@ -310,7 +311,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
-        bookmark.record_access(); // TODO: Implement proper record_access method
+        bookmark.record_access();
 
         self.repository.update(&bookmark)?;
 

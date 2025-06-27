@@ -1,5 +1,5 @@
 use bkmr::cli::args::{Cli, Commands};
-use bkmr::cli::bookmark_commands::{apply_prefix_tags, parse_tag_string};
+use bkmr::util::argument_processor::ArgumentProcessor;
 use bkmr::domain::tag::Tag;
 use bkmr::util::testing::{init_test_env, EnvGuard};
 use serial_test::serial;
@@ -61,10 +61,10 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
     // We'll mock the service function calls by patching it with a function that records calls
     // For simplicity in this example, we'll just verify the core functions work as expected
 
-    // Verify the tag string parsing
-    let exact_tags = apply_prefix_tags(
-        parse_tag_string(&Some("tag1".to_string())),
-        parse_tag_string(&Some("prefix1".to_string())),
+    // Verify the tag string parsing using ArgumentProcessor
+    let exact_tags = ArgumentProcessor::apply_prefix_tags(
+        ArgumentProcessor::parse_tag_string(&Some("tag1".to_string())),
+        ArgumentProcessor::parse_tag_string(&Some("prefix1".to_string())),
     );
 
     // Assert
