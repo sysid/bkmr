@@ -594,14 +594,12 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         let mut all_tags = file_data.tags.clone();
         all_tags.insert(system_tag.to_tag()?);
 
-        // Create bookmark using dummy URL since this is file-based content
-        let file_url = format!("file://{}", file_data.file_path.display());
-
+        // Store file content in URL column as required
         let mut bookmark = BookmarkBuilder::default()
             .id(None)
-            .url(file_url)
+            .url(file_data.content.clone())
             .title(file_data.name.clone())
-            .description(file_data.content.clone())
+            .description(String::new())
             .tags(all_tags)
             .access_count(0)
             .created_at(Some(chrono::Utc::now()))

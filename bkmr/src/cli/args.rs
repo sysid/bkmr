@@ -137,6 +137,8 @@ pub enum Commands {
     Open {
         /// list of ids, separated by comma, no blanks
         ids: String,
+        #[arg(long = "no-edit", help = "skip interactive editing for shell scripts")]
+        no_edit: bool,
     },
     /// Add a bookmark
     Add {
@@ -160,6 +162,8 @@ pub enum Commands {
         bookmark_type: String,
         #[arg(short = 'c', long = "clone", help = "clone an existing bookmark by ID")]
         clone_id: Option<i32>,
+        #[arg(long = "stdin", help = "read content from stdin into url field")]
+        stdin: bool,
     },
     /// Delete bookmarks
     Delete {
