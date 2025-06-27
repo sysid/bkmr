@@ -25,6 +25,12 @@ pub struct Bookmark {
     pub content_hash: Option<Vec<u8>>,
     #[builder(default = "false")]
     pub embeddable: bool,
+    #[builder(default)]
+    pub file_path: Option<String>,
+    #[builder(default)]
+    pub file_mtime: Option<i32>,
+    #[builder(default)]
+    pub file_hash: Option<String>,
 }
 
 /// Methods for the Bookmark entity
@@ -56,6 +62,9 @@ impl Bookmark {
             embedding: None,
             content_hash: None,
             embeddable: false, // Default to false
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Get content for embedding using the structured method
@@ -87,7 +96,10 @@ impl Bookmark {
         updated_at: DateTime<Utc>,
         embedding: Option<Vec<u8>>,
         content_hash: Option<Vec<u8>>,
-        embeddable: bool, // New parameter
+        embeddable: bool,
+        file_path: Option<String>,
+        file_mtime: Option<i32>,
+        file_hash: Option<String>,
     ) -> DomainResult<Self> {
         let tags = Tag::parse_tags(tag_string)?;
 
@@ -103,6 +115,9 @@ impl Bookmark {
             embedding,
             content_hash,
             embeddable,
+            file_path,
+            file_mtime,
+            file_hash,
         })
     }
 

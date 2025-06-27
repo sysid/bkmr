@@ -639,6 +639,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         let bookmark2 = Bookmark {
@@ -653,6 +656,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         let bookmarks = vec![bookmark1, bookmark2];
@@ -693,6 +699,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         let bookmark2 = Bookmark {
@@ -707,6 +716,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         let bookmarks = vec![bookmark1, bookmark2];

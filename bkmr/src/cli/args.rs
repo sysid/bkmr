@@ -137,6 +137,8 @@ pub enum Commands {
     Open {
         /// list of ids, separated by comma, no blanks
         ids: String,
+        #[arg(long = "no-edit", help = "skip interactive editing for shell scripts")]
+        no_edit: bool,
     },
     /// Add a bookmark
     Add {
@@ -160,6 +162,8 @@ pub enum Commands {
         bookmark_type: String,
         #[arg(short = 'c', long = "clone", help = "clone an existing bookmark by ID")]
         clone_id: Option<i32>,
+        #[arg(long = "stdin", help = "read content from stdin into url field")]
+        stdin: bool,
     },
     /// Delete bookmarks
     Delete {
@@ -253,6 +257,29 @@ pub enum Commands {
         /// Path to NDJSON file containing text documents (one per line)
         #[arg(help = "Path to NDJSON file with text documents (one JSON object per line)")]
         path: String,
+    },
+
+    /// Import files from directories, parsing frontmatter metadata
+    ImportFiles {
+        /// Directories or files to import
+        #[arg(help = "Directories or files to import")]
+        paths: Vec<String>,
+
+        #[arg(
+            short = 'u', 
+            long = "update", 
+            help = "Update existing bookmarks when content differs"
+        )]
+        update: bool,
+
+        #[arg(
+            long = "delete-missing", 
+            help = "Delete bookmarks whose source files no longer exist"
+        )]
+        delete_missing: bool,
+
+        #[arg(short = 'd', long = "dry-run", help = "Show what would be done without making changes")]
+        dry_run: bool,
     },
 
     /// Show program information and configuration details

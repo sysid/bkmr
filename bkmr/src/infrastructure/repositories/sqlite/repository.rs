@@ -108,6 +108,9 @@ impl SqliteBookmarkRepository {
             db_bookmark.embedding,
             db_bookmark.content_hash,
             db_bookmark.embeddable,
+            db_bookmark.file_path,
+            db_bookmark.file_mtime,
+            db_bookmark.file_hash,
         )
         .map_err(|e| {
             SqliteRepositoryError::ConversionError(format!(
@@ -131,6 +134,9 @@ impl SqliteBookmarkRepository {
             content_hash: bookmark.content_hash.clone(),
             created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
             embeddable: bookmark.embeddable,
+            file_path: bookmark.file_path.clone(),
+            file_mtime: bookmark.file_mtime,
+            file_hash: bookmark.file_hash.clone(),
         };
 
         debug!(
@@ -300,6 +306,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 content_hash: bookmark.content_hash.clone(),
                 created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
                 embeddable: bookmark.embeddable,
+                file_path: bookmark.file_path.clone(),
+                file_mtime: bookmark.file_mtime,
+                file_hash: bookmark.file_hash.clone(),
             };
             debug!("Inserting bookmark: {}", db_bookmark);
 

@@ -338,7 +338,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn open(cli: Cli) -> CliResult<()> {
-    if let Commands::Open { ids } = cli.command.unwrap() {
+    if let Commands::Open { ids, no_edit } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
         let action_service = create_action_service();
 
@@ -349,7 +349,7 @@ pub fn open(cli: Cli) -> CliResult<()> {
                 eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                 // Execute default action with access recording handled by action service
-                action_service.execute_default_action(&bookmark)?;
+                action_service.execute_default_action_with_options(&bookmark, no_edit)?;
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
@@ -370,6 +370,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         edit,
         bookmark_type,
         clone_id,
+        stdin,
     } = cli.command.unwrap()
     {
         let bookmark_service = create_bookmark_service();
@@ -403,6 +404,19 @@ pub fn add(cli: Cli) -> CliResult<()> {
             }
         }
 
+        // Handle stdin input - read content from stdin if requested
+        let final_url = if stdin {
+            use std::io::{self, Read};
+            let mut content = String::new();
+            io::stdin().read_to_string(&mut content)
+                .map_err(|e| CliError::Other(format!("Failed to read from stdin: {}", e)))?;
+            
+            // Trim trailing newline for cleaner content
+            Some(content.trim_end().to_string())
+        } else {
+            url
+        };
+
         // Prepare the template - either from clone or new
         let mut template = if let Some(id) = clone_id {
             // Get the bookmark to clone
@@ -420,7 +434,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         };
 
         // Override with provided values if they exist
-        if let Some(url_value) = &url {
+        if let Some(url_value) = &final_url {
             // Process escaped newlines in content when needed
             let processed_content = if system_tag == SystemTag::Markdown
                 || system_tag == SystemTag::Snippet
@@ -449,8 +463,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
         // If URL is provided, edit flag is not set, and we're not cloning,
         // use the simple add path without opening editor
-        if url.is_some() && !edit && clone_id.is_none() {
-            let url_value = url.unwrap();
+        if final_url.is_some() && !edit && clone_id.is_none() {
+            let url_value = final_url.unwrap();
 
             // Process escaped newlines in content when needed
             let processed_content = if system_tag == SystemTag::Markdown
@@ -1242,6 +1256,48 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
     }
 
     Ok(())
+}
+
+pub fn import_files(cli: Cli) -> CliResult<()> {
+    use crate::application::error::ApplicationError;
+    use crate::exitcode;
+    
+    if let Some(Commands::ImportFiles {
+        paths,
+        update,
+        delete_missing,
+        dry_run,
+    }) = cli.command
+    {
+        let service = create_bookmark_service();
+        
+        if dry_run {
+            println!("{}", "Dry run mode - showing what would be done:".green());
+        }
+        
+        match service.import_files(&paths, update, delete_missing, dry_run) {
+            Ok((added, updated, deleted)) => {
+                if dry_run {
+                    println!("Would add: {}, update: {}, delete: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
+                } else {
+                    println!("Added: {}, Updated: {}, Deleted: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
+                }
+                Ok(())
+            }
+            Err(ApplicationError::DuplicateName { name, existing_id, file_path }) => {
+                eprintln!("{}", format!("Error: Duplicate name '{}' found in {}", name, file_path).red());
+                eprintln!("Existing bookmark with same name already exists (ID: {})", existing_id);
+                eprintln!("Use --update flag to overwrite existing bookmarks with changed content");
+                std::process::exit(exitcode::DUP);
+            }
+            Err(e) => {
+                eprintln!("{}", format!("Import failed: {}", e).red());
+                std::process::exit(exitcode::USAGE);
+            }
+        }
+    } else {
+        Err(CliError::InvalidInput("Expected ImportFiles command".to_string()))
+    }
 }
 
 #[cfg(test)]

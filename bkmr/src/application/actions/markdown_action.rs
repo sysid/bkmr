@@ -556,6 +556,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Bookmark with embeddable=false
@@ -571,6 +574,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Test cases
@@ -618,6 +624,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Execute the action
@@ -664,6 +673,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Execute the action
@@ -710,6 +722,9 @@ mod tests {
             embedding: None,
             content_hash: None,
             embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
         };
 
         // Execute the action

@@ -16,6 +16,13 @@ pub enum ApplicationError {
     #[error("Validation failed: {0}")]
     Validation(String),
 
+    #[error("Duplicate name '{name}' found in {file_path}. Existing bookmark with same name already exists (ID: {existing_id}). Use --update flag to overwrite existing bookmarks with changed content")]
+    DuplicateName {
+        name: String,
+        existing_id: i32,
+        file_path: String,
+    },
+
     #[error("{0}")]
     Other(String),
 }

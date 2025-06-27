@@ -109,4 +109,50 @@ eprintln!("{}", "Error: Database not found.".red());
 eprintln!("Either:");
 eprintln!("  1. Set BKMR_DB_URL environment variable to point to an existing database");
 eprintln!("  2. Create a database using 'bkmr create-db <path>'");
+
+## Exit Codes
+
+The bkmr CLI application uses standard Unix exit codes to indicate the type of error:
+
+### Standard Exit Codes
+
+| Code | Constant           | Description                                         |
+|------|--------------------|-----------------------------------------------------|
+| 0    | `exitcode::SUCCESS`| Successful operation                               |
+| 64   | `exitcode::USAGE`  | Command line usage error (invalid arguments, etc.) |
+| 65   | `exitcode::DUP`    | Duplicate name conflict during import without --update |
+| 130  | `exitcode::CANCEL` | Operation cancelled by user (Ctrl+C)              |
+
+### Usage Examples
+
+```rust
+// Successful completion
+std::process::exit(exitcode::SUCCESS);
+
+// Invalid command line arguments
+std::process::exit(exitcode::USAGE);
+
+// Import operation found duplicate names without --update flag
+std::process::exit(exitcode::DUP);
+
+// User cancelled operation
+std::process::exit(exitcode::CANCEL);
+```
+
+### Import Operation Exit Codes
+
+The `bkmr import` command has specific behavior for duplicate name handling:
+
+- **Exit 0**: All files imported successfully, or no conflicts found
+- **Exit 65**: Duplicate name found and `--update` flag not provided
+  - The operation stops on first duplicate
+  - Error message shows conflicting file path and existing bookmark name
+  - User must re-run with `--update` flag to resolve conflicts
+
+Example error output for exit code 65:
+```
+Error: Duplicate name 'backup-script' found in /path/to/script.sh
+Existing bookmark with same name already exists (ID: 42)
+Use --update flag to overwrite existing bookmarks with changed content
+```
 ```
