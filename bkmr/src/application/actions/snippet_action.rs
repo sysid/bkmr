@@ -2,8 +2,9 @@
 use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
 use crate::domain::services::clipboard::ClipboardService;
+use crate::util::interpolation::InterpolationHelper;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -34,13 +35,12 @@ impl BookmarkAction for SnippetAction {
         let content = bookmark.snippet_content();
 
         // Apply any interpolation if the snippet contains template variables
-        let rendered_content = if content.contains("{{") || content.contains("{%") {
-            self.interpolation_service
-                .render_bookmark_url(bookmark)
-                .map_err(|e| DomainError::Other(format!("Failed to render snippet: {}", e)))?
-        } else {
-            content.to_string()
-        };
+        let rendered_content = InterpolationHelper::render_if_needed(
+            &content,
+            bookmark,
+            &self.interpolation_service,
+            "snippet"
+        )?;
 
         eprintln!("Copied to clipboard:\n{}", rendered_content);
         // Copy to clipboard

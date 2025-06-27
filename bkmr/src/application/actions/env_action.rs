@@ -2,7 +2,8 @@
 use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
+use crate::util::interpolation::InterpolationHelper;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -26,15 +27,12 @@ impl BookmarkAction for EnvAction {
         let env_content = &bookmark.url;
 
         // Apply any interpolation if the content contains template variables
-        let rendered_content = if env_content.contains("{{") || env_content.contains("{%") {
-            self.interpolation_service
-                .render_bookmark_url(bookmark)
-                .map_err(|e| {
-                    DomainError::Other(format!("Failed to render environment variables: {}", e))
-                })?
-        } else {
-            env_content.to_string()
-        };
+        let rendered_content = InterpolationHelper::render_if_needed(
+            env_content,
+            bookmark,
+            &self.interpolation_service,
+            "environment variables"
+        )?;
 
         debug!("Printing environment variables to stdout for sourcing");
 

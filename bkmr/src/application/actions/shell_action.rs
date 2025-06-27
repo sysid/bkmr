@@ -3,6 +3,7 @@ use crate::application::services::interpolation::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
+use crate::util::interpolation::InterpolationHelper;
 use rustyline::{config::Configurer, error::ReadlineError, history::FileHistory, EditMode, Editor};
 use std::io::Write;
 use std::process::Command;
@@ -185,13 +186,12 @@ impl BookmarkAction for ShellAction {
         let script = &bookmark.url;
 
         // Apply any interpolation if the script contains template variables
-        let rendered_script = if script.contains("{{") || script.contains("{%") {
-            self.interpolation_service
-                .render_bookmark_url(bookmark)
-                .map_err(|e| DomainError::Other(format!("Failed to render shell script: {}", e)))?
-        } else {
-            script.to_string()
-        };
+        let rendered_script = InterpolationHelper::render_if_needed(
+            script,
+            bookmark,
+            &self.interpolation_service,
+            "shell script"
+        )?;
 
         debug!("Shell script (interactive={}): {}", self.interactive, rendered_script);
 
