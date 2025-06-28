@@ -14,6 +14,7 @@ use tracing::{debug, instrument};
 pub struct ShellAction {
     template_service: Arc<dyn TemplateService>,
     interactive: bool,
+    script_args: Vec<String>,
 }
 
 impl ShellAction {
@@ -21,6 +22,7 @@ impl ShellAction {
         Self {
             template_service,
             interactive,
+            script_args: Vec::new(),
         }
     }
     
@@ -29,6 +31,15 @@ impl ShellAction {
         Self {
             template_service,
             interactive: false, // Direct execution without interaction
+            script_args: Vec::new(),
+        }
+    }
+    
+    pub fn new_direct_with_args(template_service: Arc<dyn TemplateService>, script_args: Vec<String>) -> Self {
+        Self {
+            template_service,
+            interactive: false, // Direct execution without interaction
+            script_args,
         }
     }
 
@@ -162,8 +173,16 @@ impl ShellAction {
         // Execute the script
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
 
-        let status = Command::new(&shell)
-            .arg(temp_file.path())
+        let mut command = Command::new(&shell);
+        command.arg(temp_file.path());
+        
+        // Append script arguments if provided
+        if !self.script_args.is_empty() {
+            command.args(&self.script_args);
+            debug!("Executing shell script with arguments: {:?}", self.script_args);
+        }
+
+        let status = command
             .status()
             .map_err(|e| DomainError::Other(format!("Failed to execute shell script: {}", e)))?;
 
@@ -440,5 +459,61 @@ mod tests {
         
         // Assert
         assert!(result.is_ok(), "Should successfully create configured editor");
+    }
+
+    #[test]
+    fn test_new_direct_with_args() {
+        // Arrange
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let args = vec!["--option1".to_string(), "value1".to_string(), "arg2".to_string()];
+        
+        // Act
+        let action = ShellAction::new_direct_with_args(template_service, args.clone());
+        
+        // Assert
+        assert!(!action.interactive, "Should be non-interactive");
+        assert_eq!(action.script_args, args, "Should store script arguments");
+    }
+
+    #[test]
+    fn test_shell_action_with_script_arguments() {
+        // Arrange
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        
+        // Create script arguments
+        let args = vec!["arg1".to_string(), "arg2".to_string()];
+        let action = ShellAction::new_direct_with_args(template_service, args);
+
+        // Create a shell script that uses arguments via $1, $2, etc.
+        let script = "echo \"First arg: $1, Second arg: $2\"";
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_shell_").unwrap());
+
+        let bookmark = Bookmark {
+            id: Some(1),
+            url: script.to_string(),
+            title: "Test Shell Script with Args".to_string(),
+            description: "A test shell script that uses arguments".to_string(),
+            tags,
+            access_count: 0,
+            created_at: Some(chrono::Utc::now()),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: false,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
+        };
+
+        // Act
+        let result = action.execute(&bookmark);
+
+        // Assert
+        assert!(result.is_ok(), "Shell action with arguments should execute successfully");
     }
 }

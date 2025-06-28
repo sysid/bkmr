@@ -123,7 +123,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn open(cli: Cli) -> CliResult<()> {
-    if let Commands::Open { ids, no_edit } = cli.command.unwrap() {
+    if let Commands::Open { ids, no_edit, script_args } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
         let action_service = create_action_service();
 
@@ -134,7 +134,7 @@ pub fn open(cli: Cli) -> CliResult<()> {
                 eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                 // Execute default action with access recording handled by action service
-                action_service.execute_default_action_with_options(&bookmark, no_edit)?;
+                action_service.execute_default_action_with_options(&bookmark, no_edit, &script_args)?;
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
