@@ -2,6 +2,7 @@
 use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::domain::bookmark::Bookmark;
+use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::interpolation::interface::InterpolationEngine;
 use crate::domain::system_tag::SystemTag;
 use std::fmt::Debug;
@@ -75,21 +76,17 @@ impl TemplateService for TemplateServiceImpl {
             BookmarkTemplate::for_type(SystemTag::Uri)
         };
 
-        let mut temp_file = NamedTempFile::new().map_err(|e| {
-            ApplicationError::Other(format!("Failed to create temporary file: {}", e))
-        })?;
+        let mut temp_file = NamedTempFile::new()
+            .app_context("Failed to create temporary file")?;
 
         debug!("Temporary file for editing: {:?}", temp_file.path());
 
         temp_file
             .write_all(template.to_string().as_bytes())
-            .map_err(|e| {
-                ApplicationError::Other(format!("Failed to write to temporary file: {}", e))
-            })?;
+            .app_context("Failed to write to temporary file")?;
 
-        temp_file.flush().map_err(|e| {
-            ApplicationError::Other(format!("Failed to flush temporary file: {}", e))
-        })?;
+        temp_file.flush()
+            .app_context("Failed to flush temporary file")?;
         let path = temp_file.path().to_path_buf();
         let modified_before = fs::metadata(&path)?.modified()?;
 
@@ -97,7 +94,7 @@ impl TemplateService for TemplateServiceImpl {
         let status = Command::new(&self.editor)
             .arg(temp_file.path())
             .status()
-            .map_err(|e| ApplicationError::Other(format!("Failed to open editor: {}", e)))?;
+            .app_context("Failed to open editor")?;
 
         if !status.success() {
             return Err(ApplicationError::Other(
@@ -112,9 +109,8 @@ impl TemplateService for TemplateServiceImpl {
         let was_modified = modified_after > modified_before;
 
         // Read the edited file
-        let edited_content = fs::read_to_string(temp_file.path()).map_err(|e| {
-            ApplicationError::Other(format!("Failed to read temporary file: {}", e))
-        })?;
+        let edited_content = fs::read_to_string(temp_file.path())
+            .app_context("Failed to read temporary file")?;
 
         // Parse the interpolation back into a bookmark
         let edited_template = BookmarkTemplate::from_string(&edited_content)?;

@@ -20,6 +20,7 @@ use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
+use crate::domain::error_context::CliErrorContext;
 use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
 use crossterm::style::Stylize;
@@ -207,12 +208,12 @@ fn display_search_results(
     } else {
         stderr
             .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
-            .map_err(|e| CliError::Other(format!("Failed to set color: {}", e)))?;
+            .cli_context("Failed to set color")?;
         writeln!(stderr, "Selection: ")
-            .map_err(|e| CliError::Other(format!("Failed to write to stderr: {}", e)))?;
+            .cli_context("Failed to write to stderr")?;
         stderr
             .reset()
-            .map_err(|e| CliError::Other(format!("Failed to reset color: {}", e)))?;
+            .cli_context("Failed to reset color")?;
 
         process(bookmarks)?;
     }
@@ -375,7 +376,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
             use std::io::{self, Read};
             let mut content = String::new();
             io::stdin().read_to_string(&mut content)
-                .map_err(|e| CliError::Other(format!("Failed to read from stdin: {}", e)))?;
+                .cli_context("Failed to read from stdin")?;
             
             // Trim trailing newline for cleaner content
             Some(content.trim_end().to_string())
