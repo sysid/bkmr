@@ -5,7 +5,6 @@ use crate::application::actions::{
 };
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
-use crate::application::services::interpolation::{InterpolationService, InterpolationServiceImpl};
 use crate::application::services::tag_service::TagService;
 use crate::application::services::template_service::TemplateService;
 use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
@@ -79,39 +78,41 @@ pub fn create_clipboard_service() -> Arc<dyn ClipboardService> {
 }
 
 pub fn create_template_service() -> Arc<dyn TemplateService> {
-    Arc::new(TemplateServiceImpl::new())
-}
-
-pub fn create_interpolation_service() -> Arc<dyn InterpolationService> {
     let shell_executor = Arc::new(SafeShellExecutor::new());
     let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-    Arc::new(InterpolationServiceImpl::new(template_engine))
+    Arc::new(TemplateServiceImpl::new(template_engine))
+}
+
+// Interpolation functionality is now part of TemplateService
+// This function is kept for backward compatibility during transition
+pub fn create_interpolation_service() -> Arc<dyn TemplateService> {
+    create_template_service()
 }
 
 // Create an action resolver with default implementations for each system tag
 pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
-    // Create the interpolation service and clipboard service
-    let interpolation_service = create_interpolation_service();
+    // Create the template service (which includes interpolation) and clipboard service
+    let template_service = create_template_service();
     let clipboard_service = create_clipboard_service();
     let repository = create_bookmark_repository();
 
     // Create actions for each system tag
     let uri_action: Box<dyn BookmarkAction> =
-        Box::new(UriAction::new(Arc::clone(&interpolation_service)));
+        Box::new(UriAction::new(Arc::clone(&template_service)));
 
     let snippet_action: Box<dyn BookmarkAction> = Box::new(SnippetAction::new(
         Arc::clone(&clipboard_service),
-        Arc::clone(&interpolation_service),
+        Arc::clone(&template_service),
     ));
 
     let text_action: Box<dyn BookmarkAction> = Box::new(TextAction::new(
         Arc::clone(&clipboard_service),
-        Arc::clone(&interpolation_service),
+        Arc::clone(&template_service),
     ));
 
     let app_state = AppState::read_global();
     let shell_action: Box<dyn BookmarkAction> = Box::new(ShellAction::new(
-        Arc::clone(&interpolation_service),
+        Arc::clone(&template_service),
         app_state.settings.shell_opts.interactive,
     ));
 
@@ -120,15 +121,15 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
     // 1. OpenAI embeddings being available
     // 2. The bookmark having embeddable=true
     let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new_with_repository(
-        Arc::clone(&interpolation_service),
+        Arc::clone(&template_service),
         repository.clone(),
     ));
 
     let env_action: Box<dyn BookmarkAction> =
-        Box::new(EnvAction::new(Arc::clone(&interpolation_service)));
+        Box::new(EnvAction::new(Arc::clone(&template_service)));
 
     let default_action: Box<dyn BookmarkAction> =
-        Box::new(DefaultAction::new(Arc::clone(&interpolation_service)));
+        Box::new(DefaultAction::new(Arc::clone(&template_service)));
 
     // Create and return the resolver
     Arc::new(SystemTagActionResolver::new(

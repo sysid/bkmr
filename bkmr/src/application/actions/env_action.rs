@@ -1,5 +1,5 @@
 // src/application/actions/env_action.rs
-use crate::application::services::interpolation::InterpolationService;
+use crate::application::services::TemplateService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainResult;
@@ -9,13 +9,13 @@ use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub struct EnvAction {
-    interpolation_service: Arc<dyn InterpolationService>,
+    template_service: Arc<dyn TemplateService>,
 }
 
 impl EnvAction {
-    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
+    pub fn new(template_service: Arc<dyn TemplateService>) -> Self {
         Self {
-            interpolation_service,
+            template_service,
         }
     }
 }
@@ -30,7 +30,7 @@ impl BookmarkAction for EnvAction {
         let rendered_content = InterpolationHelper::render_if_needed(
             env_content,
             bookmark,
-            &self.interpolation_service,
+            &self.template_service,
             "environment variables"
         )?;
 
@@ -62,7 +62,7 @@ impl BookmarkAction for EnvAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::services::interpolation::InterpolationServiceImpl;
+    use crate::application::services::TemplateServiceImpl;
     use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
         MiniJinjaEngine, SafeShellExecutor,
@@ -74,8 +74,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = EnvAction::new(interpolation_service);
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let action = EnvAction::new(template_service);
 
         // Create a simple environment variables content
         let env_content = "export FOO=bar\nexport BAZ=qux";
@@ -112,8 +112,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = EnvAction::new(interpolation_service);
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let action = EnvAction::new(template_service);
 
         // Create env content with interpolation
         let env_content = "export DATE={{ current_date | strftime(\"%Y-%m-%d\") }}\nexport USER={{ \"whoami\" | shell }}";
