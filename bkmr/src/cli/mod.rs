@@ -1,10 +1,12 @@
 // bkmr/src/cli/mod.rs
 use crate::cli::args::{Cli, Commands};
+use crate::cli::command_handler::CommandHandler;
 use crate::cli::error::CliResult;
 use termcolor::StandardStream;
 
 pub mod args;
 pub mod bookmark_commands;
+pub mod command_handler;
 pub mod completion;
 pub mod display;
 pub mod error;
@@ -18,7 +20,10 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
         return Ok(());
     }
     match cli.command {
-        Some(Commands::Search { .. }) => bookmark_commands::search(stderr, cli),
+        Some(Commands::Search { .. }) => {
+            let handler = command_handler::SearchCommandHandler::new();
+            handler.execute(cli)
+        },
         Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli),
         Some(Commands::Open { .. }) => bookmark_commands::open(cli),
         Some(Commands::Add { .. }) => bookmark_commands::add(cli),

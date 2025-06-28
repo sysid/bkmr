@@ -1,21 +1,17 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
-use crate::application::services::factory::{create_action_service, create_bookmark_service, create_interpolation_service, create_tag_service, create_template_service};
+use crate::application::services::factory::{create_action_service, create_bookmark_service, create_tag_service, create_template_service};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
-use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
-use crate::cli::fzf::fzf_process;
-use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action, process};
+use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::ConfigSource;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::embeddings::DummyEmbedding;
-use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
@@ -24,12 +20,11 @@ use crate::domain::error_context::CliErrorContext;
 use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
 use crossterm::style::Stylize;
-use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
 use std::{fs, io};
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
+use termcolor::StandardStream;
 use tracing::{instrument, warn};
 
 // Helper function to get and validate IDs
@@ -42,183 +37,8 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
 }
 
 
-// Determine sort direction based on order flags
-#[instrument(level = "trace")]
-fn determine_sort_direction(order_desc: bool, order_asc: bool) -> SortDirection {
-    match (order_desc, order_asc) {
-        (true, false) => SortDirection::Descending,
-        (false, true) => SortDirection::Ascending,
-        _ => SortDirection::Descending, // Default to descending
-    }
-}
 
-#[instrument(skip(stderr, cli))]
-pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
-    // Extract all arguments from the Search command
-    if let Commands::Search {
-        fts_query,
-        tags_exact,
-        tags_exact_prefix,
-        tags_all,
-        tags_all_prefix,
-        tags_all_not,
-        tags_all_not_prefix,
-        tags_any,
-        tags_any_prefix,
-        tags_any_not,
-        tags_any_not_prefix,
-        order_desc,
-        order_asc,
-        non_interactive,
-        is_fuzzy,
-        fzf_style,
-        is_json,
-        limit,
-        interpolate,  // Add this line to extract the interpolate flag
-    } = cli.command.unwrap()
-    {
-        let mut fields = DEFAULT_FIELDS.to_vec();
 
-        // Get service
-        let service = create_bookmark_service();
-
-        // Determine sort direction
-        let sort_direction = determine_sort_direction(order_desc, order_asc);
-
-        if order_desc || order_asc {
-            fields.push(DisplayField::LastUpdateTs);
-        }
-
-        // Process all tag parameters using centralized logic
-        let search_tags = ArgumentProcessor::process_search_tag_parameters(
-            &tags_exact,
-            &tags_exact_prefix,
-            &tags_all,
-            &tags_all_prefix,
-            &tags_all_not,
-            &tags_all_not_prefix,
-            &tags_any,
-            &tags_any_prefix,
-            &tags_any_not,
-            &tags_any_not_prefix,
-        );
-
-        let limit_usize = match limit {
-            Some(l) if l <= 0 => {
-                return Err(CliError::InvalidInput(
-                    "Limit must be a positive integer".to_string(),
-                ))
-            }
-            Some(l) => Some(l as usize),
-            None => None,
-        };
-
-        // Create a query object using the processed tag parameters
-        let query = BookmarkQuery::new()
-            .with_text_query(fts_query.as_deref())
-            .with_tags_exact(search_tags.exact_tags.as_ref())
-            .with_tags_all(search_tags.all_tags.as_ref())
-            .with_tags_all_not(search_tags.all_not_tags.as_ref())
-            .with_tags_any(search_tags.any_tags.as_ref())
-            .with_tags_any_not(search_tags.any_not_tags.as_ref())
-            .with_sort_by_date(sort_direction)
-            .with_limit(limit_usize);
-
-        // Use the new search method
-        let mut bookmarks = service.search_bookmarks(&query)?;
-
-        // Handle interpolation if requested
-        if interpolate {
-            let interpolation_service = create_interpolation_service();
-
-            // Process each bookmark's URL through interpolation
-            for bookmark in &mut bookmarks {
-                if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
-                    match interpolation_service.render_bookmark_url(bookmark) {
-                        Ok(rendered_url) => {
-                            bookmark.url = rendered_url;
-                        }
-                        Err(e) => {
-                            // Log error but continue with original content
-                            warn!(
-                                "Failed to interpolate bookmark {}: {}",
-                                bookmark.id.unwrap_or(0),
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        // Handle different output modes
-        match (is_fuzzy, is_json) {
-            (true, _) => {
-                let style = fzf_style.as_deref().unwrap_or("classic");
-                fzf_process(&bookmarks, style)?;
-            }
-            (_, true) => {
-                let json_views = JsonBookmarkView::from_domain_collection(&bookmarks);
-                write_bookmarks_as_json(&json_views)?;
-            }
-            _ => {
-                display_search_results(&mut stderr, &bookmarks, &fields, non_interactive)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-// Function to display search results in normal mode
-#[instrument(skip(stderr, bookmarks, fields), level = "debug")]
-fn display_search_results(
-    stderr: &mut StandardStream,
-    bookmarks: &[Bookmark],
-    fields: &[DisplayField],
-    non_interactive: bool,
-) -> CliResult<()> {
-    // If there's exactly one result and we're in interactive mode, execute the default action directly
-    if bookmarks.len() == 1 && !non_interactive {
-        let bookmark = &bookmarks[0];
-        writeln!(
-            stderr,
-            "Found 1 bookmark: {} (ID: {}). Executing default action...",
-            bookmark.title.clone().green(),
-            bookmark.id.unwrap_or(0)
-        )?;
-
-        return execute_bookmark_default_action(bookmark);
-    }
-
-    // Convert to display bookmarks
-    let display_bookmarks: Vec<DisplayBookmark> =
-        bookmarks.iter().map(DisplayBookmark::from_domain).collect();
-
-    show_bookmarks(&display_bookmarks, fields);
-    eprintln!("Found {} bookmarks", bookmarks.len());
-
-    if non_interactive {
-        let ids = bookmarks
-            .iter()
-            .filter_map(|bm| bm.id)
-            .map(|id| id.to_string())
-            .sorted()
-            .join(",");
-        println!("{}", ids);
-    } else {
-        stderr
-            .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
-            .cli_context("Failed to set color")?;
-        writeln!(stderr, "Selection: ")
-            .cli_context("Failed to write to stderr")?;
-        stderr
-            .reset()
-            .cli_context("Failed to reset color")?;
-
-        process(bookmarks)?;
-    }
-    Ok(())
-}
 
 #[instrument(skip(stderr, cli))]
 pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
@@ -1291,41 +1111,9 @@ mod tests {
 
 
 
-    #[test]
-    fn given_desc_flag_when_determine_sort_direction_then_returns_descending() {
-        // Act
-        let result = determine_sort_direction(true, false);
 
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
-    }
 
-    #[test]
-    fn given_asc_flag_when_determine_sort_direction_then_returns_ascending() {
-        // Act
-        let result = determine_sort_direction(false, true);
 
-        // Assert
-        assert_eq!(result, SortDirection::Ascending);
-    }
-
-    #[test]
-    fn given_both_flags_when_determine_sort_direction_then_returns_descending() {
-        // Act
-        let result = determine_sort_direction(true, true);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
-    }
-
-    #[test]
-    fn given_no_flags_when_determine_sort_direction_then_returns_descending() {
-        // Act
-        let result = determine_sort_direction(false, false);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
-    }
 
     #[test]
     #[serial]
