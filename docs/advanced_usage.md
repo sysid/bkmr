@@ -51,6 +51,13 @@ run-project-script() {
     bkmr search --fzf --tags _shell_,project-"$1"
 }
 
+# Execute script with arguments (new in v4.26+)
+run-script-with-args() {
+    local script_id="$1"
+    shift
+    bkmr open --no-edit "$script_id" -- "$@"
+}
+
 # View documentation for a technology
 view-docs() {
     bkmr search --fzf --tags _md_,"$1"
@@ -69,11 +76,23 @@ Create powerful workflows by chaining multiple actions:
 ```bash
 # Deploy application function
 deploy-app() {
-    # Get database backup script and run it
-    bkmr search --np --tags _shell_,backup "script-name"
-    # Get deployment script and run it
-    bkmr search --np --tags _shell_,deploy "script-name"
+    local env="${1:-staging}"
+    local dry_run="${2:-false}"
+    
+    # Run backup script with environment parameter
+    echo "Running backup for $env environment..."
+    bkmr open --no-edit 101 -- --env "$env"
+    
+    # Run deployment script with parameters
+    echo "Deploying to $env..."
+    if [[ "$dry_run" == "true" ]]; then
+        bkmr open --no-edit 102 -- --env "$env" --dry-run
+    else
+        bkmr open --no-edit 102 -- --env "$env"
+    fi
 }
+
+# Usage: deploy-app production false
 ```
 ### File Quickview with metadata Enrichment
 1. Add file as interpolation snippet like:

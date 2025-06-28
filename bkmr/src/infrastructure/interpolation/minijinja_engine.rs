@@ -171,12 +171,12 @@ impl ShellCommandExecutor for SafeShellExecutor {
     fn execute(&self, cmd: &str) -> Result<String, InterpolationError> {
         info!("Executing shell command: {}", cmd);
 
-        // TODO: Implement a more sophisticated command validation for safe shell mode
-        // if !self.is_command_safe(cmd) {
-        //     return Err(InterpolationError::Shell(
-        //         "Command contains forbidden patterns".to_string(),
-        //     ));
-        // }
+        // Validate command safety in safe shell mode
+        if !self.is_command_safe(cmd) {
+            return Err(InterpolationError::Shell(
+                "Command contains forbidden patterns for safe execution".to_string(),
+            ));
+        }
 
         let output = Command::new("sh")
             .arg("-c")

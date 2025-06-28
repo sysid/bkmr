@@ -139,6 +139,11 @@ pub enum Commands {
         ids: String,
         #[arg(long = "no-edit", help = "skip interactive editing for shell scripts")]
         no_edit: bool,
+        #[arg(
+            last = true,
+            help = "Arguments to pass to shell scripts (use -- to separate: bkmr open ID -- arg1 arg2)"
+        )]
+        script_args: Vec<String>,
     },
     /// Add a bookmark
     Add {

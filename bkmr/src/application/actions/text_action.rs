@@ -1,4 +1,4 @@
-use crate::application::services::interpolation::InterpolationService;
+use crate::application::services::TemplateService;
 // src/application/actions/text_action.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
@@ -10,17 +10,17 @@ use tracing::instrument;
 #[derive(Debug)]
 pub struct TextAction {
     clipboard_service: Arc<dyn ClipboardService>,
-    interpolation_service: Arc<dyn InterpolationService>,
+    template_service: Arc<dyn TemplateService>,
 }
 
 impl TextAction {
     pub fn new(
         clipboard_service: Arc<dyn ClipboardService>,
-        interpolation_service: Arc<dyn InterpolationService>,
+        template_service: Arc<dyn TemplateService>,
     ) -> Self {
         Self {
             clipboard_service,
-            interpolation_service,
+            template_service,
         }
     }
 }
@@ -36,7 +36,7 @@ impl BookmarkAction for TextAction {
 
         // Apply any interpolation if the text contains template variables
         let rendered_content = if content.contains("{{") || content.contains("{%") {
-            self.interpolation_service
+            self.template_service
                 .render_bookmark_url(bookmark)
                 .map_err(|e| DomainError::Other(format!("Failed to render text: {}", e)))?
         } else {

@@ -1,8 +1,9 @@
 // src/application/services/action_service.rs
 use crate::domain::action_resolver::ActionResolver;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::error::DomainResult;
 use crate::domain::repositories::repository::BookmarkRepository;
+use crate::util::validation::ValidationHelper;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -15,7 +16,7 @@ pub trait ActionService: Send + Sync {
     fn execute_default_action_by_id(&self, id: i32) -> DomainResult<()>;
 
     /// Executes the default action for a bookmark with override for interactive mode
-    fn execute_default_action_with_options(&self, bookmark: &Bookmark, no_edit: bool) -> DomainResult<()>;
+    fn execute_default_action_with_options(&self, bookmark: &Bookmark, no_edit: bool, script_args: &[String]) -> DomainResult<()>;
 
     /// Gets a description of the default action for a bookmark
     fn get_default_action_description(&self, bookmark: &Bookmark) -> &'static str;
@@ -55,17 +56,14 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
     #[instrument(skip(self), level = "debug")]
     fn execute_default_action_by_id(&self, id: i32) -> DomainResult<()> {
         // Get the bookmark
-        let bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
+        let bookmark = ValidationHelper::validate_and_get_bookmark_domain(id, &*self.repository)?;
 
         // Execute the default action
         self.execute_default_action(&bookmark)
     }
 
     #[instrument(skip(self, bookmark), level = "debug")]
-    fn execute_default_action_with_options(&self, bookmark: &Bookmark, no_edit: bool) -> DomainResult<()> {
+    fn execute_default_action_with_options(&self, bookmark: &Bookmark, no_edit: bool, script_args: &[String]) -> DomainResult<()> {
         use crate::application::actions::shell_action::ShellAction;
         use crate::application::services::factory::create_interpolation_service;
         use crate::domain::action::BookmarkAction;
@@ -81,9 +79,9 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         if no_edit && bookmark.tags.contains(&SystemTag::Shell.to_tag()?) {
             debug!("Executing shell action with no-edit mode");
             
-            // Create a direct (non-interactive) shell action
+            // Create a direct (non-interactive) shell action with script arguments
             let interpolation_service = create_interpolation_service();
-            let shell_action = ShellAction::new_direct(interpolation_service);
+            let shell_action = ShellAction::new_direct_with_args(interpolation_service, script_args.to_vec());
             return shell_action.execute(bookmark);
         }
 
@@ -104,10 +102,7 @@ impl<R: BookmarkRepository> ActionServiceImpl<R> {
     // Record that a bookmark was accessed
     #[instrument(skip(self), level = "trace")]
     fn record_bookmark_access(&self, id: i32) -> DomainResult<()> {
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark_domain(id, &*self.repository)?;
 
         bookmark.record_access();
 
@@ -248,7 +243,7 @@ mod tests {
         let stored_bookmark = repository.get_by_id(1).unwrap().unwrap();
         
         // Act
-        let result = service.execute_default_action_with_options(&stored_bookmark, true);
+        let result = service.execute_default_action_with_options(&stored_bookmark, true, &[]);
         
         // Assert
         assert!(result.is_ok(), "Should execute successfully with no-edit");
@@ -279,7 +274,7 @@ mod tests {
         let stored_bookmark = repository.get_by_id(bookmark_id).unwrap().unwrap();
         
         // Act
-        let result = service.execute_default_action_with_options(&stored_bookmark, true);
+        let result = service.execute_default_action_with_options(&stored_bookmark, true, &[]);
         
         // Assert
         assert!(result.is_ok(), "Should execute successfully");
@@ -309,7 +304,7 @@ mod tests {
         let stored_bookmark = repository.get_by_id(1).unwrap().unwrap();
         
         // Act
-        let result = service.execute_default_action_with_options(&stored_bookmark, false);
+        let result = service.execute_default_action_with_options(&stored_bookmark, false, &[]);
         
         // Assert
         assert!(result.is_ok(), "Should execute successfully without no-edit");
@@ -335,7 +330,7 @@ mod tests {
         bookmark.id = None; // Remove ID to test the case where access recording is skipped
         
         // Act
-        let result = service.execute_default_action_with_options(&bookmark, true);
+        let result = service.execute_default_action_with_options(&bookmark, true, &[]);
         
         // Assert
         assert!(result.is_ok(), "Should execute successfully even without bookmark ID");

@@ -1,34 +1,31 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
-use crate::application::services::factory::{create_action_service, create_bookmark_service, create_interpolation_service, create_tag_service, create_template_service};
+use crate::application::services::factory::{create_action_service, create_bookmark_service, create_tag_service, create_template_service};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
-use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
-use crate::cli::fzf::fzf_process;
-use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action, process};
+use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::ConfigSource;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::embeddings::DummyEmbedding;
-use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
+use crate::domain::error_context::CliErrorContext;
+use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
 use crossterm::style::Stylize;
-use itertools::Itertools;
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
 use std::{fs, io};
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
-use tracing::{debug, instrument, warn};
+use termcolor::StandardStream;
+use tracing::{instrument, warn};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -39,221 +36,9 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
         .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
 }
 
-// Parse a tag string into a HashSet of Tag objects
-#[instrument(level = "trace")]
-pub fn parse_tag_string(tag_str: &Option<String>) -> Option<HashSet<Tag>> {
-    Tag::parse_tag_option(tag_str.as_ref().map(|s| s.as_str())).unwrap_or_else(|e| {
-        debug!("Failed to parse tags: {}", e);
-        None
-    })
-}
 
-// Apply prefix tags to base tags, returning a new set with all tags
-#[instrument(level = "trace")]
-pub fn apply_prefix_tags(
-    base_tags: Option<HashSet<Tag>>,
-    prefix_tags: Option<HashSet<Tag>>,
-) -> Option<HashSet<Tag>> {
-    match (base_tags, prefix_tags) {
-        (None, None) => None,
-        (Some(base), None) => Some(base),
-        (None, Some(prefix)) => Some(prefix),
-        (Some(mut base), Some(prefix)) => {
-            base.extend(prefix);
-            Some(base)
-        }
-    }
-}
 
-// Determine sort direction based on order flags
-#[instrument(level = "trace")]
-fn determine_sort_direction(order_desc: bool, order_asc: bool) -> SortDirection {
-    match (order_desc, order_asc) {
-        (true, false) => SortDirection::Descending,
-        (false, true) => SortDirection::Ascending,
-        _ => SortDirection::Descending, // Default to descending
-    }
-}
 
-#[instrument(skip(stderr, cli))]
-pub fn search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
-    // Extract all arguments from the Search command
-    if let Commands::Search {
-        fts_query,
-        tags_exact,
-        tags_exact_prefix,
-        tags_all,
-        tags_all_prefix,
-        tags_all_not,
-        tags_all_not_prefix,
-        tags_any,
-        tags_any_prefix,
-        tags_any_not,
-        tags_any_not_prefix,
-        order_desc,
-        order_asc,
-        non_interactive,
-        is_fuzzy,
-        fzf_style,
-        is_json,
-        limit,
-        interpolate,  // Add this line to extract the interpolate flag
-    } = cli.command.unwrap()
-    {
-        let mut fields = DEFAULT_FIELDS.to_vec();
-
-        // Get service
-        let service = create_bookmark_service();
-
-        // Determine sort direction
-        let sort_direction = determine_sort_direction(order_desc, order_asc);
-
-        if order_desc || order_asc {
-            fields.push(DisplayField::LastUpdateTs);
-        }
-
-        // Parse all tag sets and apply prefixes
-        let exact_tags = apply_prefix_tags(
-            parse_tag_string(&tags_exact),
-            parse_tag_string(&tags_exact_prefix),
-        );
-
-        let all_tags = apply_prefix_tags(
-            parse_tag_string(&tags_all),
-            parse_tag_string(&tags_all_prefix),
-        );
-
-        let all_not_tags = apply_prefix_tags(
-            parse_tag_string(&tags_all_not),
-            parse_tag_string(&tags_all_not_prefix),
-        );
-
-        let any_tags = apply_prefix_tags(
-            parse_tag_string(&tags_any),
-            parse_tag_string(&tags_any_prefix),
-        );
-
-        let any_not_tags = apply_prefix_tags(
-            parse_tag_string(&tags_any_not),
-            parse_tag_string(&tags_any_not_prefix),
-        );
-
-        let limit_usize = match limit {
-            Some(l) if l <= 0 => {
-                return Err(CliError::InvalidInput(
-                    "Limit must be a positive integer".to_string(),
-                ))
-            }
-            Some(l) => Some(l as usize),
-            None => None,
-        };
-
-        // Create a query object instead of directly calling search_bookmarks
-        let query = BookmarkQuery::new()
-            .with_text_query(fts_query.as_deref())
-            .with_tags_exact(exact_tags.as_ref())
-            .with_tags_all(all_tags.as_ref())
-            .with_tags_all_not(all_not_tags.as_ref())
-            .with_tags_any(any_tags.as_ref())
-            .with_tags_any_not(any_not_tags.as_ref())
-            .with_sort_by_date(sort_direction)
-            .with_limit(limit_usize);
-
-        // Use the new search method
-        let mut bookmarks = service.search_bookmarks(&query)?;
-
-        // Handle interpolation if requested
-        if interpolate {
-            let interpolation_service = create_interpolation_service();
-
-            // Process each bookmark's URL through interpolation
-            for bookmark in &mut bookmarks {
-                if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
-                    match interpolation_service.render_bookmark_url(bookmark) {
-                        Ok(rendered_url) => {
-                            bookmark.url = rendered_url;
-                        }
-                        Err(e) => {
-                            // Log error but continue with original content
-                            warn!(
-                                "Failed to interpolate bookmark {}: {}",
-                                bookmark.id.unwrap_or(0),
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        // Handle different output modes
-        match (is_fuzzy, is_json) {
-            (true, _) => {
-                let style = fzf_style.as_deref().unwrap_or("classic");
-                fzf_process(&bookmarks, style)?;
-            }
-            (_, true) => {
-                let json_views = JsonBookmarkView::from_domain_collection(&bookmarks);
-                write_bookmarks_as_json(&json_views)?;
-            }
-            _ => {
-                display_search_results(&mut stderr, &bookmarks, &fields, non_interactive)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-// Function to display search results in normal mode
-#[instrument(skip(stderr, bookmarks, fields), level = "debug")]
-fn display_search_results(
-    stderr: &mut StandardStream,
-    bookmarks: &[Bookmark],
-    fields: &[DisplayField],
-    non_interactive: bool,
-) -> CliResult<()> {
-    // If there's exactly one result and we're in interactive mode, execute the default action directly
-    if bookmarks.len() == 1 && !non_interactive {
-        let bookmark = &bookmarks[0];
-        writeln!(
-            stderr,
-            "Found 1 bookmark: {} (ID: {}). Executing default action...",
-            bookmark.title.clone().green(),
-            bookmark.id.unwrap_or(0)
-        )?;
-
-        return execute_bookmark_default_action(bookmark);
-    }
-
-    // Convert to display bookmarks
-    let display_bookmarks: Vec<DisplayBookmark> =
-        bookmarks.iter().map(DisplayBookmark::from_domain).collect();
-
-    show_bookmarks(&display_bookmarks, fields);
-    eprintln!("Found {} bookmarks", bookmarks.len());
-
-    if non_interactive {
-        let ids = bookmarks
-            .iter()
-            .filter_map(|bm| bm.id)
-            .map(|id| id.to_string())
-            .sorted()
-            .join(",");
-        println!("{}", ids);
-    } else {
-        stderr
-            .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
-            .map_err(|e| CliError::Other(format!("Failed to set color: {}", e)))?;
-        writeln!(stderr, "Selection: ")
-            .map_err(|e| CliError::Other(format!("Failed to write to stderr: {}", e)))?;
-        stderr
-            .reset()
-            .map_err(|e| CliError::Other(format!("Failed to reset color: {}", e)))?;
-
-        process(bookmarks)?;
-    }
-    Ok(())
-}
 
 #[instrument(skip(stderr, cli))]
 pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
@@ -338,7 +123,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn open(cli: Cli) -> CliResult<()> {
-    if let Commands::Open { ids, no_edit } = cli.command.unwrap() {
+    if let Commands::Open { ids, no_edit, script_args } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
         let action_service = create_action_service();
 
@@ -349,7 +134,7 @@ pub fn open(cli: Cli) -> CliResult<()> {
                 eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                 // Execute default action with access recording handled by action service
-                action_service.execute_default_action_with_options(&bookmark, no_edit)?;
+                action_service.execute_default_action_with_options(&bookmark, no_edit, &script_args)?;
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
@@ -358,7 +143,18 @@ pub fn open(cli: Cli) -> CliResult<()> {
     Ok(())
 }
 
-// TODO: simplify redundant code
+/// Helper function to process content based on bookmark type
+fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
+    if matches!(
+        system_tag,
+        SystemTag::Markdown | SystemTag::Snippet | SystemTag::Text | SystemTag::Shell | SystemTag::Env
+    ) {
+        content.replace("\\n", "\n")
+    } else {
+        content.to_string()
+    }
+}
+
 #[instrument(skip(cli))]
 pub fn add(cli: Cli) -> CliResult<()> {
     if let Commands::Add {
@@ -386,17 +182,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 
-        // Parse tags if provided - using our new centralized function
-        let mut tag_set = match Tag::parse_tag_option(tags.as_deref()) {
-            Ok(Some(tags)) => tags,
-            Ok(None) => HashSet::new(),
-            Err(e) => {
-                return Err(CliError::InvalidInput(format!(
-                    "Failed to parse tags: {}",
-                    e
-                )))
-            }
-        };
+        // Parse tags using centralized argument processor
+        let mut tag_set = ArgumentProcessor::parse_tags_with_error_handling(&tags)?;
         // Add the system tag if it's not Uri (which has an empty string as_str)
         if system_tag != SystemTag::Uri {
             if let Ok(system_tag_value) = Tag::new(system_tag.as_str()) {
@@ -409,7 +196,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
             use std::io::{self, Read};
             let mut content = String::new();
             io::stdin().read_to_string(&mut content)
-                .map_err(|e| CliError::Other(format!("Failed to read from stdin: {}", e)))?;
+                .cli_context("Failed to read from stdin")?;
             
             // Trim trailing newline for cleaner content
             Some(content.trim_end().to_string())
@@ -435,18 +222,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
 
         // Override with provided values if they exist
         if let Some(url_value) = &final_url {
-            // Process escaped newlines in content when needed
-            let processed_content = if system_tag == SystemTag::Markdown
-                || system_tag == SystemTag::Snippet
-                || system_tag == SystemTag::Text
-                || system_tag == SystemTag::Shell
-                || system_tag == SystemTag::Env
-            {
-                url_value.replace("\\n", "\n")
-            } else {
-                url_value.clone()
-            };
-            template.url = processed_content;
+            template.url = process_content_for_type(url_value, system_tag);
         }
 
         if let Some(title_value) = &title {
@@ -465,18 +241,7 @@ pub fn add(cli: Cli) -> CliResult<()> {
         // use the simple add path without opening editor
         if final_url.is_some() && !edit && clone_id.is_none() {
             let url_value = final_url.unwrap();
-
-            // Process escaped newlines in content when needed
-            let processed_content = if system_tag == SystemTag::Markdown
-                || system_tag == SystemTag::Snippet
-                || system_tag == SystemTag::Text
-                || system_tag == SystemTag::Shell
-                || system_tag == SystemTag::Env
-            {
-                url_value.replace("\\n", "\n")
-            } else {
-                url_value
-            };
+            let processed_content = process_content_for_type(&url_value, system_tag);
 
             let bookmark = bookmark_service.add_bookmark(
                 &processed_content,
@@ -1338,163 +1103,17 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn given_valid_tag_string_when_parse_tag_string_then_returns_tag_set() {
-        // Arrange
-        let tag_str = Some("tag1,tag2,tag3".to_string());
 
-        // Act
-        let result = parse_tag_string(&tag_str);
 
-        // Assert
-        assert!(result.is_some());
-        let tags = result.unwrap();
-        assert_eq!(tags.len(), 3);
-        assert!(tags.contains(&Tag::new("tag1").unwrap()));
-        assert!(tags.contains(&Tag::new("tag2").unwrap()));
-        assert!(tags.contains(&Tag::new("tag3").unwrap()));
-    }
 
-    #[test]
-    fn given_empty_tag_string_when_parse_tag_string_then_returns_none() {
-        // Arrange
-        let tag_str = Some("".to_string());
 
-        // Act
-        let result = parse_tag_string(&tag_str);
 
-        // Assert
-        assert!(result.is_none());
-    }
 
-    #[test]
-    fn given_none_tag_string_when_parse_tag_string_then_returns_none() {
-        // Arrange
-        let tag_str: Option<String> = None;
 
-        // Act
-        let result = parse_tag_string(&tag_str);
 
-        // Assert
-        assert!(result.is_none());
-    }
 
-    #[test]
-    fn given_invalid_tag_string_when_parse_tag_string_then_returns_none() {
-        // Arrange
-        let tag_str = Some("invalid tag with space".to_string());
 
-        // Act
-        let result = parse_tag_string(&tag_str);
 
-        // Assert
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn given_base_and_prefix_when_apply_prefix_tags_then_returns_combined() {
-        // Arrange
-        let mut base_tags = HashSet::new();
-        base_tags.insert(Tag::new("base1").unwrap());
-        base_tags.insert(Tag::new("base2").unwrap());
-
-        let mut prefix_tags = HashSet::new();
-        prefix_tags.insert(Tag::new("prefix1").unwrap());
-        prefix_tags.insert(Tag::new("prefix2").unwrap());
-
-        // Act
-        let result = apply_prefix_tags(Some(base_tags), Some(prefix_tags));
-
-        // Assert
-        assert!(result.is_some());
-        let combined = result.unwrap();
-        assert_eq!(combined.len(), 4);
-        assert!(combined.contains(&Tag::new("base1").unwrap()));
-        assert!(combined.contains(&Tag::new("base2").unwrap()));
-        assert!(combined.contains(&Tag::new("prefix1").unwrap()));
-        assert!(combined.contains(&Tag::new("prefix2").unwrap()));
-    }
-
-    #[test]
-    fn given_only_base_when_apply_prefix_tags_then_returns_base() {
-        // Arrange
-        let mut base_tags = HashSet::new();
-        base_tags.insert(Tag::new("base1").unwrap());
-        base_tags.insert(Tag::new("base2").unwrap());
-
-        // Act
-        let result = apply_prefix_tags(Some(base_tags), None);
-
-        // Assert
-        assert!(result.is_some());
-        let tags = result.unwrap();
-        assert_eq!(tags.len(), 2);
-        assert!(tags.contains(&Tag::new("base1").unwrap()));
-        assert!(tags.contains(&Tag::new("base2").unwrap()));
-    }
-
-    #[test]
-    fn given_only_prefix_when_apply_prefix_tags_then_returns_prefix() {
-        // Arrange
-        let mut prefix_tags = HashSet::new();
-        prefix_tags.insert(Tag::new("prefix1").unwrap());
-        prefix_tags.insert(Tag::new("prefix2").unwrap());
-
-        // Act
-        let result = apply_prefix_tags(None, Some(prefix_tags));
-
-        // Assert
-        assert!(result.is_some());
-        let tags = result.unwrap();
-        assert_eq!(tags.len(), 2);
-        assert!(tags.contains(&Tag::new("prefix1").unwrap()));
-        assert!(tags.contains(&Tag::new("prefix2").unwrap()));
-    }
-
-    #[test]
-    fn given_none_for_both_when_apply_prefix_tags_then_returns_none() {
-        // Act
-        let result = apply_prefix_tags(None, None);
-
-        // Assert
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn given_desc_flag_when_determine_sort_direction_then_returns_descending() {
-        // Act
-        let result = determine_sort_direction(true, false);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
-    }
-
-    #[test]
-    fn given_asc_flag_when_determine_sort_direction_then_returns_ascending() {
-        // Act
-        let result = determine_sort_direction(false, true);
-
-        // Assert
-        assert_eq!(result, SortDirection::Ascending);
-    }
-
-    #[test]
-    fn given_both_flags_when_determine_sort_direction_then_returns_descending() {
-        // Act
-        let result = determine_sort_direction(true, true);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
-    }
-
-    #[test]
-    fn given_no_flags_when_determine_sort_direction_then_returns_descending() {
-        // Act
-        let result = determine_sort_direction(false, false);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
-    }
 
     #[test]
     #[serial]

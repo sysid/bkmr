@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
+use crate::util::validation::ValidationHelper;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::{serialize_embedding, Embedder};
@@ -36,16 +37,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         }
     }
 
-    #[instrument(skip(self), level = "trace")]
-    fn validate_bookmark_id(&self, id: i32) -> ApplicationResult<()> {
-        if id <= 0 {
-            return Err(ApplicationError::Validation(format!(
-                "Invalid bookmark ID: {}",
-                id
-            )));
-        }
-        Ok(())
-    }
 }
 
 impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
@@ -121,7 +112,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug")]
     fn delete_bookmark(&self, id: i32) -> ApplicationResult<bool> {
-        self.validate_bookmark_id(id)?;
+        ValidationHelper::validate_bookmark_id(id)?;
 
         let result = self.repository.delete(id)?;
         Ok(result)
@@ -129,7 +120,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug")]
     fn get_bookmark(&self, id: i32) -> ApplicationResult<Option<Bookmark>> {
-        self.validate_bookmark_id(id)?;
+        ValidationHelper::validate_bookmark_id(id)?;
 
         let bookmark = self.repository.get_by_id(id)?;
         Ok(bookmark)
@@ -137,12 +128,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug")]
     fn set_bookmark_embeddable(&self, id: i32, embeddable: bool) -> ApplicationResult<Bookmark> {
-        self.validate_bookmark_id(id)?;
-
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
         bookmark.set_embeddable(embeddable);
 
@@ -160,14 +146,15 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         }
     }
 
-    // todo: should be domain service
+    // Note: This embedding logic could be moved to a dedicated domain service
+    // to better separate concerns between bookmark persistence and embedding computation
     #[instrument(skip(self), level = "debug")]
     fn update_bookmark(
         &self,
         mut bookmark: Bookmark,
         force_embedding: bool,
     ) -> ApplicationResult<Bookmark> {
-        self.validate_bookmark_id(bookmark.id.ok_or_else(|| {
+        ValidationHelper::validate_bookmark_id(bookmark.id.ok_or_else(|| {
             ApplicationError::Validation("Bookmark ID is required for update".to_string())
         })?)?;
 
@@ -207,12 +194,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self, tags), level = "debug")]
     fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
-        self.validate_bookmark_id(id)?;
-
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
         for tag in tags {
             bookmark.add_tag(tag.clone())?;
@@ -226,12 +208,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         id: i32,
         tags: &HashSet<Tag>,
     ) -> ApplicationResult<Bookmark> {
-        self.validate_bookmark_id(id)?;
-
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
         for tag in tags {
             let _ = bookmark.remove_tag(tag);
@@ -241,12 +218,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self, tags), level = "debug")]
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
-        self.validate_bookmark_id(id)?;
-
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
         bookmark.set_tags(tags.clone())?;
         self.update_bookmark(bookmark, false)
@@ -337,14 +309,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug")]
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
-        self.validate_bookmark_id(id)?;
+        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
-        let mut bookmark = self
-            .repository
-            .get_by_id(id)?
-            .ok_or(ApplicationError::BookmarkNotFound(id))?;
-
-        bookmark.record_access(); // TODO: Implement proper record_access method
+        bookmark.record_access();
 
         self.repository.update(&bookmark)?;
 

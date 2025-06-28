@@ -1,337 +1,287 @@
-# Content Types and Smart Actions in bkmr
+# Content Types and Actions
 
-`bkmr` supports various content types beyond traditional web bookmarks, with each type having specific behaviors and actions. This system allows you to build a unified knowledge base with content-aware functionality.
+bkmr handles different content types with intelligent, context-aware actions. This guide covers all supported content types and their behaviors.
 
-## Supported Content Types
+## Content Type Overview
 
-### URL Bookmarks (Default)
-Standard web URLs pointing to websites, web applications, or online resources.
+| Type | System Tag | Action | Use Case |
+|------|------------|--------|----------|
+| URLs | (none) | Open in browser | Web bookmarks, documentation links |
+| Code Snippets | `_snip_` | Copy to clipboard | Reusable code fragments |
+| Shell Scripts | `_shell_` | Interactive edit + execute | Automation, commands |
+| Markdown | `_md_` | Render in browser | Documentation, notes |
+| Environment Variables | `_env_` | Print for sourcing | Environment setup |
+| Text Documents | `_imported_` | Copy to clipboard | Plain text content |
 
-```bash
-# Add a web URL
-bkmr add https://example.com web,resource
+## URLs and Web Resources
 
-# Add with explicit type
-bkmr add https://example.com web,resource --type uri
-```
-
-**Default Action:** Opens in your default browser.
-
-### Code Snippets
-Store reusable code fragments, SQL queries, or command-line incantations.
+**Default Action:** Open in default browser
 
 ```bash
-# Add a code snippet
-bkmr add "SELECT * FROM users WHERE active = true ORDER BY created_at DESC LIMIT 10;" sql,users --type snip
+# Simple URL
+bkmr add https://github.com/sysid/bkmr rust,cli
+
+# Dynamic URL with template interpolation
+bkmr add "https://api.example.com/daily/{{ current_date | strftime('%Y-%m-%d') }}" api,reports
 ```
 
-**Default Action:** Copies to clipboard for easy pasting into your editor or terminal.
-**System Tag:** `_snip_`
+**Features:**
+- Automatic metadata extraction (title, description)
+- Template interpolation support
+- Support for any URL scheme (http, https, ftp, etc.)
 
-### Shell Scripts
-Store executable shell scripts or command sequences.
+## Code Snippets (`_snip_`)
+
+**Default Action:** Copy to clipboard
 
 ```bash
-# Add a shell script
-bkmr add '#!/bin/bash\necho "Hello World"\nls -la' shell,scripts --type shell
+# JavaScript snippet
+bkmr add "const user = { name: 'John', role: 'admin' };" javascript --type snip
+
+# SQL query
+bkmr add "SELECT * FROM users WHERE created_at > NOW() - INTERVAL 7 DAY;" sql --type snip
+
+# Command line snippet
+bkmr add "docker run -it --rm -v \$(pwd):/app node:18 npm test" docker,testing --type snip
 ```
 
-**Default Action:** Presents an interactive editor for adding parameters before execution. Uses vim/emacs bindings based on your shell configuration.
-**System Tag:** `_shell_`
+**Benefits:**
+- Instant access to common code patterns
+- Reduces typing errors and ensures consistency
+- Supports any programming language
+- Template interpolation for dynamic values
 
-### Environment Variables
-Store environment variables for sourcing in a shell.
+## Shell Scripts (`_shell_`)
+
+**Default Action:** Interactive editor then execute
 
 ```bash
-# Add environment variables
-bkmr add "export DB_USER=dev_user\nexport DB_PASSWORD=dev_pass\nexport API_KEY=test_key" dev,database --type env
+# Simple shell script
+bkmr add "#!/bin/bash\necho 'Deployment started'\nssh server 'sudo systemctl restart app'" deploy --type shell
 
-# Add with template interpolation
-bkmr add "export DATE_STAMP={{ current_date | strftime(\"%Y%m%d\") }}\nexport USER=$(whoami)" env,dynamic --type env
+# Script with template interpolation
+bkmr add "#!/bin/bash\necho 'Backup for {{ current_date | strftime('%Y-%m-%d') }}'\ntar -czf backup.tar.gz /data/" backup --type shell
 ```
 
-**Default Action:** Prints to stdout for sourcing in a shell using `eval "$(bkmr open <id>)"` or `source <(bkmr open <id>)`.
-**System Tag:** `_env_`
+**Execution Modes:**
 
-### Markdown Documents
-Store documentation, notes, or any content using Markdown formatting. Markdown can be stored directly or as a reference to a local file.
+1. **Interactive (default):** Presents editor before execution
+   ```bash
+   bkmr open 123   # Opens editor with script content
+   ```
 
+2. **Direct execution:** Skip interactive editing
+   ```bash
+   bkmr open --no-edit 123
+   ```
+
+3. **With arguments:** Pass arguments to script
+   ```bash
+   bkmr open --no-edit 123 -- --env production --dry-run
+   ```
+
+**Interactive Editor Features:**
+- Pre-filled with script content
+- Vim/Emacs bindings based on shell configuration
+- Command history saved to `~/.config/bkmr/shell_history.txt`
+- Supports modification before execution
+
+**Configuration:**
 ```bash
-# Add a markdown document directly
-bkmr add "# Project Setup\n\n## Requirements\n- Node.js v14+\n- PostgreSQL\n\n## Steps\n1. Clone repo\n2. Run npm install" 
-     docs,setup --type md
-
-# Add a reference to a local markdown file
-bkmr add "/path/to/documentation.md" docs,reference --type md
-
-# Add a relative file path
-bkmr add "docs/project/setup.md" docs,reference --type md
-
-# Add with shell variables or tilde expansion
-bkmr add "~/documents/notes.md" notes,personal --type md
-bkmr add "$HOME/documents/notes.md" notes,personal --type md
-```
-
-**Default Action:** 
-- For direct markdown content: Renders the Markdown to HTML and opens in browser
-- For file paths: Reads the file content, renders the Markdown to HTML, and opens in browser
-- Supports LaTeX math formulas using MathJax rendering
-
-**System Tag:** `_md_`
-
-**Embedding Support:**
-When using with `--openai` flag, markdown content from files can be automatically embedded for semantic search.
-
-### Text Documents
-Store plain text content such as notes, documentation, or any textual information.
-
-```bash
-# Add a text document
-bkmr add "System requires Java 11 and PostgreSQL 13 for deployment." 
-     deployment,requirements --type text
-```
-
-**Default Action:** Copies to clipboard.
-**System Tag:** `_imported_`
-
-### File and Directory Paths
-Reference local files or directories on your filesystem.
-
-```bash
-# Add a file path
-bkmr add ~/documents/important.pdf documentation,reference
-
-# Add a directory
-bkmr add ~/projects/current-project project,code
-```
-
-**Default Action:** Opens with system's default application for the file type.
-
-## Setting the Content Type
-
-You can specify a content type when adding a bookmark:
-
-```bash
-bkmr add CONTENT tag1,tag2 --type TYPE
-```
-
-Where `TYPE` is one of:
-- `uri` (default): Web URLs and general URIs
-- `snip`: Code snippets
-- `shell`: Shell scripts for execution
-- `md`: Markdown documents
-- `text`: Plain text content
-- `env`: Environment variables for sourcing
-
-## Content Type Auto-Detection
-
-`bkmr` attempts to detect content types automatically:
-
-| Pattern | Detected Type |
-|---------|--------------|
-| URLs starting with `http://` or `https://` | `uri` |
-| Content with shell shebang (`#!/bin/...`) | `shell` |
-| Content starting with Markdown headers (`#`) | `md` |
-| Paths starting with `/` or `~/` | File path |
-| Paths containing `.md` extension | Markdown file |
-| Content with multiple `export VAR=value` lines | `env` |
-
-## System Tags and Action Resolution
-
-Content types are marked with internal system tags, which `bkmr` uses to determine the appropriate action:
-
-1. `_snip_`: Snippets are copied to clipboard
-2. `_shell_`: Shell scripts present interactive editor before execution
-3. `_md_`: Markdown is rendered and viewed in browser
-4. `_imported_`: Text documents are copied to clipboard
-5. `_env_`: Environment variables are printed to stdout for sourcing
-
-These system tags are mostly hidden from normal tag operations but can be viewed with detailed display.
-
-## Customizing Default Actions
-
-The behavior when accessing content follows this resolution sequence:
-
-1. Check for system tags to determine content type
-2. Apply the appropriate action for that content type
-3. Fall back to default URI behavior if no specific type is detected
-
-## Working with Templates in Content
-
-All content types support template interpolation (see [Template Interpolation](./template-interpolation.md)):
-
-```bash
-# A markdown document with dynamic date
-bkmr add "# Meeting Notes: {{ current_date | strftime('%B %d, %Y') }}\n\n## Agenda\n1. Project status\n2. Next steps" meeting,notes --type md --title "Meeting Notes"
-
-# A shell script with environment variables (auto-detected as SystemTag `_shell_`)
-bkmr add '#!/bin/bash\ncd {{ env("PROJECT_DIR", "~/projects") }}\ngit status' git,status --type shell --title "Git Status"
-
-# Environment variables with dynamic content
-bkmr add "export TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}\nexport GIT_BRANCH={{ \"git branch --show-current\" | shell }}" deploy,env --type env --title "Deployment Environment"
-```
-Of course more convenient is to use the interactive, editor-based input:
-```
-bkmr add --help
-bkmr add -e -t uri|snip|text|shell|md|env
-```
-
-
-## Benefits for Developer Workflow
-
-The content-aware system provides several advantages:
-
-1. **Context-appropriate handling** - Content is processed according to its type
-2. **Workflow acceleration** - Snippets and commands are immediately available
-3. **Documentation on demand** - Markdown renders beautifully when needed
-4. **Environment management** - Shell environments can be sourced quickly
-5. **Unified interface** - All knowledge is accessible through the same commands
-
-## Content Examples
-
-### Environment Variables Example
-
-```bash
-# Development environment variables
-export DB_HOST=localhost
-export DB_PORT=5432
-export DB_NAME=dev_db
-export DB_USER=dev_user
-export DB_PASSWORD=dev_password
-
-# Set PATH to include project binaries
-export PATH="$HOME/projects/myapp/bin:$PATH"
-
-# Add dynamic timestamp for deployments
-export BUILD_TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}
-
-echo "Development environment loaded"
-```
-
-Usage:
-```bash
-# Source environment variables
-eval "$(bkmr open 123)"
-
-# Or with process substitution
-source <(bkmr open 123)
-```
-
-### Markdown Document Examples
-
-#### Direct Markdown Content
-
-```markdown
-# Project Setup
-
-## Prerequisites
-- Node.js 14+
-- Docker
-
-## Steps
-1. Clone repository
-2. Run `npm install`
-3. Start with `npm run dev`
-
-## Troubleshooting
-See the [wiki](https://example.com/wiki).
-```
-
-#### Markdown Math Support
-
-Markdown documents with LaTeX math formulas will render properly:
-
-```markdown
-# Binary Classification Metrics
-
-The F1 score is the harmonic mean of precision and recall, giving both metrics equal weight. The formula for the F1 score is:
-
-$$
-F1 = 2 \times \left( \frac{precision \times recall}{precision + recall} \right)
-$$
-
-## Precision
-
-$$
-\text{Precision} = \frac{\text{True Positives}}{\text{True Positives} + \text{False Positives}}
-$$
-
-## Recall
-
-$$
-\text{Recall} = \frac{\text{True Positives (TP)}}{\text{True Positives (TP)} + \text{False Negatives (FN)}}
-$$
-```
-
-#### File Reference 
-
-```
-bkmr add "~/documents/project-notes.md" project,documentation --type md
-```
-
-### Shell Script Example
-
-```bash
-#!/bin/bash
-# Database backup script
-
-echo "Starting backup..."
-pg_dump mydb > ~/backups/mydb_$(date +%Y%m%d).sql
-echo "Backup complete!"
-```
-
-### Interactive Shell Script Execution
-
-When you execute a shell script bookmark, `bkmr` presents an interactive editor by default:
-
-```bash
-# Execute a shell script bookmark
-bkmr search -t _shell_ "backup script"
-Execute: pg_dump mydb > ~/backups/mydb_20250622.sql
-
-# You can edit the command to add parameters:
-Execute: pg_dump mydb > ~/backups/mydb_20250622_prod.sql --verbose
-
-# Features available:
-# - Vim bindings (if you use vim mode in your shell)
-# - Emacs bindings (if you use emacs mode)
-# - Command history saved to ~/.config/bkmr/shell_history.txt
-# - Tab completion and other readline features
-# - Ctrl-C to cancel execution
-```
-
-#### Editor Mode Detection
-
-`bkmr` automatically detects your preferred editor mode from:
-
-- `~/.inputrc` file (`set editing-mode vi`)
-- `$ZSH_VI_MODE` environment variable
-- `$BASH_VI_MODE` environment variable
-- `$INPUTRC` file location
-
-#### Disabling Interactive Mode
-
-For automation or direct execution, you can disable interactive mode:
-
-```bash
-# Via environment variable
+# Disable interactive mode globally
 export BKMR_SHELL_INTERACTIVE=false
 
-# Via configuration file
+# Or in config.toml
 [shell_opts]
 interactive = false
 ```
 
-### Code Snippet Example
+## Markdown Documents (`_md_`)
 
-```python
-# Python snippet for data processing
-import pandas as pd
+**Default Action:** Render HTML and open in browser
 
-def clean_data(df):
-    # Drop duplicates
-    df = df.drop_duplicates()
-    # Handle missing values
-    df = df.fillna({'numeric_col': 0, 'text_col': ''})
-    return df
+```bash
+# Inline markdown
+bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete docs\n- [ ] Add tests" notes --type md
+
+# Reference to markdown file
+bkmr add "~/documents/project-specs.md" specifications --type md
+
+# Markdown with math formulas
+bkmr add "# Statistics\n\n$$E = mc^2$$\n\nInline: $P(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}}$" math --type md
 ```
+
+**Features:**
+- Full markdown rendering with syntax highlighting
+- MathJax support for LaTeX formulas
+- File path resolution (supports `~`, environment variables)
+- Template interpolation in content
+- Automatic embedding updates for file-based content
+
+## Environment Variables (`_env_`)
+
+**Default Action:** Print to stdout for shell sourcing
+
+```bash
+# Development environment
+bkmr add "export DB_URL=postgres://localhost/dev\nexport API_KEY=dev_key\nexport DEBUG=true" dev-env --type env
+
+# Production environment with templates
+bkmr add "export TIMESTAMP={{ current_date | strftime('%Y%m%d_%H%M%S') }}\nexport GIT_BRANCH={{ \"git branch --show-current\" | shell }}" deploy-env --type env
+```
+
+**Usage:**
+```bash
+# Source environment variables
+eval "$(bkmr open 123)"
+
+# Or use in scripts
+source <(bkmr open 123)
+```
+
+## Text Documents (`_imported_`)
+
+**Default Action:** Copy to clipboard
+
+Primarily used for imported text files. Usually assigned automatically during file import.
+
+```bash
+# Import text files
+bkmr import-files ~/documents/notes.txt
+
+# Manually add text content
+bkmr add "Important phone numbers:\nSupport: 555-0123\nEmergency: 911" contacts --type text
+```
+
+## File References
+
+Any content type can reference local files instead of containing inline content:
+
+```bash
+# Markdown file reference
+bkmr add "~/docs/api-guide.md" documentation --type md
+
+# Shell script file reference  
+bkmr add "~/scripts/deploy.sh" automation --type shell
+
+# Text file reference
+bkmr add "~/notes/meeting-notes.txt" meetings --type text
+```
+
+**File Handling:**
+- Automatic file content loading
+- Path resolution with environment variables
+- Template interpolation in file content
+- Embedding updates when files change (for `--openai` enabled bookmarks)
+
+## Template Interpolation
+
+All content types support Jinja2-style template interpolation:
+
+### Available Variables and Filters
+
+**Date/Time:**
+```bash
+{{ current_date | strftime('%Y-%m-%d') }}          # 2025-06-28
+{{ current_date | strftime('%B %d, %Y') }}         # June 28, 2025
+{{ current_date | subtract_days(7) }}              # 7 days ago
+```
+
+**Environment:**
+```bash
+{{ env('HOME') }}                                   # Environment variable
+{{ env('API_KEY', 'default-key') }}                # With default value
+```
+
+**Shell Commands:**
+```bash
+{{ "whoami" | shell }}                             # Current username
+{{ "git branch --show-current" | shell }}         # Current git branch
+{{ "hostname" | shell }}                           # System hostname
+```
+
+### Template Examples
+
+**Dynamic URLs:**
+```bash
+bkmr add "https://reports.company.com/{{ current_date | strftime('%Y/%m') }}/summary" reports
+```
+
+**Parameterized Scripts:**
+```bash
+bkmr add "#!/bin/bash\necho 'Deployment on {{ current_date }}'\necho 'Branch: {{ \"git branch --show-current\" | shell }}'" deploy --type shell
+```
+
+**Environment with Context:**
+```bash
+bkmr add "export PROJECT_ROOT={{ env('HOME') }}/projects\nexport BUILD_TIME={{ current_date | strftime('%Y%m%d_%H%M%S') }}" build-env --type env
+```
+
+## Smart Actions in Practice
+
+### Workflow Integration
+
+**1. Copy-Edit-Execute Pattern:**
+```bash
+# Copy snippet for modification
+bkmr search --fzf -t _snip_,docker
+# Edit and use in your editor
+
+# Execute automation script
+bkmr search --fzf -t _shell_,deploy
+# Interactive edit with parameters, then execute
+```
+
+**2. Documentation Flow:**
+```bash
+# Quick reference lookup
+bkmr search --fzf -t _md_,api
+# Opens rendered documentation in browser
+
+# Environment setup
+eval "$(bkmr search --np -t _env_,development)"
+```
+
+**3. Chained Actions:**
+```bash
+# Shell script that uses other bookmarks
+bkmr add "#!/bin/bash\neval \"\$(bkmr open 7)\"\npsql -c \"\$(bkmr open 5)\"" db-workflow --type shell
+```
+
+### FZF Integration
+
+When using `bkmr search --fzf`, actions are displayed and executable:
+
+- **Enter:** Execute default action
+- **Ctrl-Y:** Copy URL/content to clipboard (overrides default action)
+- **Ctrl-E:** Edit bookmark
+- **Ctrl-D:** Delete bookmark
+
+## Best Practices
+
+**1. Consistent Tagging:**
+```bash
+# Language + purpose
+bkmr add "code here" python,authentication --type snip
+
+# Environment + technology
+bkmr add "export vars" docker,development --type env
+
+# Action + domain  
+bkmr add "script content" deploy,production --type shell
+```
+
+**2. Template Usage:**
+- Use templates for dynamic content that changes based on context
+- Prefer shell filters for system information
+- Use date filters for time-based content
+
+**3. Content Organization:**
+- Use system tags (`_snip_`, `_shell_`, etc.) consistently
+- Add descriptive tags for easy discovery
+- Group related content with common tag prefixes
+
+**4. Security Considerations:**
+- Be cautious with shell scripts containing sensitive data
+- Use environment variables for secrets rather than inline content
+- Review scripts before execution, especially in interactive mode

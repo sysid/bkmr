@@ -1,6 +1,6 @@
 // src/application/actions/markdown_action.rs
 use crate::app_state::AppState;
-use crate::application::services::interpolation::InterpolationService;
+use crate::application::services::TemplateService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
@@ -17,26 +17,26 @@ use tracing::{debug, error, info, instrument};
 
 #[derive(Debug)]
 pub struct MarkdownAction {
-    interpolation_service: Arc<dyn InterpolationService>,
+    template_service: Arc<dyn TemplateService>,
     repository: Option<Arc<dyn BookmarkRepository>>,
 }
 
 impl MarkdownAction {
     #[allow(dead_code)]
-    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
+    pub fn new(template_service: Arc<dyn TemplateService>) -> Self {
         Self {
-            interpolation_service,
+            template_service,
             repository: None,
         }
     }
 
     // Constructor with repository for embedding support
     pub fn new_with_repository(
-        interpolation_service: Arc<dyn InterpolationService>,
+        template_service: Arc<dyn TemplateService>,
         repository: Arc<dyn BookmarkRepository>,
     ) -> Self {
         Self {
-            interpolation_service,
+            template_service,
             repository: Some(repository),
         }
     }
@@ -164,7 +164,7 @@ impl BookmarkAction for MarkdownAction {
         // Apply any interpolation if the markdown contains template variables
         let rendered_markdown =
             if markdown_content.contains("{{") || markdown_content.contains("{%") {
-                self.interpolation_service
+                self.template_service
                     .render_bookmark_url(bookmark)
                     .map_err(|e| DomainError::Other(format!("Failed to render markdown: {}", e)))?
             } else {
@@ -482,7 +482,7 @@ impl BookmarkAction for MarkdownAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::services::interpolation::InterpolationServiceImpl;
+    use crate::application::services::TemplateServiceImpl;
     use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
         MiniJinjaEngine, SafeShellExecutor,
@@ -501,8 +501,8 @@ mod tests {
 
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = MarkdownAction::new(interpolation_service);
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let action = MarkdownAction::new(template_service);
 
         // Create a temporary markdown file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -528,16 +528,16 @@ mod tests {
 
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service =
-            Arc::new(InterpolationServiceImpl::new(interpolation_engine.clone()));
+        let template_service =
+            Arc::new(TemplateServiceImpl::new(interpolation_engine.clone()));
 
         // Action without repository
-        let action_no_repo = MarkdownAction::new(interpolation_service.clone());
+        let action_no_repo = MarkdownAction::new(template_service.clone());
 
         // Action with repository
         let repository = Arc::new(crate::util::testing::setup_test_db());
         let action_with_repo =
-            MarkdownAction::new_with_repository(interpolation_service, repository);
+            MarkdownAction::new_with_repository(template_service, repository);
 
         // Create test bookmarks
         let mut tags = HashSet::new();
@@ -604,8 +604,8 @@ mod tests {
 
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = MarkdownAction::new(interpolation_service);
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let action = MarkdownAction::new(template_service);
 
         // Create a test bookmark with direct markdown content
         let markdown = "# Test Markdown\n\nThis is a **test** with math: $$E = mc^2$$";
@@ -653,8 +653,8 @@ mod tests {
 
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = MarkdownAction::new(interpolation_service);
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let action = MarkdownAction::new(template_service);
 
         // Create a test bookmark with markdown table content
         let markdown = "# Test Table\n\n| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |";
@@ -702,8 +702,8 @@ mod tests {
 
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
-        let action = MarkdownAction::new(interpolation_service);
+        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let action = MarkdownAction::new(template_service);
 
         // Create a test bookmark with code blocks
         let markdown = "# Code Highlighting\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n\n```python\ndef hello():\n    print(\"Hello, world!\")\n```";

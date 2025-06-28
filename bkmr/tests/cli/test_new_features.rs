@@ -129,12 +129,13 @@ fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_withou
         command: Some(Commands::Open {
             ids: bookmark_id.to_string(),
             no_edit: true,
+            script_args: vec![],
         }),
     };
     
     // Act - Execute the open command with no_edit=true
     let stored_bookmark = bookmark_service.get_bookmark(bookmark_id).unwrap().unwrap();
-    let result = action_service.execute_default_action_with_options(&stored_bookmark, true);
+    let result = action_service.execute_default_action_with_options(&stored_bookmark, true, &[]);
     
     // Assert
     assert!(result.is_ok(), "Should execute successfully with no-edit flag");
@@ -171,7 +172,7 @@ fn given_non_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_no
     
     // Act - Execute the open command with no_edit=true (should not affect non-shell bookmarks)
     let stored_bookmark = bookmark_service.get_bookmark(bookmark_id).unwrap().unwrap();
-    let result = action_service.execute_default_action_with_options(&stored_bookmark, true);
+    let result = action_service.execute_default_action_with_options(&stored_bookmark, true, &[]);
     
     // Assert
     assert!(result.is_ok(), "Should execute successfully even for non-shell bookmarks");
