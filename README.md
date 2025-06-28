@@ -152,7 +152,7 @@ See bkmr in action:
 | `search` | Search across all content with full-text and tag filtering |
 | `sem-search` | AI-powered semantic search using OpenAI embeddings |
 | `add` | Add new content (URLs, snippets, files, shell commands, etc.) |
-| `open` | Launch or interact with stored items |
+| `open` | Launch or interact with stored items (supports script arguments) |
 | `edit` | Smart editing: auto-detects file-imported bookmarks for source file editing |
 | `import-files` | Import files/directories with frontmatter parsing and base path support |
 | `tags` | View and manage your tag taxonomy |
@@ -198,6 +198,9 @@ bkmr search -t _shell_ "backup script"
 Execute: rsync -av /home/user/docs /backup/
 # Edit to add parameters: rsync -av /home/user/docs /backup/$(date +%Y%m%d)/
 # Press Enter to execute
+
+# Direct execution with arguments (skip interactive editing)
+bkmr open --no-edit <id> -- arg1 arg2 arg3
 
 # Disable interactive mode via configuration
 export BKMR_SHELL_INTERACTIVE=false
@@ -246,13 +249,11 @@ WORK_SCRIPTS = "/work/automation/scripts"
 ```
 
 For detailed documentation on advanced features:
-- [File Import and Smart Editing](./docs/file-import-smart-editing.md)
 - [Configuration Options](./docs/configuration.md)
 - [Content Types](./docs/content-types.md)
-- [Smart Actions](./docs/smart-actions.md)
-- [Template Interpolation](./docs/template-interpolation.md)
-- [Semantic Search](./docs/semantic-search.md)
+- [File Import and Smart Editing](./docs/file-import-smart-editing.md)
 - [Advanced Usage](./docs/advanced_usage.md)
+- [Semantic Search](./docs/semantic-search.md)
 
 ## Developer Workflow Integration
 

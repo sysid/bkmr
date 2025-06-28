@@ -141,18 +141,26 @@ When interactive mode is enabled, the shell editor provides:
 **Interactive Mode (Default)**: Best for development and exploration
 ```bash
 # Execute shell bookmark - presents editor first
-bkmr search -t _shell_ "deploy script"
+bkmr open 123
 Execute: ./deploy.sh production
-# Edit to: ./deploy.sh staging --dry-run
+# Edit to add parameters: ./deploy.sh staging --dry-run
 # Press Enter to execute
 ```
 
 **Direct Mode**: Best for automation and scripts
 ```bash
+# Execute immediately without editing
+bkmr open --no-edit 123
+
+# Execute with arguments
+bkmr open --no-edit 123 -- --env staging --verbose
+```
+
+**Environment Variable Control**:
+```bash
 export BKMR_SHELL_INTERACTIVE=false
-# Execute shell bookmark - runs immediately without editing
-bkmr search -t _shell_ "deploy script"
-# Executes: ./deploy.sh production (no editing interface)
+# All shell executions will skip interactive editing
+bkmr open 123  # Runs directly without editor
 ```
 
 ## Command-Line Options
