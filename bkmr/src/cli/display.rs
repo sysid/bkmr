@@ -1,7 +1,9 @@
 // src/cli/display.rs
 
+use crate::app_state::AppState;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
+use crate::util::helper::{format_file_path, format_mtime};
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
 use std::fmt;
@@ -97,6 +99,12 @@ pub struct DisplayBookmark {
 
     #[builder(default = "false")]
     pub embeddable: bool,
+
+    #[builder(default)]
+    pub file_path: Option<String>,
+
+    #[builder(default)]
+    pub file_mtime: Option<i32>,
 }
 
 impl DisplayBookmark {
@@ -119,6 +127,8 @@ impl DisplayBookmark {
                     .map_or_else(String::new, |_| "yes".to_string()),
             )
             .embeddable(bookmark.embeddable)
+            .file_path(bookmark.file_path.clone())
+            .file_mtime(bookmark.file_mtime)
             .build()
             .unwrap()
     }
@@ -177,6 +187,8 @@ impl Default for DisplayBookmark {
             similarity: None,
             embedding: String::new(),
             embeddable: false,
+            file_path: None,
+            file_mtime: None,
         }
     }
 }
@@ -342,6 +354,26 @@ pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
             }
         }
 
+        // File info (grey) - show if present and enabled
+        let app_state = AppState::read_global();
+        if app_state.settings.fzf_opts.show_file_info {
+            if let (Some(file_path), Some(file_mtime)) = (&bm.file_path, bm.file_mtime) {
+                if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Ansi256(8)))) {
+                    // Use Ansi256 color 8 which is bright black (grey)
+                    eprintln!("Error setting color: {}", e);
+                }
+                let formatted_path = format_file_path(file_path, 120);
+                let formatted_time = format_mtime(file_mtime);
+                if let Err(e) = writeln!(
+                    &mut stderr,
+                    "{:first_col_width$}  📁 {} ({})",
+                    "", formatted_path, formatted_time
+                ) {
+                    eprintln!("Error writing to stderr: {}", e);
+                }
+            }
+        }
+
         // Reset colors and print a blank line between bookmarks
         if let Err(e) = stderr.reset() {
             eprintln!("Error resetting color: {}", e);
@@ -377,6 +409,8 @@ mod display_tests {
                 similarity: Some(0.85),
                 embedding: "yes".to_string(),
                 embeddable: true,
+                file_path: None,
+                file_mtime: None,
             },
             DisplayBookmark {
                 id: 2,
@@ -390,6 +424,8 @@ mod display_tests {
                 similarity: None,
                 embedding: "".to_string(),
                 embeddable: false,
+                file_path: None,
+                file_mtime: None,
             },
             DisplayBookmark {
                 id: 3,
@@ -403,6 +439,8 @@ mod display_tests {
                 similarity: Some(0.62),
                 embedding: "yes".to_string(),
                 embeddable: true,
+                file_path: None,
+                file_mtime: None,
             },
         ]
     }

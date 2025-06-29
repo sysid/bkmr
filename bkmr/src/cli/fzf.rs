@@ -13,6 +13,7 @@ use crate::cli::process::{
 };
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
+use crate::util::helper::{format_file_path, format_mtime};
 use crossterm::style::Stylize;
 use crossterm::{
     execute,
@@ -88,7 +89,7 @@ impl SkimItem for AlignedBookmark {
         };
 
         // Construct display text with proper ID padding
-        let text = if fzf_opts.no_url {
+        let mut text = if fzf_opts.no_url {
             format!(
                 "{:>width$}: {}{}{}",
                 id,
@@ -108,6 +109,17 @@ impl SkimItem for AlignedBookmark {
                 width = self.max_id_width
             )
         };
+
+        // Add file info line if present and enabled
+        if fzf_opts.show_file_info {
+            if let (Some(file_path), Some(file_mtime)) = (&self.bookmark.file_path, self.bookmark.file_mtime) {
+                // Add padding to align with bookmark content
+                let padding = " ".repeat(self.max_id_width + 2); // +2 for ": "
+                let formatted_path = format_file_path(file_path, 120);
+                let formatted_time = format_mtime(file_mtime);
+                text.push_str(&format!("\n{}📁 {} ({})", padding, formatted_path, formatted_time));
+            }
+        }
 
         Cow::Owned(text)
     }
@@ -177,6 +189,24 @@ impl SkimItem for AlignedBookmark {
             }
         }
 
+        // Add grey attribute for file info line (if present)
+        if fzf_opts.show_file_info {
+            if let Some(file_info_start) = text.find("📁") {
+                // Find the end of the file info line (next newline or end of string)
+                let file_info_end = text[file_info_start..].find('\n')
+                    .map(|pos| file_info_start + pos)
+                    .unwrap_or(text.len());
+                
+                attr_segments.push((
+                    Attr {
+                        fg: Color::LIGHT_BLACK, // Grey color
+                        ..Attr::default()
+                    },
+                    (file_info_start as u32, file_info_end as u32),
+                ));
+            }
+        }
+
         AnsiString::new_str(context.text, attr_segments)
     }
 
@@ -185,7 +215,7 @@ impl SkimItem for AlignedBookmark {
         let action_description = action_service.get_default_action_description(&self.bookmark);
 
         // Create a detailed preview
-        let preview_text = format!(
+        let mut preview_text = format!(
             "ID: {}\nTitle: {}\nURL/Content: {}\nDescription: {}\nTags: {}\nAccess Count: {}\nDefault Action: {}",
             self.bookmark.id.unwrap_or(0),
             self.bookmark.title,
@@ -195,6 +225,13 @@ impl SkimItem for AlignedBookmark {
             self.bookmark.access_count,
             action_description
         );
+
+        // Add file info if present
+        if let (Some(file_path), Some(file_mtime)) = (&self.bookmark.file_path, self.bookmark.file_mtime) {
+            let formatted_path = format_file_path(file_path, 120);
+            let formatted_time = format_mtime(file_mtime);
+            preview_text.push_str(&format!("\n\nSource: {} ({})", formatted_path, formatted_time));
+        }
 
         ItemPreview::AnsiText(format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text))
     }
@@ -270,6 +307,13 @@ fn create_enhanced_skim_items(
                     preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
                 }
                 
+                // Add file info if present
+                if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, &bookmark.file_mtime) {
+                    let formatted_path = format_file_path(file_path, 120);
+                    let formatted_time = format_mtime(*file_mtime);
+                    preview_text.push_str(&format!("\n\n{}: {} ({})", "Source File".dark_grey().bold(), formatted_path, formatted_time));
+                }
+                
                 preview_text
             } else {
                 // Omit the default action in preview but still include tags at the bottom
@@ -290,6 +334,13 @@ fn create_enhanced_skim_items(
                 // Add tags section if there are any tags
                 if has_tags {
                     preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
+                }
+                
+                // Add file info if present
+                if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, &bookmark.file_mtime) {
+                    let formatted_path = format_file_path(file_path, 120);
+                    let formatted_time = format_mtime(*file_mtime);
+                    preview_text.push_str(&format!("\n\n{}: {} ({})", "Source File".dark_grey().bold(), formatted_path, formatted_time));
                 }
                 
                 preview_text

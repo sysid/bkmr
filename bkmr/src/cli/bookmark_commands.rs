@@ -18,6 +18,7 @@ use crate::infrastructure::repositories::sqlite::repository::{
 };
 use crate::domain::error_context::CliErrorContext;
 use crate::util::argument_processor::ArgumentProcessor;
+use crate::util::helper::{format_file_path, format_mtime};
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
 use crossterm::style::Stylize;
 use std::collections::HashSet;
@@ -444,8 +445,8 @@ pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
     let action_description = action_service.get_default_action_description(bookmark);
 
     // Format all the bookmark details
-    format!(
-        "{} {} [{}] ({})\n  URL/Content: {}\n  Description: {}\n  Access count: {}\n  Created: {}\n  Updated: {}\n  Has embedding: {}\n  Default Action: {}\n",
+    let mut details = format!(
+        "{} {} [{}] ({})\n  URL/Content: {}\n  Description: {}\n  Access count: {}\n  Created: {}\n  Updated: {}\n  Has embedding: {}\n  Default Action: {}",
         bookmark
             .id
             .map_or("?".to_string(), |id| id.to_string())
@@ -460,7 +461,17 @@ pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
         bookmark.updated_at,
         bookmark.embedding.is_some(),
         action_description
-    )
+    );
+
+    // Add file info if present
+    if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
+        let formatted_path = format_file_path(file_path, 120);
+        let formatted_time = format_mtime(file_mtime);
+        details.push_str(&format!("\n  Source File: {} (modified: {})", formatted_path, formatted_time));
+    }
+
+    details.push('\n');
+    details
 }
 
 #[instrument(skip(cli))]

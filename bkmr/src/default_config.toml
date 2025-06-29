@@ -7,12 +7,14 @@ db_url = "../db/bkmr.db"
 #   --show-tags      Show tags in the display
 #   --no-url         Hide URLs in the display
 #   --no-action      Hide default actions in the display
+#   --no-file-info   Hide file info (path and mtime) for file-imported bookmarks
 [fzf_opts]
 height = "50%"
 reverse = false
 show_tags = false
 no_url = false
 show_action = true
+show_file_info = true
 
 # Shell script execution options
 [shell_opts]

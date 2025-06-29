@@ -25,6 +25,10 @@ pub struct FzfOpts {
     /// Whether to show default action in the fuzzy finder (default: true)
     #[serde(default = "default_show_action")]
     pub show_action: bool,
+
+    /// Whether to show file info (path and mtime) for file-imported bookmarks (default: true)
+    #[serde(default = "default_show_file_info")]
+    pub show_file_info: bool,
 }
 
 fn default_height() -> String {
@@ -32,6 +36,10 @@ fn default_height() -> String {
 }
 
 fn default_show_action() -> bool {
+    true
+}
+
+fn default_show_file_info() -> bool {
     true
 }
 
@@ -43,6 +51,7 @@ impl Default for FzfOpts {
             show_tags: false,
             no_url: false,
             show_action: default_show_action(),
+            show_file_info: default_show_file_info(),
         }
     }
 }
@@ -162,6 +171,9 @@ fn parse_fzf_opts(opts_str: &str) -> FzfOpts {
             "--no-action" => {
                 // Add handling for the new option
                 opts.show_action = false;
+            }
+            "--no-file-info" => {
+                opts.show_file_info = false;
             }
             _ => {} // Ignore unknown options
         }
@@ -537,6 +549,7 @@ mod tests {
                 show_tags: true,
                 no_url: false,
                 show_action: true,
+                show_file_info: true,
             },
             shell_opts: ShellOpts {
                 interactive: true,
