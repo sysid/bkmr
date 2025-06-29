@@ -8,11 +8,12 @@ use crate::application::services::factory::{create_action_service, create_interp
 use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{
-    clone_bookmark, copy_bookmark_url_to_clipboard, delete_bookmarks, edit_bookmarks,
+    clone_bookmark, copy_bookmark_url_to_clipboard, copy_url_to_clipboard, delete_bookmarks, edit_bookmarks,
     execute_bookmark_default_action,
 };
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
+use crate::domain::system_tag::SystemTag;
 use crate::util::helper::{format_file_path, format_mtime};
 use crossterm::style::Stylize;
 use crossterm::{
@@ -562,8 +563,18 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
             Key::Ctrl('y') | Key::Ctrl('o') => {
                 // clear_fzf_artifacts();
                 if let Some(bookmark) = selected_bookmarks.first() {
-                    // Copy URL to clipboard with interpolation
-                    copy_bookmark_url_to_clipboard(bookmark)?;
+                    // Check if this is a shell script
+                    let is_shell_script = bookmark.tags.iter()
+                        .any(|tag| tag.is_system_tag_of(SystemTag::Shell));
+                    
+                    if is_shell_script {
+                        // For shell scripts, copy the bkmr open command instead of URL content
+                        let command = format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
+                        copy_url_to_clipboard(&command)?;
+                    } else {
+                        // For all other types, copy URL to clipboard with interpolation
+                        copy_bookmark_url_to_clipboard(bookmark)?;
+                    }
                 }
             }
             Key::Ctrl('e') => {

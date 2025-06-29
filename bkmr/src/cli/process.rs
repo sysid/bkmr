@@ -498,7 +498,7 @@ pub fn copy_url_to_clipboard(url: &str) -> CliResult<()> {
 
     match clipboard_service.copy_to_clipboard(url) {
         Ok(_) => {
-            eprintln!("URL copied to clipboard: {}", url);
+            eprintln!("Copied to clipboard: {}", url);
             Ok(())
         }
         Err(e) => Err(CliError::CommandFailed(format!(

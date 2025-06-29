@@ -53,6 +53,10 @@ init:  ## init
 test:  ## tests, single-threaded
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test -- --test-threads=1
 
+.PHONY: import-files
+import-files:  ## import-files for testing from tests/resources/import_test/
+	bkmr import-files bkmr/tests/resources/import_test/
+
 .PHONY: run-all
 #run-all: test-url-details test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search ## run-all
 run-all: run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search  ## run-all

@@ -99,7 +99,7 @@ pub enum Commands {
 
         #[arg(
             long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: copy to clipboard, CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]"
+            help = "use fuzzy finder: [CTRL-O: copy to clipboard (shell scripts: copy 'bkmr open --no-edit <id> --' command), CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]"
         )]
         is_fuzzy: bool,
 
