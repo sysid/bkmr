@@ -41,6 +41,7 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
         Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli),
         Some(Commands::Completion { shell }) => handle_completion(shell),
+        Some(Commands::CreateShellStubs) => bookmark_commands::create_shell_stubs(cli),
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
             Ok(())

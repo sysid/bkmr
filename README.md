@@ -155,6 +155,7 @@ See bkmr in action:
 | `open` | Launch or interact with stored items (supports script arguments) |
 | `edit` | Smart editing: auto-detects file-imported bookmarks for source file editing |
 | `import-files` | Import files/directories with frontmatter parsing and base path support |
+| `create-shell-stubs` | Generate shell function stubs for all shell script bookmarks |
 | `tags` | View and manage your tag taxonomy |
 | `set-embeddable` | Configure items for semantic search |
 
@@ -208,6 +209,38 @@ export BKMR_SHELL_INTERACTIVE=false
 # [shell_opts]
 # interactive = false
 ```
+
+#### Shell Function Stubs
+
+Create shell functions for all your shell script bookmarks to enable direct execution with arguments:
+
+```bash
+# Generate shell function stubs
+bkmr create-shell-stubs
+
+# Example output:
+# backup-database() { bkmr open --no-edit 123 -- "$@"; }
+# export -f backup-database
+# deploy-app() { bkmr open --no-edit 124 -- "$@"; }
+# export -f deploy-app
+
+# Source directly into your current shell
+source <(bkmr create-shell-stubs)
+
+# Add to your shell profile for permanent access
+echo 'source <(bkmr create-shell-stubs)' >> ~/.bashrc
+# or for better performance, cache the output:
+bkmr create-shell-stubs >> ~/.bashrc
+
+# Now use your bookmarked scripts directly with arguments
+backup-database production --incremental
+deploy-app staging --rollback
+```
+
+**Function Name Generation:**
+- Preserves hyphens: `"backup-database"` → `backup-database()`
+- Converts spaces to underscores: `"Deploy Script"` → `deploy_script()`
+- Handles edge cases: `"2fa-setup"` → `script-2fa-setup()`
 
 ### File Import and Smart Editing
 
