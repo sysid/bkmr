@@ -94,6 +94,196 @@ deploy-app() {
 
 # Usage: deploy-app production false
 ```
+
+## Shell Function Stubs - Direct Script Access
+
+The `create-shell-stubs` command provides a powerful way to create shell functions for all your bookmarked shell scripts, enabling direct execution with natural argument passing.
+
+### Basic Shell Stubs Generation
+
+```bash
+# View all shell function stubs that would be created
+bkmr create-shell-stubs
+
+# Example output:
+# backup-database() { bkmr open --no-edit 123 -- "$@"; }
+# export -f backup-database
+# deploy-app() { bkmr open --no-edit 124 -- "$@"; }
+# export -f deploy-app
+# monitoring-setup() { bkmr open --no-edit 125 -- "$@"; }
+# export -f monitoring-setup
+```
+
+### Integration Strategies
+
+#### Method 1: Dynamic Loading (Recommended for Development)
+
+```bash
+# Source directly into current shell - always fresh
+source <(bkmr create-shell-stubs)
+
+# Add to your shell profile for automatic loading
+echo 'source <(bkmr create-shell-stubs)' >> ~/.bashrc
+echo 'source <(bkmr create-shell-stubs)' >> ~/.zshrc
+```
+
+**Benefits:**
+- Always reflects current bookmarks
+- Automatically includes new shell script bookmarks
+- No maintenance required
+
+**Considerations:**
+- Small startup delay (typically <100ms)
+- Requires bkmr to be available in PATH
+
+#### Method 2: Static Caching (Recommended for Production)
+
+```bash
+# Generate static functions file
+bkmr create-shell-stubs > ~/.config/bkmr/shell-functions.sh
+
+# Source the cached file in your profile
+echo 'source ~/.config/bkmr/shell-functions.sh' >> ~/.bashrc
+
+# Update when you add new shell script bookmarks
+alias update-shell-stubs='bkmr create-shell-stubs > ~/.config/bkmr/shell-functions.sh'
+```
+
+**Benefits:**
+- Faster shell startup
+- Works without bkmr in PATH
+- Explicit control over updates
+
+**Considerations:**
+- Manual refresh needed when bookmarks change
+- Potential for stale functions
+
+### Advanced Usage Patterns
+
+#### Selective Function Loading
+
+```bash
+# Create functions only for specific tag patterns
+create-dev-functions() {
+    bkmr search --tags _shell_,development --json | \
+    jq -r '.[].id' | \
+    while read id; do
+        local title=$(bkmr show "$id" | grep "Title:" | cut -d: -f2- | xargs)
+        local func_name=$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/_/g')
+        echo "${func_name}() { bkmr open --no-edit $id -- \"\$@\"; }"
+        echo "export -f $func_name"
+    done
+}
+```
+
+#### Function Namespace Management
+
+```bash
+# Prefix all functions to avoid conflicts
+bkmr create-shell-stubs | sed 's/^/bkmr_/' > ~/.config/bkmr/namespaced-functions.sh
+
+# Creates: bkmr_backup-database(), bkmr_deploy-app(), etc.
+```
+
+#### Integration with Function Managers
+
+```bash
+# For bash-completion integration
+_bkmr_shell_functions() {
+    local functions=$(bkmr create-shell-stubs | grep '^[a-zA-Z]' | cut -d'(' -f1)
+    COMPREPLY=($(compgen -W "$functions" -- "${COMP_WORDS[COMP_CWORD]}"))
+}
+
+# Auto-complete your bookmark functions
+complete -F _bkmr_shell_functions your-bookmark-function
+```
+
+### Real-World Workflow Examples
+
+#### DevOps Toolkit
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+source <(bkmr create-shell-stubs)
+
+# Now your bookmarked scripts become part of your shell environment:
+backup-database production --incremental
+deploy-microservice user-auth staging --canary-percentage 10
+scale-cluster monitoring --nodes 5
+update-certificates *.example.com --dry-run
+
+# All with full argument support and tab completion (if configured)
+```
+
+#### Project-Specific Workflows
+
+```bash
+# Create project-specific shell stub files
+project-stubs() {
+    local project="$1"
+    bkmr search --tags _shell_,"$project" --json | \
+    jq -r '.[].id' | \
+    while read id; do
+        local bookmark=$(bkmr show "$id")
+        local title=$(echo "$bookmark" | grep "Title:" | cut -d: -f2- | xargs)
+        local func_name=$(echo "$title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/_/g')
+        echo "${func_name}() { bkmr open --no-edit $id -- \"\$@\"; }"
+        echo "export -f $func_name"
+    done > ".${project}-stubs.sh"
+    
+    echo "Created .${project}-stubs.sh - source it with: source .${project}-stubs.sh"
+}
+
+# Usage
+project-stubs myapp
+source .myapp-stubs.sh
+```
+
+### Function Name Conventions
+
+The `create-shell-stubs` command follows these naming rules:
+
+- **Preserves hyphens**: `"backup-database"` → `backup-database()`
+- **Converts spaces to underscores**: `"Deploy Script"` → `deploy_script()`
+- **Handles special characters**: `"My Awesome Script!"` → `my_awesome_script()`
+- **Prevents numeric start**: `"2fa-setup"` → `script-2fa-setup()`
+- **Fallback for invalid names**: `"!@#$%"` → `shell_script()`
+
+### Best Practices
+
+1. **Use Descriptive Bookmark Titles**: Since function names derive from titles, use clear, concise names
+2. **Tag Consistently**: Use consistent tagging for easier filtering and organization
+3. **Test Function Names**: Preview output before sourcing to ensure no conflicts
+4. **Document Complex Functions**: Add comments to your shell profile explaining complex workflows
+5. **Regular Cleanup**: Periodically review and clean up unused bookmarks to keep function list manageable
+
+### Troubleshooting
+
+#### Function Name Conflicts
+```bash
+# Check for conflicts before sourcing
+bkmr create-shell-stubs | grep '^[a-zA-Z]' | cut -d'(' -f1 | sort | uniq -d
+
+# Rename conflicting bookmarks or use namespacing
+```
+
+#### Performance Issues
+```bash
+# Profile shell startup time
+time (source <(bkmr create-shell-stubs))
+
+# Switch to static caching if too slow
+```
+
+#### Missing Functions
+```bash
+# Verify shell script bookmarks exist
+bkmr search --tags _shell_ --json | jq length
+
+# Check if functions are properly exported
+declare -F | grep -E "(backup|deploy|monitoring)"
+```
+
 ### File Quickview with metadata Enrichment
 1. Add file as interpolation snippet like:
 ```bash

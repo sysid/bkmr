@@ -305,6 +305,18 @@ pub enum Commands {
         /// Shell to generate completions for (bash, zsh, fish)
         shell: String,
     },
+    /// Create shell function stubs for all shell script bookmarks
+    /// 
+    /// Outputs shell function definitions to stdout that can be sourced into your
+    /// shell profile. Each function allows direct execution of shell script bookmarks
+    /// with argument passing support.
+    ///
+    /// Example output:
+    ///   deploy_script() { bkmr open --no-edit 123 -- "$@"; }
+    ///   export -f deploy_script
+    ///
+    /// Usage: bkmr create-shell-stubs >> ~/.bashrc
+    CreateShellStubs,
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks
