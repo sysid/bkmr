@@ -7,9 +7,11 @@ use crate::cli::fzf::fzf_process;
 use crate::cli::process::execute_bookmark_default_action;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
+use crate::domain::system_tag::SystemTag;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use std::io::Write;
 use crate::util::argument_processor::ArgumentProcessor;
+use crate::util::helper::create_shell_function_name;
 use crossterm::style::Stylize;
 use itertools::Itertools;
 use std::sync::Arc;
@@ -259,6 +261,7 @@ impl CommandHandler for SearchCommandHandler {
             is_json,
             limit,
             interpolate,
+            shell_stubs,
         } = cli.command.unwrap()
         {
             let mut fields = crate::cli::display::DEFAULT_FIELDS.to_vec();
@@ -294,6 +297,11 @@ impl CommandHandler for SearchCommandHandler {
                 self.apply_interpolation(&mut bookmarks)?;
             }
 
+            // Handle shell stubs mode
+            if shell_stubs {
+                return self.output_shell_stubs(&bookmarks);
+            }
+
             // Handle output mode
             let mut stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
             self.handle_output_mode(
@@ -311,6 +319,32 @@ impl CommandHandler for SearchCommandHandler {
 
     fn services(&self) -> &CommandServices {
         &self.services
+    }
+}
+
+impl SearchCommandHandler {
+    /// Output shell function stubs for shell script bookmarks
+    fn output_shell_stubs(&self, bookmarks: &[Bookmark]) -> CliResult<()> {
+        // Filter for shell script bookmarks
+        let shell_bookmarks: Vec<&Bookmark> = bookmarks
+            .iter()
+            .filter(|bookmark| {
+                bookmark.tags.iter().any(|tag| tag.is_system_tag_of(SystemTag::Shell))
+            })
+            .collect();
+
+        // Generate shell function stubs
+        for bookmark in shell_bookmarks {
+            if let Some(id) = bookmark.id {
+                // Create a valid shell function name from the bookmark title
+                let function_name = create_shell_function_name(&bookmark.title);
+                
+                // Output the shell function
+                println!("{}() {{ bkmr open --no-edit {} -- \"$@\"; }}", function_name, id);
+                println!("export -f {}", function_name);
+            }
+        }
+        Ok(())
     }
 }
 
