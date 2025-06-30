@@ -52,6 +52,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
             is_json: true, // Use JSON output for easier testing
             limit: None,
             interpolate: false,
+            shell_stubs: false,
         }),
     };
 
@@ -117,6 +118,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
             is_json: true,
             limit: None,
             interpolate: false,
+            shell_stubs: false,
         }),
     };
 
@@ -208,6 +210,7 @@ fn test_search_command_structure_with_interpolate() {
             is_json: true,
             limit: Some(50),
             interpolate: true, // Test with interpolation enabled
+            shell_stubs: false,
         }),
     };
 

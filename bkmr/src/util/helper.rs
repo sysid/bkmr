@@ -84,6 +84,36 @@ pub fn format_mtime(mtime: i32) -> String {
     }
 }
 
+/// Create a valid shell function name from a bookmark title
+pub fn create_shell_function_name(title: &str) -> String {
+    let cleaned_name = title
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '-' {
+                c.to_ascii_lowercase()  // Preserve hyphens
+            } else if c.is_whitespace() || c == '_' {
+                '_'  // Only spaces and underscores become underscores
+            } else {
+                // Skip other invalid characters
+                '\0'
+            }
+        })
+        .filter(|&c| c != '\0')
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    
+    // Ensure we have a valid function name
+    if cleaned_name.is_empty() {
+        "shell_script".to_string()
+    } else if cleaned_name.chars().next().unwrap().is_ascii_digit() {
+        // Shell function names can't start with a digit
+        format!("script-{}", cleaned_name)
+    } else {
+        cleaned_name
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,5 +172,27 @@ mod tests {
         
         // Test with invalid timestamp (negative)
         assert_eq!(format_mtime(-1), "1969-12-31 23:59:59");
+    }
+
+    #[test]
+    fn test_create_shell_function_name() {
+        // Test basic alphanumeric names
+        assert_eq!(create_shell_function_name("backup_script"), "backup_script");
+        assert_eq!(create_shell_function_name("backup-script"), "backup-script");
+        
+        // Test spaces become underscores
+        assert_eq!(create_shell_function_name("Deploy Script"), "deploy_script");
+        
+        // Test edge case with digits at start
+        assert_eq!(create_shell_function_name("2fa-setup"), "script-2fa-setup");
+        
+        // Test invalid characters are removed
+        assert_eq!(create_shell_function_name("test@#$script!"), "testscript");
+        
+        // Test empty result fallback
+        assert_eq!(create_shell_function_name("@#$%"), "shell_script");
+        
+        // Test trimming underscores
+        assert_eq!(create_shell_function_name("__test__"), "test");
     }
 }
