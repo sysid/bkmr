@@ -59,7 +59,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             ));
         }
 
-        let (title_str, desc_str, keywords) =
+        let (title_str, desc_str, _keywords) =
             if fetch_metadata && (url.starts_with("http://") || url.starts_with("https://")) {
                 // Try to fetch metadata from web URLs
                 match http::load_url_details(url) {
@@ -86,15 +86,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 )
             };
 
-        let mut all_tags = tags.cloned().unwrap_or_default();
-
-        // Add keywords as tags if they are valid
-        if !keywords.is_empty() {
-            debug!("Processing keywords as tags: {}", keywords);
-            if let Ok(keyword_tags) = Tag::parse_tags(&keywords) {
-                all_tags.extend(keyword_tags);
-            }
-        }
+        let all_tags = tags.cloned().unwrap_or_default();
 
         // Create and save bookmark
         debug!(
