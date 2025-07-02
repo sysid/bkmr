@@ -103,6 +103,8 @@ bkmr --openai sem-search "containerized application security" --limit 3
 
 See bkmr in action:
 
+- <a href="https://asciinema.org/a/q4Okf4j2ja757Nav5wf0tNz8k?autoplay=1" alt="Never Context-Switch Again"><img src="https://asciinema.org/a/q4Okf4j2ja757Nav5wf0tNz8k.svg" /></a>
+
 - <a href="https://asciinema.org/a/VTsHuw1Ugsbo10EP0tZ3PdpoG?autoplay=1&speed=2&t=3" alt="Overview">Overview</a>
 
 - <a href="https://asciinema.org/a/wpnsTw3Cl7DK2R7jK7WVpp9OR?autoplay=1&speed=2&t=3" alt="Getting Started">Getting Started</a>
