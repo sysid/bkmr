@@ -33,8 +33,8 @@ fn main() {
         Arc::new(DummyEmbedding)
     };
 
-    // Convert config_file to Path reference if provided
-    let config_path_ref = cli.config_file.as_deref();
+    // Convert config to Path reference if provided
+    let config_path_ref = cli.config.as_deref();
 
     // Initialize AppState with the embedder and config file
     let app_state = AppState::new_with_config_file(embedder, config_path_ref);
