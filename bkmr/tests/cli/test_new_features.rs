@@ -41,7 +41,6 @@ fn given_stdin_content_when_add_command_with_stdin_flag_then_stores_content_in_u
     let _cli = Cli {
         name: None,
         config: None,
-        config_file: None,
         debug: 0,
         openai: false,
         generate_config: false,
@@ -122,7 +121,6 @@ fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_withou
     let _cli = Cli {
         name: None,
         config: None,
-        config_file: None,
         debug: 0,
         openai: false,
         generate_config: false,

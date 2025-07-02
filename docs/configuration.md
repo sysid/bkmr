@@ -8,7 +8,7 @@
 
 1. Command-line arguments (highest priority)
 2. Environment variables
-3. Custom config file (if specified with `--config-file`)
+3. Custom config file (if specified with `--config`)
 4. Default config file (`~/.config/bkmr/config.toml`)
 5. Built-in default values (lowest priority)
 
@@ -51,7 +51,7 @@ bkmr --generate-config > ~/.config/bkmr/config.toml
 You can specify a custom configuration file:
 
 ```bash
-bkmr --config-file /path/to/your/custom-config.toml search
+bkmr --config /path/to/your/custom-config.toml search
 ```
 
 ## Environment Variables
@@ -173,7 +173,7 @@ These options apply to all commands:
 |--------|-------------|
 | `--debug`, `-d` | Enable debug output (use multiple times for more verbosity) |
 | `--openai` | Enable OpenAI integration for semantic features |
-| `--config-file FILE` | Use a custom config file |
+| `--config FILE`, `-c FILE` | Use a custom config file |
 | `--generate-config` | Output a default configuration to stdout |
 
 ### Command-Specific Options

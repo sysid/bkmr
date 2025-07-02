@@ -14,14 +14,6 @@ pub struct Cli {
     #[arg(short, long, value_name = "FILE")]
     pub config: Option<PathBuf>,
 
-    /// Specify a custom configuration file
-    #[arg(
-        long = "config-file",
-        value_name = "FILE",
-        help = "Use configuration file"
-    )]
-    pub config_file: Option<PathBuf>,
-
     /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
