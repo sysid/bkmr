@@ -110,7 +110,7 @@ pub enum Commands {
 
         #[arg(
             long = "interpolate",
-            help = "process template interpolation in snippet content before output"
+            help = "process template interpolation in search results display (not needed for FZF mode or bookmark actions - they interpolate automatically)"
         )]
         interpolate: bool,
 
