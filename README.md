@@ -78,6 +78,7 @@ echo "Hello World!"
 # Store markdown which will be rendered in the browser
 bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md --title Markdown
 bkmr open <id>  # open it in WEB browser
+bkmr add "/path/to/markdown.md" --type md -t "Markdown File to be rendered"  # automatically detects path instead of content
 
 # Store environment variables for sourcing in a shell
 bkmr add "export DB_USER=dev\nexport DB_PASSWORD=secret\nexport API_KEY=test_key" dev,env --type env --title 'My Environment'

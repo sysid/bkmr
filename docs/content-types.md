@@ -115,7 +115,7 @@ bkmr add "# Statistics\n\n$$E = mc^2$$\n\nInline: $P(x) = \\frac{1}{\\sigma\\sqr
 - Full markdown rendering with syntax highlighting
 - MathJax support for LaTeX formulas
 - File path resolution (supports `~`, environment variables)
-- Template interpolation in content
+- No template processing (to avoid conflicts with markdown syntax like `{%}`)
 - Automatic embedding updates for file-based content
 
 ## Environment Variables (`_env_`)
@@ -171,12 +171,12 @@ bkmr add "~/notes/meeting-notes.txt" meetings --type text
 **File Handling:**
 - Automatic file content loading
 - Path resolution with environment variables
-- Template interpolation in file content
+- Template interpolation in file content (except for markdown files)
 - Embedding updates when files change (for `--openai` enabled bookmarks)
 
 ## Template Interpolation
 
-All content types support Jinja2-style template interpolation:
+Most content types support Jinja2-style template interpolation (except markdown to avoid syntax conflicts):
 
 ### Available Variables and Filters
 
