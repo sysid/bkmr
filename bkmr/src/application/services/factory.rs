@@ -121,7 +121,6 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
     // 1. OpenAI embeddings being available
     // 2. The bookmark having embeddable=true
     let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new_with_repository(
-        Arc::clone(&template_service),
         repository.clone(),
     ));
 
