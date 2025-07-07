@@ -500,12 +500,21 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     });
                 }
 
-                // Check if content has changed using hash comparison
-                if let Some(existing_hash) = &existing.file_hash {
-                    if existing_hash == &file_data.file_hash {
-                        debug!("Skipping {}: content unchanged", file_data.name);
-                        continue;
-                    }
+                // Check if content or metadata has changed
+                let content_changed = existing.file_hash.as_ref() != Some(&file_data.file_hash);
+                let metadata_changed = self.has_metadata_changed(&existing, file_data)?;
+                
+                if !content_changed && !metadata_changed {
+                    debug!("Skipping {}: no changes detected", file_data.name);
+                    continue;
+                }
+                
+                // Report what changed
+                if content_changed {
+                    println!("Content changed: {}", file_data.name);
+                }
+                if metadata_changed {
+                    println!("Metadata changed: {}", file_data.name);
                 }
 
                 // Update existing bookmark
@@ -513,20 +522,20 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     self.update_bookmark_from_file(&existing, file_data, &settings, base_path_name)?;
                 }
                 updated_count += 1;
-                debug!("Updated bookmark: {}", file_data.name);
+                println!("Updated bookmark: {}", file_data.name);
             } else {
                 // Create new bookmark
                 if !dry_run {
                     self.create_bookmark_from_file(file_data, &settings, base_path_name)?;
                 }
                 added_count += 1;
-                debug!("Added bookmark: {}", file_data.name);
+                println!("Added bookmark: {}", file_data.name);
             }
         }
 
         // Handle delete missing functionality
         if delete_missing {
-            let orphaned = self.find_orphaned_bookmarks(paths)?;
+            let orphaned = self.find_orphaned_bookmarks(&actual_scan_paths, &file_imports)?;
             for bookmark in orphaned {
                 if !dry_run {
                     if let Some(id) = bookmark.id {
@@ -534,7 +543,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     }
                 }
                 deleted_count += 1;
-                debug!("Deleted orphaned bookmark: {} ({:?})", bookmark.title, bookmark.id);
+                println!("Deleted orphaned bookmark: {} ({:?})", bookmark.title, bookmark.id);
             }
         }
 
@@ -631,7 +640,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
         // Generate embedding if possible
         if bookmark.embeddable {
-            let embedding_content = format!("{} {}", bookmark.title, bookmark.description);
+            let embedding_content = format!("{} {}", bookmark.title, bookmark.url);
             bookmark.embedding = self
                 .embedder
                 .embed(&embedding_content)?
@@ -647,8 +656,9 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     fn update_bookmark_from_file(&self, existing: &Bookmark, file_data: &FileImportData, settings: &crate::config::Settings, base_path_name: Option<&str>) -> ApplicationResult<Bookmark> {
         let mut updated = existing.clone();
         
-        // Update content and metadata
-        updated.description = file_data.content.clone();
+        // Update content and metadata (content goes in url column for file imports)
+        updated.url = file_data.content.clone();
+        updated.title = file_data.name.clone();
         
         // Update file path with base path handling
         let file_path_str = if let Some(base_name) = base_path_name {
@@ -695,7 +705,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
         // Regenerate embedding if embeddable
         if updated.embeddable {
-            let embedding_content = format!("{} {}", updated.title, updated.description);
+            let embedding_content = format!("{} {}", updated.title, updated.url);
             updated.embedding = self
                 .embedder
                 .embed(&embedding_content)?
@@ -707,20 +717,38 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(updated)
     }
 
-    /// Find orphaned bookmarks (file_path set but file no longer exists)
-    fn find_orphaned_bookmarks(&self, import_paths: &[String]) -> ApplicationResult<Vec<Bookmark>> {
+    /// Find orphaned bookmarks (file_path set but file no longer exists or not found in current scan)
+    fn find_orphaned_bookmarks(&self, import_paths: &[String], current_imports: &[FileImportData]) -> ApplicationResult<Vec<Bookmark>> {
         let all_bookmarks = self.repository.get_all()?;
         let mut orphaned = Vec::new();
+        
+        // Create a set of currently imported file paths for quick lookup
+        let current_file_paths: HashSet<_> = current_imports.iter()
+            .map(|import| import.file_path.canonicalize().unwrap_or_else(|_| import.file_path.clone()))
+            .collect();
 
         for bookmark in all_bookmarks {
-            if let Some(file_path) = &bookmark.file_path {
-                let path = Path::new(file_path);
+            if let Some(file_path_str) = &bookmark.file_path {
+                // Handle base path variables and resolve to absolute path
+                let settings = crate::config::load_settings(None)
+                    .map_err(|e| ApplicationError::Other(format!("Failed to load settings: {}", e)))?;
+                let resolved_path = crate::config::resolve_file_path(&settings, file_path_str);
+                let path = Path::new(&resolved_path);
                 
-                // Check if file still exists
-                if !path.exists() {
+                // Check if file still exists at the stored path
+                let file_exists = path.exists();
+                
+                // Check if this file was found in the current import scan
+                let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+                let found_in_scan = current_file_paths.contains(&canonical_path);
+                
+                // If the file doesn't exist OR it wasn't found in the current scan, it's orphaned
+                if !file_exists || !found_in_scan {
                     // Verify the file was under one of the import paths
                     let should_delete = import_paths.iter().any(|import_path| {
-                        path.starts_with(import_path)
+                        path.starts_with(import_path) || 
+                        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+                            .starts_with(Path::new(import_path).canonicalize().unwrap_or_else(|_| Path::new(import_path).to_path_buf()))
                     });
                     
                     if should_delete {
@@ -731,6 +759,40 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         }
 
         Ok(orphaned)
+    }
+    
+    /// Check if metadata (tags, name, type) has changed
+    fn has_metadata_changed(&self, existing: &Bookmark, file_data: &FileImportData) -> ApplicationResult<bool> {
+        // Check if title changed
+        if existing.title != file_data.name {
+            return Ok(true);
+        }
+        
+        // Check if tags changed (ignore system tags for comparison)
+        let existing_user_tags: HashSet<_> = existing.tags.iter()
+            .filter(|tag| !tag.value().starts_with('_') || !tag.value().ends_with('_'))
+            .cloned()
+            .collect();
+        let file_user_tags: HashSet<_> = file_data.tags.iter()
+            .filter(|tag| !tag.value().starts_with('_') || !tag.value().ends_with('_'))
+            .cloned()
+            .collect();
+        
+        if existing_user_tags != file_user_tags {
+            return Ok(true);
+        }
+        
+        // Check if content type changed (check system tags)
+        let existing_has_shell = existing.tags.iter().any(|tag| tag.value() == "_shell_");
+        let existing_has_md = existing.tags.iter().any(|tag| tag.value() == "_md_");
+        let file_is_shell = file_data.content_type == "_shell_";
+        let file_is_md = file_data.content_type == "_md_";
+        
+        if (existing_has_shell != file_is_shell) || (existing_has_md != file_is_md) {
+            return Ok(true);
+        }
+        
+        Ok(false)
     }
 }
 // Helper method
