@@ -9,7 +9,7 @@ bkmr handles different content types with intelligent, context-aware actions. Th
 | URLs | (none) | Open in browser | Web bookmarks, documentation links |
 | Code Snippets | `_snip_` | Copy to clipboard | Reusable code fragments |
 | Shell Scripts | `_shell_` | Interactive edit + execute | Automation, commands |
-| Markdown | `_md_` | Render in browser | Documentation, notes |
+| Markdown | `_md_` | Render in browser with TOC | Documentation, notes |
 | Environment Variables | `_env_` | Print for sourcing | Environment setup |
 | Text Documents | `_imported_` | Copy to clipboard | Plain text content |
 
@@ -98,7 +98,7 @@ interactive = false
 
 ## Markdown Documents (`_md_`)
 
-**Default Action:** Render HTML and open in browser
+**Default Action:** Render HTML with interactive Table of Contents and open in browser
 
 ```bash
 # Inline markdown
@@ -112,11 +112,29 @@ bkmr add "# Statistics\n\n$$E = mc^2$$\n\nInline: $P(x) = \\frac{1}{\\sigma\\sqr
 ```
 
 **Features:**
+- **Interactive Table of Contents**: Fixed left sidebar with hierarchical navigation for H1-H3 headers
+- **Smart Navigation**: Click any heading to jump to that section with smooth scrolling
+- **Responsive Design**: TOC collapses on mobile devices with hamburger menu toggle
 - Full markdown rendering with syntax highlighting
 - MathJax support for LaTeX formulas
 - File path resolution (supports `~`, environment variables)
 - No template processing (to avoid conflicts with markdown syntax like `{%}`)
 - Automatic embedding updates for file-based content
+- Dark mode support (inherits system theme)
+
+**TOC Generation:**
+- Automatically extracts headers from rendered HTML
+- Generates URL-safe anchor IDs from header content
+- Handles duplicate headers with numbered suffixes
+- Only processes H1, H2, and H3 levels for optimal readability
+- Works with any markdown content (inline or file-based)
+
+**Usage Examples:**
+```bash
+# Long documentation with multiple sections
+bkmr add "~/docs/api-documentation.md" api-docs --type md
+# Opens with TOC showing all API endpoints and sections
+```
 
 ## Environment Variables (`_env_`)
 

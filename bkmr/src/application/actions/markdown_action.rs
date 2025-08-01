@@ -13,6 +13,15 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument};
+use regex::Regex;
+
+/// Represents a table of contents entry
+#[derive(Debug, Clone)]
+struct TocEntry {
+    level: u8,
+    title: String,
+    id: String,
+}
 
 #[derive(Debug)]
 pub struct MarkdownAction {
@@ -139,6 +148,142 @@ impl MarkdownAction {
 
         Ok(())
     }
+
+    /// Extract headers from HTML content and add IDs if missing
+    fn extract_and_process_headers(&self, html_content: &str) -> (String, Vec<TocEntry>) {
+        let mut processed_html = html_content.to_string();
+        let mut toc_entries: Vec<TocEntry> = Vec::new();
+        let mut header_counts = std::collections::HashMap::new();
+
+        // Regex to match h1, h2, h3 headers
+        let header_regex = Regex::new(r"<(h[123])(?:\s+[^>]*)?>(.*?)</h[123]>").unwrap();
+        let id_regex = Regex::new(r#"\s+id\s*=\s*["']([^"']+)["']"#).unwrap();
+
+        // Find all headers and process them
+        let matches: Vec<_> = header_regex.find_iter(html_content).collect();
+
+        for (_i, m) in matches.iter().enumerate() {
+            let full_match = m.as_str();
+            
+            if let Some(header_cap) = header_regex.captures(full_match) {
+                let level = match &header_cap[1] {
+                    "h1" => 1,
+                    "h2" => 2,
+                    "h3" => 3,
+                    _ => continue,
+                };
+                
+                let content = &header_cap[2];
+                
+                // Check if header already has an ID
+                let existing_id = id_regex.captures(full_match).map(|c| c[1].to_string());
+
+                let header_id = if let Some(ref id) = existing_id {
+                    id.clone()
+                } else {
+                    // Generate ID from content
+                    let base_id = self.generate_header_id(content);
+                    
+                    // Handle duplicates
+                    let count = header_counts.entry(base_id.clone()).or_insert(0);
+                    *count += 1;
+                    
+                    if *count > 1 {
+                        format!("{}-{}", base_id, *count - 1)
+                    } else {
+                        base_id
+                    }
+                };
+
+                // Create TOC entry
+                toc_entries.push(TocEntry {
+                    level,
+                    title: self.clean_html_content(content),
+                    id: header_id.clone(),
+                });
+
+                // Add ID to header if it doesn't exist
+                if existing_id.is_none() {
+                    let new_header = format!(
+                        "<{} id=\"{}\">{}</{}>",
+                        &header_cap[1], header_id, content, &header_cap[1]
+                    );
+                    
+                    // Replace in the processed HTML
+                    processed_html = processed_html.replace(full_match, &new_header);
+                }
+            }
+        }
+
+        (processed_html, toc_entries)
+    }
+
+    /// Generate a URL-safe ID from header content
+    fn generate_header_id(&self, content: &str) -> String {
+        // Remove HTML tags and clean content
+        let clean_content = self.clean_html_content(content);
+        
+        // Convert to lowercase, replace spaces and special chars with hyphens
+        clean_content
+            .to_lowercase()
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() {
+                    c
+                } else if c.is_whitespace() || c == '-' || c == '_' {
+                    '-'
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>()
+            .split('-')
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<&str>>()
+            .join("-")
+    }
+
+    /// Remove HTML tags from content
+    fn clean_html_content(&self, content: &str) -> String {
+        let tag_regex = Regex::new(r"<[^>]*>").unwrap();
+        tag_regex.replace_all(content, "").trim().to_string()
+    }
+
+    /// Generate TOC HTML sidebar
+    fn generate_toc_html(&self, toc_entries: &[TocEntry]) -> String {
+        if toc_entries.is_empty() {
+            return String::new();
+        }
+
+        let mut toc_html = String::new();
+        toc_html.push_str(r#"<nav class="toc-sidebar" id="toc-sidebar">
+                <div class="toc-header">
+                    <h3>Table of Contents</h3>
+                    <button class="toc-toggle" id="toc-toggle">✕</button>
+                </div>
+                <ul class="toc-list">
+"#);
+
+        for entry in toc_entries {
+            let indent_class = match entry.level {
+                1 => "toc-h1",
+                2 => "toc-h2",
+                3 => "toc-h3",
+                _ => "toc-h1",
+            };
+
+            toc_html.push_str(&format!(
+                "                    <li class=\"toc-item {}\"><a href=\"#{}\" class=\"toc-link\">{}</a></li>\n",
+                indent_class, entry.id, entry.title
+            ));
+        }
+
+        toc_html.push_str(r#"                </ul>
+            </nav>
+            <button class="toc-mobile-toggle" id="toc-mobile-toggle">📋</button>"#);
+
+        toc_html
+    }
 }
 
 impl BookmarkAction for MarkdownAction {
@@ -175,6 +320,10 @@ impl BookmarkAction for MarkdownAction {
         // Convert markdown to HTML with enhanced options
         let html_content = to_html_with_options(&rendered_markdown, &options)
             .map_err(|e| DomainError::Other(format!("Failed to render markdown: {}", e)))?;
+
+        // Extract headers and generate TOC
+        let (processed_html, toc_entries) = self.extract_and_process_headers(&html_content);
+        let toc_html = self.generate_toc_html(&toc_entries);
 
         // Wrap the HTML content in a proper HTML document with enhanced styling
         let full_html = format!(
@@ -218,10 +367,171 @@ impl BookmarkAction for MarkdownAction {
             line-height: 1.6;
             color: var(--text-color);
             background-color: var(--background-color);
+            margin: 0;
+            padding: 0;
+            font-size: var(--base-font-size);
+        }}
+
+        .container {{
+            display: flex;
+            min-height: 100vh;
+        }}
+
+        .main-content {{
+            flex: 1;
             max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            font-size: var(--base-font-size);
+            transition: margin-left 0.3s ease;
+        }}
+
+        .main-content.toc-visible {{
+            margin-left: 320px;
+        }}
+
+        /* TOC Sidebar Styling */
+        .toc-sidebar {{
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 300px;
+            height: 100vh;
+            background-color: var(--background-color);
+            border-right: 1px solid var(--table-border);
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }}
+
+        .toc-sidebar.hidden {{
+            transform: translateX(-100%);
+        }}
+
+        .toc-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--table-border);
+        }}
+
+        .toc-header h3 {{
+            margin: 0;
+            font-size: 1.1em;
+            font-weight: 600;
+        }}
+
+        .toc-toggle {{
+            background: none;
+            border: none;
+            font-size: 1.2em;
+            cursor: pointer;
+            color: var(--text-color);
+            padding: 5px;
+            border-radius: 3px;
+        }}
+
+        .toc-toggle:hover {{
+            background-color: var(--code-background);
+        }}
+
+        .toc-list {{
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }}
+
+        .toc-item {{
+            margin: 0;
+            padding: 0;
+        }}
+
+        .toc-link {{
+            display: block;
+            padding: 6px 0;
+            color: var(--text-color);
+            text-decoration: none;
+            border-radius: 3px;
+            transition: all 0.2s ease;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }}
+
+        .toc-link:hover {{
+            background-color: var(--code-background);
+            padding-left: 8px;
+        }}
+
+        .toc-link.active {{
+            color: var(--link-color);
+            background-color: var(--code-background);
+            font-weight: 500;
+        }}
+
+        .toc-h1 .toc-link {{
+            font-weight: 600;
+            font-size: 0.95em;
+        }}
+
+        .toc-h2 .toc-link {{
+            padding-left: 16px;
+            font-size: 0.88em;
+        }}
+
+        .toc-h3 .toc-link {{
+            padding-left: 32px;
+            font-size: 0.85em;
+            color: var(--blockquote-color);
+        }}
+
+        .toc-mobile-toggle {{
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: var(--link-color);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 1.2em;
+            cursor: pointer;
+            z-index: 1001;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }}
+
+        /* Mobile responsive */
+        @media (max-width: 1024px) {{
+            .main-content.toc-visible {{
+                margin-left: 0;
+                padding: 20px;
+            }}
+
+            .toc-sidebar {{
+                transform: translateX(-100%);
+            }}
+
+            .toc-sidebar.mobile-visible {{
+                transform: translateX(0);
+            }}
+
+            .toc-mobile-toggle {{
+                display: block;
+            }}
+        }}
+
+        @media (max-width: 768px) {{
+            .main-content {{
+                padding: 15px;
+            }}
+
+            .toc-sidebar {{
+                width: 280px;
+            }}
         }}
 
         h1, h2, h3, h4, h5, h6 {{
@@ -380,6 +690,16 @@ impl BookmarkAction for MarkdownAction {
             left: 0;
             top: 0.25em;
         }}
+
+        /* Smooth scrolling for anchor links */
+        html {{
+            scroll-behavior: smooth;
+        }}
+
+        /* Ensure headers have some top margin for anchor positioning */
+        h1[id], h2[id], h3[id] {{
+            scroll-margin-top: 20px;
+        }}
     </style>
     <!-- MathJax for LaTeX rendering -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML"></script>
@@ -418,14 +738,100 @@ impl BookmarkAction for MarkdownAction {
                     this.parentElement.classList.toggle('completed');
                 }});
             }});
+
+            // TOC functionality
+            const tocSidebar = document.getElementById('toc-sidebar');
+            const tocToggle = document.getElementById('toc-toggle');
+            const tocMobileToggle = document.getElementById('toc-mobile-toggle');
+            const mainContent = document.querySelector('.main-content');
+            const tocLinks = document.querySelectorAll('.toc-link');
+
+            // If TOC exists, add toc-visible class to main content
+            if (tocSidebar) {{
+                mainContent.classList.add('toc-visible');
+            }}
+
+            // Toggle TOC visibility
+            function toggleToc() {{
+                if (window.innerWidth <= 1024) {{
+                    tocSidebar.classList.toggle('mobile-visible');
+                }} else {{
+                    tocSidebar.classList.toggle('hidden');
+                    mainContent.classList.toggle('toc-visible');
+                }}
+            }}
+
+            // Desktop toggle
+            if (tocToggle) {{
+                tocToggle.addEventListener('click', toggleToc);
+            }}
+
+            // Mobile toggle
+            if (tocMobileToggle) {{
+                tocMobileToggle.addEventListener('click', toggleToc);
+            }}
+
+            // Close mobile TOC when clicking on a link
+            tocLinks.forEach(link => {{
+                link.addEventListener('click', () => {{
+                    if (window.innerWidth <= 1024) {{
+                        tocSidebar.classList.remove('mobile-visible');
+                    }}
+                }});
+            }});
+
+            // Active section highlighting
+            function updateActiveSection() {{
+                const headers = document.querySelectorAll('h1[id], h2[id], h3[id]');
+                const scrollPosition = window.scrollY + 100;
+
+                let activeId = null;
+                for (const header of headers) {{
+                    if (header.offsetTop <= scrollPosition) {{
+                        activeId = header.id;
+                    }} else {{
+                        break;
+                    }}
+                }}
+
+                // Update active link
+                tocLinks.forEach(link => {{
+                    link.classList.remove('active');
+                    if (activeId && link.getAttribute('href') === '#' + activeId) {{
+                        link.classList.add('active');
+                    }}
+                }});
+            }}
+
+            // Update active section on scroll
+            window.addEventListener('scroll', updateActiveSection);
+            updateActiveSection(); // Initial call
+
+            // Handle window resize
+            window.addEventListener('resize', () => {{
+                if (window.innerWidth > 1024 && tocSidebar) {{
+                    tocSidebar.classList.remove('mobile-visible');
+                    if (!tocSidebar.classList.contains('hidden')) {{
+                        mainContent.classList.add('toc-visible');
+                    }}
+                }} else {{
+                    tocSidebar.classList.remove('hidden');
+                    mainContent.classList.remove('toc-visible');
+                }}
+            }});
         }});
     </script>
 </head>
 <body>
     {}
+    <div class="container">
+        <main class="main-content">
+            {}
+        </main>
+    </div>
 </body>
 </html>"#,
-            bookmark.title, html_content
+            bookmark.title, toc_html, processed_html
         );
 
         // Create a temporary HTML file with explicit .html extension
@@ -707,5 +1113,274 @@ mod tests {
                 }
             }
         }
+    }
+
+    // Tests for TOC functionality
+    #[test]
+    fn test_extract_and_process_headers_basic() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let html_content = r#"<h1>Main Title</h1>
+<p>Some content</p>
+<h2>Section 1</h2>
+<p>More content</p>
+<h3>Subsection 1.1</h3>
+<p>Even more content</p>"#;
+        
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+        
+        // Should find 3 headers
+        assert_eq!(toc_entries.len(), 3);
+        
+        // Check first entry (H1)
+        assert_eq!(toc_entries[0].level, 1);
+        assert_eq!(toc_entries[0].title, "Main Title");
+        assert_eq!(toc_entries[0].id, "main-title");
+        
+        // Check second entry (H2)
+        assert_eq!(toc_entries[1].level, 2);
+        assert_eq!(toc_entries[1].title, "Section 1");
+        assert_eq!(toc_entries[1].id, "section-1");
+        
+        // Check third entry (H3)
+        assert_eq!(toc_entries[2].level, 3);
+        assert_eq!(toc_entries[2].title, "Subsection 1.1");
+        assert_eq!(toc_entries[2].id, "subsection-1-1");
+        
+        // Check that IDs were added to the HTML
+        assert!(processed_html.contains("<h1 id=\"main-title\">Main Title</h1>"));
+        assert!(processed_html.contains("<h2 id=\"section-1\">Section 1</h2>"));
+        assert!(processed_html.contains("<h3 id=\"subsection-1-1\">Subsection 1.1</h3>"));
+    }
+
+    #[test]
+    fn test_extract_and_process_headers_with_existing_ids() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let html_content = r#"<h1 id="existing-id">Title with ID</h1>
+<h2>Title without ID</h2>"#;
+        
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+        
+        assert_eq!(toc_entries.len(), 2);
+        
+        // First header should keep existing ID
+        assert_eq!(toc_entries[0].id, "existing-id");
+        assert!(processed_html.contains("<h1 id=\"existing-id\">Title with ID</h1>"));
+        
+        // Second header should get generated ID
+        assert_eq!(toc_entries[1].id, "title-without-id");
+        assert!(processed_html.contains("<h2 id=\"title-without-id\">Title without ID</h2>"));
+    }
+
+    #[test]
+    fn test_extract_and_process_headers_duplicate_titles() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let html_content = r#"<h1>Introduction</h1>
+<h2>Introduction</h2>
+<h3>Introduction</h3>"#;
+        
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+        
+        assert_eq!(toc_entries.len(), 3);
+        
+        // Check duplicate handling
+        assert_eq!(toc_entries[0].id, "introduction");
+        assert_eq!(toc_entries[1].id, "introduction-1");
+        assert_eq!(toc_entries[2].id, "introduction-2");
+        
+        // Check processed HTML
+        assert!(processed_html.contains("<h1 id=\"introduction\">Introduction</h1>"));
+        assert!(processed_html.contains("<h2 id=\"introduction-1\">Introduction</h2>"));
+        assert!(processed_html.contains("<h3 id=\"introduction-2\">Introduction</h3>"));
+    }
+
+    #[test]
+    fn test_extract_and_process_headers_with_html_content() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let html_content = r#"<h1>Title with <strong>bold</strong> and <em>italic</em></h1>
+<h2>Code: <code>function()</code></h2>"#;
+        
+        let (_processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+        
+        assert_eq!(toc_entries.len(), 2);
+        
+        // Check that HTML tags are stripped from titles
+        assert_eq!(toc_entries[0].title, "Title with bold and italic");
+        assert_eq!(toc_entries[1].title, "Code: function()");
+        
+        // Check IDs are generated from clean content
+        assert_eq!(toc_entries[0].id, "title-with-bold-and-italic");
+        assert_eq!(toc_entries[1].id, "code-function");
+    }
+
+    #[test]
+    fn test_extract_and_process_headers_empty_content() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let html_content = "<p>No headers here</p>";
+        
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+        
+        assert_eq!(toc_entries.len(), 0);
+        assert_eq!(processed_html, html_content); // Should be unchanged
+    }
+
+    #[test]
+    fn test_extract_and_process_headers_ignores_h4_and_higher() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let html_content = r#"<h1>H1 Title</h1>
+<h2>H2 Title</h2>
+<h3>H3 Title</h3>
+<h4>H4 Title</h4>
+<h5>H5 Title</h5>
+<h6>H6 Title</h6>"#;
+        
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+        
+        // Should only find H1, H2, H3
+        assert_eq!(toc_entries.len(), 3);
+        assert_eq!(toc_entries[0].level, 1);
+        assert_eq!(toc_entries[1].level, 2);
+        assert_eq!(toc_entries[2].level, 3);
+        
+        // H4, H5, H6 should be unchanged in processed HTML
+        assert!(processed_html.contains("<h4>H4 Title</h4>"));
+        assert!(processed_html.contains("<h5>H5 Title</h5>"));
+        assert!(processed_html.contains("<h6>H6 Title</h6>"));
+    }
+
+    #[test]
+    fn test_generate_header_id() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        
+        // Test normal text
+        assert_eq!(action.generate_header_id("Simple Title"), "simple-title");
+        
+        // Test with special characters
+        assert_eq!(action.generate_header_id("Title with Special! @#$% Characters"), "title-with-special-characters");
+        
+        // Test with numbers
+        assert_eq!(action.generate_header_id("Section 1.2.3"), "section-1-2-3");
+        
+        // Test with extra spaces and hyphens
+        assert_eq!(action.generate_header_id("  Multiple   Spaces  and--Hyphens  "), "multiple-spaces-and-hyphens");
+        
+        // Test with HTML content
+        assert_eq!(action.generate_header_id("Title with <strong>HTML</strong> tags"), "title-with-html-tags");
+    }
+
+    #[test]
+    fn test_clean_html_content() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        
+        // Test removing HTML tags
+        assert_eq!(action.clean_html_content("<strong>Bold</strong> text"), "Bold text");
+        assert_eq!(action.clean_html_content("<em>Italic</em> and <code>code</code>"), "Italic and code");
+        assert_eq!(action.clean_html_content("<a href='#'>Link</a> text"), "Link text");
+        
+        // Test with nested tags
+        assert_eq!(action.clean_html_content("<div><span>Nested</span> content</div>"), "Nested content");
+        
+        // Test with no HTML
+        assert_eq!(action.clean_html_content("Plain text"), "Plain text");
+        
+        // Test with self-closing tags
+        assert_eq!(action.clean_html_content("Text with <br/> break"), "Text with  break");
+    }
+
+    #[test]
+    fn test_generate_toc_html_empty() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let toc_entries = vec![];
+        
+        let toc_html = action.generate_toc_html(&toc_entries);
+        
+        assert_eq!(toc_html, "");
+    }
+
+    #[test]
+    fn test_generate_toc_html_with_entries() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let toc_entries = vec![
+            TocEntry {
+                level: 1,
+                title: "Main Title".to_string(),
+                id: "main-title".to_string(),
+            },
+            TocEntry {
+                level: 2,
+                title: "Section 1".to_string(),
+                id: "section-1".to_string(),
+            },
+            TocEntry {
+                level: 3,
+                title: "Subsection 1.1".to_string(),
+                id: "subsection-1-1".to_string(),
+            },
+        ];
+        
+        let toc_html = action.generate_toc_html(&toc_entries);
+        
+        // Check that HTML contains the sidebar structure
+        assert!(toc_html.contains("<nav class=\"toc-sidebar\" id=\"toc-sidebar\">"));
+        assert!(toc_html.contains("Table of Contents"));
+        assert!(toc_html.contains("<ul class=\"toc-list\">"));
+        
+        // Check that entries are included with correct classes
+        assert!(toc_html.contains("<li class=\"toc-item toc-h1\"><a href=\"#main-title\" class=\"toc-link\">Main Title</a></li>"));
+        assert!(toc_html.contains("<li class=\"toc-item toc-h2\"><a href=\"#section-1\" class=\"toc-link\">Section 1</a></li>"));
+        assert!(toc_html.contains("<li class=\"toc-item toc-h3\"><a href=\"#subsection-1-1\" class=\"toc-link\">Subsection 1.1</a></li>"));
+        
+        // Check mobile toggle button
+        assert!(toc_html.contains("<button class=\"toc-mobile-toggle\" id=\"toc-mobile-toggle\">📋</button>"));
+    }
+
+    #[test]
+    fn test_generate_toc_html_special_characters_in_titles() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+        
+        let action = MarkdownAction::new();
+        let toc_entries = vec![
+            TocEntry {
+                level: 1,
+                title: "Title with & < > \" characters".to_string(),
+                id: "title-with-characters".to_string(),
+            },
+        ];
+        
+        let toc_html = action.generate_toc_html(&toc_entries);
+        
+        // Check that special characters are preserved in the title
+        assert!(toc_html.contains("Title with & < > \" characters"));
+        assert!(toc_html.contains("href=\"#title-with-characters\""));
     }
 }

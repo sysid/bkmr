@@ -75,9 +75,9 @@ echo "Hello World!"
 > Hello World!
 
 
-# Store markdown which will be rendered in the browser
+# Store markdown which will be rendered in the browser with Table of Contents
 bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write tests" notes,project --type md --title Markdown
-bkmr open <id>  # open it in WEB browser
+bkmr open <id>  # opens in browser with interactive TOC sidebar for navigation
 bkmr add "/path/to/markdown.md" --type md -t "Markdown File to be rendered"  # automatically detects path instead of content
 
 # Store environment variables for sourcing in a shell
@@ -172,7 +172,7 @@ See bkmr in action:
 | Snippets              | Copy to clipboard                     | `_snip_`     |
 | Shell Scripts         | Interactive edit then execute in terminal | `_shell_`    |
 | Environment Variables | Print to stdout for sourcing in shell | `_env_`      |
-| Markdown              | Render and view in browser            | `_md_`       |
+| Markdown              | Render in browser with TOC sidebar   | `_md_`       |
 | Text Documents        | Copy to clipboard                     | `_imported_` |
 | Local Files           | Open with default application         | (none)       |
 

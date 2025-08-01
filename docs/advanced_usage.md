@@ -569,6 +569,120 @@ For action issues:
 bkmr -d -d open 123  # Double debug flag for more detailed output
 ```
 
+## Advanced Markdown Features
+
+### Interactive Table of Contents
+
+bkmr's markdown rendering includes an advanced Table of Contents (TOC) system that transforms long documents into navigable, interactive resources.
+
+#### TOC Features
+
+**Automatic Generation:**
+- Extracts H1, H2, and H3 headers from your markdown
+- Creates unique anchor IDs with duplicate handling
+- Builds hierarchical navigation structure automatically
+
+**Interactive Navigation:**
+- Fixed left sidebar (300px wide) that stays visible while scrolling
+- Click any heading to jump to that section with smooth scrolling
+- Active section highlighting shows your current reading position
+- Responsive design with mobile hamburger menu
+
+#### Practical Use Cases
+
+**API Documentation:**
+```bash
+# Long API documentation with multiple endpoints
+bkmr add "~/docs/api-reference.md" api-docs --type md
+# TOC shows: Authentication > Endpoints > Users > Posts > Comments > Error Handling
+```
+
+**Technical Specifications:**
+```bash
+# Architecture documentation
+bkmr add "# System Architecture\n\n## Frontend\n\n### React Components\n### State Management\n\n## Backend\n\n### API Design\n### Database Schema\n\n## Infrastructure\n\n### Deployment\n### Monitoring" architecture --type md
+# Creates navigable architecture overview with nested sections
+```
+
+**Meeting Notes and Reports:**
+```bash
+# Structured meeting notes
+bkmr add "# Weekly Team Meeting\n\n## Agenda\n\n### Project Updates\n### Action Items\n### Blockers\n\n## Decisions\n\n### Technical Decisions\n### Process Changes" meeting-notes --type md
+# TOC enables quick navigation to specific discussion topics
+```
+
+#### TOC Customization
+
+**Responsive Behavior:**
+- **Desktop (≥1024px)**: Fixed sidebar with toggle button
+- **Tablet (768px-1024px)**: Hidden by default, accessible via floating button
+- **Mobile (<768px)**: Overlay mode with 280px width
+
+**Advanced Navigation:**
+- Keyboard accessible (tab navigation)
+- Smooth scroll behavior with proper scroll margins
+- Active section detection based on viewport position
+- Collapsible TOC for distraction-free reading
+
+#### Best Practices for TOC-Friendly Markdown
+
+**1. Use Consistent Header Hierarchy:**
+```markdown
+# Main Topic (H1)
+## Major Section (H2)
+### Subsection (H3)
+### Another Subsection (H3)
+## Another Major Section (H2)
+```
+
+**2. Descriptive Header Names:**
+```markdown
+# ✅ Getting Started with Authentication
+# ❌ Auth
+
+## ✅ Setting Up OAuth 2.0 Flow
+## ❌ OAuth Setup
+```
+
+**3. Logical Document Structure:**
+- Use H1 for main document title
+- Use H2 for major sections
+- Use H3 for subsections (TOC stops at H3 for readability)
+- Avoid skipping header levels (H1 → H3)
+
+**4. TOC-Optimized Content:**
+```bash
+# Well-structured technical document
+bkmr add "$(cat << 'EOF'
+# Project Setup Guide
+
+## Prerequisites
+
+### System Requirements
+### Dependencies
+
+## Installation
+
+### Local Development
+### Docker Setup
+### Production Deployment
+
+## Configuration
+
+### Environment Variables
+### Database Setup
+### API Keys
+
+## Usage Examples
+
+### Basic Usage
+### Advanced Features
+EOF
+)" setup-guide --type md
+```
+
+This creates a comprehensive, navigable setup guide where users can jump directly to the section they need.
+
 ## Conclusion
 
 By mastering tag prefix filtering, content-specific actions, and template interpolation, you can transform bkmr from a simple bookmark manager into a powerful knowledge management system tailored to your specific workflows.
