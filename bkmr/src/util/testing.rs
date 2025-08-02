@@ -32,9 +32,9 @@ impl TestEnv {
         Self {
             db_path: PathBuf::from("../db/bkmr.db"),
             resources: vec![
-                "tests/resources/bkmr.v1.db",
-                "tests/resources/bkmr.v2.db",
-                "tests/resources/bkmr.v2.noembed.db",
+                "tests/resources/schema_v1_migration_test.db",
+                "tests/resources/schema_v2_with_embeddings.db",
+                "tests/resources/schema_v2_no_embeddings.db",
             ],
         }
     }

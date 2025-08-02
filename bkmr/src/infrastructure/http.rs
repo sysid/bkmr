@@ -59,9 +59,11 @@ pub fn load_url_details(url: &str) -> DomainResult<(String, String, String)> {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use super::*;
     use crate::util::testing::{init_test_env, EnvGuard};
     #[test]
+    #[serial]
     fn test_load_url_details() -> DomainResult<()> {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -83,6 +85,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_check_website() {
         // This test depends on network availability.
         let (accessible, duration) = check_website("http://example.com", 2000);
