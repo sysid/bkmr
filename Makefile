@@ -51,6 +51,7 @@ init:  ## init
 
 .PHONY: test
 test:  ## tests, single-threaded
+	@rm -f $(app_root)/db/bkmr.db
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test -- --test-threads=1
 
 .PHONY: import-files
