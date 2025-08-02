@@ -44,8 +44,10 @@ init:  ## init
 	mkdir -p ~/xxx
 	@echo "-M- copy full buku db to ~/xxx"
 	@cp -v $(VIMWIKI_PATH)/buku/bm.db ~/xxx/bkmr.db
-	@cp -vf bkmr/tests/resources/bkmr.v?.db ~/xxx/
-	@cp -vf bkmr/tests/resources/bkmr.v2.db $(app_root)/db/bkmr.db
+	@cp -vf bkmr/tests/resources/schema_v1_migration_test.db ~/xxx/
+	@cp -vf bkmr/tests/resources/schema_v2_with_embeddings.db ~/xxx/
+	@cp -vf bkmr/tests/resources/schema_v2_no_embeddings.db ~/xxx/
+	@echo "Test database will be created fresh by test infrastructure"
 	@tree -a ~/xxx
 	@tree -a  $(app_root)/db
 
@@ -80,10 +82,11 @@ run-load-texts: run-create-db  ## run-load-text
 run-migrate-db: init  ## run-migrate-db
 	@echo "--------------------------------------------------------------------------------"
 	@echo "-M- First run: should do migration"
-	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d -d --openai
+	cp bkmr/tests/resources/schema_v1_migration_test.db ~/xxx/test_migration.db
+	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/test_migration.db cargo run -- -d -d -d --openai
 	@echo "--------------------------------------------------------------------------------"
 	@echo "-M- Second run: should be ok, do nothing"
-	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/bkmr.v1.db cargo run -- -d -d -d --openai
+	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/test_migration.db cargo run -- -d -d -d --openai
 
 .PHONY: run-backfill
 run-backfill: run-create-db  ## run-backfill
@@ -98,7 +101,7 @@ run-create-db:  ## run-create-db: opens new /tmp/bkmr_test.db
 
 .PHONY: run-edit-sem
 run-edit-sem: init  ## run-edit-sem with openai semantic
-	pushd $(pkg_src) && BKMR_DB_URL=~/xxx//bkmr.v2.db cargo run -- -d -d --openai edit 1
+	pushd $(pkg_src) && BKMR_DB_URL=~/xxx/schema_v2_with_embeddings.db cargo run -- -d -d --openai edit 1
 
 .PHONY: run-edit
 run-edit: init-db   ## run-edit v1
