@@ -276,7 +276,40 @@ eval "$(bkmr open <id>)"  # Variables resolved before sourcing
 
 ### Common Issues
 
-**1. Template Not Rendering**
+**1. Template Syntax Conflicts with Other Tools**
+
+bkmr detects any `{{` or `{%` patterns and attempts Jinja2 template processing, which can cause conflicts with other templating systems:
+
+```bash
+# ❌ Problem: GitHub CLI Go templates conflict with bkmr Jinja2
+gh run list --template '{{range .}}{{.name}}{{end}}'
+# Error: Template syntax error: unexpected end of variable block
+
+# ✅ Solution: Dynamic template construction to avoid {{ pattern detection
+OPEN_BRACE='{'
+CLOSE_BRACE='}'
+TEMPLATE="${OPEN_BRACE}${OPEN_BRACE}range .${CLOSE_BRACE}${CLOSE_BRACE}..."
+gh run list --template "$TEMPLATE"
+
+# ❌ Problem: Docker Compose variable conflicts
+version: '3.8'
+services:
+  app:
+    image: myapp:{{.Tag}}  # Conflicts with bkmr template detection
+
+# ✅ Solution: Escape or construct dynamically
+TAG_VAR='{{.Tag}}'
+# Or use different quoting/escaping strategies
+```
+
+**Common Tools with Template Syntax Conflicts:**
+- GitHub CLI (`gh`) - Uses Go templates with `{{` syntax
+- Docker Compose - Uses Go templates in some contexts  
+- Helm charts - Uses Go templates extensively
+- Kubernetes manifests - May contain Go template syntax
+- Other CLIs using Go's `text/template` package
+
+**2. Template Not Rendering**
 ```bash
 # Check raw content first
 bkmr search "template-name"
@@ -287,7 +320,7 @@ bkmr search "template-name"
 # ❌ Wrong:   {{current_date}}  (missing spaces)
 ```
 
-**2. Environment Variable Not Found**
+**3. Environment Variable Not Found**
 ```bash
 # Use fallback values
 {{ env('MISSING_VAR', 'default-value') }}
@@ -296,7 +329,7 @@ bkmr search "template-name"
 echo $VARIABLE_NAME
 ```
 
-**3. Shell Command Failures**
+**4. Shell Command Failures**
 ```bash
 # Test shell commands separately
 {{ "nonexistent-command" | shell }}  # May cause errors
@@ -305,7 +338,7 @@ echo $VARIABLE_NAME
 {{ "which git && git branch --show-current || echo 'no-git'" | shell }}
 ```
 
-**4. Date Format Issues**
+**5. Date Format Issues**
 ```bash
 # Use standard strftime formats
 {{ current_date | strftime('%Y-%m-%d') }}  # ✅ Good

@@ -683,6 +683,62 @@ EOF
 
 This creates a comprehensive, navigable setup guide where users can jump directly to the section they need.
 
+## Advanced Gotchas and Troubleshooting
+
+### Template Syntax Conflicts
+
+When importing shell scripts or other content containing template syntax from different tools, you may encounter conflicts with bkmr's Jinja2 template processing:
+
+**Problem**: bkmr automatically detects `{{` or `{%` patterns and attempts Jinja2 template processing, causing syntax errors with other templating systems:
+
+```bash
+# This GitHub CLI command fails when imported into bkmr
+gh run list --template '{{range .}}{{.name}}{{end}}'
+# Error: Template syntax error: unexpected end of variable block
+```
+
+**Solution**: Use dynamic template construction to avoid pattern detection:
+
+```bash
+# In your shell script, construct templates dynamically:
+OPEN_BRACE='{'
+CLOSE_BRACE='}'
+TEMPLATE="${OPEN_BRACE}${OPEN_BRACE}range .${CLOSE_BRACE}${CLOSE_BRACE}${OPEN_BRACE}${OPEN_BRACE}.name${CLOSE_BRACE}${CLOSE_BRACE}${OPEN_BRACE}${OPEN_BRACE}end${CLOSE_BRACE}${CLOSE_BRACE}"
+gh run list --template "$TEMPLATE"
+```
+
+**Common Tools with Template Conflicts:**
+- GitHub CLI (`gh`) - Go templates
+- Docker Compose - Go template variables  
+- Helm charts - Go templates
+- Kubernetes manifests - Go template syntax
+- Terraform - Go template functions
+
+**Best Practices:**
+- Document the workaround with inline comments explaining why it's necessary
+- Consider extracting complex templates into separate files when possible
+- Use shell variables to construct problematic template patterns at runtime
+
+### Shell Script Argument Handling
+
+When using `bkmr open <id> --no-edit -- args`, remember:
+
+```bash
+# Arguments are passed as positional parameters
+# In your script, access them with $1, $2, $3, etc.
+echo "First arg: $1"
+echo "All args: $@"
+```
+
+### File Import Considerations
+
+When using `bkmr import-files`:
+
+- Changes to file content, metadata (frontmatter), or file paths are all detected
+- Use `--dry-run` to preview changes before applying
+- Use `--update` flag to handle files with existing bookmarks
+- System tags (`_shell_`, `_md_`) are auto-assigned based on file extension and frontmatter
+
 ## Conclusion
 
 By mastering tag prefix filtering, content-specific actions, and template interpolation, you can transform bkmr from a simple bookmark manager into a powerful knowledge management system tailored to your specific workflows.
