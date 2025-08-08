@@ -131,12 +131,14 @@ pub enum Commands {
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
     },
-    /// Open/launch bookmarks
+    /// Open/launch bookmarks or view files
     Open {
-        /// list of ids, separated by comma, no blanks
+        /// list of ids, separated by comma, no blanks OR file path when used with --file
         ids: String,
         #[arg(long = "no-edit", help = "skip interactive editing for shell scripts")]
         no_edit: bool,
+        #[arg(long = "file", help = "treat ids parameter as file path for direct viewing")]
+        file: bool,
         #[arg(
             last = true,
             help = "Arguments to pass to shell scripts (use -- to separate: bkmr open ID -- arg1 arg2)"

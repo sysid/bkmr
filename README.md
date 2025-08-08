@@ -80,6 +80,11 @@ bkmr add "# Project Notes\n\n## Tasks\n- [ ] Complete documentation\n- [ ] Write
 bkmr open <id>  # opens in browser with interactive TOC sidebar for navigation
 bkmr add "/path/to/markdown.md" --type md -t "Markdown File to be rendered"  # automatically detects path instead of content
 
+# View markdown files directly without storing as bookmarks
+bkmr open --file README.md              # renders with TOC, syntax highlighting
+bkmr open --file ~/docs/notes.md        # supports relative and absolute paths
+bkmr open --file ./documentation.md     # automatic markdown rendering in browser
+
 # Store environment variables for sourcing in a shell
 bkmr add "export DB_USER=dev\nexport DB_PASSWORD=secret\nexport API_KEY=test_key" dev,env --type env --title 'My Environment'
 bkmr search --fzf --fzf-style enhanced -t _env_  # select it for sourcing

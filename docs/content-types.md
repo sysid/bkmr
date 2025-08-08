@@ -136,6 +136,27 @@ bkmr add "~/docs/api-documentation.md" api-docs --type md
 # Opens with TOC showing all API endpoints and sections
 ```
 
+**Direct File Viewing:**
+View markdown files directly without storing as bookmarks:
+
+```bash
+# View local markdown files
+bkmr open --file README.md
+bkmr open --file ~/docs/project-notes.md
+bkmr open --file ./documentation/api.md
+
+# Works with any supported path formats
+bkmr open --file $HOME/wiki/page.md        # Environment variables
+bkmr open --file ~/Documents/notes.md      # Tilde expansion
+```
+
+**Direct viewing benefits:**
+- No database storage required
+- Instant rendering with full TOC support
+- Same features as bookmark-stored markdown (syntax highlighting, math support, responsive design)
+- Supports all path resolution features (relative, absolute, environment variables)
+- Perfect for quick documentation viewing during development
+
 ## Environment Variables (`_env_`)
 
 **Default Action:** Print to stdout for shell sourcing
