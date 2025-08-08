@@ -1,5 +1,5 @@
 // bkmr/src/application/mod.rs
-mod actions;
+pub mod actions;
 pub mod error;
 pub mod services;
 pub mod templates;

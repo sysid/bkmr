@@ -1,5 +1,6 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
+use crate::application::actions::MarkdownAction;
 use crate::application::services::factory::{create_action_service, create_bookmark_service, create_tag_service, create_template_service};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
@@ -20,6 +21,7 @@ use crate::domain::error_context::CliErrorContext;
 use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::{format_file_path, format_mtime};
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
+use chrono;
 use crossterm::style::Stylize;
 use std::collections::HashSet;
 use std::io::Write;
@@ -124,23 +126,83 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn open(cli: Cli) -> CliResult<()> {
-    if let Commands::Open { ids, no_edit, script_args } = cli.command.unwrap() {
-        let bookmark_service = create_bookmark_service();
-        let action_service = create_action_service();
+    if let Commands::Open { ids, no_edit, file, script_args } = cli.command.unwrap() {
+        if file {
+            // Handle direct file viewing
+            handle_file_viewing(&ids)?;
+        } else {
+            // Handle bookmark opening (existing logic)
+            let bookmark_service = create_bookmark_service();
+            let action_service = create_action_service();
 
-        for id in get_ids(ids)? {
-            if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
-                // Use action service to execute default action
-                let action_type = action_service.get_default_action_description(&bookmark);
-                eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
+            for id in get_ids(ids)? {
+                if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+                    // Use action service to execute default action
+                    let action_type = action_service.get_default_action_description(&bookmark);
+                    eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
-                // Execute default action with access recording handled by action service
-                action_service.execute_default_action_with_options(&bookmark, no_edit, &script_args)?;
-            } else {
-                eprintln!("Bookmark with ID {} not found", id);
+                    // Execute default action with access recording handled by action service
+                    action_service.execute_default_action_with_options(&bookmark, no_edit, &script_args)?;
+                } else {
+                    eprintln!("Bookmark with ID {} not found", id);
+                }
             }
         }
     }
+    Ok(())
+}
+
+/// Handle direct file viewing by creating a temporary bookmark and using existing markdown functionality
+fn handle_file_viewing(file_path: &str) -> CliResult<()> {
+    use crate::domain::action::BookmarkAction;
+    use std::collections::HashSet;
+    
+    // Check if file exists first
+    if !Path::new(file_path).exists() {
+        return Err(CliError::Other(format!(
+            "File not found: {}. Please check the path and try again.",
+            file_path
+        )));
+    }
+
+    // Extract filename for display
+    let path = Path::new(file_path);
+    let filename = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(file_path);
+
+    eprintln!("Rendering file: {}", filename);
+
+    // Create markdown action (reuses existing file reading logic)
+    let markdown_action = MarkdownAction::new();
+
+    // Create a minimal bookmark structure - the MarkdownAction already handles file paths in url field
+    let mut tags = HashSet::new();
+    tags.insert(Tag::new("_md_").map_err(|e| CliError::Other(e.to_string()))?);
+    
+    let temp_bookmark = Bookmark {
+        id: None,
+        url: file_path.to_string(), // File path - MarkdownAction will detect this and read the file
+        title: filename.to_string(),
+        description: format!("Direct file view: {}", file_path),
+        tags,
+        access_count: 0,
+        created_at: Some(chrono::Utc::now()),
+        updated_at: chrono::Utc::now(),
+        embedding: None,
+        content_hash: None,
+        embeddable: false,
+        file_path: None,
+        file_mtime: None,
+        file_hash: None,
+    };
+
+    // Execute the markdown action - it will handle file reading and rendering
+    markdown_action
+        .execute(&temp_bookmark)
+        .cli_context("Failed to render file")?;
+
     Ok(())
 }
 
