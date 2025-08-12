@@ -266,7 +266,22 @@ pub enum Commands {
         path: String,
     },
 
-    /// Import files from directories, parsing frontmatter metadata
+    /// Import files from directories, parsing frontmatter metadata.
+    /// 
+    /// Supported file types: .sh (shell scripts), .py (python scripts), .md (markdown files)
+    /// 
+    /// Required frontmatter format (YAML):
+    /// ---
+    /// name: "Script Name"        # Required: bookmark title
+    /// tags: ["tag1", "tag2"]     # Optional: comma-separated tags  
+    /// type: "_shell_"            # Optional: content type (_shell_, _md_, _snip_)
+    /// ---
+    /// 
+    /// Or hash-style format (for scripts):
+    /// #!/bin/bash
+    /// # name: Script Name
+    /// # tags: tag1, tag2
+    /// # type: _shell_
     ImportFiles {
         /// Directories or files to import
         #[arg(help = "Directories or files to import")]
@@ -287,6 +302,13 @@ pub enum Commands {
 
         #[arg(short = 'd', long = "dry-run", help = "Show what would be done without making changes")]
         dry_run: bool,
+
+        #[arg(
+            short = 'v',
+            long = "verbose", 
+            help = "Show detailed information about skipped files and validation issues"
+        )]
+        verbose: bool,
 
         #[arg(
             long = "base-path", 

@@ -30,6 +30,7 @@ pub struct ImportOptions {
     pub update: bool,           // Update existing bookmarks when content differs
     pub delete_missing: bool,   // Delete bookmarks whose source files no longer exist
     pub dry_run: bool,          // Show what would be done without making changes
+    pub verbose: bool,          // Show detailed information about skipped files and validation issues
 }
 
 pub trait ImportRepository: Send + Sync + Debug {
