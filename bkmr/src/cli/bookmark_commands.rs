@@ -1106,6 +1106,7 @@ pub fn import_files(cli: Cli) -> CliResult<()> {
         update,
         delete_missing,
         dry_run,
+        verbose,
         base_path,
     }) = cli.command
     {
@@ -1129,7 +1130,7 @@ pub fn import_files(cli: Cli) -> CliResult<()> {
             println!("{}", "Dry run mode - showing what would be done:".green());
         }
         
-        match service.import_files(&paths, update, delete_missing, dry_run, base_path.as_deref()) {
+        match service.import_files(&paths, update, delete_missing, dry_run, verbose, base_path.as_deref()) {
             Ok((added, updated, deleted)) => {
                 if dry_run {
                     println!("Would add: {}, update: {}, delete: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());

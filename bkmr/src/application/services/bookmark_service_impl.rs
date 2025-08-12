@@ -439,12 +439,13 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         update: bool,
         delete_missing: bool,
         dry_run: bool,
+        verbose: bool,
         base_path_name: Option<&str>,
     ) -> ApplicationResult<(usize, usize, usize)> {
         use crate::domain::repositories::import_repository::ImportOptions;
 
-        debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}, base_path={:?}", 
-               paths, update, delete_missing, dry_run, base_path_name);
+        debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}, verbose={}, base_path={:?}", 
+               paths, update, delete_missing, dry_run, verbose, base_path_name);
 
         // Load settings for base path resolution
         let settings = crate::config::load_settings(None)
@@ -473,6 +474,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             update,
             delete_missing,
             dry_run,
+            verbose,
         };
 
         // Get file data from repository using resolved paths

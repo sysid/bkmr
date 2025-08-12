@@ -27,6 +27,30 @@ impl FileImportRepository {
         }
     }
 
+    /// Validate if content has proper frontmatter format
+    fn validate_frontmatter_format(&self, content: &str, _file_path: &Path) -> DomainResult<bool> {
+        let content = content.trim();
+        
+        // Check for YAML frontmatter (structural presence only)
+        if content.starts_with("---") {
+            // Just check that closing delimiter exists - parsing validation happens later
+            return Ok(content[3..].contains("---"));
+        }
+        
+        // Check for hash-style frontmatter
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('#') && !trimmed.starts_with("#!") {
+                let comment_content = trimmed[1..].trim();
+                if comment_content.contains(':') {
+                    return Ok(true);
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+
     /// Parse YAML frontmatter or hash-style comments from file content
     fn parse_frontmatter(&self, content: &str, file_path: &Path) -> DomainResult<(FileMeta, String)> {
         let content = content.trim();
@@ -65,7 +89,7 @@ impl FileImportRepository {
                     
                     match key {
                         "name" => {
-                            meta.name = Some(value.to_string());
+                            meta.name = value.to_string();
                             found_any_metadata = true;
                         },
                         "tags" => {
@@ -115,17 +139,28 @@ impl FileImportRepository {
                 )
             ))?;
 
+        // Check if file has frontmatter - return error if no frontmatter found
+        let has_frontmatter = self.validate_frontmatter_format(&content, file_path)?;
+        if !has_frontmatter {
+            return Err(DomainError::RepositoryError(
+                crate::domain::error::RepositoryError::Other(
+                    format!("No frontmatter found in {}", file_path.display())
+                )
+            ));
+        }
+
         // Parse frontmatter
         let (meta, clean_content) = self.parse_frontmatter(&content, file_path)?;
 
         // Validate required fields
-        let name = meta.name.ok_or_else(|| {
-            DomainError::RepositoryError(
+        if meta.name.is_empty() {
+            return Err(DomainError::RepositoryError(
                 crate::domain::error::RepositoryError::Other(
                     format!("Missing required 'name' field in {}", file_path.display())
                 )
-            )
-        })?;
+            ));
+        }
+        let name = meta.name;
 
         // Parse tags
         let tags = if let Some(tag_str) = meta.tags {
@@ -217,9 +252,15 @@ impl ImportRepository for FileImportRepository {
                     match self.process_file(path) {
                         Ok(file_data) => all_files.push(file_data),
                         Err(e) => {
-                            warn!("Failed to process file {}: {}", path.display(), e);
+                            if _options.verbose {
+                                eprintln!("Skipping {}: {}", path.display(), e);
+                            } else {
+                                debug!("Skipping {}: {}", path.display(), e);
+                            }
                         }
                     }
+                } else if _options.verbose {
+                    eprintln!("Skipping {}: unsupported file type (expected .sh, .py, or .md)", path.display());
                 }
             } else if path.is_dir() {
                 // Directory - use WalkBuilder for recursive traversal
@@ -240,7 +281,11 @@ impl ImportRepository for FileImportRepository {
                                         all_files.push(file_data);
                                     }
                                     Err(e) => {
-                                        warn!("Failed to process file {}: {}", entry_path.display(), e);
+                                        if _options.verbose {
+                                            eprintln!("Skipping {}: {}", entry_path.display(), e);
+                                        } else {
+                                            debug!("Skipping {}: {}", entry_path.display(), e);
+                                        }
                                     }
                                 }
                             }
@@ -269,12 +314,22 @@ impl FileImportRepository {
 }
 
 /// Frontmatter metadata structure
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 struct FileMeta {
-    name: Option<String>,
+    name: String, // Required field
     tags: Option<String>,
     #[serde(rename = "type")]
     r#type: Option<String>,
+}
+
+impl Default for FileMeta {
+    fn default() -> Self {
+        Self {
+            name: String::new(), // Will be detected as missing during validation
+            tags: None,
+            r#type: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -298,7 +353,7 @@ echo "Hello World"
         let path = Path::new("test.sh");
         let (meta, clean_content) = repo.parse_frontmatter(content, path).unwrap();
         
-        assert_eq!(meta.name, Some("test-script".to_string()));
+        assert_eq!(meta.name, "test-script".to_string());
         assert_eq!(meta.tags, Some("admin, backup".to_string()));
         assert_eq!(meta.r#type, Some("_shell_".to_string()));
         assert_eq!(clean_content, "#!/bin/bash\necho \"Hello World\"");
@@ -317,7 +372,7 @@ echo "Backing up database"
         let path = Path::new("backup.sh");
         let (meta, clean_content) = repo.parse_frontmatter(content, path).unwrap();
         
-        assert_eq!(meta.name, Some("backup-db".to_string()));
+        assert_eq!(meta.name, "backup-db".to_string());
         assert_eq!(meta.tags, Some("database, backup".to_string()));
         assert_eq!(meta.r#type, Some("_shell_".to_string()));
         assert!(clean_content.contains("#!/bin/bash"));
@@ -356,5 +411,180 @@ echo "test"
         assert_eq!(result.content, "#!/bin/bash\necho \"test\"");
         assert!(result.file_hash.len() == 64); // SHA-256 hex string
         assert!(result.file_mtime > 0);
+    }
+
+    #[test]
+    fn test_validate_frontmatter_format_valid_yaml() {
+        let repo = FileImportRepository::new();
+        let content = r#"---
+name: test
+---
+content"#;
+        let path = Path::new("test.sh");
+        assert!(repo.validate_frontmatter_format(content, path).unwrap());
+    }
+
+    #[test]
+    fn test_validate_frontmatter_format_invalid_yaml() {
+        let repo = FileImportRepository::new();
+        let content = r#"---
+name: [invalid yaml
+---
+content"#;
+        let path = Path::new("test.sh");
+        // validate_frontmatter_format only checks structural presence, not parsing validity
+        // Invalid YAML syntax will be caught during actual parsing in parse_frontmatter
+        assert!(repo.validate_frontmatter_format(content, path).unwrap());
+    }
+
+    #[test]
+    fn test_validate_frontmatter_format_incomplete_yaml() {
+        let repo = FileImportRepository::new();
+        let content = r#"---
+name: test
+content without closing"#;
+        let path = Path::new("test.sh");
+        // validate_frontmatter_format only checks for closing delimiter presence
+        // Missing closing delimiter returns false (no frontmatter detected)
+        assert!(!repo.validate_frontmatter_format(content, path).unwrap());
+    }
+
+    #[test]
+    fn test_validate_frontmatter_format_hash_style() {
+        let repo = FileImportRepository::new();
+        let content = r#"#!/bin/bash
+# name: test
+echo hello"#;
+        let path = Path::new("test.sh");
+        assert!(repo.validate_frontmatter_format(content, path).unwrap());
+    }
+
+    #[test]
+    fn test_validate_frontmatter_format_no_frontmatter() {
+        let repo = FileImportRepository::new();
+        let content = r#"#!/bin/bash
+echo hello"#;
+        let path = Path::new("test.sh");
+        assert!(!repo.validate_frontmatter_format(content, path).unwrap());
+    }
+
+    #[test]
+    fn test_process_file_no_frontmatter() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.sh");
+        
+        let content = r#"#!/bin/bash
+echo "test"
+"#;
+        
+        fs::write(&file_path, content).unwrap();
+        
+        let repo = FileImportRepository::new();
+        let result = repo.process_file(&file_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No frontmatter found"));
+    }
+
+    #[test]
+    fn test_process_file_missing_required_name() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.sh");
+        
+        let content = r#"---
+tags: test
+---
+#!/bin/bash
+echo "test"
+"#;
+        
+        fs::write(&file_path, content).unwrap();
+        
+        let repo = FileImportRepository::new();
+        let result = repo.process_file(&file_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Missing required 'name' field"));
+    }
+
+    #[test]
+    fn test_process_file_empty_name() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.sh");
+        
+        let content = r#"---
+name: ""
+tags: test
+---
+#!/bin/bash
+echo "test"
+"#;
+        
+        fs::write(&file_path, content).unwrap();
+        
+        let repo = FileImportRepository::new();
+        let result = repo.process_file(&file_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Missing required 'name' field"));
+    }
+
+    #[test]
+    fn test_import_files_with_verbose_option() {
+        use crate::domain::repositories::import_repository::ImportOptions;
+        
+        let temp_dir = TempDir::new().unwrap();
+        let repo = FileImportRepository::new();
+        
+        // Create a valid file
+        let valid_file = temp_dir.path().join("valid.sh");
+        fs::write(&valid_file, r#"---
+name: valid-script
+---
+#!/bin/bash
+echo "valid"
+"#).unwrap();
+        
+        // Create an invalid file (no frontmatter)
+        let invalid_file = temp_dir.path().join("invalid.sh");
+        fs::write(&invalid_file, r#"#!/bin/bash
+echo "invalid"
+"#).unwrap();
+        
+        // Create an unsupported file
+        let unsupported_file = temp_dir.path().join("unsupported.txt");
+        fs::write(&unsupported_file, "text content").unwrap();
+        
+        let paths = vec![temp_dir.path().to_string_lossy().to_string()];
+        let options = ImportOptions {
+            update: false,
+            delete_missing: false,
+            dry_run: false,
+            verbose: true,
+        };
+        
+        let result = repo.import_files(&paths, &options).unwrap();
+        
+        // Should only import the valid file
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "valid-script");
+    }
+
+    #[test]
+    fn test_parse_frontmatter_catches_invalid_yaml() {
+        let repo = FileImportRepository::new();
+        let content = r#"---
+name: [invalid yaml
+---
+#!/bin/bash
+echo "test"
+"#;
+        let path = Path::new("test.sh");
+        
+        // validate_frontmatter_format should pass (structural check only)
+        assert!(repo.validate_frontmatter_format(content, path).unwrap());
+        
+        // parse_frontmatter should catch the invalid YAML and fall through to hash-style parsing
+        let result = repo.parse_frontmatter(content, path).unwrap();
+        // Since YAML parsing failed, it falls back to hash-style which finds no metadata
+        // Default FileMeta will have empty name, which should be caught in validation
+        assert!(result.0.name.is_empty());
     }
 }

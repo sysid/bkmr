@@ -94,6 +94,7 @@ pub trait BookmarkService: Send + Sync + Debug {
         update: bool,
         delete_missing: bool,
         dry_run: bool,
+        verbose: bool,
         base_path_name: Option<&str>,
     ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
 }
