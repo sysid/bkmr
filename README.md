@@ -5,11 +5,13 @@
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 [![Build Status][build-image]][build-url]
 
+> Combine any snippet (code, urls, markdown, text) with powerful search, interpolation and execution.
+ 
 # Beyond Bookmarks and Snippets: A CLI Knowledge Management System
 
 [bkmr reborn](https://sysid.github.io/bkmr-reborn/)
 
-`bkmr` - selected [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - is a fast, feature-rich command-line tool that extends far beyond traditional bookmark management.
+`bkmr` - selected [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - is a fast, feature-rich command-line tool that extends bookmark management, snippet handling, markdown rendering, script execution and more.
 
 **Organize**, **find**, and **apply** your various content types:
 
@@ -28,6 +30,11 @@
 - **Intelligent**: Full-text and semantic search capabilities
 - **Privacy-focused**: Local database, no cloud dependencies unless enabled
 - **Fast**: 20x faster than similar Python tools
+
+### NEW: [Editor Integrations!](#editor-integrations)
+
+- **[bkmr-lsp](https://github.com/sysid/bkmr-lsp)**: LSP server for VS Code, Vim/Neovim, Emacs - automatic snippet completion with language-aware filtering
+- **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin for all IDEs
 
 ## Core Features
 
@@ -295,6 +302,46 @@ For detailed documentation on advanced features:
 - [File Import and Smart Editing](./docs/file-import-smart-editing.md)
 - [Advanced Usage](./docs/advanced_usage.md)
 - [Semantic Search](./docs/semantic-search.md)
+
+## Editor Integrations
+
+Instead of switching between editor and terminal, access snippets directly within the IDE.
+
+### bkmr-lsp: Universal Language Server
+
+**[bkmr-lsp](https://github.com/sysid/bkmr-lsp)** provides Language Server Protocol (LSP) integration for any LSP-compatible editor.
+
+**Key Features:**
+- **Automatic completion**: Snippets appear in completion popup while typing (no trigger characters needed)
+- **Language-aware filtering**: Automatically shows only relevant snippets based on current file type
+- **Universal snippets**: Write snippets in natural Rust syntax that automatically adapt to target languages
+- **Template interpolation**: Server-side processing of bkmr templates with live data
+
+### IntelliJ Platform Plugin
+
+**[bkmr-intellij-plugin](https://github.com/sysid/bkmr-intellij-plugin)** brings bkmr integration to all JetBrains IDEs with native IntelliJ Platform integration.
+
+**Key Features:**
+- **Seamless LSP integration**: Automatic snippet completion with no manual triggers
+- **Tab navigation**: Full snippet placeholder support with Tab/Shift+Tab navigation
+- **Cross-platform**: Works in IntelliJ IDEA, PyCharm, WebStorm, CLion, RustRover, and all JetBrains IDEs
+- **Filepath comments**: Insert relative filepaths as comments with smart language detection
+
+### Universal Snippets
+
+Both integrations support **universal snippets** - write snippets once using natural Rust syntax, and they automatically translate to your target language:
+
+```rust
+// Universal snippet (stored as Rust syntax)
+// Function: {{ function_name }}
+// TODO: implement
+    return {{ value }};
+```
+
+**Automatic translation:**
+- **Python**: `// comment` → `# comment`
+- **HTML**: `// comment` → `<!-- comment -->`
+- **Indentation**: Adapts to language conventions (tabs for Go, 2 spaces for JS, etc.)
 
 ## Developer Workflow Integration
 
