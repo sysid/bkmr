@@ -327,6 +327,13 @@ pub enum Commands {
         /// Shell to generate completions for (bash, zsh, fish)
         shell: String,
     },
+    /// Start LSP (Language Server Protocol) server for snippet completion
+    #[cfg(feature = "lsp")]
+    Lsp {
+        /// Disable bkmr template interpolation (serve raw templates instead of processed content)
+        #[arg(long, help = "Disable bkmr template interpolation")]
+        no_interpolation: bool,
+    },
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks

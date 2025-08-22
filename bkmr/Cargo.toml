@@ -13,6 +13,12 @@ categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["cli"]
+cli = []
+lsp = ["tower-lsp", "tokio", "async-trait"]
+all = ["cli", "lsp"]
+
 [dependencies]
 arboard = "3.5.0"
 bincode = "2.0.1"
@@ -58,6 +64,11 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tuikit = "0.5.0"
 url = "2.5.4"
+
+# LSP-specific dependencies (optional)
+tower-lsp = { version = "0.20", optional = true }
+tokio = { version = "1", features = ["full"], optional = true }
+async-trait = { version = "0.1", optional = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.17"

@@ -41,6 +41,8 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
         Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli),
         Some(Commands::Completion { shell }) => handle_completion(shell),
+        #[cfg(feature = "lsp")]
+        Some(Commands::Lsp { no_interpolation }) => handle_lsp(no_interpolation),
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
             Ok(())
@@ -91,4 +93,21 @@ fn handle_completion(shell: String) -> CliResult<()> {
             e
         ))),
     }
+}
+
+#[cfg(feature = "lsp")]
+fn handle_lsp(no_interpolation: bool) -> CliResult<()> {
+    use tokio::runtime::Runtime;
+    
+    // Create a tokio runtime for the LSP server
+    let rt = Runtime::new().map_err(|e| {
+        error::CliError::CommandFailed(format!("Failed to create async runtime: {}", e))
+    })?;
+    
+    // Run the LSP server
+    rt.block_on(async {
+        crate::lsp::run_lsp_server(no_interpolation).await;
+    });
+    
+    Ok(())
 }
