@@ -7,6 +7,8 @@
 pub mod backend;
 #[cfg(feature = "lsp")]
 pub mod domain;
+#[cfg(feature = "lsp")]
+pub mod services;
 
 #[cfg(feature = "lsp")]
 pub use backend::BkmrLspBackend;
