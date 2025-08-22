@@ -107,3 +107,10 @@ impl From<BookmarkBuilderError> for DomainError {
         DomainError::BookmarkOperationFailed(e.to_string())
     }
 }
+
+#[cfg(feature = "lsp")]
+impl From<crate::lsp::services::snippet_service::SnippetError> for DomainError {
+    fn from(e: crate::lsp::services::snippet_service::SnippetError) -> Self {
+        DomainError::Other(e.to_string())
+    }
+}

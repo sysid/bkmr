@@ -9,24 +9,32 @@ use tower_lsp::jsonrpc::Result as LspResult;
 #[cfg(feature = "lsp")]
 use tower_lsp::lsp_types::*;
 #[cfg(feature = "lsp")]
-use tracing::{debug, info, instrument};
-
+use tracing::{debug, error, info, instrument, warn};
 #[cfg(feature = "lsp")]
-use crate::lsp::services::{AsyncSnippetService, LspSnippetService};
+use crate::domain::error::{DomainError, DomainResult};
 #[cfg(feature = "lsp")]
-use crate::lsp::domain::SnippetFilter;
+use std::sync::Arc;
 #[cfg(feature = "lsp")]
 use std::collections::HashMap;
+
+#[cfg(feature = "lsp")]
+use crate::lsp::services::{CompletionService, LspSnippetService};
+#[cfg(feature = "lsp")]
+use crate::lsp::domain::{CompletionContext, CompletionQuery};
 
 /// Configuration for the bkmr-lsp server
 #[derive(Debug, Clone)]
 pub struct BkmrConfig {
+    pub bkmr_binary: String,
+    pub max_completions: usize,
     pub enable_interpolation: bool,
 }
 
 impl Default for BkmrConfig {
     fn default() -> Self {
         Self {
+            bkmr_binary: "bkmr".to_string(),
+            max_completions: 50,
             enable_interpolation: true,
         }
     }
@@ -38,23 +46,34 @@ impl Default for BkmrConfig {
 pub struct BkmrLspBackend {
     client: Client,
     config: BkmrConfig,
-    snippet_service: LspSnippetService,
+    completion_service: CompletionService,
     /// Cache of document contents to extract prefixes
-    document_cache: std::sync::Arc<std::sync::RwLock<HashMap<String, String>>>,
+    document_cache: Arc<std::sync::RwLock<HashMap<String, String>>>,
     /// Cache of document language IDs for filetype-based filtering
-    language_cache: std::sync::Arc<std::sync::RwLock<HashMap<String, String>>>,
+    language_cache: Arc<std::sync::RwLock<HashMap<String, String>>>,
 }
 
 #[cfg(feature = "lsp")]
 impl BkmrLspBackend {
-    pub fn new(client: Client, config: BkmrConfig) -> Self {
+    pub fn new(client: Client) -> Self {
+        Self::with_config(client, BkmrConfig::default())
+    }
+
+    pub fn with_config(client: Client, config: BkmrConfig) -> Self {
         debug!("Creating BkmrLspBackend with config: {:?}", config);
-        Self { 
-            client, 
+        
+        // Create snippet service 
+        let snippet_service = Arc::new(LspSnippetService::new());
+        
+        // Create completion service with configuration
+        let completion_service = CompletionService::with_config(snippet_service, config.clone());
+        
+        Self {
+            client,
             config,
-            snippet_service: LspSnippetService::new(),
-            document_cache: std::sync::Arc::new(std::sync::RwLock::new(HashMap::new())),
-            language_cache: std::sync::Arc::new(std::sync::RwLock::new(HashMap::new())),
+            completion_service,
+            document_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            language_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
         }
     }
 
@@ -123,165 +142,331 @@ impl BkmrLspBackend {
         let cache = self.language_cache.read().ok()?;
         cache.get(&uri.to_string()).cloned()
     }
+
+    /// Check if bkmr binary is available
+    #[instrument(skip(self))]
+    async fn verify_bkmr_availability(&self) -> DomainResult<()> {
+        debug!("Verifying bkmr availability");
+
+        let command_future = tokio::process::Command::new(&self.config.bkmr_binary)
+            .args(["--help"])
+            .output();
+
+        let output =
+            match tokio::time::timeout(std::time::Duration::from_secs(5), command_future).await {
+                Ok(Ok(output)) => output,
+                Ok(Err(e)) => {
+                    return Err(DomainError::Other(format!("bkmr binary not found: {}", e)));
+                }
+                Err(_) => {
+                    return Err(DomainError::Other("bkmr --help command timed out".to_string()));
+                }
+            };
+
+        if !output.status.success() {
+            return Err(DomainError::Other("bkmr binary is not working properly".to_string()));
+        }
+
+        info!("bkmr binary verified successfully");
+        Ok(())
+    }
 }
 
 #[cfg(feature = "lsp")]
 #[tower_lsp::async_trait]
 impl LanguageServer for BkmrLspBackend {
-    async fn initialize(&self, _: InitializeParams) -> LspResult<InitializeResult> {
-        info!("LSP server initialized");
-        Ok(InitializeResult {
-            server_info: None,
+    #[instrument(skip(self, params))]
+    async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
+        info!(
+            "Initialize request received from client: {:?}",
+            params.client_info
+        );
+
+        // Verify bkmr is available
+        if let Err(e) = self.verify_bkmr_availability().await {
+            error!("bkmr verification failed: {}", e);
+            self.client
+                .log_message(
+                    MessageType::ERROR,
+                    &format!("Failed to verify bkmr availability: {}", e),
+                )
+                .await;
+        }
+
+        // Check if client supports snippets
+        let snippet_support = params
+            .capabilities
+            .text_document
+            .as_ref()
+            .and_then(|td| td.completion.as_ref())
+            .and_then(|comp| comp.completion_item.as_ref())
+            .and_then(|item| item.snippet_support)
+            .unwrap_or(false);
+
+        info!("Client snippet support: {}", snippet_support);
+
+        if !snippet_support {
+            warn!("Client does not support snippets");
+            self.client
+                .log_message(
+                    MessageType::WARNING,
+                    "Client does not support snippets, functionality may be limited",
+                )
+                .await;
+        }
+
+        let result = InitializeResult {
             capabilities: ServerCapabilities {
-                completion_provider: Some(CompletionOptions {
-                    resolve_provider: Some(false),
-                    trigger_characters: Some(vec![":".to_string()]),
-                    work_done_progress_options: Default::default(),
-                    all_commit_characters: None,
-                    completion_item: None,
-                }),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
-                ..ServerCapabilities::default()
+                completion_provider: Some(CompletionOptions {
+                    resolve_provider: Some(false),
+                    trigger_characters: None, // No automatic triggers - manual completion only
+                    all_commit_characters: None,
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                    completion_item: None,
+                }),
+                ..Default::default()
             },
-        })
-    }
+            ..Default::default()
+        };
 
-    async fn initialized(&self, _: InitializedParams) {
-        info!("LSP server ready");
-        self.client
-            .log_message(MessageType::INFO, "bkmr LSP server initialized")
-            .await;
-    }
-
-    async fn shutdown(&self) -> LspResult<()> {
-        info!("LSP server shutting down");
-        Ok(())
-    }
-
-    async fn did_open(&self, params: DidOpenTextDocumentParams) {
-        debug!("Document opened: {}", params.text_document.uri);
-        
-        // Cache the document content
-        if let Ok(mut cache) = self.document_cache.write() {
-            cache.insert(params.text_document.uri.to_string(), params.text_document.text);
-        }
-        
-        // Cache the language ID
-        if let Ok(mut cache) = self.language_cache.write() {
-            cache.insert(params.text_document.uri.to_string(), params.text_document.language_id);
-        }
-    }
-
-    async fn did_change(&self, params: DidChangeTextDocumentParams) {
-        debug!("Document changed: {}", params.text_document.uri);
-        
-        // Update the document cache with the new content
-        if let Some(change) = params.content_changes.into_iter().next() {
-            if let Ok(mut cache) = self.document_cache.write() {
-                cache.insert(params.text_document.uri.to_string(), change.text);
-            }
-        }
+        info!("Initialize complete - manual completion only (no trigger characters)");
+        Ok(result)
     }
 
     #[instrument(skip(self))]
-    async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
-        debug!("Completion requested");
-        
-        let position = params.text_document_position.position;
-        let uri = &params.text_document_position.text_document.uri;
-        
-        // Extract the query from the cursor position
-        let (query_text, range) = match self.extract_snippet_query(uri, position) {
-            Some(result) => result,
-            None => {
-                debug!("No query found at cursor position");
-                return Ok(Some(CompletionResponse::Array(vec![])));
+    async fn initialized(&self, _: InitializedParams) {
+        info!("Server initialized successfully");
+
+        self.client
+            .log_message(MessageType::INFO, "bkmr-lsp server ready")
+            .await;
+    }
+
+    #[instrument(skip(self))]
+    async fn shutdown(&self) -> LspResult<()> {
+        info!("Shutdown request received");
+        self.client
+            .log_message(MessageType::INFO, "Shutting down bkmr-lsp server")
+            .await;
+        Ok(())
+    }
+
+    #[instrument(skip(self, params))]
+    async fn did_open(&self, params: DidOpenTextDocumentParams) {
+        let uri = params.text_document.uri.to_string();
+        let content = params.text_document.text;
+        let language_id = params.text_document.language_id;
+
+        debug!("Document opened: {} (language: {})", uri, language_id);
+
+        if let Ok(mut cache) = self.document_cache.write() {
+            cache.insert(uri.clone(), content);
+        }
+
+        if let Ok(mut lang_cache) = self.language_cache.write() {
+            lang_cache.insert(uri, language_id);
+        }
+    }
+
+    #[instrument(skip(self, params))]
+    async fn did_change(&self, params: DidChangeTextDocumentParams) {
+        let uri = params.text_document.uri.to_string();
+
+        debug!("Document changed: {}", uri);
+
+        if let Ok(mut cache) = self.document_cache.write() {
+            for change in params.content_changes {
+                if let Some(content) = cache.get_mut(&uri) {
+                    // For FULL sync, replace entire content
+                    if change.range.is_none() {
+                        *content = change.text;
+                    } else {
+                        // For incremental sync, would need more complex logic
+                        // For now, just replace entirely
+                        *content = change.text;
+                    }
+                }
             }
-        };
-        
-        debug!("Extracted query: '{}' at range: {:?}", query_text, range);
-        
-        // Get the language ID for filtering
+        }
+    }
+
+    #[instrument(skip(self, params))]
+    async fn did_close(&self, params: DidCloseTextDocumentParams) {
+        let uri = params.text_document.uri.to_string();
+
+        debug!("Document closed: {}", uri);
+
+        if let Ok(mut cache) = self.document_cache.write() {
+            cache.remove(&uri);
+        }
+
+        if let Ok(mut lang_cache) = self.language_cache.write() {
+            lang_cache.remove(&uri);
+        }
+    }
+
+    #[instrument(skip(self, params))]
+    async fn completion(&self, params: CompletionParams) -> LspResult<Option<CompletionResponse>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+
+        debug!(
+            "Completion request for {}:{},{}",
+            uri, position.line, position.character
+        );
+
+        // Only respond to manual completion requests (Ctrl+Space)
+        if let Some(context) = &params.context {
+            match context.trigger_kind {
+                CompletionTriggerKind::INVOKED => {
+                    // Manual Ctrl+Space - proceed with word-based completion
+                    debug!("Manual completion request - proceeding with word-based snippet search");
+                }
+                CompletionTriggerKind::TRIGGER_FOR_INCOMPLETE_COMPLETIONS => {
+                    debug!("Completion for incomplete results - proceeding");
+                }
+                _ => {
+                    debug!("Ignoring automatic trigger - only manual completion supported");
+                    return Ok(Some(CompletionResponse::Array(vec![])));
+                }
+            }
+        } else {
+            debug!("No completion context - skipping");
+            return Ok(Some(CompletionResponse::Array(vec![])));
+        }
+
+        // Extract the query after trigger and get replacement range
+        let query_info = self.extract_snippet_query(uri, position);
+        debug!("Extracted snippet query info: {:?}", query_info);
+
+        // Get the language ID for filetype-based filtering
         let language_id = self.get_language_id(uri);
-        debug!("Language ID: {:?}", language_id);
-        
-        // Create snippet filter
-        let filter = SnippetFilter::new(
-            language_id,
-            Some(query_text.clone()),
-            50, // Max results
+        debug!("Document language ID: {:?}", language_id);
+
+        // Create completion context for the service
+        let mut context = CompletionContext::new(
+            uri.clone(),
+            position,
+            language_id
         );
         
-        // Fetch snippets using the service
-        let snippets = match self.snippet_service.fetch_snippets(&filter).await {
-            Ok(snippets) => snippets,
-            Err(e) => {
-                debug!("Error fetching snippets: {}", e);
-                return Ok(Some(CompletionResponse::Array(vec![])));
-            }
-        };
-        
-        debug!("Found {} snippets", snippets.len());
-        
-        // Convert snippets to LSP completion items
-        let completion_items: Vec<CompletionItem> = snippets
-            .into_iter()
-            .map(|snippet| {
-                CompletionItem {
-                    label: snippet.title.clone(),
-                    kind: Some(CompletionItemKind::SNIPPET),
-                    detail: Some(snippet.description.clone()),
-                    insert_text: Some(snippet.content.clone()),
-                    text_edit: Some(CompletionTextEdit::Edit(TextEdit {
-                        range,
-                        new_text: snippet.content,
-                    })),
-                    ..Default::default()
+        // Add query information if extracted
+        if let Some((query, range)) = query_info {
+            debug!("Query: '{}', Range: {:?}", query, range);
+            context = context.with_query(CompletionQuery::new(query, range));
+        } else {
+            debug!("No query extracted, using empty query");
+        }
+
+        // Use CompletionService to get completion items
+        match self.completion_service.get_completions(&context).await {
+            Ok(completion_items) => {
+                info!(
+                    "Returning {} completion items for query: {:?}",
+                    completion_items.len(),
+                    context.get_query_text().unwrap_or("")
+                );
+
+                // Only log first few items to reduce noise in LSP logs
+                for (i, item) in completion_items.iter().enumerate().take(3) {
+                    debug!(
+                        "Item {}: label='{}', sort_text={:?}",
+                        i, item.label, item.sort_text
+                    );
                 }
-            })
-            .collect();
-        
-        debug!("Returning {} completion items", completion_items.len());
-        Ok(Some(CompletionResponse::Array(completion_items)))
+                if completion_items.len() > 3 {
+                    debug!("... and {} more items", completion_items.len() - 3);
+                }
+
+                Ok(Some(CompletionResponse::List(CompletionList {
+                    is_incomplete: true,
+                    items: completion_items,
+                })))
+            }
+            Err(e) => {
+                error!("Failed to get completions: {}", e);
+                self.client
+                    .log_message(
+                        MessageType::ERROR,
+                        &format!("Failed to get completions: {}", e),
+                    )
+                    .await;
+                Ok(Some(CompletionResponse::Array(vec![])))
+            }
+        }
     }
 }
 
 /// Run the LSP server
 #[cfg(feature = "lsp")]
 pub async fn run_server(no_interpolation: bool) {
-    // Initialize logging
-    if let Err(e) = init_logging() {
-        eprintln!("Failed to initialize logging: {}", e);
+    // Initialize logging with fallback if it fails
+    let result = init_logging();
+    if let Err(e) = result {
+        eprintln!(
+            "Failed to initialize logging: {}, continuing without structured logging",
+            e
+        );
     }
 
-    info!("Starting bkmr LSP server");
+    // Get version from Cargo.toml
+    let version = env!("CARGO_PKG_VERSION");
+    eprintln!("Starting bkmr LSP server v{}", version);
+    info!("Starting bkmr LSP server v{}", version);
 
     // Create configuration
     let config = BkmrConfig {
+        bkmr_binary: "bkmr".to_string(),
+        max_completions: 50,
         enable_interpolation: !no_interpolation,
     };
 
+    eprintln!("Configuration: {:?}", config);
+    info!("Configuration: {:?}", config);
+
+    // Validate environment before starting
+    if let Err(e) = validate_environment().await {
+        error!("Environment validation failed: {}", e);
+        eprintln!("Environment validation failed: {}", e);
+        std::process::exit(1);
+    }
+
     // Set up the LSP service
-    let (service, socket) = LspService::new(|client| BkmrLspBackend::new(client, config.clone()));
+    let (service, socket) = LspService::new(|client| BkmrLspBackend::with_config(client, config.clone()));
+
+    eprintln!("LSP service created, starting server on stdin/stdout");
+    info!("LSP service created, starting server on stdin/stdout");
 
     // Create server with stdin/stdout
     let stdin = tokio::io::stdin();
     let stdout = tokio::io::stdout();
 
     // Start the server
-    info!("LSP server starting on stdin/stdout");
+    eprintln!("Starting LSP server loop");
+    info!("Starting LSP server loop");
     Server::new(stdin, stdout, socket).serve(service).await;
-    info!("LSP server shutdown complete");
+    
+    // If we reach here, the server has shut down gracefully
+    info!("Server shutdown gracefully");
 }
 
 #[cfg(feature = "lsp")]
 fn init_logging() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tracing_subscriber::EnvFilter;
 
+    // Check if a global subscriber is already set
+    // If main.rs has already initialized logging, skip re-initialization
+    if tracing::dispatcher::has_been_set() {
+        // Logging already initialized by main.rs, return Ok
+        return Ok(());
+    }
+
+    // Try different logging configurations in order of preference
     let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("bkmr=info"))
+        .or_else(|_| EnvFilter::try_new("bkmr_lsp=info"))
         .unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::fmt()
@@ -290,6 +475,25 @@ fn init_logging() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .with_target(false) // Reduce noise in LSP logs
         .with_env_filter(filter)
         .try_init()?;
+
+    Ok(())
+}
+
+/// Validate that the environment is suitable for running the LSP server
+#[cfg(feature = "lsp")]
+async fn validate_environment() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Check if we're in a proper LSP context (stdin/stdout should be available)
+    if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
+        eprintln!("Warning: bkmr lsp is designed to run as an LSP server");
+        eprintln!("It should be launched by an LSP client, not directly from a terminal");
+        eprintln!("If you're testing, pipe some LSP messages to stdin");
+    }
+
+    // Test basic async functionality
+    tokio::time::timeout(std::time::Duration::from_millis(100), async {
+        tokio::task::yield_now().await
+    })
+    .await?;
 
     Ok(())
 }

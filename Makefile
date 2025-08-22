@@ -52,9 +52,26 @@ init:  ## init
 	@tree -a  $(app_root)/db
 
 .PHONY: test
-test:  ## tests, single-threaded
+test:  ## tests, single-threaded (CLI only, for backward compatibility)
 	@rm -f $(app_root)/db/bkmr.db
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test -- --test-threads=1
+
+.PHONY: test-cli
+test-cli:  ## tests CLI functionality only, single-threaded
+	@rm -f $(app_root)/db/bkmr.db
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --features cli -- --test-threads=1
+
+.PHONY: test-lsp
+test-lsp:  ## tests LSP functionality only, single-threaded
+# 	@mkdir -p $(app_root)/db
+# 	@touch $(app_root)/db/bkmr.db
+	@rm -f $(app_root)/db/bkmr.db
+	RUST_LOG=error BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --features lsp --lib 'lsp::' -- --test-threads=1
+
+.PHONY: test-all
+test-all:  ## tests with full functionality (CLI + LSP), single-threaded
+	@rm -f $(app_root)/db/bkmr.db
+	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --features all -- --test-threads=1
 
 .PHONY: import-files
 import-files:  ## import-files for testing from tests/resources/import_test/
@@ -142,11 +159,19 @@ build-wheel:  ## build-wheel
 	maturin build --release -m bkmr/Cargo.toml
 
 .PHONY: build
-build:  ## build
+build:  ## build default (cli)
 	pushd $(pkg_src) && cargo build --release
 
+.PHONY: build-fast-lsp
+build-fast-lsp:  ## build-fast lsp
+	pushd $(pkg_src) && cargo build --features lsp
+
+.PHONY: build-fast-all
+build-fast-all:  ## build-fast cli + lsp
+	pushd $(pkg_src) && cargo build --features all
+
 .PHONY: build-fast
-build-fast:  ## build-fast
+build-fast:  ## build-fast default
 	pushd $(pkg_src) && cargo build
 
 .PHONY: install-debug

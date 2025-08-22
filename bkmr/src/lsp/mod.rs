@@ -10,6 +10,9 @@ pub mod domain;
 #[cfg(feature = "lsp")]
 pub mod services;
 
+#[cfg(all(test, feature = "lsp"))]
+mod tests;
+
 #[cfg(feature = "lsp")]
 pub use backend::BkmrLspBackend;
 
