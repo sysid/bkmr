@@ -3,10 +3,12 @@ mod integration_tests {
     use crate::lsp::backend::BkmrConfig;
     use crate::lsp::domain::{CompletionContext, Snippet};
     use crate::lsp::services::{CompletionService, LspSnippetService};
+    use serial_test::serial;
     use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Url};
 
     #[tokio::test]
+    #[serial]
     async fn given_context_when_getting_completions_then_returns_items() {
         // Arrange
         let snippet_service = Arc::new(LspSnippetService::new());
@@ -161,6 +163,7 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn given_health_check_when_called_then_returns_ok() {
         // Arrange
         let snippet_service = Arc::new(LspSnippetService::new());

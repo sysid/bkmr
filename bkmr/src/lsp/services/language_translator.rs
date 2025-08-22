@@ -4,11 +4,42 @@ use tower_lsp::lsp_types::Url;
 use tracing::{debug, instrument};
 #[cfg(feature = "lsp")]
 use regex::{Regex, RegexBuilder};
+#[cfg(feature = "lsp")]
+use std::sync::OnceLock;
 
 #[cfg(feature = "lsp")]
 use crate::lsp::domain::{LanguageInfo, LanguageRegistry, Snippet};
 #[cfg(feature = "lsp")]
-use crate::domain::error::DomainResult;
+use crate::domain::error::{DomainResult, DomainError};
+
+// Pre-compiled regex patterns for performance (modern replacement for lazy_static)
+#[cfg(feature = "lsp")]
+static LINE_COMMENT_START: OnceLock<Regex> = OnceLock::new();
+#[cfg(feature = "lsp")]
+static LINE_COMMENT_END: OnceLock<Regex> = OnceLock::new();
+#[cfg(feature = "lsp")]
+static RUST_INDENT: OnceLock<Regex> = OnceLock::new();
+
+#[cfg(feature = "lsp")]
+fn get_line_comment_start() -> &'static Regex {
+    LINE_COMMENT_START.get_or_init(|| {
+        Regex::new(r"^(\s*)//\s*(.*)$").expect("compile line comment start regex")
+    })
+}
+
+#[cfg(feature = "lsp")]
+fn get_line_comment_end() -> &'static Regex {
+    LINE_COMMENT_END.get_or_init(|| {
+        Regex::new(r"^(.+?)(\s+)//\s*(.*)$").expect("compile line comment end regex")
+    })
+}
+
+#[cfg(feature = "lsp")]
+fn get_rust_indent() -> &'static Regex {
+    RUST_INDENT.get_or_init(|| {
+        Regex::new(r"^( {4})+").expect("compile rust indentation regex")
+    })
+}
 
 /// Service for translating Rust syntax patterns to target languages
 #[cfg(feature = "lsp")]
@@ -44,20 +75,21 @@ impl LanguageTranslator {
 
         // Use line-by-line processing to preserve newlines
         let mut processed_content =
-            Self::translate_rust_patterns_line_by_line(content, &target_lang);
+            Self::translate_rust_patterns_line_by_line(content, &target_lang)
+                .map_err(|e| DomainError::Other(format!("Failed to process content line by line: {}", e)))?;
 
         // Replace Rust block comments (/* */) with target language block comments
         if let Some((target_start, target_end)) = &target_lang.block_comment {
-            if let Ok(block_comment_regex) = RegexBuilder::new(r"/\*(.*?)\*/")
+            let block_comment_regex = RegexBuilder::new(r"/\*(.*?)\*/")
                 .dot_matches_new_line(true)
                 .build()
-            {
-                processed_content = block_comment_regex
-                    .replace_all(&processed_content, |caps: &regex::Captures| {
-                        format!("{}{}{}", target_start, &caps[1], target_end)
-                    })
-                    .to_string();
-            }
+                .map_err(|e| DomainError::Other(format!("Failed to compile block comment regex: {}", e)))?;
+
+            processed_content = block_comment_regex
+                .replace_all(&processed_content, |caps: &regex::Captures| {
+                    format!("{}{}{}", target_start, &caps[1], target_end)
+                })
+                .to_string();
         }
 
         // Add file name replacement for simple relative path
@@ -77,14 +109,9 @@ impl LanguageTranslator {
     fn translate_rust_patterns_line_by_line(
         content: &str,
         target_lang: &LanguageInfo,
-    ) -> String {
+    ) -> DomainResult<String> {
         let lines: Vec<&str> = content.split('\n').collect();
         let mut processed_lines = Vec::new();
-
-        // Create regex patterns when needed
-        let line_comment_start = Regex::new(r"^(\s*)//\s*(.*)$").ok();
-        let line_comment_end = Regex::new(r"^(.+?)(\s+)//\s*(.*)$").ok();
-        let rust_indent = Regex::new(r"^( {4})+").ok();
 
         for line in lines {
             let mut processed_line = line.to_string();
@@ -92,54 +119,44 @@ impl LanguageTranslator {
             // Process line comments (//)
             if let Some(target_comment) = &target_lang.line_comment {
                 // Start of line comments
-                if let Some(ref regex) = line_comment_start {
-                    if let Some(captures) = regex.captures(line) {
-                        processed_line = format!("{}{} {}", &captures[1], target_comment, &captures[2]);
-                    }
-                    // End of line comments (after code)
-                    else if let Some(ref regex2) = line_comment_end {
-                        if let Some(captures) = regex2.captures(line) {
-                            processed_line = format!(
-                                "{}{}{} {}",
-                                &captures[1], &captures[2], target_comment, &captures[3]
-                            );
-                        }
-                    }
+                if let Some(captures) = get_line_comment_start().captures(line) {
+                    processed_line = format!("{}{} {}", &captures[1], target_comment, &captures[2]);
+                }
+                // End of line comments (after code)
+                else if let Some(captures) = get_line_comment_end().captures(line) {
+                    processed_line = format!(
+                        "{}{}{} {}",
+                        &captures[1], &captures[2], target_comment, &captures[3]
+                    );
                 }
             } else if let Some((block_start, block_end)) = &target_lang.block_comment {
                 // For languages without line comments, use block comments
-                if let Some(ref regex) = line_comment_start {
-                    if let Some(captures) = regex.captures(line) {
-                        processed_line = format!(
-                            "{}{} {} {}",
-                            &captures[1], block_start, &captures[2], block_end
-                        );
-                    } else if let Some(ref regex2) = line_comment_end {
-                        if let Some(captures) = regex2.captures(line) {
-                            processed_line = format!(
-                                "{}{}{} {} {}",
-                                &captures[1], &captures[2], block_start, &captures[3], block_end
-                            );
-                        }
-                    }
+                if let Some(captures) = get_line_comment_start().captures(line) {
+                    processed_line = format!(
+                        "{}{} {} {}",
+                        &captures[1], block_start, &captures[2], block_end
+                    );
+                } else if let Some(captures) = get_line_comment_end().captures(line) {
+                    processed_line = format!(
+                        "{}{}{} {} {}",
+                        &captures[1], &captures[2], block_start, &captures[3], block_end
+                    );
                 }
             }
 
             // Process indentation
             if target_lang.indent_char != "    " {
-                if let Some(ref regex) = rust_indent {
-                    if let Some(captures) = regex.captures(&processed_line) {
-                        let rust_indent_count = captures[0].len() / 4;
-                        let new_indent = target_lang.indent_char.repeat(rust_indent_count);
-                        processed_line = processed_line.replacen(&captures[0], &new_indent, 1);
-                    }
+                if let Some(captures) = get_rust_indent().captures(&processed_line) {
+                    let rust_indent_count = captures[0].len() / 4;
+                    let new_indent = target_lang.indent_char.repeat(rust_indent_count);
+                    processed_line = processed_line.replacen(&captures[0], &new_indent, 1);
                 }
             }
 
             processed_lines.push(processed_line);
         }
 
-        processed_lines.join("\n")
+        Ok(processed_lines.join("\n"))
     }
 }
 
