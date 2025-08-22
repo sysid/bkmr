@@ -167,9 +167,20 @@ mod tests {
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
 
     #[tokio::test]
+    #[serial]
     async fn given_context_with_query_when_getting_completions_then_returns_filtered_items() {
         // Arrange
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
@@ -193,8 +204,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn given_plain_snippet_when_creating_completion_item_then_uses_plain_text_format() {
         // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
         let plain_snippet = Snippet::new(
             1,
             "Plain Text".to_string(),
@@ -203,7 +217,15 @@ mod tests {
             vec!["plain".to_string(), "_snip_".to_string()],
         );
 
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let repository = setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
@@ -222,8 +244,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn given_regular_snippet_when_creating_completion_item_then_uses_snippet_format() {
         // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
         let regular_snippet = Snippet::new(
             1,
             "Regular Snippet".to_string(),
@@ -232,7 +257,15 @@ mod tests {
             vec!["rust".to_string(), "_snip_".to_string()],
         );
 
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let repository = setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
@@ -251,8 +284,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn given_universal_snippet_when_creating_completion_item_then_translates_content() {
         // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
         let universal_snippet = Snippet::new(
             1,
             "Universal Comment".to_string(),
@@ -261,7 +297,15 @@ mod tests {
             vec!["universal".to_string(), "_snip_".to_string()],
         );
 
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let repository = setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         let uri = Url::parse("file:///test.py").expect("parse URI");
@@ -279,12 +323,12 @@ mod tests {
         assert!(insert_text.contains("# This is a universal comment"));
     }
 
-    // TODO: failing when test-all
     #[tokio::test]
     #[serial]
     async fn given_completion_item_with_range_when_creating_then_uses_text_edit() {
         // Arrange
-        let repo = setup_test_db();  // required, test expects DB
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
         let snippet = Snippet::new(
             1,
             "Test Snippet".to_string(),
@@ -293,7 +337,15 @@ mod tests {
             vec!["rust".to_string(), "_snip_".to_string()],
         );
 
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let repository = setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
@@ -326,9 +378,20 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn given_healthy_service_when_health_check_then_returns_ok() {
         // Arrange
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         // Act

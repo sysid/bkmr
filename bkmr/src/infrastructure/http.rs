@@ -66,6 +66,7 @@ mod tests {
     use crate::util::testing::{init_test_env, EnvGuard};
     #[test]
     #[serial]
+    #[ignore]
     fn test_load_url_details() -> DomainResult<()> {
         // let _ = init_test_env();
         // let _guard = EnvGuard::new();

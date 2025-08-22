@@ -3,6 +3,7 @@ mod integration_tests {
     use crate::lsp::backend::BkmrConfig;
     use crate::lsp::domain::{CompletionContext, Snippet};
     use crate::lsp::services::{CompletionService, LspSnippetService};
+    use crate::util::testing::{init_test_env, EnvGuard};
     use serial_test::serial;
     use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Url};
@@ -11,7 +12,17 @@ mod integration_tests {
     #[serial]
     async fn given_context_when_getting_completions_then_returns_items() {
         // Arrange
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = crate::util::testing::setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let config = BkmrConfig::default();
         let service = CompletionService::with_config(snippet_service, config);
 
@@ -76,7 +87,15 @@ mod integration_tests {
             vec!["plain".to_string(), "_snip_".to_string()],
         );
 
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let repository = crate::util::testing::setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
@@ -107,7 +126,15 @@ mod integration_tests {
             vec!["rust".to_string(), "_snip_".to_string()],
         );
 
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let repository = crate::util::testing::setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
@@ -166,7 +193,17 @@ mod integration_tests {
     #[serial]
     async fn given_health_check_when_called_then_returns_ok() {
         // Arrange
-        let snippet_service = Arc::new(LspSnippetService::new());
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = crate::util::testing::setup_test_db();
+        let repository_arc = Arc::new(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
+            repository_arc,
+            embedder,
+            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
+        ));
+        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
         let service = CompletionService::new(snippet_service);
 
         // Act
