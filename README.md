@@ -325,6 +325,9 @@ bkmr lsp --no-interpolation
 - **Language-aware filtering**: Automatically shows only relevant snippets based on current file type
 - **Universal snippets**: Write snippets in natural Rust syntax that automatically adapt to target languages
 - **Template interpolation**: Server-side processing of bkmr templates with live data
+- **LSP commands**: Additional functionality like automatic filepath comment insertion
+
+For comprehensive documentation including editor configuration, troubleshooting, and advanced features, see [LSP Documentation](./docs/lsp.md).
 
 ### IntelliJ Platform Plugin
 
