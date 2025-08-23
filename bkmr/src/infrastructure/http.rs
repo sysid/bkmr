@@ -63,7 +63,6 @@ pub fn load_url_details(url: &str) -> DomainResult<(String, String, String)> {
 mod tests {
     use serial_test::serial;
     use super::*;
-    use crate::util::testing::{init_test_env, EnvGuard};
     #[test]
     #[serial]
     #[ignore]

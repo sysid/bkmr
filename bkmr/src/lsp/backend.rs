@@ -5,12 +5,12 @@
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
+use serde_json::Value;
 use tracing::{debug, error, info, instrument, warn};
 use crate::domain::error::{DomainError, DomainResult};
 use std::sync::Arc;
-use std::collections::HashMap;
 
-use crate::lsp::services::{CompletionService, LspSnippetService};
+use crate::lsp::services::{CommandService, CompletionService, DocumentService, LspSnippetService};
 use crate::lsp::domain::{CompletionContext, CompletionQuery};
 
 /// Configuration for the bkmr-lsp server
@@ -37,10 +37,7 @@ pub struct BkmrLspBackend {
     client: Client,
     config: BkmrConfig,
     completion_service: CompletionService,
-    /// Cache of document contents to extract prefixes
-    document_cache: Arc<std::sync::RwLock<HashMap<String, String>>>,
-    /// Cache of document language IDs for filetype-based filtering
-    language_cache: Arc<std::sync::RwLock<HashMap<String, String>>>,
+    document_service: DocumentService,
 }
 
 impl BkmrLspBackend {
@@ -57,79 +54,28 @@ impl BkmrLspBackend {
         // Create completion service with configuration
         let completion_service = CompletionService::with_config(snippet_service, config.clone());
         
+        // Create document service
+        let document_service = DocumentService::new();
+        
         Self {
             client,
             config,
             completion_service,
-            document_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
-            language_cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            document_service,
         }
     }
 
     /// Extract word backwards from cursor position and return both query and range
+    /// Delegates to DocumentService
     #[instrument(skip(self))]
     fn extract_snippet_query(&self, uri: &Url, position: Position) -> Option<(String, Range)> {
-        let cache = self.document_cache.read().ok()?;
-        let content = cache.get(&uri.to_string())?;
-
-        let lines: Vec<&str> = content.lines().collect();
-        if position.line as usize >= lines.len() {
-            return None;
-        }
-
-        let line = lines[position.line as usize];
-        let char_pos = position.character as usize;
-
-        if char_pos > line.len() {
-            return None;
-        }
-
-        let before_cursor = &line[..char_pos];
-        debug!(
-            "Extracting from line: '{}', char_pos: {}, before_cursor: '{}'",
-            line, char_pos, before_cursor
-        );
-
-        // Extract word backwards from cursor - find where the word starts
-        let word_start = before_cursor
-            .char_indices()
-            .rev()
-            .take_while(|(_, c)| c.is_alphanumeric() || *c == '_' || *c == '-')
-            .last()
-            .map(|(i, _)| i)
-            .unwrap_or(char_pos);
-
-        debug!("Word boundaries: start={}, end={}", word_start, char_pos);
-
-        if word_start < char_pos {
-            let word = &before_cursor[word_start..];
-            if !word.is_empty() && word.chars().any(|c| c.is_alphanumeric()) {
-                debug!("Extracted word: '{}' from position {}", word, char_pos);
-
-                // Create range for the word to be replaced
-                let range = Range {
-                    start: Position {
-                        line: position.line,
-                        character: word_start as u32,
-                    },
-                    end: Position {
-                        line: position.line,
-                        character: char_pos as u32,
-                    },
-                };
-
-                return Some((word.to_string(), range));
-            }
-        }
-
-        debug!("No valid word found at position {}", char_pos);
-        None
+        self.document_service.extract_snippet_query_sync(uri, position)
     }
 
     /// Get the language ID for a document URI
+    /// Delegates to DocumentService
     fn get_language_id(&self, uri: &Url) -> Option<String> {
-        let cache = self.language_cache.read().ok()?;
-        cache.get(&uri.to_string()).cloned()
+        self.document_service.get_language_id_sync(uri)
     }
 
     /// Check if bkmr binary is available
@@ -215,6 +161,10 @@ impl LanguageServer for BkmrLspBackend {
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                     completion_item: None,
                 }),
+                execute_command_provider: Some(ExecuteCommandOptions {
+                    commands: vec!["bkmr.insertFilepathComment".to_string()],
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
                 ..Default::default()
             },
             ..Default::default()
@@ -250,12 +200,8 @@ impl LanguageServer for BkmrLspBackend {
 
         debug!("Document opened: {} (language: {})", uri, language_id);
 
-        if let Ok(mut cache) = self.document_cache.write() {
-            cache.insert(uri.clone(), content);
-        }
-
-        if let Ok(mut lang_cache) = self.language_cache.write() {
-            lang_cache.insert(uri, language_id);
+        if let Err(e) = self.document_service.open_document(uri, language_id, content).await {
+            error!("Failed to open document: {}", e);
         }
     }
 
@@ -265,17 +211,17 @@ impl LanguageServer for BkmrLspBackend {
 
         debug!("Document changed: {}", uri);
 
-        if let Ok(mut cache) = self.document_cache.write() {
-            for change in params.content_changes {
-                if let Some(content) = cache.get_mut(&uri) {
-                    // For FULL sync, replace entire content
-                    if change.range.is_none() {
-                        *content = change.text;
-                    } else {
-                        // For incremental sync, would need more complex logic
-                        // For now, just replace entirely
-                        *content = change.text;
-                    }
+        for change in params.content_changes {
+            // For FULL sync, replace entire content
+            if change.range.is_none() {
+                if let Err(e) = self.document_service.update_document(uri.clone(), change.text).await {
+                    error!("Failed to update document: {}", e);
+                }
+            } else {
+                // For incremental sync, would need more complex logic
+                // For now, just replace entirely
+                if let Err(e) = self.document_service.update_document(uri.clone(), change.text).await {
+                    error!("Failed to update document: {}", e);
                 }
             }
         }
@@ -287,12 +233,8 @@ impl LanguageServer for BkmrLspBackend {
 
         debug!("Document closed: {}", uri);
 
-        if let Ok(mut cache) = self.document_cache.write() {
-            cache.remove(&uri);
-        }
-
-        if let Ok(mut lang_cache) = self.language_cache.write() {
-            lang_cache.remove(&uri);
+        if let Err(e) = self.document_service.close_document(uri).await {
+            error!("Failed to close document: {}", e);
         }
     }
 
@@ -383,6 +325,73 @@ impl LanguageServer for BkmrLspBackend {
                     )
                     .await;
                 Ok(Some(CompletionResponse::Array(vec![])))
+            }
+        }
+    }
+
+    #[instrument(skip(self, params))]
+    async fn execute_command(&self, params: ExecuteCommandParams) -> LspResult<Option<Value>> {
+        debug!("Execute command request: {}", params.command);
+
+        match params.command.as_str() {
+            "bkmr.insertFilepathComment" => {
+                if let Some(arg) = params.arguments.first() {
+                    if let Some(uri_str) = arg.as_str() {
+                        debug!("Executing insertFilepathComment for URI: {}", uri_str);
+
+                        match CommandService::insert_filepath_comment(uri_str) {
+                            Ok(workspace_edit) => {
+                                match self.client.apply_edit(workspace_edit).await {
+                                    Ok(response) => {
+                                        if response.applied {
+                                            info!("Successfully applied filepath comment edit");
+                                            return Ok(Some(serde_json::json!({"success": true})));
+                                        } else {
+                                            error!("Client failed to apply edit: {:?}", response.failure_reason);
+                                            return Ok(Some(serde_json::json!({
+                                                "success": false,
+                                                "error": response.failure_reason.unwrap_or_else(|| "Unknown error".to_string())
+                                            })));
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to send workspace edit to client: {}", e);
+                                        return Ok(Some(serde_json::json!({
+                                            "success": false,
+                                            "error": format!("Failed to apply edit: {}", e)
+                                        })));
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("Failed to create filepath comment edit: {}", e);
+                                return Ok(Some(serde_json::json!({
+                                    "success": false,
+                                    "error": format!("Failed to create edit: {}", e)
+                                })));
+                            }
+                        }
+                    } else {
+                        error!("Invalid argument format for insertFilepathComment");
+                        return Ok(Some(serde_json::json!({
+                            "success": false,
+                            "error": "Invalid argument format"
+                        })));
+                    }
+                } else {
+                    error!("No arguments provided for insertFilepathComment command");
+                    return Ok(Some(serde_json::json!({
+                        "success": false,
+                        "error": "No arguments provided"
+                    })));
+                }
+            }
+            _ => {
+                warn!("Unknown command: {}", params.command);
+                Ok(Some(serde_json::json!({
+                    "success": false,
+                    "error": format!("Unknown command: {}", params.command)
+                })))
             }
         }
     }

@@ -230,4 +230,5 @@ mod integration_tests {
         // Assert
         assert!(result.is_ok(), "Health check should pass");
     }
+
 }

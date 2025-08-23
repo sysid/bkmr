@@ -108,8 +108,8 @@ impl From<BookmarkBuilderError> for DomainError {
     }
 }
 
-impl From<crate::lsp::services::snippet_service::SnippetError> for DomainError {
-    fn from(e: crate::lsp::services::snippet_service::SnippetError) -> Self {
+impl From<crate::lsp::services::SnippetError> for DomainError {
+    fn from(e: crate::lsp::services::SnippetError) -> Self {
         DomainError::Other(e.to_string())
     }
 }
