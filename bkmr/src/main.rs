@@ -25,16 +25,7 @@ fn main() {
     
     // Determine if colors should be disabled
     // Force no colors for LSP command to avoid ANSI escape sequences in LSP logs
-    let no_color = cli.no_color || {
-        #[cfg(feature = "lsp")]
-        {
-            matches!(cli.command, Some(Commands::Lsp { .. }))
-        }
-        #[cfg(not(feature = "lsp"))]
-        {
-            false
-        }
-    };
+    let no_color = cli.no_color || matches!(cli.command, Some(Commands::Lsp { .. }));
     
     setup_logging(cli.debug, no_color);
 

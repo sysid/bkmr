@@ -2,24 +2,15 @@
 //!
 //! Provides Language Server Protocol functionality for snippet completion.
 
-#[cfg(feature = "lsp")]
 use tower_lsp::{Client, LanguageServer, LspService, Server};
-#[cfg(feature = "lsp")]
 use tower_lsp::jsonrpc::Result as LspResult;
-#[cfg(feature = "lsp")]
 use tower_lsp::lsp_types::*;
-#[cfg(feature = "lsp")]
 use tracing::{debug, error, info, instrument, warn};
-#[cfg(feature = "lsp")]
 use crate::domain::error::{DomainError, DomainResult};
-#[cfg(feature = "lsp")]
 use std::sync::Arc;
-#[cfg(feature = "lsp")]
 use std::collections::HashMap;
 
-#[cfg(feature = "lsp")]
 use crate::lsp::services::{CompletionService, LspSnippetService};
-#[cfg(feature = "lsp")]
 use crate::lsp::domain::{CompletionContext, CompletionQuery};
 
 /// Configuration for the bkmr-lsp server
@@ -41,7 +32,6 @@ impl Default for BkmrConfig {
 }
 
 /// Main LSP backend structure
-#[cfg(feature = "lsp")]
 #[derive(Debug)]
 pub struct BkmrLspBackend {
     client: Client,
@@ -53,7 +43,6 @@ pub struct BkmrLspBackend {
     language_cache: Arc<std::sync::RwLock<HashMap<String, String>>>,
 }
 
-#[cfg(feature = "lsp")]
 impl BkmrLspBackend {
     pub fn new(client: Client) -> Self {
         Self::with_config(client, BkmrConfig::default())
@@ -172,7 +161,6 @@ impl BkmrLspBackend {
     }
 }
 
-#[cfg(feature = "lsp")]
 #[tower_lsp::async_trait]
 impl LanguageServer for BkmrLspBackend {
     #[instrument(skip(self, params))]
@@ -401,7 +389,6 @@ impl LanguageServer for BkmrLspBackend {
 }
 
 /// Run the LSP server
-#[cfg(feature = "lsp")]
 pub async fn run_server(no_interpolation: bool) {
     // Logging is now initialized in main.rs with proper color control
     // No need for duplicate initialization here
@@ -453,7 +440,6 @@ pub async fn run_server(no_interpolation: bool) {
 // 2. Automatic detection of LSP command (forces no color for LSP)
 
 /// Validate that the environment is suitable for running the LSP server
-#[cfg(feature = "lsp")]
 async fn validate_environment() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Check if we're in a proper LSP context (stdin/stdout should be available)
     if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
@@ -471,8 +457,3 @@ async fn validate_environment() -> Result<(), Box<dyn std::error::Error + Send +
     Ok(())
 }
 
-#[cfg(not(feature = "lsp"))]
-pub async fn run_server(_no_interpolation: bool) {
-    eprintln!("LSP support not compiled. Build with --features lsp");
-    std::process::exit(1);
-}

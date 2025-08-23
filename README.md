@@ -33,7 +33,7 @@
 
 ### NEW: [Editor Integrations!](#editor-integrations)
 
-- **[bkmr-lsp](https://github.com/sysid/bkmr-lsp)**: LSP server for VS Code, Vim/Neovim, Emacs - automatic snippet completion with language-aware filtering
+- **Built-in LSP server**: Use `bkmr lsp` for VS Code, Vim/Neovim, Emacs - automatic snippet completion with language-aware filtering
 - **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin for all IDEs
 
 ## Core Features
@@ -307,9 +307,18 @@ For detailed documentation on advanced features:
 
 Instead of switching between editor and terminal, access snippets directly within the IDE.
 
-### bkmr-lsp: Universal Language Server
+### Built-in LSP Server
 
-**[bkmr-lsp](https://github.com/sysid/bkmr-lsp)** provides Language Server Protocol (LSP) integration for any LSP-compatible editor.
+**bkmr** includes a built-in Language Server Protocol (LSP) server accessible via `bkmr lsp` for any LSP-compatible editor.
+
+**Usage:**
+```bash
+# Start the LSP server (typically configured in your editor)
+bkmr lsp
+
+# Disable template interpolation if needed
+bkmr lsp --no-interpolation
+```
 
 **Key Features:**
 - **Automatic completion**: Snippets appear in completion popup while typing (no trigger characters needed)

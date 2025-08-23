@@ -2,7 +2,6 @@
 //!
 //! Provides async wrapper around bkmr bookmark service for snippet operations
 
-#[cfg(feature = "lsp")]
 use async_trait::async_trait;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::factory;
@@ -42,7 +41,6 @@ impl LspSnippetService {
     }
 }
 
-#[cfg(feature = "lsp")]
 #[async_trait]
 pub trait AsyncSnippetService: Send + Sync {
     /// Fetch snippets based on the provided filter
@@ -52,7 +50,6 @@ pub trait AsyncSnippetService: Send + Sync {
     async fn health_check(&self) -> SnippetResult<()>;
 }
 
-#[cfg(feature = "lsp")]
 #[async_trait]
 impl AsyncSnippetService for LspSnippetService {
     #[instrument(skip(self))]

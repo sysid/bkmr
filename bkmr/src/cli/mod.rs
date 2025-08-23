@@ -41,7 +41,6 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
         Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli),
         Some(Commands::Completion { shell }) => handle_completion(shell),
-        #[cfg(feature = "lsp")]
         Some(Commands::Lsp { no_interpolation }) => handle_lsp(no_interpolation),
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
@@ -95,7 +94,6 @@ fn handle_completion(shell: String) -> CliResult<()> {
     }
 }
 
-#[cfg(feature = "lsp")]
 fn handle_lsp(no_interpolation: bool) -> CliResult<()> {
     use tokio::runtime::Runtime;
     

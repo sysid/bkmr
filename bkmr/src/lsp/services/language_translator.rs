@@ -1,40 +1,28 @@
-#[cfg(feature = "lsp")]
 use tower_lsp::lsp_types::Url;
-#[cfg(feature = "lsp")]
 use tracing::{debug, instrument};
-#[cfg(feature = "lsp")]
 use regex::{Regex, RegexBuilder};
-#[cfg(feature = "lsp")]
 use std::sync::OnceLock;
 
-#[cfg(feature = "lsp")]
 use crate::lsp::domain::{LanguageInfo, LanguageRegistry, Snippet};
-#[cfg(feature = "lsp")]
 use crate::domain::error::{DomainResult, DomainError};
 
 // Pre-compiled regex patterns for performance (modern replacement for lazy_static)
-#[cfg(feature = "lsp")]
 static LINE_COMMENT_START: OnceLock<Regex> = OnceLock::new();
-#[cfg(feature = "lsp")]
 static LINE_COMMENT_END: OnceLock<Regex> = OnceLock::new();
-#[cfg(feature = "lsp")]
 static RUST_INDENT: OnceLock<Regex> = OnceLock::new();
 
-#[cfg(feature = "lsp")]
 fn get_line_comment_start() -> &'static Regex {
     LINE_COMMENT_START.get_or_init(|| {
         Regex::new(r"^(\s*)//\s*(.*)$").expect("compile line comment start regex")
     })
 }
 
-#[cfg(feature = "lsp")]
 fn get_line_comment_end() -> &'static Regex {
     LINE_COMMENT_END.get_or_init(|| {
         Regex::new(r"^(.+?)(\s+)//\s*(.*)$").expect("compile line comment end regex")
     })
 }
 
-#[cfg(feature = "lsp")]
 fn get_rust_indent() -> &'static Regex {
     RUST_INDENT.get_or_init(|| {
         Regex::new(r"^( {4})+").expect("compile rust indentation regex")
@@ -42,10 +30,8 @@ fn get_rust_indent() -> &'static Regex {
 }
 
 /// Service for translating Rust syntax patterns to target languages
-#[cfg(feature = "lsp")]
 pub struct LanguageTranslator;
 
-#[cfg(feature = "lsp")]
 impl LanguageTranslator {
     /// Translate Rust syntax patterns in universal snippets to target language
     #[instrument(skip(snippet))]
@@ -160,7 +146,7 @@ impl LanguageTranslator {
     }
 }
 
-#[cfg(all(test, feature = "lsp"))]
+#[cfg(test)]
 mod tests {
     use super::*;
 

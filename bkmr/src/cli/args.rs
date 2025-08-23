@@ -331,7 +331,6 @@ pub enum Commands {
         shell: String,
     },
     /// Start LSP (Language Server Protocol) server for snippet completion
-    #[cfg(feature = "lsp")]
     Lsp {
         /// Disable bkmr template interpolation (serve raw templates instead of processed content)
         #[arg(long, help = "Disable bkmr template interpolation")]

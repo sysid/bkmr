@@ -1,4 +1,4 @@
-#[cfg(all(test, feature = "lsp"))]
+#[cfg(test)]
 mod integration_tests {
     use crate::lsp::backend::BkmrConfig;
     use crate::lsp::domain::{CompletionContext, Snippet};

@@ -1,30 +1,21 @@
-#[cfg(feature = "lsp")]
 use crate::domain::error::{DomainError, DomainResult};
-#[cfg(feature = "lsp")]
 use std::sync::Arc;
-#[cfg(feature = "lsp")]
 use tower_lsp::lsp_types::{
     CompletionItem, CompletionItemKind, CompletionTextEdit, Documentation, InsertTextFormat,
     TextEdit,
 };
-#[cfg(feature = "lsp")]
 use tracing::{debug, instrument};
 
-#[cfg(feature = "lsp")]
 use crate::lsp::backend::BkmrConfig;
-#[cfg(feature = "lsp")]
 use crate::lsp::domain::{CompletionContext, Snippet, SnippetFilter};
-#[cfg(feature = "lsp")]
 use crate::lsp::services::{LanguageTranslator, LspSnippetService, AsyncSnippetService};
 
 /// Service for handling completion logic
-#[cfg(feature = "lsp")]
 pub struct CompletionService {
     snippet_service: Arc<LspSnippetService>,
     config: BkmrConfig,
 }
 
-#[cfg(feature = "lsp")]
 impl std::fmt::Debug for CompletionService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompletionService")
@@ -34,7 +25,6 @@ impl std::fmt::Debug for CompletionService {
     }
 }
 
-#[cfg(feature = "lsp")]
 impl CompletionService {
     pub fn new(snippet_service: Arc<LspSnippetService>) -> Self {
         Self::with_config(snippet_service, BkmrConfig::default())
@@ -158,7 +148,7 @@ impl CompletionService {
     }
 }
 
-#[cfg(all(test, feature = "lsp"))]
+#[cfg(test)]
 mod tests {
     use serial_test::serial;
     use super::*;

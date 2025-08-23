@@ -17,7 +17,6 @@ pub mod exitcode;
 pub mod util;
 
 // LSP module (optional)
-#[cfg(feature = "lsp")]
 pub mod lsp;
 
 #[cfg(test)]

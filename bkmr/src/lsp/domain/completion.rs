@@ -1,16 +1,13 @@
-#[cfg(feature = "lsp")]
 use tower_lsp::lsp_types::{Position, Range, Url};
 
 /// Represents a completion query extracted from the document
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompletionQuery {
     pub text: String,
-    #[cfg(feature = "lsp")]
     pub range: Range,
 }
 
 impl CompletionQuery {
-    #[cfg(feature = "lsp")]
     pub fn new(text: String, range: Range) -> Self {
         Self { text, range }
     }
@@ -23,16 +20,13 @@ impl CompletionQuery {
 /// Context for completion requests
 #[derive(Debug, Clone)]
 pub struct CompletionContext {
-    #[cfg(feature = "lsp")]
     pub uri: Url,
-    #[cfg(feature = "lsp")]
     pub position: Position,
     pub language_id: Option<String>,
     pub query: Option<CompletionQuery>,
 }
 
 impl CompletionContext {
-    #[cfg(feature = "lsp")]
     pub fn new(uri: Url, position: Position, language_id: Option<String>) -> Self {
         Self {
             uri,
@@ -55,7 +49,6 @@ impl CompletionContext {
         self.query.as_ref().map(|q| q.text.as_str())
     }
 
-    #[cfg(feature = "lsp")]
     pub fn get_replacement_range(&self) -> Option<Range> {
         self.query.as_ref().map(|q| q.range)
     }
