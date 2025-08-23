@@ -48,7 +48,6 @@ impl<R: BookmarkRepository> TagService for TagServiceImpl<R> {
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
-    use serial_test::serial;
     use std::collections::HashSet;
 
     // Helper function to create a TagServiceImpl with a test repository
@@ -59,7 +58,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_test_database_when_get_all_tags_then_returns_all_tags() {
         // Arrange
         let _env = init_test_env();
@@ -97,7 +95,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_test_database_when_get_related_tags_for_ccc_then_returns_correct_related_tags() {
         // Arrange
         let _env = init_test_env();
@@ -143,7 +140,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_empty_tag_when_get_related_tags_then_returns_empty_list() {
         // Arrange
         let _env = init_test_env();
@@ -162,7 +158,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_valid_tag_string_when_parse_tag_string_then_returns_correct_tags() {
         // Arrange
         let _env = init_test_env();
@@ -183,7 +178,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_empty_tag_string_when_parse_tag_string_then_returns_empty_vec() {
         // Arrange
         let _env = init_test_env();
@@ -201,7 +195,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_invalid_tag_string_when_parse_tag_string_then_returns_error() {
         // Arrange
         let _env = init_test_env();
@@ -226,7 +219,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_tag_string_with_duplicates_when_parse_tag_string_then_returns_unique_tags() {
         // Arrange
         let _env = init_test_env();

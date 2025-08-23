@@ -145,7 +145,6 @@ impl AppState {
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, EnvGuard};
-    use serial_test::serial;
     use std::env;
 
     /// Helper for environment variable cleanup
@@ -177,7 +176,6 @@ mod tests {
     // }
 
     #[test]
-    #[serial]
     fn given_no_environment_when_new_then_defaults() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -193,7 +191,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_env_vars_when_new_then_overrides() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -208,7 +205,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_global_state_when_update_then_state_changes() {
         let _guard = EnvGuard::new();
         let mut state = AppState::default();
@@ -220,7 +216,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_modified_env_when_reload_then_settings_change() {
         let _guard = EnvGuard::new();
 

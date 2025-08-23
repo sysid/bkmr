@@ -1,12 +1,10 @@
 use assert_cmd::Command;
-use serial_test::serial;
 use bkmr::util::testing::{init_test_env, EnvGuard};
 use bkmr::application::services::factory::create_bookmark_service;
 use bkmr::domain::tag::Tag;
 use std::collections::HashSet;
 
 #[test]
-#[serial]
 fn test_search_command_with_tags() {
     let _env = init_test_env();
     let _guard = EnvGuard::new();

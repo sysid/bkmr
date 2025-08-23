@@ -331,7 +331,6 @@ pub fn create_file_path_with_base(base_path_name: &str, relative_path: &str) -> 
 mod tests {
     use super::*;
     use crate::util::testing::EnvGuard;
-    use serial_test::serial;
     use std::env;
     use std::fs;
     use std::path::Path;
@@ -346,7 +345,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_default_settings() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
@@ -363,7 +361,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_specific_config_file() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
@@ -397,7 +394,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_environment_variables_override_config_file() {
         let _guard = EnvGuard::new();
 
@@ -433,7 +429,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_nonexistent_config_file() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
@@ -452,7 +447,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_environment_variables_override() {
         let _guard = EnvGuard::new();
 
@@ -471,7 +465,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_partial_environment_override() {
         let _guard = EnvGuard::new();
 
@@ -488,7 +481,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_parse_fzf_opts() {
         // Test with all options
         let opts = parse_fzf_opts("--height 80% --reverse --show-tags --no-url");
@@ -518,7 +510,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_config_file_loading() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
@@ -570,7 +561,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_environment_overrides_config_file() {
         let _guard = EnvGuard::new();
 
@@ -605,7 +595,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_default_db_path() {
         // Test the default path generation
         let path = default_db_path();
@@ -613,7 +602,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_shell_interactive_environment_override() {
         let _guard = EnvGuard::new();
         

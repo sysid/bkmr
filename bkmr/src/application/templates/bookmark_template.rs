@@ -344,13 +344,9 @@ fn parse_sections(content: &str) -> ApplicationResult<std::collections::HashMap<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::testing::init_test_env;
-    use serial_test::serial;
 
     #[test]
-    #[serial]
     fn test_template_roundtrip() {
-        let _ = init_test_env();
 
         // Create a template
         let mut tags = HashSet::new();
@@ -383,9 +379,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_template_with_empty_lines() {
-        let _ = init_test_env();
 
         let template_str = "\
             # Bookmark Template\n\
@@ -420,9 +414,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_empty_id_creates_new_bookmark() {
-        let _ = init_test_env();
 
         let template_str = "\
             # Bookmark Template\n\
@@ -445,9 +437,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_invalid_tags_returns_error() {
-        let _ = init_test_env();
 
         let template_str = "\
             # Bookmark Template\n\
@@ -474,9 +464,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_missing_section_uses_default() {
-        let _ = init_test_env();
 
         let template_str = "\
             # Bookmark Template\n\
@@ -498,9 +486,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_complex_markdown_with_dashes() {
-        let _ = init_test_env();
 
         // Create a template with complex markdown content that includes dashes
         let template_str = "\
@@ -545,9 +531,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_content_with_section_like_text() {
-        let _ = init_test_env();
 
         // Create a template with text that might be confused with section markers
         let template_str = "\
@@ -585,9 +569,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_section_marker_at_end_of_file() {
-        let _ = init_test_env();
 
         // Test with a section marker at the end of the file and no content after it
         let template_str = "\
@@ -613,9 +595,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_empty_sections() {
-        let _ = init_test_env();
 
         // Test with some empty sections
         let template_str = "\
@@ -642,9 +622,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_adjacent_sections() {
-        let _ = init_test_env();
 
         // Test with sections right next to each other
         let template_str = "\

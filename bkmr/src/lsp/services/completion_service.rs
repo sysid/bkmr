@@ -150,7 +150,6 @@ impl CompletionService {
 
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
     use crate::lsp::services::LspSnippetService;
     use tower_lsp::lsp_types::{Position, Range, Url};
@@ -162,7 +161,7 @@ mod tests {
      * 
      * All tests in this module that access the database must follow these patterns:
      * 
-     * 1. ALWAYS use #[serial] annotation to prevent concurrent database access
+     * 1. Tests run single-threaded (--test-threads=1) so no special synchronization needed
      * 2. NEVER use LspSnippetService::new() in tests - it calls factory methods that 
      *    bypass test environment setup and try to access production database
      * 3. ALWAYS use proper test service construction pattern:
@@ -179,7 +178,6 @@ mod tests {
      */
 
     #[tokio::test]
-    #[serial]
     async fn given_context_with_query_when_getting_completions_then_returns_filtered_items() {
         // Arrange
         let _env = init_test_env();
@@ -216,7 +214,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_plain_snippet_when_creating_completion_item_then_uses_plain_text_format() {
         // Arrange
         let _env = init_test_env();
@@ -256,7 +253,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_regular_snippet_when_creating_completion_item_then_uses_snippet_format() {
         // Arrange
         let _env = init_test_env();
@@ -296,7 +292,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_universal_snippet_when_creating_completion_item_then_translates_content() {
         // Arrange
         let _env = init_test_env();
@@ -336,7 +331,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_completion_item_with_range_when_creating_then_uses_text_edit() {
         // Arrange
         let _env = init_test_env();
@@ -390,7 +384,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_healthy_service_when_health_check_then_returns_ok() {
         // Arrange
         let _env = init_test_env();

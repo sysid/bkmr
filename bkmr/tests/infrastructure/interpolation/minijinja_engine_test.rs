@@ -5,7 +5,6 @@ use bkmr::domain::tag::Tag;
 use bkmr::infrastructure::interpolation::minijinja_engine::MiniJinjaEngine;
 use bkmr::util::testing::init_test_env;
 use chrono::{Datelike, Utc};
-use serial_test::serial;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -62,7 +61,6 @@ fn create_test_bookmark() -> Bookmark {
 }
 
 #[test]
-#[serial]
 fn test_render_static_url() {
     let _test_env = init_test_env();
     let engine = MiniJinjaEngine::new(Arc::new(MockShellExecutor::new()));
@@ -74,7 +72,6 @@ fn test_render_static_url() {
 }
 
 #[test]
-#[serial]
 fn test_render_template_url() {
     let _test_env = init_test_env();
     std::env::set_var("USER", "testuser");
@@ -88,7 +85,6 @@ fn test_render_template_url() {
 }
 
 #[test]
-#[serial]
 fn test_render_bookmark_url() {
     let _test_env = init_test_env();
     std::env::set_var("USER", "testuser");
@@ -105,7 +101,6 @@ fn test_render_bookmark_url() {
 }
 
 #[test]
-#[serial]
 fn test_date_filters() {
     let _test_env = init_test_env();
     let engine = MiniJinjaEngine::new(Arc::new(MockShellExecutor::new()));
@@ -121,7 +116,6 @@ fn test_date_filters() {
 }
 
 #[test]
-#[serial]
 fn test_shell_filter() {
     let _test_env = init_test_env();
     let engine = MiniJinjaEngine::new(Arc::new(MockShellExecutor::new()));

@@ -1,11 +1,9 @@
 use assert_cmd::Command;
 use bkmr::util::testing::EnvGuard;
 use predicates::prelude::*;
-use serial_test::serial;
 use std::fs;
 
 #[test]
-#[serial]
 fn given_debug_flag_when_running_then_enables_debug_mode() {
     // let config = init_test_env();
     // let _guard = EnvGuard::new();
@@ -17,7 +15,6 @@ fn given_debug_flag_when_running_then_enables_debug_mode() {
 }
 
 #[test]
-#[serial]
 #[ignore = "not implemented"]
 fn given_path_when_creating_database_then_creates_successfully() {
     // let config = init_test_env();
@@ -31,7 +28,6 @@ fn given_path_when_creating_database_then_creates_successfully() {
 }
 
 #[test]
-#[serial]
 fn given_bookmark_ids_when_showing_then_displays_correct_entries() {
     // let config = init_test_env();
     let _guard = EnvGuard::new();

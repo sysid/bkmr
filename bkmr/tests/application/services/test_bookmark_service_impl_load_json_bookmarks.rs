@@ -4,11 +4,9 @@ use bkmr::application::services::factory;
 use bkmr::domain::repositories::repository::BookmarkRepository;
 use bkmr::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use bkmr::util::testing::{init_test_env, EnvGuard};
-use serial_test::serial;
 use std::path::Path;
 
 #[test]
-#[serial]
 fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_database(
 ) -> ApplicationResult<()> {
     // Arrange

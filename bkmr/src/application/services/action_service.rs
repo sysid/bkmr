@@ -121,7 +121,6 @@ mod tests {
     use crate::domain::tag::Tag;
     use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
     use crate::util::testing::{init_test_env, EnvGuard};
-    use serial_test::serial;
     use std::collections::HashSet;
     use std::sync::Arc;
 
@@ -224,7 +223,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_shell_bookmark_when_execute_default_action_with_no_edit_then_uses_direct_shell_action() {
         // Arrange
         let _env = init_test_env();
@@ -254,7 +252,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_non_shell_bookmark_when_execute_default_action_with_no_edit_then_uses_normal_resolver() {
         // Arrange
         let _env = init_test_env();
@@ -285,7 +282,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_shell_bookmark_when_execute_default_action_with_no_edit_false_then_uses_normal_resolver() {
         // Arrange
         let _env = init_test_env();
@@ -315,7 +311,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_bookmark_without_id_when_execute_default_action_with_options_then_still_executes() {
         // Arrange
         let _env = init_test_env();

@@ -1,18 +1,13 @@
 // tests/test_import.rs
 
-use bkmr::application::services::factory::create_bookmark_service;
-use bkmr::util::testing::{init_test_env, setup_test_db};
-use serial_test::serial;
+use bkmr::util::test_context::TestContext;
 use std::fs;
 use tempfile::TempDir;
 
 #[test]
-#[serial]
 fn test_import_files_with_yaml_frontmatter() {
-    let _env = init_test_env();
-    let _db = setup_test_db();
-    
-    let service = create_bookmark_service();
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
     
     // Test importing files with YAML frontmatter
     let test_dir = "tests/resources/import_test";
@@ -20,6 +15,9 @@ fn test_import_files_with_yaml_frontmatter() {
     
     // First import (should add files)
     let result = service.import_files(&paths, false, false, false, false, None);
+    if let Err(e) = &result {
+        eprintln!("Import failed: {:?}", e);
+    }
     assert!(result.is_ok(), "Import should succeed");
     
     let (added, updated, deleted) = result.unwrap();
@@ -29,12 +27,9 @@ fn test_import_files_with_yaml_frontmatter() {
 }
 
 #[test]
-#[serial] 
 fn test_import_files_duplicate_name_without_update() {
-    let _env = init_test_env();
-    let _db = setup_test_db();
-    
-    let service = create_bookmark_service();
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
     
     // Create a temporary file with duplicate name
     let temp_dir = TempDir::new().unwrap();
@@ -75,12 +70,9 @@ echo "another duplicate"
 }
 
 #[test]
-#[serial]
 fn test_import_files_update_existing() {
-    let _env = init_test_env();
-    let _db = setup_test_db();
-    
-    let service = create_bookmark_service();
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
     
     // Create a temporary file
     let temp_dir = TempDir::new().unwrap();
@@ -121,12 +113,9 @@ echo "version 2"
 }
 
 #[test]
-#[serial]
 fn test_import_files_dry_run() {
-    let _env = init_test_env();
-    let _db = setup_test_db();
-    
-    let service = create_bookmark_service();
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
     
     let test_dir = "tests/resources/import_test";
     let paths = vec![test_dir.to_string()];
@@ -148,12 +137,9 @@ fn test_import_files_dry_run() {
 }
 
 #[test]
-#[serial]
 fn test_import_files_hash_comments() {
-    let _env = init_test_env();
-    let _db = setup_test_db();
-    
-    let service = create_bookmark_service();
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
     
     // Create a temporary file with hash-style frontmatter
     let temp_dir = TempDir::new().unwrap();
@@ -178,12 +164,9 @@ ls -la
 }
 
 #[test]
-#[serial]
 fn test_import_files_missing_name_field() {
-    let _env = init_test_env();
-    let _db = setup_test_db();
-    
-    let service = create_bookmark_service();
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
     
     // Create a file without required name field
     let temp_dir = TempDir::new().unwrap();

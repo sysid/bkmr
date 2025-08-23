@@ -85,10 +85,8 @@ impl OpenAiEmbedding {
 mod tests {
     use super::*;
     use crate::util::testing::init_test_env;
-    use serial_test::serial;
 
     #[test]
-    #[serial]
     fn test_openai_embedding() {
         let _ = init_test_env();
         if env::var("OPENAI_API_KEY").is_err() {
@@ -104,7 +102,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_openai_embedding_fails_without_api_key() {
         // Temporarily unset the API key if it exists
         let key_exists = env::var("OPENAI_API_KEY").is_ok();

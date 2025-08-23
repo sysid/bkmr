@@ -313,11 +313,9 @@ mod tests {
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
     use crate::application::services::bookmark_service_impl::BookmarkServiceImpl;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
-    use serial_test::serial;
     use std::sync::Arc;
 
     #[test]
-    #[serial]
     fn given_valid_snippet_data_when_creating_then_returns_snippet_with_id() {
         // Arrange
         let _env = init_test_env();
@@ -353,7 +351,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_language_filter_when_listing_snippets_then_returns_filtered_results() {
         // Arrange
         let _env = init_test_env();
@@ -388,7 +385,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_existing_snippet_when_updating_then_preserves_system_tag() {
         // Arrange
         let _env = init_test_env();
@@ -436,7 +432,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_non_snippet_bookmark_when_getting_as_snippet_then_returns_error() {
         // Arrange
         let _env = init_test_env();
@@ -476,7 +471,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_non_existent_id_when_deleting_snippet_then_returns_not_found() {
         // Arrange
         let _env = init_test_env();

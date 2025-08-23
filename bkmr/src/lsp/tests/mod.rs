@@ -4,7 +4,6 @@ mod integration_tests {
     use crate::lsp::domain::{CompletionContext, Snippet};
     use crate::lsp::services::{CompletionService, LspSnippetService};
     use crate::util::testing::{init_test_env, EnvGuard};
-    use serial_test::serial;
     use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Url};
 
@@ -13,7 +12,7 @@ mod integration_tests {
      * 
      * These integration tests require careful database access patterns:
      * 
-     * 1. ALWAYS use #[serial] annotation for any test that accesses database
+     * 1. Tests run single-threaded (--test-threads=1) so no special synchronization needed
      * 2. NEVER use LspSnippetService::new() - it bypasses test environment
      * 3. ALWAYS use proper test service construction:
      *    - init_test_env() + EnvGuard::new() + setup_test_db()
@@ -27,7 +26,6 @@ mod integration_tests {
      */
 
     #[tokio::test]
-    #[serial]
     async fn given_context_when_getting_completions_then_returns_items() {
         // Arrange
         let _env = init_test_env();
@@ -208,7 +206,6 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_health_check_when_called_then_returns_ok() {
         // Arrange
         let _env = init_test_env();
@@ -232,7 +229,6 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_create_snippet_command_when_executed_then_creates_snippet() {
         // Arrange
         use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
@@ -293,7 +289,6 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_list_snippets_command_when_executed_then_returns_filtered_list() {
         // Arrange
         use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
@@ -377,7 +372,6 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_update_snippet_command_when_executed_then_updates_and_preserves_system_tag() {
         // Arrange
         use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
@@ -457,7 +451,6 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    #[serial]
     async fn given_delete_snippet_command_when_executed_then_deletes_snippet() {
         // Arrange
         use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
