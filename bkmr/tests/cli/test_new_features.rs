@@ -4,7 +4,6 @@ use bkmr::domain::repositories::repository::BookmarkRepository;
 use bkmr::domain::tag::Tag;
 use bkmr::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use bkmr::util::testing::{init_test_env, EnvGuard};
-use serial_test::serial;
 use std::collections::HashSet;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -22,7 +21,6 @@ fn create_test_repository() -> SqliteBookmarkRepository {
 }
 
 #[test]
-#[serial]
 fn given_stdin_content_when_add_command_with_stdin_flag_then_stores_content_in_url_column() {
     // Arrange
     let _env = init_test_env();
@@ -92,7 +90,6 @@ fn given_stdin_content_when_add_command_with_stdin_flag_then_stores_content_in_u
 }
 
 #[test]
-#[serial]
 fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_without_interaction() {
     // Arrange
     let _env = init_test_env();
@@ -147,7 +144,6 @@ fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_withou
 }
 
 #[test]
-#[serial]
 fn given_non_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_normally() {
     // Arrange
     let _env = init_test_env();
@@ -184,7 +180,6 @@ fn given_non_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_no
 }
 
 #[test]
-#[serial]
 fn given_add_command_with_stdin_and_type_shell_when_executed_then_creates_shell_bookmark() {
     // Arrange
     let _env = init_test_env();
@@ -225,7 +220,6 @@ fn given_add_command_with_stdin_and_type_shell_when_executed_then_creates_shell_
 }
 
 #[test]
-#[serial]
 fn given_stdin_with_multiline_content_when_add_command_then_preserves_formatting() {
     // Arrange
     let _env = init_test_env();

@@ -61,10 +61,8 @@ pub fn load_url_details(url: &str) -> DomainResult<(String, String, String)> {
 // TODO: tests sporadically failing (example.com issue?)
 #[cfg(test)]
 mod tests {
-    use serial_test::serial;
     use super::*;
     #[test]
-    #[serial]
     #[ignore]
     fn test_load_url_details() -> DomainResult<()> {
         // let _ = init_test_env();
@@ -87,7 +85,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_check_website() {
         // This test depends on network availability.
         let (accessible, duration) = check_website("https://google.com", 2000);

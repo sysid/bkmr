@@ -49,3 +49,27 @@ impl ClipboardService for ClipboardServiceImpl {
         }
     }
 }
+
+/// Dummy clipboard service for testing that doesn't interact with system clipboard
+#[derive(Debug)]
+pub struct DummyClipboardService;
+
+impl DummyClipboardService {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for DummyClipboardService {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClipboardService for DummyClipboardService {
+    #[instrument(level = "trace")]
+    fn copy_to_clipboard(&self, _text: &str) -> DomainResult<()> {
+        // For testing, we just pretend to copy to clipboard
+        Ok(())
+    }
+}

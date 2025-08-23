@@ -372,9 +372,63 @@ If you're upgrading from a previous version, `bkmr` will automatically:
 2. Create a timestamped backup of your current database
 3. Apply migrations to support newer features
 
+## Development
+
+### Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/sysid/bkmr.git
+cd bkmr
+
+# Build debug version
+cargo build
+
+# Build release version
+cargo build --release
+```
+
+### Running Tests
+
+**IMPORTANT**: All tests must be run single-threaded due to shared SQLite database state:
+
+```bash
+# Run tests (REQUIRED: single-threaded)
+cargo test -- --test-threads=1
+
+# Or use the Makefile (pre-configured for single-threaded execution)
+make test
+
+# Run with visible output
+cargo test -- --test-threads=1 --nocapture
+```
+
+**Why single-threaded?**
+- Tests share a common SQLite database and environment variables
+- Parallel execution causes race conditions and intermittent failures
+- Single-threaded execution ensures reliable, deterministic test results
+
+### Development Commands
+
+```bash
+# Format code
+make format
+
+# Run linter
+make lint
+
+# Clean build artifacts
+make clean
+
+# Install development version
+make install
+```
+
 ## Community and Contributions
 
 We welcome contributions! Please check our [Contributing Guidelines](./CONTRIBUTING.md) to get started.
+
+**For developers**: Remember to always run tests with `--test-threads=1` to avoid database conflicts.
 
 <!-- Badges -->
 [build-image]: https://github.com/sysid/bkmr/actions/workflows/release_wheels.yml/badge.svg

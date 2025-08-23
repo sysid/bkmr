@@ -819,7 +819,6 @@ mod tests {
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
-    use serial_test::serial;
     use std::collections::HashSet;
 
     // Helper function to create a BookmarkServiceImpl with a test repository
@@ -835,7 +834,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_valid_id_when_get_bookmark_then_returns_correct_bookmark() {
         // Arrange
         let _env = init_test_env();
@@ -854,7 +852,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_invalid_id_when_get_bookmark_then_returns_none() {
         // Arrange
         let _env = init_test_env();
@@ -869,7 +866,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_negative_id_when_get_bookmark_then_returns_error() {
         // Arrange
         let _env = init_test_env();
@@ -893,7 +889,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_valid_url_when_get_bookmark_by_url_then_returns_correct_bookmark() {
         // Arrange
         let _env = init_test_env();
@@ -913,7 +908,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_new_bookmark_when_add_bookmark_then_creates_and_returns_bookmark() {
         // Arrange
         let _env = init_test_env();
@@ -947,7 +941,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_existing_url_when_add_bookmark_then_returns_error() {
         // Arrange
         let _env = init_test_env();
@@ -1028,7 +1021,6 @@ mod tests {
     // }
 
     #[test]
-    #[serial]
     fn given_existing_bookmark_when_add_tags_then_adds_tags_correctly() {
         // Arrange
         let _env = init_test_env();
@@ -1055,7 +1047,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_existing_bookmark_when_remove_tags_then_removes_tags_correctly() {
         // Arrange
         let _env = init_test_env();
@@ -1090,7 +1081,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_existing_bookmark_when_replace_tags_then_replaces_all_tags() {
         // Arrange
         let _env = init_test_env();
@@ -1118,7 +1108,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_existing_bookmark_when_record_access_then_increments_access_count() {
         // Arrange
         let _env = init_test_env();
@@ -1142,7 +1131,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_test_database_when_delete_bookmark_then_removes_bookmark() {
         // Arrange
         let _env = init_test_env();
@@ -1234,7 +1222,6 @@ mod tests {
     // }
 
     #[test]
-    #[serial]
     fn given_text_query_when_search_by_text_then_returns_matching_bookmarks() {
         // Arrange
         let _env = init_test_env();
@@ -1263,7 +1250,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_test_database_when_get_all_bookmarks_then_returns_all_bookmarks() {
         // Arrange
         let _env = init_test_env();
@@ -1288,7 +1274,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_count_when_get_random_bookmarks_then_returns_random_selection() {
         // Arrange
         let _env = init_test_env();
@@ -1326,7 +1311,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_test_database_when_get_bookmarks_without_embeddings_then_returns_correct_bookmarks() {
         // Arrange
         let _env = init_test_env();
@@ -1347,7 +1331,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn given_bookmark_when_set_embeddable_then_updates_flag() {
         // Arrange
         let _env = init_test_env();

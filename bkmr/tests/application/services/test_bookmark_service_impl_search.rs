@@ -9,7 +9,6 @@ use bkmr::domain::tag::Tag;
 use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::infrastructure::repositories::json_import_repository::JsonImportRepository;
 use bkmr::util::testing::{init_test_env, setup_test_db, EnvGuard};
-use serial_test::serial;
 
 // Helper function to create a test service
 fn create_test_service() -> impl BookmarkService {
@@ -62,7 +61,6 @@ fn search_bookmarks(
 }
 
 #[test]
-#[serial]
 fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_results() {
     // Arrange
     let _env = init_test_env();
@@ -148,7 +146,6 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
 }
 
 #[test]
-#[serial]
 fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filters_correctly() {
     // Arrange
     let _env = init_test_env();
@@ -215,7 +212,6 @@ fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filte
 }
 
 #[test]
-#[serial]
 fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only() {
     // Arrange
     let _env = init_test_env();
@@ -266,7 +262,6 @@ fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only()
 }
 
 #[test]
-#[serial]
 fn given_tag_prefix_when_search_bookmarks_then_returns_matching_prefixed_tags() {
     // Arrange
     let _env = init_test_env();
@@ -304,7 +299,6 @@ fn given_tag_prefix_when_search_bookmarks_then_returns_matching_prefixed_tags() 
 }
 
 #[test]
-#[serial]
 fn given_negated_tag_filters_when_search_bookmarks_then_excludes_correctly() {
     // Arrange
     let _env = init_test_env();
@@ -353,7 +347,6 @@ fn given_negated_tag_filters_when_search_bookmarks_then_excludes_correctly() {
 }
 
 #[test]
-#[serial]
 fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_and_limits() {
     // Arrange
     let _env = init_test_env();
@@ -427,7 +420,6 @@ fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_a
 }
 
 #[test]
-#[serial]
 fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_apply_in_correct_order(
 ) {
     // Arrange
@@ -519,7 +511,6 @@ fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_a
 }
 
 #[test]
-#[serial]
 fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     // Arrange
     let _env = init_test_env();

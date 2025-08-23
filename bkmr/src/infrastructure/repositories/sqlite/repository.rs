@@ -699,7 +699,6 @@ mod tests {
     use crate::app_state::AppState;
     use crate::domain::repositories::query::TextSearchSpecification;
     use crate::util::testing::{init_test_env, setup_test_db};
-    use serial_test::serial;
     use std::collections::HashSet;
 
     fn create_test_bookmark(
@@ -718,7 +717,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_add_and_get_by_id() -> Result<(), DomainError> {
         let repo = setup_test_db();
 
@@ -751,7 +749,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_by_url() -> Result<(), DomainError> {
         let repo = setup_test_db();
 
@@ -777,7 +774,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_update() -> Result<(), DomainError> {
         let repo = setup_test_db();
 
@@ -815,7 +811,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_delete_and_reindex() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -859,7 +854,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search() -> Result<(), DomainError> {
         let repo = setup_test_db();
 
@@ -903,7 +897,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_all_tags() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -942,7 +935,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_related_tags() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -981,7 +973,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_random() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1012,7 +1003,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_without_embeddings() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1037,7 +1027,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_exists_by_url() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1097,7 +1086,6 @@ mod tests {
     // }
 
     #[test]
-    #[serial]
     fn test_get_by_invalid_id() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1112,7 +1100,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_all_tags_as_vector() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1156,7 +1143,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_check_schema_migrations_exists() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1194,7 +1180,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_check_embedding_column_exists() -> Result<(), DomainError> {
         let repo = setup_test_db();
         repo.empty_bookmark_table()?;
@@ -1223,7 +1208,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_setup_test_db() {
         let _ = init_test_env();
         let repo = setup_test_db();
@@ -1232,7 +1216,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_all_bookmark_ids() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1256,7 +1239,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_bookmarks_by_ids_with_valid_ids() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1280,7 +1262,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_bookmarks_by_ids_with_empty_ids() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1299,7 +1280,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_bookmarks_by_ids_with_nonexistent_ids() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1318,7 +1298,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_get_bookmarks_by_ids_with_mixed_ids() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1357,7 +1336,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search_with_text_query_only() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1389,7 +1367,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search_with_empty_text_query() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1418,7 +1395,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search_with_no_text_query() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1447,7 +1423,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search_with_text_and_tag_filters() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1487,7 +1462,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search_with_nonmatching_text_query() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
@@ -1509,7 +1483,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_search_with_mixed_filters() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();

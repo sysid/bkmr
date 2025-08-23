@@ -183,7 +183,6 @@ pub fn teardown_temp_dir(temp_dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
 
     #[test]
     fn my_test() {
@@ -194,7 +193,6 @@ mod tests {
     }
 
     #[test]
-    #[serial]
     fn test_setup_test_db() {
         let _ = init_test_env();
         let repo = setup_test_db();

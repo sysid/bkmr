@@ -5,6 +5,7 @@
 
 pub mod backend;
 pub mod domain;
+pub mod error;
 pub mod services;
 
 #[cfg(test)]

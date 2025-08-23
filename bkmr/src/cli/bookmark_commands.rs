@@ -1159,7 +1159,6 @@ pub fn import_files(cli: Cli) -> CliResult<()> {
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
-    use serial_test::serial;
 
     #[test]
     fn test_get_ids_valid() {
@@ -1190,7 +1189,6 @@ mod tests {
 
 
     #[test]
-    #[serial]
     fn test_pre_fill_database() {
         // Arrange
         let _ = init_test_env();

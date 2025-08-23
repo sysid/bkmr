@@ -68,7 +68,6 @@ atty = "0.2"
 [dev-dependencies]
 assert_cmd = "2.0.17"
 float-cmp = "0.10.0"
-serial_test = "3.2.0"
 
 [build-dependencies]
 pyo3 = { version = "0.23.5", features = ["extension-module", "anyhow"] }

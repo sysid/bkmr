@@ -386,7 +386,6 @@ pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
 mod display_tests {
     use super::*;
     use chrono::Utc;
-    use serial_test::serial;
     use std::{fs, path::Path};
 
     fn create_test_bookmarks() -> Vec<DisplayBookmark> {
@@ -446,7 +445,6 @@ mod display_tests {
     }
 
     #[test]
-    #[serial]
     fn test_show_bookmarks_visual() {
         println!("\n\nTEST: Colored Bookmark Display - Default Fields\n");
         let bookmarks = create_test_bookmarks();
@@ -454,7 +452,6 @@ mod display_tests {
     }
 
     #[test]
-    #[serial]
     fn test_show_bookmarks_visual_all_fields() {
         println!("\n\nTEST: Colored Bookmark Display - All Fields\n");
         let bookmarks = create_test_bookmarks();
@@ -476,7 +473,6 @@ mod display_tests {
     }
 
     #[test]
-    #[serial]
     fn test_show_bookmarks_empty() {
         println!("\n\nTEST: Empty Bookmark List\n");
         let empty_bookmarks: Vec<DisplayBookmark> = Vec::new();
@@ -484,7 +480,6 @@ mod display_tests {
     }
 
     #[test]
-    #[serial]
     fn test_output_to_file() -> io::Result<()> {
         use std::io::Write;
 

@@ -134,7 +134,6 @@ mod tests {
     use super::*;
     use crate::domain::tag::Tag;
     use crate::util::testing::init_test_env;
-    use serial_test::serial;
     use std::collections::HashSet;
 
     // This is more of an integration test and requires manual editing
@@ -142,7 +141,6 @@ mod tests {
     // A mock editor function that writes predetermined content to a file
     #[test]
     #[ignore = "Manual test"]
-    #[serial]
     fn test_edit_bookmark_with_template() {
         let _ = init_test_env();
 

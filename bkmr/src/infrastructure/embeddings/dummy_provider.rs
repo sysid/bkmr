@@ -21,10 +21,8 @@ impl Embedder for DummyEmbedding {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serial_test::serial;
 
     #[test]
-    #[serial]
     fn test_dummy_embedding_returns_none() {
         let dummy = DummyEmbedding;
         let result = dummy.embed("test text").unwrap();
