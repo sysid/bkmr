@@ -166,6 +166,28 @@ mod tests {
     use tower_lsp::lsp_types::{Position, Range, Url};
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
 
+    // TODO: consolidate this
+    /*
+     * IMPORTANT: LSP Test Database Synchronization Requirements
+     * 
+     * All tests in this module that access the database must follow these patterns:
+     * 
+     * 1. ALWAYS use #[serial] annotation to prevent concurrent database access
+     * 2. NEVER use LspSnippetService::new() in tests - it calls factory methods that 
+     *    bypass test environment setup and try to access production database
+     * 3. ALWAYS use proper test service construction pattern:
+     *    - Call init_test_env(), EnvGuard::new(), setup_test_db()
+     *    - Manually construct BookmarkServiceImpl with test repository
+     *    - Use LspSnippetService::with_service() constructor
+     * 
+     * This was discovered when make test-all was failing due to race conditions.
+     * The issue was that LspSnippetService::new() -> factory::create_bookmark_service()
+     * would try to read from global AppState and access a database that doesn't exist
+     * in the test environment, causing "Database not found" errors.
+     * 
+     * See CLAUDE.md for complete details on this synchronization issue.
+     */
+
     #[tokio::test]
     #[serial]
     async fn given_context_with_query_when_getting_completions_then_returns_filtered_items() {

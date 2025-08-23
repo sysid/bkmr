@@ -8,6 +8,24 @@ mod integration_tests {
     use std::sync::Arc;
     use tower_lsp::lsp_types::{Position, Url};
 
+    /*
+     * IMPORTANT: LSP Integration Test Database Synchronization
+     * 
+     * These integration tests require careful database access patterns:
+     * 
+     * 1. ALWAYS use #[serial] annotation for any test that accesses database
+     * 2. NEVER use LspSnippetService::new() - it bypasses test environment
+     * 3. ALWAYS use proper test service construction:
+     *    - init_test_env() + EnvGuard::new() + setup_test_db()
+     *    - Manual BookmarkServiceImpl construction with test repository
+     *    - LspSnippetService::with_service() constructor
+     * 
+     * These tests were failing in make test-all due to factory method calls
+     * trying to access production database configuration instead of test setup.
+     * 
+     * See CLAUDE.md and completion_service.rs tests for full documentation.
+     */
+
     #[tokio::test]
     #[serial]
     async fn given_context_when_getting_completions_then_returns_items() {

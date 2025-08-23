@@ -403,15 +403,9 @@ impl LanguageServer for BkmrLspBackend {
 /// Run the LSP server
 #[cfg(feature = "lsp")]
 pub async fn run_server(no_interpolation: bool) {
-    // Initialize logging with fallback if it fails
-    let result = init_logging();
-    if let Err(e) = result {
-        eprintln!(
-            "Failed to initialize logging: {}, continuing without structured logging",
-            e
-        );
-    }
-
+    // Logging is now initialized in main.rs with proper color control
+    // No need for duplicate initialization here
+    
     // Get version from Cargo.toml
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("Starting bkmr LSP server v{}", version);
@@ -453,31 +447,10 @@ pub async fn run_server(no_interpolation: bool) {
     info!("Server shutdown gracefully");
 }
 
-#[cfg(feature = "lsp")]
-fn init_logging() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use tracing_subscriber::EnvFilter;
-
-    // Check if a global subscriber is already set
-    // If main.rs has already initialized logging, skip re-initialization
-    if tracing::dispatcher::has_been_set() {
-        // Logging already initialized by main.rs, return Ok
-        return Ok(());
-    }
-
-    // Try different logging configurations in order of preference
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("bkmr_lsp=info"))
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .with_ansi(false) // Disable color codes for LSP compatibility
-        .with_target(false) // Reduce noise in LSP logs
-        .with_env_filter(filter)
-        .try_init()?;
-
-    Ok(())
-}
+// Logging initialization has been moved to main.rs for centralization
+// The main.rs setup_logging function now handles color control based on:
+// 1. The global --no-color flag
+// 2. Automatic detection of LSP command (forces no color for LSP)
 
 /// Validate that the environment is suitable for running the LSP server
 #[cfg(feature = "lsp")]

@@ -21,6 +21,9 @@ pub struct Cli {
     #[arg(long = "openai", help = "use OpenAI API to embed bookmarks")]
     pub openai: bool,
 
+    #[arg(long = "no-color", help = "Disable colored output")]
+    pub no_color: bool,
+
     #[arg(
         long = "generate-config",
         help = "bkmr --generate-config > ~/.config/bkmr/config.toml"
