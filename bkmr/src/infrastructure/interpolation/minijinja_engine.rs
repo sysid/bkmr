@@ -154,7 +154,6 @@ impl SafeShellExecutor {
         Self
     }
 
-    #[expect(dead_code)]
     fn is_command_safe(&self, cmd: &str) -> bool {
         let dangerous_patterns = [
             ";", "|", "&", ">", "<", "`", "$", "(", ")", "{", "}", "[", "]", "sudo", "rm", "mv",

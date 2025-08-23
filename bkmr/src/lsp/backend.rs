@@ -12,6 +12,7 @@ use std::sync::Arc;
 
 use crate::lsp::services::{CommandService, CompletionService, DocumentService, LspSnippetService};
 use crate::lsp::domain::{CompletionContext, CompletionQuery};
+use crate::lsp::error::LspError;
 
 /// Configuration for the bkmr-lsp server
 #[derive(Debug, Clone)]
@@ -38,6 +39,7 @@ pub struct BkmrLspBackend {
     config: BkmrConfig,
     completion_service: CompletionService,
     document_service: DocumentService,
+    command_service: CommandService,
 }
 
 impl BkmrLspBackend {
@@ -57,11 +59,35 @@ impl BkmrLspBackend {
         // Create document service
         let document_service = DocumentService::new();
         
+        // Create command service
+        let command_service = CommandService::new();
+        
         Self {
             client,
             config,
             completion_service,
             document_service,
+            command_service,
+        }
+    }
+
+    /// Create BkmrLspBackend with specific services (for testing)
+    #[cfg(test)]
+    pub fn with_services(
+        client: Client,
+        config: BkmrConfig,
+        completion_service: CompletionService,
+        document_service: DocumentService,
+        command_service: CommandService,
+    ) -> Self {
+        debug!("Creating BkmrLspBackend with test services");
+        
+        Self {
+            client,
+            config,
+            completion_service,
+            document_service,
+            command_service,
         }
     }
 
@@ -162,7 +188,14 @@ impl LanguageServer for BkmrLspBackend {
                     completion_item: None,
                 }),
                 execute_command_provider: Some(ExecuteCommandOptions {
-                    commands: vec!["bkmr.insertFilepathComment".to_string()],
+                    commands: vec![
+                        "bkmr.insertFilepathComment".to_string(),
+                        "bkmr.createSnippet".to_string(),
+                        "bkmr.listSnippets".to_string(),
+                        "bkmr.getSnippet".to_string(),
+                        "bkmr.updateSnippet".to_string(),
+                        "bkmr.deleteSnippet".to_string(),
+                    ],
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 }),
                 ..Default::default()
@@ -387,6 +420,99 @@ impl LanguageServer for BkmrLspBackend {
                         "success": false,
                         "error": "No arguments provided"
                     })));
+                }
+            }
+            "bkmr.createSnippet" => {
+                // Parse arguments: {"url": "...", "title": "...", "description": "...", "tags": [...]}
+                if let Some(arg) = params.arguments.first() {
+                    let url = arg.get("url").and_then(|v| v.as_str());
+                    let title = arg.get("title").and_then(|v| v.as_str());
+                    let description = arg.get("description").and_then(|v| v.as_str());
+                    let tags = arg.get("tags")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect::<Vec<_>>()
+                        )
+                        .unwrap_or_default();
+                    
+                    if let (Some(url), Some(title)) = (url, title) {
+                        match self.command_service.create_snippet(url, title, description, tags) {
+                            Ok(result) => Ok(Some(result)),
+                            Err(e) => Ok(Some(e.to_lsp_response())),
+                        }
+                    } else {
+                        Ok(Some(LspError::InvalidInput("Missing required fields: url and title".to_string()).to_lsp_response()))
+                    }
+                } else {
+                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                }
+            }
+            "bkmr.listSnippets" => {
+                // Parse optional language parameter
+                let language_id = params.arguments.first()
+                    .and_then(|arg| arg.get("language"))
+                    .and_then(|v| v.as_str());
+                
+                match self.command_service.list_snippets(language_id) {
+                    Ok(result) => Ok(Some(result)),
+                    Err(e) => Ok(Some(e.to_lsp_response())),
+                }
+            }
+            "bkmr.getSnippet" => {
+                // Parse ID parameter
+                if let Some(arg) = params.arguments.first() {
+                    if let Some(id) = arg.get("id").and_then(|v| v.as_i64()) {
+                        match self.command_service.get_snippet(id as i32) {
+                            Ok(result) => Ok(Some(result)),
+                            Err(e) => Ok(Some(e.to_lsp_response())),
+                        }
+                    } else {
+                        Ok(Some(LspError::InvalidInput("Missing or invalid id parameter".to_string()).to_lsp_response()))
+                    }
+                } else {
+                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                }
+            }
+            "bkmr.updateSnippet" => {
+                // Parse update parameters
+                if let Some(arg) = params.arguments.first() {
+                    let id = arg.get("id").and_then(|v| v.as_i64()).map(|i| i as i32);
+                    let url = arg.get("url").and_then(|v| v.as_str());
+                    let title = arg.get("title").and_then(|v| v.as_str());
+                    let description = arg.get("description").and_then(|v| v.as_str());
+                    let tags = arg.get("tags")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect::<Vec<_>>()
+                        );
+                    
+                    if let Some(id) = id {
+                        match self.command_service.update_snippet(id, url, title, description, tags) {
+                            Ok(result) => Ok(Some(result)),
+                            Err(e) => Ok(Some(e.to_lsp_response())),
+                        }
+                    } else {
+                        Ok(Some(LspError::InvalidInput("Missing required field: id".to_string()).to_lsp_response()))
+                    }
+                } else {
+                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                }
+            }
+            "bkmr.deleteSnippet" => {
+                // Parse ID parameter
+                if let Some(arg) = params.arguments.first() {
+                    if let Some(id) = arg.get("id").and_then(|v| v.as_i64()) {
+                        match self.command_service.delete_snippet(id as i32) {
+                            Ok(result) => Ok(Some(result)),
+                            Err(e) => Ok(Some(e.to_lsp_response())),
+                        }
+                    } else {
+                        Ok(Some(LspError::InvalidInput("Missing or invalid id parameter".to_string()).to_lsp_response()))
+                    }
+                } else {
+                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
                 }
             }
             _ => {
