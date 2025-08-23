@@ -167,7 +167,10 @@ impl LanguageServer for BkmrLspBackend {
                 }),
                 ..Default::default()
             },
-            ..Default::default()
+            server_info: Some(ServerInfo {
+                name: "bkmr-lsp".to_string(),
+                version: Some(env!("CARGO_PKG_VERSION").to_string()),
+            }),
         };
 
         info!("Initialize complete - manual completion only (no trigger characters)");
