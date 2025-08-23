@@ -30,6 +30,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
         config: None,
         debug: 0,
         openai: false,
+        no_color: false,
         generate_config: false,
         command: Some(Commands::Search {
             fts_query: None,
@@ -95,6 +96,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
         config: None,
         debug: 0,
         openai: false,
+        no_color: false,
         generate_config: false,
         command: Some(Commands::Search {
             fts_query: None,
@@ -186,6 +188,7 @@ fn test_search_command_structure_with_interpolate() {
         config: None,
         debug: 0,
         openai: false,
+        no_color: false,
         generate_config: false,
         command: Some(Commands::Search {
             fts_query: Some("test query".to_string()),

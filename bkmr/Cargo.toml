@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "4.31.0"
+version = "5.0.0"
 edition = "2021"
 description = "A Unified CLI Tool for Bookmark, Snippet, and Knowledge Management"
 repository = "https://github.com/sysid/bkmr"
@@ -58,6 +58,12 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tuikit = "0.5.0"
 url = "2.5.4"
+
+# LSP dependencies (always included)
+tower-lsp = "0.20"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+atty = "0.2"
 
 [dev-dependencies]
 assert_cmd = "2.0.17"

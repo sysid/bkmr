@@ -16,5 +16,8 @@ pub mod config;
 pub mod exitcode;
 pub mod util;
 
+// LSP module (optional)
+pub mod lsp;
+
 #[cfg(test)]
 mod tests {}

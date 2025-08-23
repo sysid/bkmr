@@ -52,7 +52,7 @@ init:  ## init
 	@tree -a  $(app_root)/db
 
 .PHONY: test
-test:  ## tests, single-threaded
+test:  ## tests, single-threaded (all functionality)
 	@rm -f $(app_root)/db/bkmr.db
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test -- --test-threads=1
 
@@ -121,7 +121,7 @@ all: clean build install  ## all
 	:
 
 .PHONY: all-fast
-all-fast: clean build-fast install-debug  ## all-fast: no release build
+all-fast: clean build-fast install-debug  ## all-fast: debug build
 	:
 
 .PHONY: generate-ci
@@ -142,11 +142,11 @@ build-wheel:  ## build-wheel
 	maturin build --release -m bkmr/Cargo.toml
 
 .PHONY: build
-build:  ## build
+build:  ## build release version
 	pushd $(pkg_src) && cargo build --release
 
 .PHONY: build-fast
-build-fast:  ## build-fast
+build-fast:  ## build debug version
 	pushd $(pkg_src) && cargo build
 
 .PHONY: install-debug

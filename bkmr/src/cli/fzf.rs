@@ -36,7 +36,7 @@ struct SnippetItem {
 }
 
 impl SkimItem for SnippetItem {
-    fn text(&self) -> Cow<str> {
+    fn text(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.display_text)
     }
 
@@ -44,7 +44,7 @@ impl SkimItem for SnippetItem {
         ItemPreview::AnsiText(self.preview.clone())
     }
 
-    fn output(&self) -> Cow<str> {
+    fn output(&self) -> Cow<'_, str> {
         if let Some(id) = self.bookmark.id {
             Cow::Owned(id.to_string())
         } else {
@@ -60,7 +60,7 @@ struct AlignedBookmark {
 }
 
 impl SkimItem for AlignedBookmark {
-    fn text(&self) -> Cow<str> {
+    fn text(&self) -> Cow<'_, str> {
         let id = self.bookmark.id.unwrap_or(0);
         let title = &self.bookmark.title;
         let url = &self.bookmark.url;
@@ -237,7 +237,7 @@ impl SkimItem for AlignedBookmark {
         ItemPreview::AnsiText(format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text))
     }
 
-    fn output(&self) -> Cow<str> {
+    fn output(&self) -> Cow<'_, str> {
         if let Some(id) = self.bookmark.id {
             Cow::Owned(id.to_string())
         } else {
@@ -390,7 +390,7 @@ fn get_selected_bookmarks_from_aligned(
 }
 
 impl SkimItem for SemanticSearchResult {
-    fn text(&self) -> Cow<str> {
+    fn text(&self) -> Cow<'_, str> {
         let id = self.bookmark.id.unwrap_or(0);
         let title = &self.bookmark.title;
         let url = &self.bookmark.url;

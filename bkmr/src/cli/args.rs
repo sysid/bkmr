@@ -21,6 +21,9 @@ pub struct Cli {
     #[arg(long = "openai", help = "use OpenAI API to embed bookmarks")]
     pub openai: bool,
 
+    #[arg(long = "no-color", help = "Disable colored output")]
+    pub no_color: bool,
+
     #[arg(
         long = "generate-config",
         help = "bkmr --generate-config > ~/.config/bkmr/config.toml"
@@ -326,6 +329,12 @@ pub enum Commands {
     Completion {
         /// Shell to generate completions for (bash, zsh, fish)
         shell: String,
+    },
+    /// Start LSP (Language Server Protocol) server for snippet completion
+    Lsp {
+        /// Disable bkmr template interpolation (serve raw templates instead of processed content)
+        #[arg(long, help = "Disable bkmr template interpolation")]
+        no_interpolation: bool,
     },
     #[command(hide = true)]
     Xxx {

@@ -2,7 +2,7 @@
 use bkmr::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
 
 use bkmr::app_state::AppState;
-use bkmr::cli::args::Cli;
+use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::execute_command;
 use bkmr::domain::embedding::Embedder;
 use bkmr::exitcode;
@@ -22,7 +22,12 @@ fn main() {
     // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
     let cli = Cli::parse();
-    setup_logging(cli.debug);
+    
+    // Determine if colors should be disabled
+    // Force no colors for LSP command to avoid ANSI escape sequences in LSP logs
+    let no_color = cli.no_color || matches!(cli.command, Some(Commands::Lsp { .. }));
+    
+    setup_logging(cli.debug, no_color);
 
     // Create embedder based on CLI option
     let embedder: Arc<dyn Embedder> = if cli.openai {
@@ -52,7 +57,7 @@ fn main() {
     }
 }
 
-fn setup_logging(verbosity: u8) {
+fn setup_logging(verbosity: u8, no_color: bool) {
     debug!("INIT: Attempting logger init from main.rs");
 
     let filter = match verbosity {
@@ -86,6 +91,7 @@ fn setup_logging(verbosity: u8) {
     let fmt_layer = fmt::layer()
         .with_writer(std::io::stderr) // Set writer first
         .with_target(true)
+        .with_ansi(!no_color) // Control ANSI colors based on flag
         // src/main.rs (continued)
         .with_thread_names(false)
         .with_span_events(FmtSpan::ENTER)

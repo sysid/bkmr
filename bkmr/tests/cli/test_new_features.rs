@@ -43,6 +43,7 @@ fn given_stdin_content_when_add_command_with_stdin_flag_then_stores_content_in_u
         config: None,
         debug: 0,
         openai: false,
+        no_color: false,
         generate_config: false,
         command: Some(Commands::Add {
             url: None,
@@ -123,6 +124,7 @@ fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_withou
         config: None,
         debug: 0,
         openai: false,
+        no_color: false,
         generate_config: false,
         command: Some(Commands::Open {
             ids: bookmark_id.to_string(),
