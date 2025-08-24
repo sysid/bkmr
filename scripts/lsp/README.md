@@ -12,7 +12,115 @@ Rust integration tests.
 
 ## Available Scripts
 
-### 1. show_commands.py
+### 1. list_snippets.py
+
+**Purpose**: List snippets by language using LSP executeCommand.
+
+**Features**:
+- Lists snippets with optional language filtering
+- Executes `bkmr.listSnippets` command with language parameter
+- Displays results in formatted table or JSON
+- Shows snippet details including ID, title, content preview, and tags
+- Supports any programming language filter (sh, rust, python, javascript, etc.)
+- Proper error handling and LSP protocol compliance
+
+**Usage**:
+```bash
+# List shell script snippets
+./scripts/lsp/list_snippets.py --language sh
+
+# List Rust snippets in JSON format  
+./scripts/lsp/list_snippets.py --language rust --json
+
+# List all snippets (no language filter)
+./scripts/lsp/list_snippets.py
+
+# Show longer content previews
+./scripts/lsp/list_snippets.py --preview 100
+
+# Show detailed view of specific snippet
+./scripts/lsp/list_snippets.py --detail-id 5
+
+# Enable debug logging
+./scripts/lsp/list_snippets.py --language sh --debug
+```
+
+**Sample Output**:
+```
+🔍 Querying sh snippets...
+✅ Found 11 sh snippets
+
+====================================================================================================
+📋 SNIPPETS
+====================================================================================================
+ID    Title                     Preview                                  Tags                     
+----------------------------------------------------------------------------------------------------
+3021  bash-yes-no               source $TW_BINX/lib/sane_fn.sh...      plain, sh               
+3148  sane-fn                   source "$TW_BINX/lib/sane_fn.sh"       plain, sh               
+3150  script-default            #!/usr/bin/env bash...                  plain, sh               
+----------------------------------------------------------------------------------------------------
+Total: 11 snippets
+====================================================================================================
+```
+
+**Environment Variables**:
+- `BKMR_DB_URL`: Database path override
+- `RUST_LOG`: Server logging level
+
+### 2. get_snippet.py
+
+**Purpose**: Get individual snippet by ID using LSP executeCommand.
+
+**Features**:
+- Retrieves specific snippet by ID
+- Executes `bkmr.getSnippet` command
+- Shows detailed snippet information with full content
+- Displays metadata including title, tags, description, and file info
+- JSON output option for programmatic use
+- Proper error handling for non-existent or non-snippet bookmarks
+
+**Usage**:
+```bash
+# Get snippet by ID
+./scripts/lsp/get_snippet.py 3165
+
+# Get snippet in JSON format
+./scripts/lsp/get_snippet.py 3165 --json
+
+# Enable debug logging
+./scripts/lsp/get_snippet.py 3165 --debug
+```
+
+**Sample Output**:
+```
+🔍 Retrieving snippet ID 3165...
+✅ Retrieved snippet ID 3165
+
+================================================================================
+🔍 SNIPPET DETAILS - ID: 3165
+================================================================================
+Title: nvim-update-bkmr-nvim
+ID: 3165
+Tags: 
+System Tags: _snip_
+Description: Update plugin
+
+Content:
+------------------------------------------------------------
+nvim --headless "+Lazy! update bkmr-nvim" +qa
+------------------------------------------------------------
+================================================================================
+```
+
+**Parameters**:
+- `snippet_id`: Snippet ID to retrieve (required)
+
+**Error Handling**:
+- Non-existent bookmarks: "Snippet with ID X not found"
+- Non-snippet bookmarks: "Bookmark X is not a snippet" 
+- Server errors: Displays specific error messages
+
+### 3. show_commands.py
 
 **Purpose**: Discover and display available LSP commands.
 
@@ -44,7 +152,7 @@ Rust integration tests.
 - Usage examples with sample JSON
 - Command testing capabilities
 
-### 2. test_lsp_client.py
+### 4. test_lsp_client.py
 
 **Purpose**: Comprehensive LSP protocol debugging and testing client.
 
@@ -77,7 +185,7 @@ Rust integration tests.
 - Completion requests at various positions
 - Proper shutdown sequence
 
-### 3. test_lsp_filtering.py
+### 5. test_lsp_filtering.py
 
 **Purpose**: Determines whether the LSP server implements server-side or client-side filtering.
 
@@ -105,7 +213,7 @@ Rust integration tests.
 - Document change handling
 - Completion response patterns
 
-### 4. test_lsp_language_filtering.py
+### 6. test_lsp_language_filtering.py
 
 **Purpose**: Tests language-aware filtering for different file types.
 
@@ -172,7 +280,7 @@ make test-lsp-language
 
 1. Check that you have snippets in your database:
    ```bash
-   bkmr search --ntags-prefix _snip_
+   bkmr search -t _snip_
    ```
 
 2. Ensure bkmr is in your PATH:
