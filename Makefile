@@ -56,6 +56,29 @@ test:  ## tests, single-threaded (all functionality)
 	@rm -f $(app_root)/db/bkmr.db
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test -- --test-threads=1
 
+.PHONY: test-lsp
+test-lsp: test-lsp-client test-lsp-filtering test-lsp-language  ## test all LSP functionality
+
+.PHONY: show-lsp-commands
+show-lsp-commands:  ## show available LSP commands
+	@echo "Showing available LSP commands..."
+	@python3 scripts/lsp/show_commands.py
+
+.PHONY: test-lsp-client
+test-lsp-client:  ## test LSP protocol client
+	@echo "Testing LSP protocol communication..."
+	@python3 scripts/lsp/test_lsp_client.py
+
+.PHONY: test-lsp-filtering
+test-lsp-filtering:  ## test LSP server-side vs client-side filtering
+	@echo "Testing LSP filtering behavior..."
+	@python3 scripts/lsp/test_lsp_filtering.py
+
+.PHONY: test-lsp-language
+test-lsp-language:  ## test LSP language-aware filtering
+	@echo "Testing LSP language filtering..."
+	@python3 scripts/lsp/test_lsp_language_filtering.py
+
 .PHONY: import-files
 import-files:  ## import-files for testing from tests/resources/import_test/
 	bkmr import-files bkmr/tests/resources/import_test/
