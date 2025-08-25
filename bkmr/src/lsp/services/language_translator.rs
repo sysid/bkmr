@@ -10,6 +10,7 @@ use crate::domain::error::{DomainResult, DomainError};
 static LINE_COMMENT_START: OnceLock<Regex> = OnceLock::new();
 static LINE_COMMENT_END: OnceLock<Regex> = OnceLock::new();
 static RUST_INDENT: OnceLock<Regex> = OnceLock::new();
+static RAW_BLOCK_PATTERN: OnceLock<Regex> = OnceLock::new();
 
 fn get_line_comment_start() -> &'static Regex {
     LINE_COMMENT_START.get_or_init(|| {
@@ -29,21 +30,43 @@ fn get_rust_indent() -> &'static Regex {
     })
 }
 
+fn get_raw_block_pattern() -> &'static Regex {
+    RAW_BLOCK_PATTERN.get_or_init(|| {
+        RegexBuilder::new(r"\{%\s*raw\s*%\}(.*?)\{%\s*endraw\s*%\}")
+            .dot_matches_new_line(true)
+            .build()
+            .expect("compile raw block regex")
+    })
+}
+
 /// Service for translating Rust syntax patterns to target languages
 pub struct LanguageTranslator;
 
 impl LanguageTranslator {
+    /// Filter raw blocks from content before processing
+    fn filter_raw_blocks(content: &str) -> String {
+        let raw_regex = get_raw_block_pattern();
+        raw_regex.replace_all(content, |caps: &regex::Captures| {
+            // Return just the content inside the raw block, without the markers
+            caps.get(1).map_or("", |m| m.as_str()).to_string()
+        }).to_string()
+    }
+
     /// Translate Rust syntax patterns in universal snippets to target language
     #[instrument(skip(snippet))]
     pub fn translate_snippet(snippet: &Snippet, language_id: &str, uri: &Url) -> DomainResult<String> {
+        // First, filter out raw block markers for all snippets (universal and regular)
+        let filtered_content = Self::filter_raw_blocks(snippet.get_content());
+        
         let content = if snippet.is_universal() {
             debug!("Processing universal snippet: {}", snippet.title);
             debug!("Original content: {:?}", snippet.get_content());
+            debug!("Filtered content: {:?}", filtered_content);
 
-            Self::translate_rust_patterns(snippet.get_content(), language_id, uri)?
+            Self::translate_rust_patterns(&filtered_content, language_id, uri)?
         } else {
-            // Regular snippet - return content as-is
-            snippet.get_content().to_string()
+            // Regular snippet - return filtered content as-is
+            filtered_content
         };
 
         debug!("Final translated content: {:?}", content);
@@ -266,5 +289,106 @@ block comment
         assert!(result.is_ok());
         let translated = result.expect("valid translation result");
         assert!(translated.contains("// File: example.rs"));
+    }
+
+    #[test]
+    fn given_content_with_raw_blocks_when_filtering_then_removes_markers() {
+        // Arrange
+        let content = "Before {% raw %}DATABASE_URL=${DATABASE_URL}{% endraw %} After";
+        
+        // Act
+        let result = LanguageTranslator::filter_raw_blocks(content);
+        
+        // Assert
+        assert_eq!(result, "Before DATABASE_URL=${DATABASE_URL} After");
+    }
+
+    #[test]
+    fn given_multiline_raw_block_when_filtering_then_preserves_content() {
+        // Arrange
+        let content = r#"Setup:
+{% raw %}
+export DATABASE_URL=${DATABASE_URL}
+export API_KEY=${API_KEY}
+{% endraw %}
+Done."#;
+        
+        // Act
+        let result = LanguageTranslator::filter_raw_blocks(content);
+        
+        // Assert
+        let expected = r#"Setup:
+
+export DATABASE_URL=${DATABASE_URL}
+export API_KEY=${API_KEY}
+
+Done."#;
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn given_regular_snippet_with_raw_blocks_when_translating_then_filters_markers() {
+        // Arrange
+        let snippet = Snippet::new(
+            1,
+            "Test Regular Snippet".to_string(),
+            "Before {% raw %}${VAR}{% endraw %} After".to_string(),
+            "Test description".to_string(),
+            vec!["rust".to_string(), "_snip_".to_string()],
+        );
+        let uri = Url::parse("file:///test.rs").expect("parse URI");
+
+        // Act
+        let result = LanguageTranslator::translate_snippet(&snippet, "rust", &uri);
+
+        // Assert
+        assert!(result.is_ok());
+        let translated = result.expect("valid translation result");
+        assert_eq!(translated, "Before ${VAR} After"); // Raw markers removed
+    }
+
+    #[test]
+    fn given_universal_snippet_with_raw_blocks_when_translating_then_filters_and_translates() {
+        // Arrange
+        let snippet = Snippet::new(
+            1,
+            "Test Universal Snippet".to_string(),
+            "// Comment {% raw %}${DATABASE_URL}{% endraw %}".to_string(),
+            "Test description".to_string(),
+            vec!["universal".to_string(), "_snip_".to_string()],
+        );
+        let uri = Url::parse("file:///test.py").expect("parse URI");
+
+        // Act
+        let result = LanguageTranslator::translate_snippet(&snippet, "python", &uri);
+
+        // Assert
+        assert!(result.is_ok());
+        let translated = result.expect("valid translation result");
+        assert_eq!(translated, "# Comment ${DATABASE_URL}"); // Markers removed and comment translated
+    }
+
+    #[test]
+    fn given_content_without_raw_blocks_when_filtering_then_unchanged() {
+        // Arrange
+        let content = "Normal content without raw blocks";
+        
+        // Act
+        let result = LanguageTranslator::filter_raw_blocks(content);
+        
+        // Assert
+        assert_eq!(result, content);
+    }
+
+    #[test]
+    fn given_multiple_raw_blocks_when_filtering_then_removes_all_markers() {
+        // Arrange
+        let content = "First {% raw %}${VAR1}{% endraw %} middle {% raw %}${VAR2}{% endraw %} end";
+        
+        // Act
+        let result = LanguageTranslator::filter_raw_blocks(content);
+        
+        // Assert
+        assert_eq!(result, "First ${VAR1} middle ${VAR2} end");
     }
 }
