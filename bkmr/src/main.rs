@@ -22,11 +22,11 @@ fn main() {
     // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
     let cli = Cli::parse();
-    
+
     // Determine if colors should be disabled
     // Force no colors for LSP command to avoid ANSI escape sequences in LSP logs
     let no_color = cli.no_color || matches!(cli.command, Some(Commands::Lsp { .. }));
-    
+
     setup_logging(cli.debug, no_color);
 
     // Create embedder based on CLI option

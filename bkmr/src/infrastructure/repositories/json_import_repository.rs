@@ -157,12 +157,16 @@ impl ImportRepository for JsonImportRepository {
         Ok(imports)
     }
 
-    fn import_files(&self, _paths: &[String], _options: &crate::domain::repositories::import_repository::ImportOptions) -> DomainResult<Vec<crate::domain::repositories::import_repository::FileImportData>> {
+    fn import_files(
+        &self,
+        _paths: &[String],
+        _options: &crate::domain::repositories::import_repository::ImportOptions,
+    ) -> DomainResult<Vec<crate::domain::repositories::import_repository::FileImportData>> {
         // JsonImportRepository doesn't handle file imports - delegate to FileImportRepository
         Err(DomainError::RepositoryError(
             crate::domain::error::RepositoryError::Other(
-                "File import not supported by JsonImportRepository".to_string()
-            )
+                "File import not supported by JsonImportRepository".to_string(),
+            ),
         ))
     }
 }

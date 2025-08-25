@@ -14,9 +14,7 @@ pub struct UriAction {
 
 impl UriAction {
     pub fn new(template_service: Arc<dyn TemplateService>) -> Self {
-        Self {
-            template_service,
-        }
+        Self { template_service }
     }
 
     // Helper method to open a URL with proper rendering

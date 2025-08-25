@@ -23,7 +23,7 @@ pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
         Some(Commands::Search { .. }) => {
             let handler = command_handler::SearchCommandHandler::new();
             handler.execute(cli)
-        },
+        }
         Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli),
         Some(Commands::Open { .. }) => bookmark_commands::open(cli),
         Some(Commands::Add { .. }) => bookmark_commands::add(cli),
@@ -96,16 +96,16 @@ fn handle_completion(shell: String) -> CliResult<()> {
 
 fn handle_lsp(no_interpolation: bool) -> CliResult<()> {
     use tokio::runtime::Runtime;
-    
+
     // Create a tokio runtime for the LSP server
     let rt = Runtime::new().map_err(|e| {
         error::CliError::CommandFailed(format!("Failed to create async runtime: {}", e))
     })?;
-    
+
     // Run the LSP server
     rt.block_on(async {
         crate::lsp::run_lsp_server(no_interpolation).await;
     });
-    
+
     Ok(())
 }

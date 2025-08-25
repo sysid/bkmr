@@ -8,7 +8,7 @@ use tracing::{debug, instrument};
 
 use crate::lsp::backend::BkmrConfig;
 use crate::lsp::domain::{CompletionContext, Snippet, SnippetFilter};
-use crate::lsp::services::{LanguageTranslator, LspSnippetService, AsyncSnippetService};
+use crate::lsp::services::{AsyncSnippetService, LanguageTranslator, LspSnippetService};
 
 /// Service for handling completion logic
 pub struct CompletionService {
@@ -31,7 +31,10 @@ impl CompletionService {
     }
 
     pub fn with_config(snippet_service: Arc<LspSnippetService>, config: BkmrConfig) -> Self {
-        Self { snippet_service, config }
+        Self {
+            snippet_service,
+            config,
+        }
     }
 
     /// Generate completion items from context
@@ -42,10 +45,7 @@ impl CompletionService {
     ) -> DomainResult<Vec<CompletionItem>> {
         let filter = self.build_snippet_filter(context);
 
-        let snippets = self
-            .snippet_service
-            .fetch_snippets(&filter)
-            .await?;
+        let snippets = self.snippet_service.fetch_snippets(&filter).await?;
 
         let completion_items: Result<Vec<CompletionItem>, _> = snippets
             .iter()
@@ -61,7 +61,10 @@ impl CompletionService {
             .collect();
 
         let completion_items = completion_items.map_err(|e| {
-            DomainError::Other(format!("Failed to convert snippets to completion items: {}", e))
+            DomainError::Other(format!(
+                "Failed to convert snippets to completion items: {}",
+                e
+            ))
         })?;
 
         debug!("Generated {} completion items", completion_items.len());
@@ -75,6 +78,7 @@ impl CompletionService {
             context.language_id.clone(),
             query_prefix,
             50, // TODO: Make configurable
+            self.config.enable_interpolation,
         )
     }
 
@@ -87,10 +91,9 @@ impl CompletionService {
         language_id: &str,
         uri: &tower_lsp::lsp_types::Url,
     ) -> DomainResult<CompletionItem> {
-        // Translate content if this is a universal snippet
-        let translated_content = LanguageTranslator::translate_snippet(snippet, language_id, uri)?;
-
-        let snippet_content = translated_content;
+        // Snippet content is already processed (interpolated) by LspSnippetService
+        // We only need to apply language translation
+        let snippet_content = LanguageTranslator::translate_snippet(snippet, language_id, uri)?;
 
         let label = snippet.title.clone();
 
@@ -103,9 +106,17 @@ impl CompletionService {
 
         // Determine if this should be treated as plain text
         let (item_kind, text_format, detail_text) = if snippet.is_plain() {
-            (CompletionItemKind::TEXT, InsertTextFormat::PLAIN_TEXT, "bkmr plain text")
+            (
+                CompletionItemKind::TEXT,
+                InsertTextFormat::PLAIN_TEXT,
+                "bkmr plain text",
+            )
         } else {
-            (CompletionItemKind::SNIPPET, InsertTextFormat::SNIPPET, "bkmr snippet")
+            (
+                CompletionItemKind::SNIPPET,
+                InsertTextFormat::SNIPPET,
+                "bkmr snippet",
+            )
         };
 
         let mut completion_item = CompletionItem {
@@ -146,34 +157,34 @@ impl CompletionService {
             .await
             .map_err(|e| DomainError::Other(e.to_string()))
     }
+
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lsp::services::LspSnippetService;
+    use crate::util::testing::{init_test_env, EnvGuard};
     use tower_lsp::lsp_types::{Position, Range, Url};
-    use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
 
     // TODO: consolidate this
     /*
      * IMPORTANT: LSP Test Database Synchronization Requirements
-     * 
+     *
      * All tests in this module that access the database must follow these patterns:
-     * 
+     *
      * 1. Tests run single-threaded (--test-threads=1) so no special synchronization needed
-     * 2. NEVER use LspSnippetService::new() in tests - it calls factory methods that 
+     * 2. NEVER use LspSnippetService::new() in tests - it calls factory methods that
      *    bypass test environment setup and try to access production database
      * 3. ALWAYS use proper test service construction pattern:
      *    - Call init_test_env(), EnvGuard::new(), setup_test_db()
      *    - Manually construct BookmarkServiceImpl with test repository
      *    - Use LspSnippetService::with_service() constructor
-     * 
+     *
      * This was discovered when make test-all was failing due to race conditions.
      * The issue was that LspSnippetService::new() -> factory::create_bookmark_service()
      * would try to read from global AppState and access a database that doesn't exist
      * in the test environment, causing "Database not found" errors.
-     * 
+     *
      * See CLAUDE.md for complete details on this synchronization issue.
      */
 
@@ -182,16 +193,9 @@ mod tests {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
-        let repository = setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
-        let service = CompletionService::new(snippet_service);
+        let ctx = crate::util::test_context::TestContext::new();
+        let lsp_bundle = ctx.create_lsp_services();
+        let service = lsp_bundle.completion_service;
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
         let context = CompletionContext::new(
@@ -226,16 +230,9 @@ mod tests {
             vec!["plain".to_string(), "_snip_".to_string()],
         );
 
-        let repository = setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
-        let service = CompletionService::new(snippet_service);
+        let ctx = crate::util::test_context::TestContext::new();
+        let lsp_bundle = ctx.create_lsp_services();
+        let service = lsp_bundle.completion_service;
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
@@ -265,16 +262,9 @@ mod tests {
             vec!["rust".to_string(), "_snip_".to_string()],
         );
 
-        let repository = setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
-        let service = CompletionService::new(snippet_service);
+        let ctx = crate::util::test_context::TestContext::new();
+        let lsp_bundle = ctx.create_lsp_services();
+        let service = lsp_bundle.completion_service;
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
@@ -304,16 +294,9 @@ mod tests {
             vec!["universal".to_string(), "_snip_".to_string()],
         );
 
-        let repository = setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
-        let service = CompletionService::new(snippet_service);
+        let ctx = crate::util::test_context::TestContext::new();
+        let lsp_bundle = ctx.create_lsp_services();
+        let service = lsp_bundle.completion_service;
 
         let uri = Url::parse("file:///test.py").expect("parse URI");
 
@@ -343,16 +326,9 @@ mod tests {
             vec!["rust".to_string(), "_snip_".to_string()],
         );
 
-        let repository = setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
-        let service = CompletionService::new(snippet_service);
+        let ctx = crate::util::test_context::TestContext::new();
+        let lsp_bundle = ctx.create_lsp_services();
+        let service = lsp_bundle.completion_service;
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
         let range = Range {
@@ -388,16 +364,9 @@ mod tests {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
-        let repository = setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
-        let service = CompletionService::new(snippet_service);
+        let ctx = crate::util::test_context::TestContext::new();
+        let lsp_bundle = ctx.create_lsp_services();
+        let service = lsp_bundle.completion_service;
 
         // Act
         let result = service.health_check().await;

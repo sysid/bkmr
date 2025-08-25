@@ -347,7 +347,6 @@ mod tests {
 
     #[test]
     fn test_template_roundtrip() {
-
         // Create a template
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -380,7 +379,6 @@ mod tests {
 
     #[test]
     fn test_template_with_empty_lines() {
-
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -415,7 +413,6 @@ mod tests {
 
     #[test]
     fn test_empty_id_creates_new_bookmark() {
-
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -438,7 +435,6 @@ mod tests {
 
     #[test]
     fn test_invalid_tags_returns_error() {
-
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -465,7 +461,6 @@ mod tests {
 
     #[test]
     fn test_missing_section_uses_default() {
-
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -487,7 +482,6 @@ mod tests {
 
     #[test]
     fn test_complex_markdown_with_dashes() {
-
         // Create a template with complex markdown content that includes dashes
         let template_str = "\
             # Bookmark Template\n\
@@ -532,7 +526,6 @@ mod tests {
 
     #[test]
     fn test_content_with_section_like_text() {
-
         // Create a template with text that might be confused with section markers
         let template_str = "\
             # Bookmark Template\n\
@@ -570,7 +563,6 @@ mod tests {
 
     #[test]
     fn test_section_marker_at_end_of_file() {
-
         // Test with a section marker at the end of the file and no content after it
         let template_str = "\
             # Bookmark Template\n\
@@ -596,7 +588,6 @@ mod tests {
 
     #[test]
     fn test_empty_sections() {
-
         // Test with some empty sections
         let template_str = "\
             # Bookmark Template\n\
@@ -623,7 +614,6 @@ mod tests {
 
     #[test]
     fn test_adjacent_sections() {
-
         // Test with sections right next to each other
         let template_str = "\
             # Bookmark Template\n\

@@ -1,6 +1,6 @@
 use bkmr::cli::args::{Cli, Commands};
-use bkmr::util::argument_processor::ArgumentProcessor;
 use bkmr::domain::tag::Tag;
+use bkmr::util::argument_processor::ArgumentProcessor;
 use bkmr::util::testing::{init_test_env, EnvGuard};
 use termcolor::{ColorChoice, StandardStream};
 

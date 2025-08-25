@@ -1,5 +1,5 @@
 //! LSP (Language Server Protocol) implementation for bkmr
-//! 
+//!
 //! This module provides LSP server functionality for snippet completion
 //! and editing in editors that support the Language Server Protocol.
 

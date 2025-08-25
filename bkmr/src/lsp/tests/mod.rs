@@ -9,19 +9,19 @@ mod integration_tests {
 
     /*
      * IMPORTANT: LSP Integration Test Database Synchronization
-     * 
+     *
      * These integration tests require careful database access patterns:
-     * 
+     *
      * 1. Tests run single-threaded (--test-threads=1) so no special synchronization needed
      * 2. NEVER use LspSnippetService::new() - it bypasses test environment
      * 3. ALWAYS use proper test service construction:
      *    - init_test_env() + EnvGuard::new() + setup_test_db()
      *    - Manual BookmarkServiceImpl construction with test repository
      *    - LspSnippetService::with_service() constructor
-     * 
+     *
      * These tests were failing in make test-all due to factory method calls
      * trying to access production database configuration instead of test setup.
-     * 
+     *
      * See CLAUDE.md and completion_service.rs tests for full documentation.
      */
 
@@ -38,7 +38,8 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
         let config = BkmrConfig::default();
         let service = CompletionService::with_config(snippet_service, config);
 
@@ -58,7 +59,7 @@ mod integration_tests {
         // Assert
         assert!(result.is_ok(), "Completion service should return Ok result");
         let items = result.expect("valid completion items");
-        
+
         // Note: The actual number depends on database content
         // This test validates that the service doesn't crash
         println!("Got {} completion items", items.len());
@@ -67,7 +68,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_universal_snippet_when_translating_to_python_then_converts_comments() {
         use crate::lsp::services::LanguageTranslator;
-        
+
         // Arrange
         let snippet = Snippet::new(
             1,
@@ -84,7 +85,7 @@ mod integration_tests {
         // Assert
         assert!(result.is_ok(), "Translation should succeed");
         let translated = result.expect("valid translation result");
-        
+
         assert!(translated.contains("# This is a comment"));
         assert!(translated.contains("    # Indented comment"));
     }
@@ -111,7 +112,8 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
         let service = CompletionService::new(snippet_service);
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
@@ -150,7 +152,8 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
         let service = CompletionService::new(snippet_service);
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
@@ -170,7 +173,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_go_language_when_translating_rust_indentation_then_converts_to_tabs() {
         use crate::lsp::services::LanguageTranslator;
-        
+
         // Arrange
         let uri = Url::parse("file:///test.go").expect("parse URI");
         let rust_content = "fn example() {\n    let x = 5;\n        let y = 10;\n}";
@@ -181,7 +184,7 @@ mod integration_tests {
         // Assert
         assert!(result.is_ok(), "Go translation should succeed");
         let go_result = result.expect("Go translation result");
-        
+
         assert!(go_result.contains("fn example() {"));
         assert!(go_result.contains("\tlet x = 5;"));
         assert!(go_result.contains("\t\tlet y = 10;"));
@@ -190,7 +193,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_filename_template_when_translating_then_replaces_correctly() {
         use crate::lsp::services::LanguageTranslator;
-        
+
         // Arrange
         let uri = Url::parse("file:///path/to/example.rs").expect("parse URI");
         let content = "// File: {{ filename }}";
@@ -199,9 +202,12 @@ mod integration_tests {
         let result = LanguageTranslator::translate_rust_patterns(content, "rust", &uri);
 
         // Assert
-        assert!(result.is_ok(), "Filename template replacement should succeed");
+        assert!(
+            result.is_ok(),
+            "Filename template replacement should succeed"
+        );
         let translated = result.expect("valid translation result");
-        
+
         assert!(translated.contains("// File: example.rs"));
     }
 
@@ -218,7 +224,8 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
         let service = CompletionService::new(snippet_service);
 
         // Act
@@ -231,12 +238,12 @@ mod integration_tests {
     #[tokio::test]
     async fn given_create_snippet_command_when_executed_then_creates_snippet() {
         // Arrange
-        use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
+        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
         use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
-        use serde_json::json;
-        
+
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let repository = crate::util::testing::setup_test_db();
@@ -247,16 +254,17 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        
+
         // Create LSP services with test setup
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service.clone()));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
         let completion_service = CompletionService::new(snippet_service);
         let document_service = DocumentService::new();
         let command_service = CommandService::with_service(bookmark_service);
-        
+
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
-                client, 
+                client,
                 BkmrConfig::default(),
                 completion_service,
                 document_service,
@@ -264,7 +272,7 @@ mod integration_tests {
             )
         });
         let backend = service.inner();
-        
+
         let params = ExecuteCommandParams {
             command: "bkmr.createSnippet".to_string(),
             arguments: vec![json!({
@@ -275,10 +283,10 @@ mod integration_tests {
             })],
             work_done_progress_params: Default::default(),
         };
-        
+
         // Act
         let result = backend.execute_command(params).await;
-        
+
         // Assert
         assert!(result.is_ok());
         let response = result.unwrap();
@@ -291,12 +299,12 @@ mod integration_tests {
     #[tokio::test]
     async fn given_list_snippets_command_when_executed_then_returns_filtered_list() {
         // Arrange
-        use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
+        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
         use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
-        use serde_json::json;
-        
+
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let repository = crate::util::testing::setup_test_db();
@@ -307,16 +315,17 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        
+
         // Create LSP services with test setup
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service.clone()));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
         let completion_service = CompletionService::new(snippet_service);
         let document_service = DocumentService::new();
         let command_service = CommandService::with_service(bookmark_service);
-        
+
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
-                client, 
+                client,
                 BkmrConfig::default(),
                 completion_service,
                 document_service,
@@ -324,28 +333,34 @@ mod integration_tests {
             )
         });
         let backend = service.inner();
-        
+
         // First create some snippets
-        backend.execute_command(ExecuteCommandParams {
-            command: "bkmr.createSnippet".to_string(),
-            arguments: vec![json!({
-                "url": "fn rust_fn() {}",
-                "title": "Rust Function",
-                "tags": ["rust"]
-            })],
-            work_done_progress_params: Default::default(),
-        }).await.unwrap();
-        
-        backend.execute_command(ExecuteCommandParams {
-            command: "bkmr.createSnippet".to_string(),
-            arguments: vec![json!({
-                "url": "def python_fn():",
-                "title": "Python Function",
-                "tags": ["python"]
-            })],
-            work_done_progress_params: Default::default(),
-        }).await.unwrap();
-        
+        backend
+            .execute_command(ExecuteCommandParams {
+                command: "bkmr.createSnippet".to_string(),
+                arguments: vec![json!({
+                    "url": "fn rust_fn() {}",
+                    "title": "Rust Function",
+                    "tags": ["rust"]
+                })],
+                work_done_progress_params: Default::default(),
+            })
+            .await
+            .unwrap();
+
+        backend
+            .execute_command(ExecuteCommandParams {
+                command: "bkmr.createSnippet".to_string(),
+                arguments: vec![json!({
+                    "url": "def python_fn():",
+                    "title": "Python Function",
+                    "tags": ["python"]
+                })],
+                work_done_progress_params: Default::default(),
+            })
+            .await
+            .unwrap();
+
         // Act - List only Rust snippets
         let params = ExecuteCommandParams {
             command: "bkmr.listSnippets".to_string(),
@@ -354,16 +369,16 @@ mod integration_tests {
             })],
             work_done_progress_params: Default::default(),
         };
-        
+
         let result = backend.execute_command(params).await;
-        
+
         // Assert
         assert!(result.is_ok());
         let response = result.unwrap();
         assert!(response.is_some());
         let json = response.unwrap();
         let snippets = json.get("snippets").unwrap().as_array().unwrap();
-        
+
         // Should only contain Rust snippets
         for snippet in snippets {
             let tags = snippet.get("tags").unwrap().as_array().unwrap();
@@ -374,12 +389,12 @@ mod integration_tests {
     #[tokio::test]
     async fn given_update_snippet_command_when_executed_then_updates_and_preserves_system_tag() {
         // Arrange
-        use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
+        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
         use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
-        use serde_json::json;
-        
+
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let repository = crate::util::testing::setup_test_db();
@@ -390,16 +405,17 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        
+
         // Create LSP services with test setup
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service.clone()));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
         let completion_service = CompletionService::new(snippet_service);
         let document_service = DocumentService::new();
         let command_service = CommandService::with_service(bookmark_service);
-        
+
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
-                client, 
+                client,
                 BkmrConfig::default(),
                 completion_service,
                 document_service,
@@ -407,20 +423,24 @@ mod integration_tests {
             )
         });
         let backend = service.inner();
-        
+
         // Create a snippet first
-        let create_result = backend.execute_command(ExecuteCommandParams {
-            command: "bkmr.createSnippet".to_string(),
-            arguments: vec![json!({
-                "url": "original content",
-                "title": "Original Title",
-                "tags": ["rust"]
-            })],
-            work_done_progress_params: Default::default(),
-        }).await.unwrap().unwrap();
-        
+        let create_result = backend
+            .execute_command(ExecuteCommandParams {
+                command: "bkmr.createSnippet".to_string(),
+                arguments: vec![json!({
+                    "url": "original content",
+                    "title": "Original Title",
+                    "tags": ["rust"]
+                })],
+                work_done_progress_params: Default::default(),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+
         let id = create_result.get("id").unwrap().as_i64().unwrap();
-        
+
         // Act - Update the snippet
         let params = ExecuteCommandParams {
             command: "bkmr.updateSnippet".to_string(),
@@ -432,18 +452,24 @@ mod integration_tests {
             })],
             work_done_progress_params: Default::default(),
         };
-        
+
         let result = backend.execute_command(params).await;
-        
+
         // Assert
         assert!(result.is_ok());
         let response = result.unwrap();
         assert!(response.is_some());
         let json = response.unwrap();
-        
-        assert_eq!(json.get("title").unwrap().as_str().unwrap(), "Updated Title");
-        assert_eq!(json.get("url").unwrap().as_str().unwrap(), "updated content");
-        
+
+        assert_eq!(
+            json.get("title").unwrap().as_str().unwrap(),
+            "Updated Title"
+        );
+        assert_eq!(
+            json.get("url").unwrap().as_str().unwrap(),
+            "updated content"
+        );
+
         let tags = json.get("tags").unwrap().as_array().unwrap();
         assert!(tags.iter().any(|t| t.as_str() == Some("_snip_"))); // System tag preserved
         assert!(tags.iter().any(|t| t.as_str() == Some("python")));
@@ -453,12 +479,12 @@ mod integration_tests {
     #[tokio::test]
     async fn given_delete_snippet_command_when_executed_then_deletes_snippet() {
         // Arrange
-        use crate::lsp::backend::{BkmrLspBackend, BkmrConfig};
+        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
         use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
-        use serde_json::json;
-        
+
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let repository = crate::util::testing::setup_test_db();
@@ -469,16 +495,17 @@ mod integration_tests {
             embedder,
             Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
         ));
-        
+
         // Create LSP services with test setup
-        let snippet_service = Arc::new(LspSnippetService::with_service(bookmark_service.clone()));
+        let template_service = crate::application::services::factory::create_template_service();
+        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
         let completion_service = CompletionService::new(snippet_service);
         let document_service = DocumentService::new();
         let command_service = CommandService::with_service(bookmark_service);
-        
+
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
-                client, 
+                client,
                 BkmrConfig::default(),
                 completion_service,
                 document_service,
@@ -486,20 +513,24 @@ mod integration_tests {
             )
         });
         let backend = service.inner();
-        
+
         // Create a snippet first
-        let create_result = backend.execute_command(ExecuteCommandParams {
-            command: "bkmr.createSnippet".to_string(),
-            arguments: vec![json!({
-                "url": "to be deleted",
-                "title": "To Delete",
-                "tags": ["temp"]
-            })],
-            work_done_progress_params: Default::default(),
-        }).await.unwrap().unwrap();
-        
+        let create_result = backend
+            .execute_command(ExecuteCommandParams {
+                command: "bkmr.createSnippet".to_string(),
+                arguments: vec![json!({
+                    "url": "to be deleted",
+                    "title": "To Delete",
+                    "tags": ["temp"]
+                })],
+                work_done_progress_params: Default::default(),
+            })
+            .await
+            .unwrap()
+            .unwrap();
+
         let id = create_result.get("id").unwrap().as_i64().unwrap();
-        
+
         // Act - Delete the snippet
         let params = ExecuteCommandParams {
             command: "bkmr.deleteSnippet".to_string(),
@@ -508,16 +539,16 @@ mod integration_tests {
             })],
             work_done_progress_params: Default::default(),
         };
-        
+
         let result = backend.execute_command(params).await;
-        
+
         // Assert
         assert!(result.is_ok());
         let response = result.unwrap();
         assert!(response.is_some());
         let json = response.unwrap();
-        assert_eq!(json.get("success").unwrap().as_bool().unwrap(), true);
-        
+        assert!(json.get("success").unwrap().as_bool().unwrap());
+
         // Verify it's deleted by trying to get it
         let get_params = ExecuteCommandParams {
             command: "bkmr.getSnippet".to_string(),
@@ -526,9 +557,8 @@ mod integration_tests {
             })],
             work_done_progress_params: Default::default(),
         };
-        
-        let get_result = backend.execute_command(get_params).await.unwrap().unwrap();
-        assert_eq!(get_result.get("success").unwrap().as_bool().unwrap(), false);
-    }
 
+        let get_result = backend.execute_command(get_params).await.unwrap().unwrap();
+        assert!(!get_result.get("success").unwrap().as_bool().unwrap());
+    }
 }

@@ -2,17 +2,17 @@
 //!
 //! Provides Language Server Protocol functionality for snippet completion.
 
-use tower_lsp::{Client, LanguageServer, LspService, Server};
+use crate::domain::error::{DomainError, DomainResult};
+use serde_json::Value;
+use std::sync::Arc;
 use tower_lsp::jsonrpc::Result as LspResult;
 use tower_lsp::lsp_types::*;
-use serde_json::Value;
+use tower_lsp::{Client, LanguageServer, LspService, Server};
 use tracing::{debug, error, info, instrument, warn};
-use crate::domain::error::{DomainError, DomainResult};
-use std::sync::Arc;
 
-use crate::lsp::services::{CommandService, CompletionService, DocumentService, LspSnippetService};
 use crate::lsp::domain::{CompletionContext, CompletionQuery};
 use crate::lsp::error::LspError;
+use crate::lsp::services::{CommandService, CompletionService, DocumentService, LspSnippetService};
 
 /// Configuration for the bkmr-lsp server
 #[derive(Debug, Clone)]
@@ -49,19 +49,19 @@ impl BkmrLspBackend {
 
     pub fn with_config(client: Client, config: BkmrConfig) -> Self {
         debug!("Creating BkmrLspBackend with config: {:?}", config);
-        
-        // Create snippet service 
+
+        // Create snippet service
         let snippet_service = Arc::new(LspSnippetService::new());
-        
+
         // Create completion service with configuration
         let completion_service = CompletionService::with_config(snippet_service, config.clone());
-        
+
         // Create document service
         let document_service = DocumentService::new();
-        
+
         // Create command service
         let command_service = CommandService::new();
-        
+
         Self {
             client,
             config,
@@ -81,7 +81,7 @@ impl BkmrLspBackend {
         command_service: CommandService,
     ) -> Self {
         debug!("Creating BkmrLspBackend with test services");
-        
+
         Self {
             client,
             config,
@@ -95,7 +95,8 @@ impl BkmrLspBackend {
     /// Delegates to DocumentService
     #[instrument(skip(self))]
     fn extract_snippet_query(&self, uri: &Url, position: Position) -> Option<(String, Range)> {
-        self.document_service.extract_snippet_query_sync(uri, position)
+        self.document_service
+            .extract_snippet_query_sync(uri, position)
     }
 
     /// Get the language ID for a document URI
@@ -120,12 +121,16 @@ impl BkmrLspBackend {
                     return Err(DomainError::Other(format!("bkmr binary not found: {}", e)));
                 }
                 Err(_) => {
-                    return Err(DomainError::Other("bkmr --help command timed out".to_string()));
+                    return Err(DomainError::Other(
+                        "bkmr --help command timed out".to_string(),
+                    ));
                 }
             };
 
         if !output.status.success() {
-            return Err(DomainError::Other("bkmr binary is not working properly".to_string()));
+            return Err(DomainError::Other(
+                "bkmr binary is not working properly".to_string(),
+            ));
         }
 
         info!("bkmr binary verified successfully");
@@ -236,7 +241,11 @@ impl LanguageServer for BkmrLspBackend {
 
         debug!("Document opened: {} (language: {})", uri, language_id);
 
-        if let Err(e) = self.document_service.open_document(uri, language_id, content).await {
+        if let Err(e) = self
+            .document_service
+            .open_document(uri, language_id, content)
+            .await
+        {
             error!("Failed to open document: {}", e);
         }
     }
@@ -250,13 +259,21 @@ impl LanguageServer for BkmrLspBackend {
         for change in params.content_changes {
             // For FULL sync, replace entire content
             if change.range.is_none() {
-                if let Err(e) = self.document_service.update_document(uri.clone(), change.text).await {
+                if let Err(e) = self
+                    .document_service
+                    .update_document(uri.clone(), change.text)
+                    .await
+                {
                     error!("Failed to update document: {}", e);
                 }
             } else {
                 // For incremental sync, would need more complex logic
                 // For now, just replace entirely
-                if let Err(e) = self.document_service.update_document(uri.clone(), change.text).await {
+                if let Err(e) = self
+                    .document_service
+                    .update_document(uri.clone(), change.text)
+                    .await
+                {
                     error!("Failed to update document: {}", e);
                 }
             }
@@ -313,12 +330,8 @@ impl LanguageServer for BkmrLspBackend {
         debug!("Document language ID: {:?}", language_id);
 
         // Create completion context for the service
-        let mut context = CompletionContext::new(
-            uri.clone(),
-            position,
-            language_id
-        );
-        
+        let mut context = CompletionContext::new(uri.clone(), position, language_id);
+
         // Add query information if extracted
         if let Some((query, range)) = query_info {
             debug!("Query: '{}', Range: {:?}", query, range);
@@ -383,7 +396,10 @@ impl LanguageServer for BkmrLspBackend {
                                             info!("Successfully applied filepath comment edit");
                                             return Ok(Some(serde_json::json!({"success": true})));
                                         } else {
-                                            error!("Client failed to apply edit: {:?}", response.failure_reason);
+                                            error!(
+                                                "Client failed to apply edit: {:?}",
+                                                response.failure_reason
+                                            );
                                             return Ok(Some(serde_json::json!({
                                                 "success": false,
                                                 "error": response.failure_reason.unwrap_or_else(|| "Unknown error".to_string())
@@ -428,32 +444,47 @@ impl LanguageServer for BkmrLspBackend {
                     let url = arg.get("url").and_then(|v| v.as_str());
                     let title = arg.get("title").and_then(|v| v.as_str());
                     let description = arg.get("description").and_then(|v| v.as_str());
-                    let tags = arg.get("tags")
+                    let tags = arg
+                        .get("tags")
                         .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect::<Vec<_>>()
-                        )
+                        .map(|arr| {
+                            arr.iter()
+                                .filter_map(|v| v.as_str().map(String::from))
+                                .collect::<Vec<_>>()
+                        })
                         .unwrap_or_default();
-                    
+
                     if let (Some(url), Some(title)) = (url, title) {
-                        match self.command_service.create_snippet(url, title, description, tags) {
+                        match self
+                            .command_service
+                            .create_snippet(url, title, description, tags)
+                        {
                             Ok(result) => Ok(Some(result)),
                             Err(e) => Ok(Some(e.to_lsp_response())),
                         }
                     } else {
-                        Ok(Some(LspError::InvalidInput("Missing required fields: url and title".to_string()).to_lsp_response()))
+                        Ok(Some(
+                            LspError::InvalidInput(
+                                "Missing required fields: url and title".to_string(),
+                            )
+                            .to_lsp_response(),
+                        ))
                     }
                 } else {
-                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                    Ok(Some(
+                        LspError::InvalidInput("No arguments provided".to_string())
+                            .to_lsp_response(),
+                    ))
                 }
             }
             "bkmr.listSnippets" => {
                 // Parse optional language parameter
-                let language_id = params.arguments.first()
+                let language_id = params
+                    .arguments
+                    .first()
                     .and_then(|arg| arg.get("language"))
                     .and_then(|v| v.as_str());
-                
+
                 match self.command_service.list_snippets(language_id) {
                     Ok(result) => Ok(Some(result)),
                     Err(e) => Ok(Some(e.to_lsp_response())),
@@ -468,10 +499,16 @@ impl LanguageServer for BkmrLspBackend {
                             Err(e) => Ok(Some(e.to_lsp_response())),
                         }
                     } else {
-                        Ok(Some(LspError::InvalidInput("Missing or invalid id parameter".to_string()).to_lsp_response()))
+                        Ok(Some(
+                            LspError::InvalidInput("Missing or invalid id parameter".to_string())
+                                .to_lsp_response(),
+                        ))
                     }
                 } else {
-                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                    Ok(Some(
+                        LspError::InvalidInput("No arguments provided".to_string())
+                            .to_lsp_response(),
+                    ))
                 }
             }
             "bkmr.updateSnippet" => {
@@ -481,23 +518,31 @@ impl LanguageServer for BkmrLspBackend {
                     let url = arg.get("url").and_then(|v| v.as_str());
                     let title = arg.get("title").and_then(|v| v.as_str());
                     let description = arg.get("description").and_then(|v| v.as_str());
-                    let tags = arg.get("tags")
-                        .and_then(|v| v.as_array())
-                        .map(|arr| arr.iter()
+                    let tags = arg.get("tags").and_then(|v| v.as_array()).map(|arr| {
+                        arr.iter()
                             .filter_map(|v| v.as_str().map(String::from))
                             .collect::<Vec<_>>()
-                        );
-                    
+                    });
+
                     if let Some(id) = id {
-                        match self.command_service.update_snippet(id, url, title, description, tags) {
+                        match self
+                            .command_service
+                            .update_snippet(id, url, title, description, tags)
+                        {
                             Ok(result) => Ok(Some(result)),
                             Err(e) => Ok(Some(e.to_lsp_response())),
                         }
                     } else {
-                        Ok(Some(LspError::InvalidInput("Missing required field: id".to_string()).to_lsp_response()))
+                        Ok(Some(
+                            LspError::InvalidInput("Missing required field: id".to_string())
+                                .to_lsp_response(),
+                        ))
                     }
                 } else {
-                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                    Ok(Some(
+                        LspError::InvalidInput("No arguments provided".to_string())
+                            .to_lsp_response(),
+                    ))
                 }
             }
             "bkmr.deleteSnippet" => {
@@ -509,10 +554,16 @@ impl LanguageServer for BkmrLspBackend {
                             Err(e) => Ok(Some(e.to_lsp_response())),
                         }
                     } else {
-                        Ok(Some(LspError::InvalidInput("Missing or invalid id parameter".to_string()).to_lsp_response()))
+                        Ok(Some(
+                            LspError::InvalidInput("Missing or invalid id parameter".to_string())
+                                .to_lsp_response(),
+                        ))
                     }
                 } else {
-                    Ok(Some(LspError::InvalidInput("No arguments provided".to_string()).to_lsp_response()))
+                    Ok(Some(
+                        LspError::InvalidInput("No arguments provided".to_string())
+                            .to_lsp_response(),
+                    ))
                 }
             }
             _ => {
@@ -530,7 +581,7 @@ impl LanguageServer for BkmrLspBackend {
 pub async fn run_server(no_interpolation: bool) {
     // Logging is now initialized in main.rs with proper color control
     // No need for duplicate initialization here
-    
+
     // Get version from Cargo.toml
     let version = env!("CARGO_PKG_VERSION");
     eprintln!("Starting bkmr LSP server v{}", version);
@@ -554,7 +605,8 @@ pub async fn run_server(no_interpolation: bool) {
     }
 
     // Set up the LSP service
-    let (service, socket) = LspService::new(|client| BkmrLspBackend::with_config(client, config.clone()));
+    let (service, socket) =
+        LspService::new(|client| BkmrLspBackend::with_config(client, config.clone()));
 
     eprintln!("LSP service created, starting server on stdin/stdout");
     info!("LSP service created, starting server on stdin/stdout");
@@ -567,7 +619,7 @@ pub async fn run_server(no_interpolation: bool) {
     eprintln!("Starting LSP server loop");
     info!("Starting LSP server loop");
     Server::new(stdin, stdout, socket).serve(service).await;
-    
+
     // If we reach here, the server has shut down gracefully
     info!("Server shutdown gracefully");
 }
@@ -594,4 +646,3 @@ async fn validate_environment() -> Result<(), Box<dyn std::error::Error + Send +
 
     Ok(())
 }
-

@@ -8,12 +8,12 @@ use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::util::helper::calc_content_hash;
 use crate::util::path::{abspath, is_file_path};
 use markdown::{to_html_with_options, Options};
+use regex::Regex;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument};
-use regex::Regex;
 
 /// Represents a table of contents entry
 #[derive(Debug, Clone)]
@@ -31,15 +31,11 @@ pub struct MarkdownAction {
 impl MarkdownAction {
     #[allow(dead_code)]
     pub fn new() -> Self {
-        Self {
-            repository: None,
-        }
+        Self { repository: None }
     }
 
     // Constructor with repository for embedding support
-    pub fn new_with_repository(
-        repository: Arc<dyn BookmarkRepository>,
-    ) -> Self {
+    pub fn new_with_repository(repository: Arc<dyn BookmarkRepository>) -> Self {
         Self {
             repository: Some(repository),
         }
@@ -162,9 +158,9 @@ impl MarkdownAction {
         // Find all headers and process them
         let matches: Vec<_> = header_regex.find_iter(html_content).collect();
 
-        for (_i, m) in matches.iter().enumerate() {
+        for m in matches.iter() {
             let full_match = m.as_str();
-            
+
             if let Some(header_cap) = header_regex.captures(full_match) {
                 let level = match &header_cap[1] {
                     "h1" => 1,
@@ -172,9 +168,9 @@ impl MarkdownAction {
                     "h3" => 3,
                     _ => continue,
                 };
-                
+
                 let content = &header_cap[2];
-                
+
                 // Check if header already has an ID
                 let existing_id = id_regex.captures(full_match).map(|c| c[1].to_string());
 
@@ -183,11 +179,11 @@ impl MarkdownAction {
                 } else {
                     // Generate ID from content
                     let base_id = self.generate_header_id(content);
-                    
+
                     // Handle duplicates
                     let count = header_counts.entry(base_id.clone()).or_insert(0);
                     *count += 1;
-                    
+
                     if *count > 1 {
                         format!("{}-{}", base_id, *count - 1)
                     } else {
@@ -208,7 +204,7 @@ impl MarkdownAction {
                         "<{} id=\"{}\">{}</{}>",
                         &header_cap[1], header_id, content, &header_cap[1]
                     );
-                    
+
                     // Replace in the processed HTML
                     processed_html = processed_html.replace(full_match, &new_header);
                 }
@@ -222,7 +218,7 @@ impl MarkdownAction {
     fn generate_header_id(&self, content: &str) -> String {
         // Remove HTML tags and clean content
         let clean_content = self.clean_html_content(content);
-        
+
         // Convert to lowercase, replace spaces and special chars with hyphens
         clean_content
             .to_lowercase()
@@ -256,13 +252,15 @@ impl MarkdownAction {
         }
 
         let mut toc_html = String::new();
-        toc_html.push_str(r#"<nav class="toc-sidebar" id="toc-sidebar">
+        toc_html.push_str(
+            r#"<nav class="toc-sidebar" id="toc-sidebar">
                 <div class="toc-header">
                     <h3>Table of Contents</h3>
                     <button class="toc-toggle" id="toc-toggle">✕</button>
                 </div>
                 <ul class="toc-list">
-"#);
+"#,
+        );
 
         for entry in toc_entries {
             let indent_class = match entry.level {
@@ -278,9 +276,11 @@ impl MarkdownAction {
             ));
         }
 
-        toc_html.push_str(r#"                </ul>
+        toc_html.push_str(
+            r#"                </ul>
             </nav>
-            <button class="toc-mobile-toggle" id="toc-mobile-toggle">📋</button>"#);
+            <button class="toc-mobile-toggle" id="toc-mobile-toggle">📋</button>"#,
+        );
 
         toc_html
     }
@@ -1120,7 +1120,7 @@ mod tests {
     fn test_extract_and_process_headers_basic() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let html_content = r#"<h1>Main Title</h1>
 <p>Some content</p>
@@ -1128,27 +1128,27 @@ mod tests {
 <p>More content</p>
 <h3>Subsection 1.1</h3>
 <p>Even more content</p>"#;
-        
+
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
-        
+
         // Should find 3 headers
         assert_eq!(toc_entries.len(), 3);
-        
+
         // Check first entry (H1)
         assert_eq!(toc_entries[0].level, 1);
         assert_eq!(toc_entries[0].title, "Main Title");
         assert_eq!(toc_entries[0].id, "main-title");
-        
+
         // Check second entry (H2)
         assert_eq!(toc_entries[1].level, 2);
         assert_eq!(toc_entries[1].title, "Section 1");
         assert_eq!(toc_entries[1].id, "section-1");
-        
+
         // Check third entry (H3)
         assert_eq!(toc_entries[2].level, 3);
         assert_eq!(toc_entries[2].title, "Subsection 1.1");
         assert_eq!(toc_entries[2].id, "subsection-1-1");
-        
+
         // Check that IDs were added to the HTML
         assert!(processed_html.contains("<h1 id=\"main-title\">Main Title</h1>"));
         assert!(processed_html.contains("<h2 id=\"section-1\">Section 1</h2>"));
@@ -1159,19 +1159,19 @@ mod tests {
     fn test_extract_and_process_headers_with_existing_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let html_content = r#"<h1 id="existing-id">Title with ID</h1>
 <h2>Title without ID</h2>"#;
-        
+
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
-        
+
         assert_eq!(toc_entries.len(), 2);
-        
+
         // First header should keep existing ID
         assert_eq!(toc_entries[0].id, "existing-id");
         assert!(processed_html.contains("<h1 id=\"existing-id\">Title with ID</h1>"));
-        
+
         // Second header should get generated ID
         assert_eq!(toc_entries[1].id, "title-without-id");
         assert!(processed_html.contains("<h2 id=\"title-without-id\">Title without ID</h2>"));
@@ -1181,21 +1181,21 @@ mod tests {
     fn test_extract_and_process_headers_duplicate_titles() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let html_content = r#"<h1>Introduction</h1>
 <h2>Introduction</h2>
 <h3>Introduction</h3>"#;
-        
+
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
-        
+
         assert_eq!(toc_entries.len(), 3);
-        
+
         // Check duplicate handling
         assert_eq!(toc_entries[0].id, "introduction");
         assert_eq!(toc_entries[1].id, "introduction-1");
         assert_eq!(toc_entries[2].id, "introduction-2");
-        
+
         // Check processed HTML
         assert!(processed_html.contains("<h1 id=\"introduction\">Introduction</h1>"));
         assert!(processed_html.contains("<h2 id=\"introduction-1\">Introduction</h2>"));
@@ -1206,19 +1206,19 @@ mod tests {
     fn test_extract_and_process_headers_with_html_content() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let html_content = r#"<h1>Title with <strong>bold</strong> and <em>italic</em></h1>
 <h2>Code: <code>function()</code></h2>"#;
-        
+
         let (_processed_html, toc_entries) = action.extract_and_process_headers(html_content);
-        
+
         assert_eq!(toc_entries.len(), 2);
-        
+
         // Check that HTML tags are stripped from titles
         assert_eq!(toc_entries[0].title, "Title with bold and italic");
         assert_eq!(toc_entries[1].title, "Code: function()");
-        
+
         // Check IDs are generated from clean content
         assert_eq!(toc_entries[0].id, "title-with-bold-and-italic");
         assert_eq!(toc_entries[1].id, "code-function");
@@ -1228,12 +1228,12 @@ mod tests {
     fn test_extract_and_process_headers_empty_content() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let html_content = "<p>No headers here</p>";
-        
+
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
-        
+
         assert_eq!(toc_entries.len(), 0);
         assert_eq!(processed_html, html_content); // Should be unchanged
     }
@@ -1242,7 +1242,7 @@ mod tests {
     fn test_extract_and_process_headers_ignores_h4_and_higher() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let html_content = r#"<h1>H1 Title</h1>
 <h2>H2 Title</h2>
@@ -1250,15 +1250,15 @@ mod tests {
 <h4>H4 Title</h4>
 <h5>H5 Title</h5>
 <h6>H6 Title</h6>"#;
-        
+
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
-        
+
         // Should only find H1, H2, H3
         assert_eq!(toc_entries.len(), 3);
         assert_eq!(toc_entries[0].level, 1);
         assert_eq!(toc_entries[1].level, 2);
         assert_eq!(toc_entries[2].level, 3);
-        
+
         // H4, H5, H6 should be unchanged in processed HTML
         assert!(processed_html.contains("<h4>H4 Title</h4>"));
         assert!(processed_html.contains("<h5>H5 Title</h5>"));
@@ -1269,57 +1269,81 @@ mod tests {
     fn test_generate_header_id() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
-        
+
         // Test normal text
         assert_eq!(action.generate_header_id("Simple Title"), "simple-title");
-        
+
         // Test with special characters
-        assert_eq!(action.generate_header_id("Title with Special! @#$% Characters"), "title-with-special-characters");
-        
+        assert_eq!(
+            action.generate_header_id("Title with Special! @#$% Characters"),
+            "title-with-special-characters"
+        );
+
         // Test with numbers
         assert_eq!(action.generate_header_id("Section 1.2.3"), "section-1-2-3");
-        
+
         // Test with extra spaces and hyphens
-        assert_eq!(action.generate_header_id("  Multiple   Spaces  and--Hyphens  "), "multiple-spaces-and-hyphens");
-        
+        assert_eq!(
+            action.generate_header_id("  Multiple   Spaces  and--Hyphens  "),
+            "multiple-spaces-and-hyphens"
+        );
+
         // Test with HTML content
-        assert_eq!(action.generate_header_id("Title with <strong>HTML</strong> tags"), "title-with-html-tags");
+        assert_eq!(
+            action.generate_header_id("Title with <strong>HTML</strong> tags"),
+            "title-with-html-tags"
+        );
     }
 
     #[test]
     fn test_clean_html_content() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
-        
+
         // Test removing HTML tags
-        assert_eq!(action.clean_html_content("<strong>Bold</strong> text"), "Bold text");
-        assert_eq!(action.clean_html_content("<em>Italic</em> and <code>code</code>"), "Italic and code");
-        assert_eq!(action.clean_html_content("<a href='#'>Link</a> text"), "Link text");
-        
+        assert_eq!(
+            action.clean_html_content("<strong>Bold</strong> text"),
+            "Bold text"
+        );
+        assert_eq!(
+            action.clean_html_content("<em>Italic</em> and <code>code</code>"),
+            "Italic and code"
+        );
+        assert_eq!(
+            action.clean_html_content("<a href='#'>Link</a> text"),
+            "Link text"
+        );
+
         // Test with nested tags
-        assert_eq!(action.clean_html_content("<div><span>Nested</span> content</div>"), "Nested content");
-        
+        assert_eq!(
+            action.clean_html_content("<div><span>Nested</span> content</div>"),
+            "Nested content"
+        );
+
         // Test with no HTML
         assert_eq!(action.clean_html_content("Plain text"), "Plain text");
-        
+
         // Test with self-closing tags
-        assert_eq!(action.clean_html_content("Text with <br/> break"), "Text with  break");
+        assert_eq!(
+            action.clean_html_content("Text with <br/> break"),
+            "Text with  break"
+        );
     }
 
     #[test]
     fn test_generate_toc_html_empty() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let toc_entries = vec![];
-        
+
         let toc_html = action.generate_toc_html(&toc_entries);
-        
+
         assert_eq!(toc_html, "");
     }
 
@@ -1327,7 +1351,7 @@ mod tests {
     fn test_generate_toc_html_with_entries() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
         let toc_entries = vec![
             TocEntry {
@@ -1346,39 +1370,38 @@ mod tests {
                 id: "subsection-1-1".to_string(),
             },
         ];
-        
+
         let toc_html = action.generate_toc_html(&toc_entries);
-        
+
         // Check that HTML contains the sidebar structure
         assert!(toc_html.contains("<nav class=\"toc-sidebar\" id=\"toc-sidebar\">"));
         assert!(toc_html.contains("Table of Contents"));
         assert!(toc_html.contains("<ul class=\"toc-list\">"));
-        
+
         // Check that entries are included with correct classes
         assert!(toc_html.contains("<li class=\"toc-item toc-h1\"><a href=\"#main-title\" class=\"toc-link\">Main Title</a></li>"));
         assert!(toc_html.contains("<li class=\"toc-item toc-h2\"><a href=\"#section-1\" class=\"toc-link\">Section 1</a></li>"));
         assert!(toc_html.contains("<li class=\"toc-item toc-h3\"><a href=\"#subsection-1-1\" class=\"toc-link\">Subsection 1.1</a></li>"));
-        
+
         // Check mobile toggle button
-        assert!(toc_html.contains("<button class=\"toc-mobile-toggle\" id=\"toc-mobile-toggle\">📋</button>"));
+        assert!(toc_html
+            .contains("<button class=\"toc-mobile-toggle\" id=\"toc-mobile-toggle\">📋</button>"));
     }
 
     #[test]
     fn test_generate_toc_html_special_characters_in_titles() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
-        
+
         let action = MarkdownAction::new();
-        let toc_entries = vec![
-            TocEntry {
-                level: 1,
-                title: "Title with & < > \" characters".to_string(),
-                id: "title-with-characters".to_string(),
-            },
-        ];
-        
+        let toc_entries = vec![TocEntry {
+            level: 1,
+            title: "Title with & < > \" characters".to_string(),
+            id: "title-with-characters".to_string(),
+        }];
+
         let toc_html = action.generate_toc_html(&toc_entries);
-        
+
         // Check that special characters are preserved in the title
         assert!(toc_html.contains("Title with & < > \" characters"));
         assert!(toc_html.contains("href=\"#title-with-characters\""));

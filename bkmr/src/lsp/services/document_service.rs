@@ -52,7 +52,11 @@ impl DocumentService {
 
     /// Update document content
     #[instrument(skip(self, content))]
-    pub async fn update_document(&self, uri: String, content: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn update_document(
+        &self,
+        uri: String,
+        content: String,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         debug!("Updating document: {}", uri);
 
         let mut cache = self.document_cache.write().await;
@@ -63,7 +67,10 @@ impl DocumentService {
 
     /// Close a document and remove from cache
     #[instrument(skip(self))]
-    pub async fn close_document(&self, uri: String) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn close_document(
+        &self,
+        uri: String,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         debug!("Closing document: {}", uri);
 
         {
@@ -170,7 +177,11 @@ impl DocumentService {
 
     /// Extract snippet query synchronously for compatibility with existing backend
     /// This is a temporary bridge method to maintain compatibility
-    pub fn extract_snippet_query_sync(&self, uri: &Url, position: Position) -> Option<(String, Range)> {
+    pub fn extract_snippet_query_sync(
+        &self,
+        uri: &Url,
+        position: Position,
+    ) -> Option<(String, Range)> {
         // Try to get read lock without waiting
         if let Ok(cache) = self.document_cache.try_read() {
             let content = cache.get(&uri.to_string())?;

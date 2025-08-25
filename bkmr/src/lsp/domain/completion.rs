@@ -60,6 +60,7 @@ pub struct SnippetFilter {
     pub language_id: Option<String>,
     pub query_prefix: Option<String>,
     pub max_results: usize,
+    pub enable_interpolation: bool,
 }
 
 impl SnippetFilter {
@@ -67,11 +68,13 @@ impl SnippetFilter {
         language_id: Option<String>,
         query_prefix: Option<String>,
         max_results: usize,
+        enable_interpolation: bool,
     ) -> Self {
         Self {
             language_id,
             query_prefix,
             max_results,
+            enable_interpolation,
         }
     }
 
@@ -97,6 +100,7 @@ impl Default for SnippetFilter {
             language_id: None,
             query_prefix: None,
             max_results: 50,
+            enable_interpolation: true,
         }
     }
 }
@@ -191,7 +195,7 @@ mod tests {
     #[test]
     fn given_language_id_when_building_fts_query_then_includes_universal_snippets() {
         // Arrange
-        let filter = SnippetFilter::new(Some("rust".to_string()), None, 50);
+        let filter = SnippetFilter::new(Some("rust".to_string()), None, 50, true);
 
         // Act
         let query = filter.build_fts_query();
@@ -209,7 +213,7 @@ mod tests {
     #[test]
     fn given_no_language_id_when_building_fts_query_then_returns_basic_query() {
         // Arrange
-        let filter = SnippetFilter::new(None, None, 50);
+        let filter = SnippetFilter::new(None, None, 50, true);
 
         // Act
         let query = filter.build_fts_query();
@@ -221,7 +225,7 @@ mod tests {
     #[test]
     fn given_empty_language_id_when_building_fts_query_then_returns_basic_query() {
         // Arrange
-        let filter = SnippetFilter::new(Some("".to_string()), None, 50);
+        let filter = SnippetFilter::new(Some("".to_string()), None, 50, true);
 
         // Act
         let query = filter.build_fts_query();

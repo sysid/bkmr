@@ -10,7 +10,7 @@ use tracing::{debug, instrument};
 // Import our new config module
 use crate::config::{load_settings, Settings};
 
-/** Global AppState (“Service Locator” Style)
+/* Global AppState ("Service Locator" Style)
 Global State Management:
 The AppState struct and APP_STATE static variable provide global access to application state using
 a thread-safe RwLock. This pattern is used throughout the codebase.
@@ -32,7 +32,7 @@ need to keep AppState struct, but modify it to use our new configuration system 
   let db_url = &app_state.settings.db_url;
   let embedder = &app_state.context.embedder;
 
-  This returns a read guard, preventing concurrent writes while it’s in use.
+  This returns a read guard, preventing concurrent writes while it's in use.
 
   write access:
   let mut new_state = AppState::new();
@@ -42,7 +42,6 @@ need to keep AppState struct, but modify it to use our new configuration system 
   refresh from environment:
   AppState::reload_settings()?;
 */
-
 // Keep the Context struct as-is
 pub struct Context {
     pub embedder: Arc<dyn Embedder>,

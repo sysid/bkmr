@@ -50,7 +50,7 @@ impl Tag {
     }
 
     /// Parse an optional string into an `Option<HashSet<Tag>>`.
-    /// 
+    ///
     /// Returns `None` if the input is `None` or an empty string.
     /// Otherwise, parses the string into a `HashSet<Tag>` and wraps it in `Some`.
     pub fn parse_tag_option(

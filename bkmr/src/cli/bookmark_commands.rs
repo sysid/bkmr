@@ -1,27 +1,29 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
 use crate::application::actions::MarkdownAction;
-use crate::application::services::factory::{create_action_service, create_bookmark_service, create_tag_service, create_template_service};
+use crate::application::services::factory::{
+    create_action_service, create_bookmark_service, create_tag_service, create_template_service,
+};
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::ConfigSource;
 use crate::domain::bookmark::Bookmark;
+use crate::domain::error_context::CliErrorContext;
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::embeddings::DummyEmbedding;
+use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
-use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
-use crate::domain::error_context::CliErrorContext;
 use crate::util::argument_processor::ArgumentProcessor;
-use crate::util::helper::{format_file_path, format_mtime};
 use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
+use crate::util::helper::{format_file_path, format_mtime};
 use chrono;
 use crossterm::style::Stylize;
 use std::collections::HashSet;
@@ -39,10 +41,6 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
     ensure_int_vector(&string_vec)
         .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
 }
-
-
-
-
 
 #[instrument(skip(stderr, cli))]
 pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
@@ -127,7 +125,13 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn open(cli: Cli) -> CliResult<()> {
-    if let Commands::Open { ids, no_edit, file, script_args } = cli.command.unwrap() {
+    if let Commands::Open {
+        ids,
+        no_edit,
+        file,
+        script_args,
+    } = cli.command.unwrap()
+    {
         if file {
             // Handle direct file viewing
             handle_file_viewing(&ids)?;
@@ -143,7 +147,11 @@ pub fn open(cli: Cli) -> CliResult<()> {
                     eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                     // Execute default action with access recording handled by action service
-                    action_service.execute_default_action_with_options(&bookmark, no_edit, &script_args)?;
+                    action_service.execute_default_action_with_options(
+                        &bookmark,
+                        no_edit,
+                        &script_args,
+                    )?;
                 } else {
                     eprintln!("Bookmark with ID {} not found", id);
                 }
@@ -157,7 +165,7 @@ pub fn open(cli: Cli) -> CliResult<()> {
 fn handle_file_viewing(file_path: &str) -> CliResult<()> {
     use crate::domain::action::BookmarkAction;
     use std::collections::HashSet;
-    
+
     // Check if file exists first
     if !Path::new(file_path).exists() {
         return Err(CliError::Other(format!(
@@ -181,7 +189,7 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
     // Create a minimal bookmark structure - the MarkdownAction already handles file paths in url field
     let mut tags = HashSet::new();
     tags.insert(Tag::new("_md_").map_err(|e| CliError::Other(e.to_string()))?);
-    
+
     let temp_bookmark = Bookmark {
         id: None,
         url: file_path.to_string(), // File path - MarkdownAction will detect this and read the file
@@ -211,7 +219,11 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
 fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
     if matches!(
         system_tag,
-        SystemTag::Markdown | SystemTag::Snippet | SystemTag::Text | SystemTag::Shell | SystemTag::Env
+        SystemTag::Markdown
+            | SystemTag::Snippet
+            | SystemTag::Text
+            | SystemTag::Shell
+            | SystemTag::Env
     ) {
         content.replace("\\n", "\n")
     } else {
@@ -259,9 +271,10 @@ pub fn add(cli: Cli) -> CliResult<()> {
         let final_url = if stdin {
             use std::io::{self, Read};
             let mut content = String::new();
-            io::stdin().read_to_string(&mut content)
+            io::stdin()
+                .read_to_string(&mut content)
                 .cli_context("Failed to read from stdin")?;
-            
+
             // Trim trailing newline for cleaner content
             Some(content.trim_end().to_string())
         } else {
@@ -542,7 +555,10 @@ pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
     if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
         let formatted_path = format_file_path(file_path, 120);
         let formatted_time = format_mtime(file_mtime);
-        details.push_str(&format!("\n  Source File: {} (modified: {})", formatted_path, formatted_time));
+        details.push_str(&format!(
+            "\n  Source File: {} (modified: {})",
+            formatted_path, formatted_time
+        ));
     }
 
     details.push('\n');
@@ -1111,9 +1127,9 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
 
 pub fn import_files(cli: Cli) -> CliResult<()> {
     use crate::application::error::ApplicationError;
+    use crate::config::{has_base_path, load_settings};
     use crate::exitcode;
-    use crate::config::{load_settings, has_base_path};
-    
+
     if let Some(Commands::ImportFiles {
         paths,
         update,
@@ -1127,34 +1143,68 @@ pub fn import_files(cli: Cli) -> CliResult<()> {
         if let Some(ref base_path_name) = base_path {
             let settings = load_settings(cli.config.as_deref())
                 .map_err(|e| CliError::Other(format!("Failed to load configuration: {}", e)))?;
-            
+
             if !has_base_path(&settings, base_path_name) {
-                eprintln!("{}", format!("Error: Base path '{}' not found in configuration", base_path_name).red());
+                eprintln!(
+                    "{}",
+                    format!(
+                        "Error: Base path '{}' not found in configuration",
+                        base_path_name
+                    )
+                    .red()
+                );
                 eprintln!("Add it to your config.toml under [base_paths]:");
                 eprintln!("  [base_paths]");
                 eprintln!("  {} = \"$HOME/your/path\"", base_path_name);
                 std::process::exit(exitcode::USAGE);
             }
         }
-        
+
         let service = create_bookmark_service();
-        
+
         if dry_run {
             println!("{}", "Dry run mode - showing what would be done:".green());
         }
-        
-        match service.import_files(&paths, update, delete_missing, dry_run, verbose, base_path.as_deref()) {
+
+        match service.import_files(
+            &paths,
+            update,
+            delete_missing,
+            dry_run,
+            verbose,
+            base_path.as_deref(),
+        ) {
             Ok((added, updated, deleted)) => {
                 if dry_run {
-                    println!("Would add: {}, update: {}, delete: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
+                    println!(
+                        "Would add: {}, update: {}, delete: {}",
+                        added.to_string().green(),
+                        updated.to_string().yellow(),
+                        deleted.to_string().red()
+                    );
                 } else {
-                    println!("Added: {}, Updated: {}, Deleted: {}", added.to_string().green(), updated.to_string().yellow(), deleted.to_string().red());
+                    println!(
+                        "Added: {}, Updated: {}, Deleted: {}",
+                        added.to_string().green(),
+                        updated.to_string().yellow(),
+                        deleted.to_string().red()
+                    );
                 }
                 Ok(())
             }
-            Err(ApplicationError::DuplicateName { name, existing_id, file_path }) => {
-                eprintln!("{}", format!("Error: Duplicate name '{}' found in {}", name, file_path).red());
-                eprintln!("Existing bookmark with same name already exists (ID: {})", existing_id);
+            Err(ApplicationError::DuplicateName {
+                name,
+                existing_id,
+                file_path,
+            }) => {
+                eprintln!(
+                    "{}",
+                    format!("Error: Duplicate name '{}' found in {}", name, file_path).red()
+                );
+                eprintln!(
+                    "Existing bookmark with same name already exists (ID: {})",
+                    existing_id
+                );
                 eprintln!("Use --update flag to overwrite existing bookmarks with changed content");
                 std::process::exit(exitcode::DUP);
             }
@@ -1164,7 +1214,9 @@ pub fn import_files(cli: Cli) -> CliResult<()> {
             }
         }
     } else {
-        Err(CliError::InvalidInput("Expected ImportFiles command".to_string()))
+        Err(CliError::InvalidInput(
+            "Expected ImportFiles command".to_string(),
+        ))
     }
 }
 
@@ -1188,18 +1240,6 @@ mod tests {
         let result = get_ids(ids);
         assert!(result.is_err());
     }
-
-
-
-
-
-
-
-
-
-
-
-
 
     #[test]
     fn test_pre_fill_database() {
@@ -1291,5 +1331,3 @@ mod tests {
         assert!(snippets > 0, "Database should contain snippet entries");
     }
 }
-
-
