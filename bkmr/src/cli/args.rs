@@ -197,7 +197,11 @@ pub enum Commands {
         force_db: bool,
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
-    Show { ids: String },
+    Show { 
+        ids: String,
+        #[arg(long = "json", help = "output as json")]
+        is_json: bool,
+    },
     /// Opens n random URLs
     Surprise {
         #[arg(short = 'n', help = "number of URLs to open", default_value_t = 1)]

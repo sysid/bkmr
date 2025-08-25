@@ -17,6 +17,7 @@ use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
+use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::domain::error_context::CliErrorContext;
 use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::{format_file_path, format_mtime};
@@ -480,17 +481,29 @@ pub fn edit(cli: Cli) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn show(cli: Cli) -> CliResult<()> {
-    if let Commands::Show { ids } = cli.command.unwrap() {
+    if let Commands::Show { ids, is_json } = cli.command.unwrap() {
         let bookmark_service = create_bookmark_service();
 
         let id_list = get_ids(ids)?;
+        let mut bookmarks = Vec::new();
 
         for id in id_list {
             if let Some(_bookmark) = bookmark_service.get_bookmark(id)? {
                 let updated_bookmark = bookmark_service.record_bookmark_access(id)?;
-                print!("{}", show_bookmark_details(&updated_bookmark));
+                bookmarks.push(updated_bookmark);
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
+            }
+        }
+
+        if is_json {
+            // Output bookmarks as JSON
+            let json_views = JsonBookmarkView::from_domain_collection(&bookmarks);
+            write_bookmarks_as_json(&json_views)?;
+        } else {
+            // Output bookmarks in detailed format (existing behavior)
+            for bookmark in &bookmarks {
+                print!("{}", show_bookmark_details(bookmark));
             }
         }
     }
