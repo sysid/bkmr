@@ -33,7 +33,8 @@
 
 ### NEW: [Editor Integrations!](#editor-integrations)
 
-- **Built-in LSP server**: Use `bkmr lsp` for VS Code, Vim/Neovim, Emacs - automatic snippet completion with language-aware filtering
+- **Built-in LSP server**: Use `bkmr lsp` for VS Code, Vim, Emacs - automatic snippet completion with language-aware filtering
+- **[Neovim Plugin](https://github.com/sysid/bkmr-nvim)**: Visual interface with Telescope integration and zero configuration
 - **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin for all IDEs
 
 ## Core Features
@@ -307,9 +308,30 @@ For detailed documentation on advanced features:
 
 Instead of switching between editor and terminal, access snippets directly within the IDE.
 
+### Neovim Plugin (Recommended for Neovim Users)
+
+**[bkmr-nvim](https://github.com/sysid/bkmr-nvim)** provides the best Neovim integration experience with visual interface and zero configuration.
+
+**Installation with lazy.nvim:**
+```lua
+{
+  "sysid/bkmr-nvim",
+  dependencies = { "nvim-lua/plenary.nvim" },
+  config = function()
+    require("bkmr").setup() -- Zero config required!
+  end,
+}
+```
+
+**Key Features:**
+- **Visual snippet browser**: Telescope/FZF integration for browsing and searching
+- **In-editor editing**: Create and edit snippets without leaving Neovim
+- **Automatic LSP setup**: Configures bkmr LSP server automatically
+- **Custom commands**: `:Bkmr`, `:BkmrEdit`, `:BkmrSearch`
+
 ### Built-in LSP Server
 
-**bkmr** includes a built-in Language Server Protocol (LSP) server accessible via `bkmr lsp` for any LSP-compatible editor.
+**bkmr** includes a built-in Language Server Protocol (LSP) server accessible via `bkmr lsp` for any LSP-compatible editor (VS Code, Vim, Emacs, Sublime, etc.).
 
 **Usage:**
 ```bash
@@ -321,17 +343,17 @@ bkmr lsp --no-interpolation
 ```
 
 **Key Features:**
-- **Automatic completion**: Snippets appear in completion popup while typing (no trigger characters needed)
-- **Language-aware filtering**: Automatically shows only relevant snippets based on current file type
-- **Universal snippets**: Write snippets in natural Rust syntax that automatically adapt to target languages
-- **Template interpolation**: Server-side processing of bkmr templates with live data
-- **LSP commands**: Additional functionality like automatic filepath comment insertion
+- **Automatic completion**: Snippets appear in completion popup while typing
+- **Language-aware filtering**: Shows only relevant snippets based on file type
+- **Universal snippets**: Write once in Rust syntax, automatically adapt to any language
+- **Template interpolation**: Server-side processing of bkmr templates
+- **LSP commands**: CRUD operations and utilities directly from editor
 
-For comprehensive documentation including editor configuration, troubleshooting, and advanced features, see [LSP Documentation](./docs/lsp.md).
+For comprehensive documentation including editor configuration, see [LSP Documentation](./docs/lsp.md).
 
 ### IntelliJ Platform Plugin
 
-**[bkmr-intellij-plugin](https://github.com/sysid/bkmr-intellij-plugin)** brings bkmr integration to all JetBrains IDEs with native IntelliJ Platform integration.
+**[bkmr-intellij-plugin](https://github.com/sysid/bkmr-intellij-plugin)** brings bkmr integration to all JetBrains IDEs.
 
 **Key Features:**
 - **Seamless LSP integration**: Automatic snippet completion with no manual triggers

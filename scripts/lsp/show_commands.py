@@ -53,10 +53,10 @@ class LSPCommandExplorer:
         "bkmr.createSnippet": {
             "description": "Create a new snippet in the database",
             "parameters": {
-                "url": "Snippet content/code",
-                "title": "Snippet title",
+                "url": "Snippet content/code (required)",
+                "title": "Snippet title (required)",
                 "description": "Optional description",
-                "tags": "List of tags"
+                "tags": "List of tags (optional)"
             },
             "example": {
                 "url": "console.log('Hello, World!');",
@@ -68,22 +68,24 @@ class LSPCommandExplorer:
         "bkmr.updateSnippet": {
             "description": "Update an existing snippet",
             "parameters": {
-                "id": "Snippet ID",
-                "url": "Updated content",
-                "title": "Updated title",
-                "tags": "Updated tags"
+                "id": "Snippet ID (required)",
+                "url": "Updated content (optional)",
+                "title": "Updated title (optional)",
+                "description": "Updated description (optional)",
+                "tags": "Updated tags (optional)"
             },
             "example": {
                 "id": 1,
                 "url": "console.log('Updated!');",
                 "title": "Updated JavaScript",
+                "description": "Updated console log example",
                 "tags": ["javascript", "updated"]
             }
         },
         "bkmr.deleteSnippet": {
             "description": "Delete a snippet from the database",
             "parameters": {
-                "id": "Snippet ID to delete"
+                "id": "Snippet ID to delete (required)"
             },
             "example": {
                 "id": 1
@@ -92,7 +94,7 @@ class LSPCommandExplorer:
         "bkmr.getSnippet": {
             "description": "Retrieve a specific snippet by ID",
             "parameters": {
-                "id": "Snippet ID to retrieve"
+                "id": "Snippet ID to retrieve (required)"
             },
             "example": {
                 "id": 1
@@ -107,23 +109,12 @@ class LSPCommandExplorer:
                 "language": "rust"
             }
         },
-        "bkmr.searchSnippets": {
-            "description": "Search snippets by query",
-            "parameters": {
-                "query": "Search query string"
-            },
-            "example": {
-                "query": "async"
-            }
-        },
         "bkmr.insertFilepathComment": {
             "description": "Insert a comment with the current file path",
             "parameters": {
-                "uri": "File URI"
+                "(direct string)": "File URI as direct string argument (required)"
             },
-            "example": {
-                "uri": "file:///path/to/file.rs"
-            }
+            "example": "file:///path/to/file.rs"
         }
     }
     
