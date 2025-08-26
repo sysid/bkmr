@@ -140,7 +140,10 @@ pub enum Commands {
         ids: String,
         #[arg(long = "no-edit", help = "skip interactive editing for shell scripts")]
         no_edit: bool,
-        #[arg(long = "file", help = "treat ids parameter as file path for direct viewing")]
+        #[arg(
+            long = "file",
+            help = "treat ids parameter as file path for direct viewing"
+        )]
         file: bool,
         #[arg(
             last = true,
@@ -193,11 +196,18 @@ pub enum Commands {
     Edit {
         /// Edit bookmarks, list of ids, separated by comma, no blanks
         ids: String,
-        #[arg(long = "force-db", help = "force edit database content instead of source file for file-imported bookmarks")]
+        #[arg(
+            long = "force-db",
+            help = "force edit database content instead of source file for file-imported bookmarks"
+        )]
         force_db: bool,
     },
     /// Show Bookmarks (list of ids, separated by comma, no blanks)
-    Show { ids: String },
+    Show {
+        ids: String,
+        #[arg(long = "json", help = "output as json")]
+        is_json: bool,
+    },
     /// Opens n random URLs
     Surprise {
         #[arg(short = 'n', help = "number of URLs to open", default_value_t = 1)]
@@ -270,16 +280,16 @@ pub enum Commands {
     },
 
     /// Import files from directories, parsing frontmatter metadata.
-    /// 
+    ///
     /// Supported file types: .sh (shell scripts), .py (python scripts), .md (markdown files)
-    /// 
+    ///
     /// Required frontmatter format (YAML):
     /// ---
     /// name: "Script Name"        # Required: bookmark title
     /// tags: ["tag1", "tag2"]     # Optional: comma-separated tags  
     /// type: "_shell_"            # Optional: content type (_shell_, _md_, _snip_)
     /// ---
-    /// 
+    ///
     /// Or hash-style format (for scripts):
     /// #!/bin/bash
     /// # name: Script Name
@@ -291,30 +301,34 @@ pub enum Commands {
         paths: Vec<String>,
 
         #[arg(
-            short = 'u', 
-            long = "update", 
+            short = 'u',
+            long = "update",
             help = "Update existing bookmarks when content differs"
         )]
         update: bool,
 
         #[arg(
-            long = "delete-missing", 
+            long = "delete-missing",
             help = "Delete bookmarks whose source files no longer exist"
         )]
         delete_missing: bool,
 
-        #[arg(short = 'd', long = "dry-run", help = "Show what would be done without making changes")]
+        #[arg(
+            short = 'd',
+            long = "dry-run",
+            help = "Show what would be done without making changes"
+        )]
         dry_run: bool,
 
         #[arg(
             short = 'v',
-            long = "verbose", 
+            long = "verbose",
             help = "Show detailed information about skipped files and validation issues"
         )]
         verbose: bool,
 
         #[arg(
-            long = "base-path", 
+            long = "base-path",
             help = "Base path variable name from config (e.g., SCRIPTS_HOME). Paths must be relative to the base path location."
         )]
         base_path: Option<String>,

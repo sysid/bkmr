@@ -272,7 +272,10 @@ fn apply_env_overrides(settings: &mut Settings) {
     }
 
     if let Ok(shell_interactive) = std::env::var("BKMR_SHELL_INTERACTIVE") {
-        trace!("Using BKMR_SHELL_INTERACTIVE from environment: {}", shell_interactive);
+        trace!(
+            "Using BKMR_SHELL_INTERACTIVE from environment: {}",
+            shell_interactive
+        );
         settings.shell_opts.interactive = shell_interactive.to_lowercase() == "true";
         used_env_vars = true;
     }
@@ -304,16 +307,17 @@ pub fn has_base_path(settings: &Settings, name: &str) -> bool {
 /// Resolve a file path with base path variables
 pub fn resolve_file_path(settings: &Settings, path: &str) -> String {
     let mut resolved = path.to_string();
-    
+
     // Replace base path variables
     for (name, base_path) in &settings.base_paths {
         let var_pattern = format!("${}", name);
         if resolved.contains(&var_pattern) {
-            let expanded_base = shellexpand::full(base_path).unwrap_or(std::borrow::Cow::Borrowed(base_path));
+            let expanded_base =
+                shellexpand::full(base_path).unwrap_or(std::borrow::Cow::Borrowed(base_path));
             resolved = resolved.replace(&var_pattern, &expanded_base);
         }
     }
-    
+
     // Also handle standard environment variables
     match shellexpand::full(&resolved) {
         Ok(expanded) => expanded.to_string(),
@@ -542,9 +546,7 @@ mod tests {
                 show_action: true,
                 show_file_info: true,
             },
-            shell_opts: ShellOpts {
-                interactive: true,
-            },
+            shell_opts: ShellOpts { interactive: true },
             base_paths: HashMap::new(),
             config_source: ConfigSource::ConfigFile,
         };
@@ -604,23 +606,29 @@ mod tests {
     #[test]
     fn test_shell_interactive_environment_override() {
         let _guard = EnvGuard::new();
-        
+
         // Set environment variable to disable interactive mode
         env::set_var("BKMR_SHELL_INTERACTIVE", "false");
         env::remove_var("BKMR_DB_URL");
         env::remove_var("BKMR_FZF_OPTS");
-        
+
         let settings = load_settings(None).unwrap();
-        
+
         // Check that shell interactive was overridden
-        assert!(!settings.shell_opts.interactive, "Should disable interactive mode via environment");
-        
+        assert!(
+            !settings.shell_opts.interactive,
+            "Should disable interactive mode via environment"
+        );
+
         // Set environment variable to enable interactive mode
         env::set_var("BKMR_SHELL_INTERACTIVE", "true");
-        
+
         let settings = load_settings(None).unwrap();
-        
+
         // Check that shell interactive was overridden
-        assert!(settings.shell_opts.interactive, "Should enable interactive mode via environment");
+        assert!(
+            settings.shell_opts.interactive,
+            "Should enable interactive mode via environment"
+        );
     }
 }

@@ -90,9 +90,9 @@ pub fn create_shell_function_name(title: &str) -> String {
         .chars()
         .map(|c| {
             if c.is_alphanumeric() || c == '-' {
-                c.to_ascii_lowercase()  // Preserve hyphens
+                c.to_ascii_lowercase() // Preserve hyphens
             } else if c.is_whitespace() || c == '_' {
-                '_'  // Only spaces and underscores become underscores
+                '_' // Only spaces and underscores become underscores
             } else {
                 // Skip other invalid characters
                 '\0'
@@ -102,7 +102,7 @@ pub fn create_shell_function_name(title: &str) -> String {
         .collect::<String>()
         .trim_matches('_')
         .to_string();
-    
+
     // Ensure we have a valid function name
     if cleaned_name.is_empty() {
         "shell_script".to_string()
@@ -145,18 +145,25 @@ mod tests {
     #[test]
     fn test_format_file_path() {
         // Short paths should not be truncated
-        assert_eq!(format_file_path("/home/user/file.txt", 120), "/home/user/file.txt");
-        
+        assert_eq!(
+            format_file_path("/home/user/file.txt", 120),
+            "/home/user/file.txt"
+        );
+
         // Long paths should be truncated from the beginning
-        let long_path = "/home/user/very/long/path/to/some/deeply/nested/directory/structure/with/file.txt";
+        let long_path =
+            "/home/user/very/long/path/to/some/deeply/nested/directory/structure/with/file.txt";
         let formatted = format_file_path(long_path, 30);
         assert!(formatted.starts_with("..."));
         assert!(formatted.ends_with("file.txt"));
         assert_eq!(formatted.len(), 30);
-        
+
         // Base path variables should be preserved
-        assert_eq!(format_file_path("$HOME/scripts/test.sh", 120), "$HOME/scripts/test.sh");
-        
+        assert_eq!(
+            format_file_path("$HOME/scripts/test.sh", 120),
+            "$HOME/scripts/test.sh"
+        );
+
         // Long paths with base path variables
         let var_path = "$SCRIPTS_HOME/very/long/path/to/some/script.sh";
         let formatted = format_file_path(var_path, 30);
@@ -169,7 +176,7 @@ mod tests {
         // Test with a known timestamp
         let timestamp = 1704067200; // 2024-01-01 00:00:00 UTC
         assert_eq!(format_mtime(timestamp), "2024-01-01 00:00:00");
-        
+
         // Test with invalid timestamp (negative)
         assert_eq!(format_mtime(-1), "1969-12-31 23:59:59");
     }
@@ -179,19 +186,19 @@ mod tests {
         // Test basic alphanumeric names
         assert_eq!(create_shell_function_name("backup_script"), "backup_script");
         assert_eq!(create_shell_function_name("backup-script"), "backup-script");
-        
+
         // Test spaces become underscores
         assert_eq!(create_shell_function_name("Deploy Script"), "deploy_script");
-        
+
         // Test edge case with digits at start
         assert_eq!(create_shell_function_name("2fa-setup"), "script-2fa-setup");
-        
+
         // Test invalid characters are removed
         assert_eq!(create_shell_function_name("test@#$script!"), "testscript");
-        
+
         // Test empty result fallback
         assert_eq!(create_shell_function_name("@#$%"), "shell_script");
-        
+
         // Test trimming underscores
         assert_eq!(create_shell_function_name("__test__"), "test");
     }

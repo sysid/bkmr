@@ -9,11 +9,11 @@ use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::system_tag::SystemTag;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
-use std::io::Write;
 use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::create_shell_function_name;
 use crossterm::style::Stylize;
 use itertools::Itertools;
+use std::io::Write;
 use std::sync::Arc;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::{instrument, warn};
@@ -52,7 +52,7 @@ impl Default for CommandServices {
 pub trait CommandHandler {
     /// Execute a command with standardized error handling and service management
     fn execute(&self, cli: Cli) -> CliResult<()>;
-    
+
     /// Get the services needed for this command
     fn services(&self) -> &CommandServices;
 }
@@ -216,15 +216,12 @@ impl SearchCommandHandler {
         } else {
             use crate::cli::process::process;
             use crate::domain::error_context::CliErrorContext;
-            
+
             stderr
                 .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
                 .cli_context("Failed to set color")?;
-            writeln!(stderr, "Selection: ")
-                .cli_context("Failed to write to stderr")?;
-            stderr
-                .reset()
-                .cli_context("Failed to reset color")?;
+            writeln!(stderr, "Selection: ").cli_context("Failed to write to stderr")?;
+            stderr.reset().cli_context("Failed to reset color")?;
 
             process(bookmarks)?;
         }
@@ -329,7 +326,10 @@ impl SearchCommandHandler {
         let shell_bookmarks: Vec<&Bookmark> = bookmarks
             .iter()
             .filter(|bookmark| {
-                bookmark.tags.iter().any(|tag| tag.is_system_tag_of(SystemTag::Shell))
+                bookmark
+                    .tags
+                    .iter()
+                    .any(|tag| tag.is_system_tag_of(SystemTag::Shell))
             })
             .collect();
 
@@ -338,9 +338,12 @@ impl SearchCommandHandler {
             if let Some(id) = bookmark.id {
                 // Create a valid shell function name from the bookmark title
                 let function_name = create_shell_function_name(&bookmark.title);
-                
+
                 // Output the shell function
-                println!("{}() {{ bkmr open --no-edit {} -- \"$@\"; }}", function_name, id);
+                println!(
+                    "{}() {{ bkmr open --no-edit {} -- \"$@\"; }}",
+                    function_name, id
+                );
                 println!("export -f {}", function_name);
             }
         }

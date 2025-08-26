@@ -1,3 +1,3 @@
 mod test_bookmark_commands;
-mod test_search;
-mod test_new_features;  // todo: check naming
+mod test_new_features;
+mod test_search; // todo: check naming

@@ -1,5 +1,5 @@
-use crate::domain::tag::Tag;
 use crate::cli::error::{CliError, CliResult};
+use crate::domain::tag::Tag;
 use std::collections::HashSet;
 use tracing::{debug, instrument};
 
@@ -106,7 +106,7 @@ mod tests {
     fn test_parse_tag_string_valid() {
         let tag_str = Some("tag1,tag2,tag3".to_string());
         let result = ArgumentProcessor::parse_tag_string(&tag_str);
-        
+
         assert!(result.is_some());
         let tags = result.unwrap();
         assert_eq!(tags.len(), 3);
@@ -138,7 +138,7 @@ mod tests {
 
         let result = ArgumentProcessor::apply_prefix_tags(base, prefix);
         assert!(result.is_some());
-        
+
         let combined = result.unwrap();
         assert_eq!(combined.len(), 3);
         assert!(combined.contains(&Tag::new("base1").unwrap()));
@@ -156,7 +156,7 @@ mod tests {
 
         let result = ArgumentProcessor::apply_prefix_tags(base, None);
         assert!(result.is_some());
-        
+
         let tags = result.unwrap();
         assert_eq!(tags.len(), 1);
         assert!(tags.contains(&Tag::new("base1").unwrap()));
@@ -172,7 +172,7 @@ mod tests {
 
         let result = ArgumentProcessor::apply_prefix_tags(None, prefix);
         assert!(result.is_some());
-        
+
         let tags = result.unwrap();
         assert_eq!(tags.len(), 1);
         assert!(tags.contains(&Tag::new("prefix1").unwrap()));
@@ -188,7 +188,7 @@ mod tests {
     fn test_parse_tags_with_error_handling_valid() {
         let tag_str = Some("tag1,tag2".to_string());
         let result = ArgumentProcessor::parse_tags_with_error_handling(&tag_str);
-        
+
         assert!(result.is_ok());
         let tags = result.unwrap();
         assert_eq!(tags.len(), 2);
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn test_parse_tags_with_error_handling_none() {
         let result = ArgumentProcessor::parse_tags_with_error_handling(&None);
-        
+
         assert!(result.is_ok());
         let tags = result.unwrap();
         assert!(tags.is_empty());

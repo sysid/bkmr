@@ -1,6 +1,6 @@
 use crate::application::error::{ApplicationError, ApplicationResult};
-use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::bookmark::Bookmark;
+use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::repositories::repository::BookmarkRepository;
 
 /// Utility for common validation patterns across services
@@ -8,10 +8,10 @@ pub struct ValidationHelper;
 
 impl ValidationHelper {
     /// Validates that a bookmark ID is positive (> 0)
-    /// 
+    ///
     /// # Arguments
     /// * `id` - The bookmark ID to validate
-    /// 
+    ///
     /// # Returns
     /// * `Ok(())` - If the ID is valid
     /// * `Err(ApplicationError::Validation)` - If the ID is invalid (≤ 0)
@@ -26,11 +26,11 @@ impl ValidationHelper {
     }
 
     /// Validates bookmark ID and retrieves the bookmark from repository, returning an error if not found
-    /// 
+    ///
     /// # Arguments
     /// * `id` - The bookmark ID to validate and fetch
     /// * `repository` - The repository to fetch from
-    /// 
+    ///
     /// # Returns
     /// * `Ok(Bookmark)` - If the ID is valid and bookmark exists
     /// * `Err(ApplicationError)` - If the ID is invalid or bookmark not found
@@ -39,18 +39,18 @@ impl ValidationHelper {
         repository: &R,
     ) -> ApplicationResult<Bookmark> {
         Self::validate_bookmark_id(id)?;
-        
+
         repository
             .get_by_id(id)?
             .ok_or(ApplicationError::BookmarkNotFound(id))
     }
 
     /// Domain-level validation and retrieval (for domain services like ActionService)
-    /// 
+    ///
     /// # Arguments
     /// * `id` - The bookmark ID to validate and fetch
     /// * `repository` - The repository to fetch from
-    /// 
+    ///
     /// # Returns
     /// * `Ok(Bookmark)` - If the ID is valid and bookmark exists
     /// * `Err(DomainError)` - If the ID is invalid or bookmark not found
@@ -80,13 +80,19 @@ mod tests {
     fn test_validate_bookmark_id_zero() {
         let result = ValidationHelper::validate_bookmark_id(0);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid bookmark ID: 0"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid bookmark ID: 0"));
     }
 
     #[test]
     fn test_validate_bookmark_id_negative() {
         let result = ValidationHelper::validate_bookmark_id(-1);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid bookmark ID: -1"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid bookmark ID: -1"));
     }
 }

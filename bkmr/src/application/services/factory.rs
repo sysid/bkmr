@@ -120,9 +120,8 @@ pub fn create_action_resolver() -> Arc<dyn ActionResolver> {
     // The action itself will determine whether to update embeddings based on:
     // 1. OpenAI embeddings being available
     // 2. The bookmark having embeddable=true
-    let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new_with_repository(
-        repository.clone(),
-    ));
+    let markdown_action: Box<dyn BookmarkAction> =
+        Box::new(MarkdownAction::new_with_repository(repository.clone()));
 
     let env_action: Box<dyn BookmarkAction> =
         Box::new(EnvAction::new(Arc::clone(&template_service)));

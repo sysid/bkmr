@@ -3,19 +3,21 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
-use crate::util::validation::ValidationHelper;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::{serialize_embedding, Embedder};
-use crate::domain::repositories::import_repository::{BookmarkImportData, ImportRepository, FileImportData};
+use crate::domain::repositories::import_repository::{
+    BookmarkImportData, FileImportData, ImportRepository,
+};
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::{SemanticSearch, SemanticSearchResult};
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
-use tracing::{debug, instrument, warn};
+use crate::util::validation::ValidationHelper;
 use std::path::Path;
+use tracing::{debug, instrument, warn};
 
 #[derive(Debug)]
 pub struct BookmarkServiceImpl<R: BookmarkRepository> {
@@ -36,7 +38,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             import_repository,
         }
     }
-
 }
 
 impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
@@ -456,14 +457,18 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             if let Some(base_value) = settings.base_paths.get(base_name) {
                 let expanded_base = crate::config::resolve_file_path(&settings, base_value);
                 // Convert relative paths to absolute paths under the base
-                paths.iter()
+                paths
+                    .iter()
                     .map(|relative_path| {
                         let full_path = std::path::Path::new(&expanded_base).join(relative_path);
                         full_path.to_string_lossy().to_string()
                     })
                     .collect()
             } else {
-                return Err(ApplicationError::Other(format!("Base path '{}' not found in configuration", base_name)));
+                return Err(ApplicationError::Other(format!(
+                    "Base path '{}' not found in configuration",
+                    base_name
+                )));
             }
         } else {
             // No base path - use paths as provided
@@ -505,12 +510,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 // Check if content or metadata has changed
                 let content_changed = existing.file_hash.as_ref() != Some(&file_data.file_hash);
                 let metadata_changed = self.has_metadata_changed(&existing, file_data)?;
-                
+
                 if !content_changed && !metadata_changed {
                     debug!("Skipping {}: no changes detected", file_data.name);
                     continue;
                 }
-                
+
                 // Report what changed
                 if content_changed {
                     println!("Content changed: {}", file_data.name);
@@ -521,7 +526,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
                 // Update existing bookmark
                 if !dry_run {
-                    self.update_bookmark_from_file(&existing, file_data, &settings, base_path_name)?;
+                    self.update_bookmark_from_file(
+                        &existing,
+                        file_data,
+                        &settings,
+                        base_path_name,
+                    )?;
                 }
                 updated_count += 1;
                 println!("Updated bookmark: {}", file_data.name);
@@ -545,7 +555,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     }
                 }
                 deleted_count += 1;
-                println!("Deleted orphaned bookmark: {} ({:?})", bookmark.title, bookmark.id);
+                println!(
+                    "Deleted orphaned bookmark: {} ({:?})",
+                    bookmark.title, bookmark.id
+                );
             }
         }
 
@@ -560,23 +573,28 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         let mut query = BookmarkQuery::new();
         // Quote the search term to handle special characters like hyphens
         query.text_query = Some(format!("\"{}\"", name));
-        
+
         let results = self.repository.search(&query)?;
-        
+
         // Find exact title match (case-sensitive)
         for bookmark in results {
             if bookmark.title == name {
                 return Ok(Some(bookmark));
             }
         }
-        
+
         Ok(None)
     }
 
     /// Create a new bookmark from file data
-    fn create_bookmark_from_file(&self, file_data: &FileImportData, settings: &crate::config::Settings, base_path_name: Option<&str>) -> ApplicationResult<Bookmark> {
+    fn create_bookmark_from_file(
+        &self,
+        file_data: &FileImportData,
+        settings: &crate::config::Settings,
+        base_path_name: Option<&str>,
+    ) -> ApplicationResult<Bookmark> {
         use crate::domain::system_tag::SystemTag;
-        
+
         // Convert content type to system tag
         let system_tag = match file_data.content_type.as_str() {
             "_shell_" => SystemTag::Shell,
@@ -613,25 +631,28 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             if let Some(base_value) = settings.base_paths.get(base_name) {
                 let expanded_base = crate::config::resolve_file_path(settings, base_value);
                 let absolute_file_path = file_data.file_path.display().to_string();
-                
+
                 // Since we resolved the scan paths, files should be under the base path
                 if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
                     let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
                     crate::config::create_file_path_with_base(base_name, relative_path)
                 } else {
                     return Err(ApplicationError::Other(format!(
-                        "File {} is not under base path {} ({})", 
+                        "File {} is not under base path {} ({})",
                         absolute_file_path, base_name, expanded_base
                     )));
                 }
             } else {
-                return Err(ApplicationError::Other(format!("Base path '{}' not found in configuration", base_name)));
+                return Err(ApplicationError::Other(format!(
+                    "Base path '{}' not found in configuration",
+                    base_name
+                )));
             }
         } else {
             // No base path specified - store absolute path
             file_data.file_path.display().to_string()
         };
-        
+
         bookmark.file_path = Some(file_path_str);
         bookmark.file_mtime = Some(file_data.file_mtime as i32);
         bookmark.file_hash = Some(file_data.file_hash.clone());
@@ -655,42 +676,51 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     }
 
     /// Update existing bookmark from file data
-    fn update_bookmark_from_file(&self, existing: &Bookmark, file_data: &FileImportData, settings: &crate::config::Settings, base_path_name: Option<&str>) -> ApplicationResult<Bookmark> {
+    fn update_bookmark_from_file(
+        &self,
+        existing: &Bookmark,
+        file_data: &FileImportData,
+        settings: &crate::config::Settings,
+        base_path_name: Option<&str>,
+    ) -> ApplicationResult<Bookmark> {
         let mut updated = existing.clone();
-        
+
         // Update content and metadata (content goes in url column for file imports)
         updated.url = file_data.content.clone();
         updated.title = file_data.name.clone();
-        
+
         // Update file path with base path handling
         let file_path_str = if let Some(base_name) = base_path_name {
             // User provided base path - store as relative path with base path variable
             if let Some(base_value) = settings.base_paths.get(base_name) {
                 let expanded_base = crate::config::resolve_file_path(settings, base_value);
                 let absolute_file_path = file_data.file_path.display().to_string();
-                
+
                 // Since we resolved the scan paths, files should be under the base path
                 if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
                     let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
                     crate::config::create_file_path_with_base(base_name, relative_path)
                 } else {
                     return Err(ApplicationError::Other(format!(
-                        "File {} is not under base path {} ({})", 
+                        "File {} is not under base path {} ({})",
                         absolute_file_path, base_name, expanded_base
                     )));
                 }
             } else {
-                return Err(ApplicationError::Other(format!("Base path '{}' not found in configuration", base_name)));
+                return Err(ApplicationError::Other(format!(
+                    "Base path '{}' not found in configuration",
+                    base_name
+                )));
             }
         } else {
             // No base path specified - store absolute path
             file_data.file_path.display().to_string()
         };
-        
+
         updated.file_path = Some(file_path_str);
         updated.file_mtime = Some(file_data.file_mtime as i32);
         updated.file_hash = Some(file_data.file_hash.clone());
-        
+
         // Update content hash
         let content_hash = calc_content_hash(&file_data.content);
         updated.content_hash = Some(content_hash);
@@ -720,39 +750,56 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     }
 
     /// Find orphaned bookmarks (file_path set but file no longer exists or not found in current scan)
-    fn find_orphaned_bookmarks(&self, import_paths: &[String], current_imports: &[FileImportData]) -> ApplicationResult<Vec<Bookmark>> {
+    fn find_orphaned_bookmarks(
+        &self,
+        import_paths: &[String],
+        current_imports: &[FileImportData],
+    ) -> ApplicationResult<Vec<Bookmark>> {
         let all_bookmarks = self.repository.get_all()?;
         let mut orphaned = Vec::new();
-        
+
         // Create a set of currently imported file paths for quick lookup
-        let current_file_paths: HashSet<_> = current_imports.iter()
-            .map(|import| import.file_path.canonicalize().unwrap_or_else(|_| import.file_path.clone()))
+        let current_file_paths: HashSet<_> = current_imports
+            .iter()
+            .map(|import| {
+                import
+                    .file_path
+                    .canonicalize()
+                    .unwrap_or_else(|_| import.file_path.clone())
+            })
             .collect();
 
         for bookmark in all_bookmarks {
             if let Some(file_path_str) = &bookmark.file_path {
                 // Handle base path variables and resolve to absolute path
-                let settings = crate::config::load_settings(None)
-                    .map_err(|e| ApplicationError::Other(format!("Failed to load settings: {}", e)))?;
+                let settings = crate::config::load_settings(None).map_err(|e| {
+                    ApplicationError::Other(format!("Failed to load settings: {}", e))
+                })?;
                 let resolved_path = crate::config::resolve_file_path(&settings, file_path_str);
                 let path = Path::new(&resolved_path);
-                
+
                 // Check if file still exists at the stored path
                 let file_exists = path.exists();
-                
+
                 // Check if this file was found in the current import scan
                 let canonical_path = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
                 let found_in_scan = current_file_paths.contains(&canonical_path);
-                
+
                 // If the file doesn't exist OR it wasn't found in the current scan, it's orphaned
                 if !file_exists || !found_in_scan {
                     // Verify the file was under one of the import paths
                     let should_delete = import_paths.iter().any(|import_path| {
-                        path.starts_with(import_path) || 
-                        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-                            .starts_with(Path::new(import_path).canonicalize().unwrap_or_else(|_| Path::new(import_path).to_path_buf()))
+                        path.starts_with(import_path)
+                            || path
+                                .canonicalize()
+                                .unwrap_or_else(|_| path.to_path_buf())
+                                .starts_with(
+                                    Path::new(import_path)
+                                        .canonicalize()
+                                        .unwrap_or_else(|_| Path::new(import_path).to_path_buf()),
+                                )
                     });
-                    
+
                     if should_delete {
                         orphaned.push(bookmark);
                     }
@@ -762,38 +809,46 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
         Ok(orphaned)
     }
-    
+
     /// Check if metadata (tags, name, type) has changed
-    fn has_metadata_changed(&self, existing: &Bookmark, file_data: &FileImportData) -> ApplicationResult<bool> {
+    fn has_metadata_changed(
+        &self,
+        existing: &Bookmark,
+        file_data: &FileImportData,
+    ) -> ApplicationResult<bool> {
         // Check if title changed
         if existing.title != file_data.name {
             return Ok(true);
         }
-        
+
         // Check if tags changed (ignore system tags for comparison)
-        let existing_user_tags: HashSet<_> = existing.tags.iter()
+        let existing_user_tags: HashSet<_> = existing
+            .tags
+            .iter()
             .filter(|tag| !tag.value().starts_with('_') || !tag.value().ends_with('_'))
             .cloned()
             .collect();
-        let file_user_tags: HashSet<_> = file_data.tags.iter()
+        let file_user_tags: HashSet<_> = file_data
+            .tags
+            .iter()
             .filter(|tag| !tag.value().starts_with('_') || !tag.value().ends_with('_'))
             .cloned()
             .collect();
-        
+
         if existing_user_tags != file_user_tags {
             return Ok(true);
         }
-        
+
         // Check if content type changed (check system tags)
         let existing_has_shell = existing.tags.iter().any(|tag| tag.value() == "_shell_");
         let existing_has_md = existing.tags.iter().any(|tag| tag.value() == "_md_");
         let file_is_shell = file_data.content_type == "_shell_";
         let file_is_md = file_data.content_type == "_md_";
-        
+
         if (existing_has_shell != file_is_shell) || (existing_has_md != file_is_md) {
             return Ok(true);
         }
-        
+
         Ok(false)
     }
 }

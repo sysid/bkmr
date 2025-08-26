@@ -25,7 +25,7 @@ impl ShellAction {
             script_args: Vec::new(),
         }
     }
-    
+
     #[allow(dead_code)]
     pub fn new_direct(template_service: Arc<dyn TemplateService>) -> Self {
         Self {
@@ -34,8 +34,11 @@ impl ShellAction {
             script_args: Vec::new(),
         }
     }
-    
-    pub fn new_direct_with_args(template_service: Arc<dyn TemplateService>, script_args: Vec<String>) -> Self {
+
+    pub fn new_direct_with_args(
+        template_service: Arc<dyn TemplateService>,
+        script_args: Vec<String>,
+    ) -> Self {
         Self {
             template_service,
             interactive: false, // Direct execution without interaction
@@ -46,7 +49,7 @@ impl ShellAction {
     fn interactive_execute(&self, script: &str) -> DomainResult<()> {
         // Configure rustyline to mimic user's shell environment
         let mut rl = self.create_configured_editor()?;
-        
+
         // Present the script for interactive editing with pre-filled content
         match rl.readline_with_initial("", (script, "")) {
             Ok(final_command) => {
@@ -54,15 +57,15 @@ impl ShellAction {
                     debug!("User provided empty command, skipping execution");
                     return Ok(());
                 }
-                
+
                 // Add the command to rustyline's history
                 let _ = rl.add_history_entry(&final_command);
-                
+
                 // Save history to file for persistence across sessions
                 if let Err(e) = rl.save_history(&self.get_history_file_path()) {
                     debug!("Failed to save history: {}", e);
                 }
-                
+
                 debug!("Executing interactive command: {}", final_command);
                 self.execute_script(&final_command)
             }
@@ -78,19 +81,19 @@ impl ShellAction {
         // Create editor with default config first
         let mut rl = Editor::new()
             .map_err(|e| DomainError::Other(format!("Failed to create readline editor: {}", e)))?;
-        
+
         // Configure the editor to mimic shell behavior
         rl.set_auto_add_history(true);
         rl.set_history_ignore_space(true);
         let _ = rl.set_history_ignore_dups(true);
         rl.set_edit_mode(self.detect_edit_mode());
-        
+
         // Load existing history if available
         let history_file = self.get_history_file_path();
         if let Err(e) = rl.load_history(&history_file) {
             debug!("No existing history file or failed to load: {}", e);
         }
-        
+
         Ok(rl)
     }
 
@@ -104,7 +107,7 @@ impl ShellAction {
                 }
             }
         }
-        
+
         // Check for readline configuration
         if let Ok(inputrc) = std::env::var("INPUTRC") {
             if let Ok(content) = std::fs::read_to_string(&inputrc) {
@@ -113,7 +116,7 @@ impl ShellAction {
                 }
             }
         }
-        
+
         // Check default inputrc locations
         if let Some(home_dir) = dirs::home_dir() {
             let inputrc_path = home_dir.join(".inputrc");
@@ -123,16 +126,16 @@ impl ShellAction {
                 }
             }
         }
-        
+
         // Check bash vi mode environment variable
         if std::env::var("BASH_VI_MODE").is_ok() {
             return EditMode::Vi;
         }
-        
+
         // Default to emacs mode (readline default)
         EditMode::Emacs
     }
-    
+
     fn get_history_file_path(&self) -> std::path::PathBuf {
         // Use a bkmr-specific history file in the user's config directory
         if let Some(config_dir) = dirs::config_dir() {
@@ -175,11 +178,14 @@ impl ShellAction {
 
         let mut command = Command::new(&shell);
         command.arg(temp_file.path());
-        
+
         // Append script arguments if provided
         if !self.script_args.is_empty() {
             command.args(&self.script_args);
-            debug!("Executing shell script with arguments: {:?}", self.script_args);
+            debug!(
+                "Executing shell script with arguments: {:?}",
+                self.script_args
+            );
         }
 
         let status = command
@@ -209,10 +215,13 @@ impl BookmarkAction for ShellAction {
             script,
             bookmark,
             &self.template_service,
-            "shell script"
+            "shell script",
         )?;
 
-        debug!("Shell script (interactive={}): {}", self.interactive, rendered_script);
+        debug!(
+            "Shell script (interactive={}): {}",
+            self.interactive, rendered_script
+        );
 
         // Print a header to indicate what's being executed
         // eprintln!("Executing: {}", bookmark.title);
@@ -371,14 +380,20 @@ mod tests {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        
+
         // Act
         let interactive_action = ShellAction::new(template_service.clone(), true);
         let direct_action = ShellAction::new_direct(template_service);
-        
+
         // Assert
-        assert!(interactive_action.interactive, "new() with true should set interactive mode");
-        assert!(!direct_action.interactive, "new_direct() should set non-interactive mode");
+        assert!(
+            interactive_action.interactive,
+            "new() with true should set interactive mode"
+        );
+        assert!(
+            !direct_action.interactive,
+            "new_direct() should set non-interactive mode"
+        );
     }
 
     #[test]
@@ -388,10 +403,10 @@ mod tests {
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(template_service);
-        
+
         // Act
         let result = action.execute_script("echo 'test execute_script method'");
-        
+
         // Assert
         assert!(result.is_ok(), "execute_script should work directly");
     }
@@ -403,13 +418,16 @@ mod tests {
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(template_service);
-        
+
         // Act - This simulates what would happen after interactive editing
         let script_with_params = "echo 'Hello' && echo 'World' && echo 'Parameters work!'";
         let result = action.execute_script(script_with_params);
-        
+
         // Assert
-        assert!(result.is_ok(), "Shell script with parameters should execute successfully");
+        assert!(
+            result.is_ok(),
+            "Shell script with parameters should execute successfully"
+        );
     }
 
     #[test]
@@ -419,14 +437,14 @@ mod tests {
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
         let action = ShellAction::new(template_service, true);
-        
+
         // Act
         let edit_mode = action.detect_edit_mode();
-        
+
         // Assert - Should be either Emacs or Vi mode (both are valid)
         assert!(
             matches!(edit_mode, EditMode::Emacs) || matches!(edit_mode, EditMode::Vi),
-            "Should detect either Emacs or Vi mode, got: {:?}", 
+            "Should detect either Emacs or Vi mode, got: {:?}",
             edit_mode
         );
     }
@@ -438,12 +456,15 @@ mod tests {
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
         let action = ShellAction::new(template_service, true);
-        
+
         // Act
         let history_path = action.get_history_file_path();
-        
+
         // Assert
-        assert!(history_path.to_string_lossy().contains("shell_history.txt"), "Should create a history file path");
+        assert!(
+            history_path.to_string_lossy().contains("shell_history.txt"),
+            "Should create a history file path"
+        );
     }
 
     #[test]
@@ -453,12 +474,15 @@ mod tests {
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
         let action = ShellAction::new(template_service, true);
-        
+
         // Act
         let result = action.create_configured_editor();
-        
+
         // Assert
-        assert!(result.is_ok(), "Should successfully create configured editor");
+        assert!(
+            result.is_ok(),
+            "Should successfully create configured editor"
+        );
     }
 
     #[test]
@@ -467,11 +491,15 @@ mod tests {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let args = vec!["--option1".to_string(), "value1".to_string(), "arg2".to_string()];
-        
+        let args = vec![
+            "--option1".to_string(),
+            "value1".to_string(),
+            "arg2".to_string(),
+        ];
+
         // Act
         let action = ShellAction::new_direct_with_args(template_service, args.clone());
-        
+
         // Assert
         assert!(!action.interactive, "Should be non-interactive");
         assert_eq!(action.script_args, args, "Should store script arguments");
@@ -483,7 +511,7 @@ mod tests {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        
+
         // Create script arguments
         let args = vec!["arg1".to_string(), "arg2".to_string()];
         let action = ShellAction::new_direct_with_args(template_service, args);
@@ -514,6 +542,9 @@ mod tests {
         let result = action.execute(&bookmark);
 
         // Assert
-        assert!(result.is_ok(), "Shell action with arguments should execute successfully");
+        assert!(
+            result.is_ok(),
+            "Shell action with arguments should execute successfully"
+        );
     }
 }

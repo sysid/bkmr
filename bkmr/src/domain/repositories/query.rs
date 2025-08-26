@@ -35,15 +35,15 @@ impl<T> Specification<T> for Box<dyn Specification<T>> {
 }
 
 /*
-In the <xxx>Specification struct, the generic type parameter T is only used in constraints 
-(where T: std::fmt::Debug) and method signatures, but it's not directly used as the type of 
-any field in the struct. This creates a situation where the compiler might consider T unused, 
+In the <xxx>Specification struct, the generic type parameter T is only used in constraints
+(where T: std::fmt::Debug) and method signatures, but it's not directly used as the type of
+any field in the struct. This creates a situation where the compiler might consider T unused,
 which can lead to issues:
 1. Type Parameter Variance: Without PhantomData<T>, the compiler can't determine the proper variance for the unused type parameter.
 2. Lifetime Inference: For type parameters that include lifetimes, the compiler needs to know how they're used within the struct.
 3. Drop Check Semantics: The compiler needs to know if the generic type's destructor should be considered when dropping the struct.
 
-It makes the connection between the struct and the type parameter explicit and helps the compiler 
+It makes the connection between the struct and the type parameter explicit and helps the compiler
 understand how the type is conceptually used, even if it doesn't appear in a field.
  */
 

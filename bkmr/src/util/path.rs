@@ -23,7 +23,10 @@ pub fn temp_dir() -> PathBuf {
     let tempdir = tempfile::tempdir().unwrap();
     let options = fs_extra::dir::CopyOptions::new(); //Initialize default values for CopyOptions
     fs_extra::copy_items(
-        &["tests/resources/schema_v1_migration_test.db", "tests/resources/schema_v2_with_embeddings.db"],
+        &[
+            "tests/resources/schema_v1_migration_test.db",
+            "tests/resources/schema_v2_with_embeddings.db",
+        ],
         tempdir.path(),
         &options,
     )

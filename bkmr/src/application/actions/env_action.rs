@@ -14,9 +14,7 @@ pub struct EnvAction {
 
 impl EnvAction {
     pub fn new(template_service: Arc<dyn TemplateService>) -> Self {
-        Self {
-            template_service,
-        }
+        Self { template_service }
     }
 }
 
@@ -31,7 +29,7 @@ impl BookmarkAction for EnvAction {
             env_content,
             bookmark,
             &self.template_service,
-            "environment variables"
+            "environment variables",
         )?;
 
         debug!("Printing environment variables to stdout for sourcing");

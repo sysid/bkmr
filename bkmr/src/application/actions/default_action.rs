@@ -13,9 +13,7 @@ pub struct DefaultAction {
 
 impl DefaultAction {
     pub fn new(template_service: Arc<dyn TemplateService>) -> Self {
-        Self {
-            template_service,
-        }
+        Self { template_service }
     }
 }
 

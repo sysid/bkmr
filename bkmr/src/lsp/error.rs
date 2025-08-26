@@ -12,19 +12,19 @@ use thiserror::Error;
 pub enum LspError {
     #[error("Not found: {0}")]
     NotFound(String),
-    
+
     #[error("Invalid input: {0}")]
     InvalidInput(String),
-    
+
     #[error("Database error: {0}")]
     DatabaseError(String),
-    
+
     #[error("Domain error: {0}")]
     Domain(#[from] DomainError),
-    
+
     #[error("Application error: {0}")]
     Application(#[from] ApplicationError),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -40,7 +40,7 @@ impl LspError {
             LspError::Application(err) => (-32004, err.to_string()),
             LspError::Internal(msg) => (-32603, msg.clone()),
         };
-        
+
         json!({
             "success": false,
             "error": {

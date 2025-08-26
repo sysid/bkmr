@@ -1,8 +1,8 @@
 /// Standard Unix exit codes for bkmr CLI application.
-/// 
+///
 /// These codes follow the BSD convention where possible and provide
 /// meaningful feedback about the type of error that occurred.
-
+///
 /// Successful termination
 pub const SUCCESS: i32 = 0;
 

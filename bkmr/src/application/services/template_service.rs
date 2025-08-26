@@ -18,7 +18,7 @@ pub trait TemplateService: Send + Sync + Debug {
         &self,
         bookmark: Option<Bookmark>,
     ) -> ApplicationResult<(Bookmark, bool)>;
-    
+
     /// Render an interpolated URL within the context of a bookmark
     fn render_bookmark_url(&self, bookmark: &Bookmark) -> ApplicationResult<String>;
 }
@@ -32,7 +32,9 @@ pub struct TemplateServiceImpl {
 impl Default for TemplateServiceImpl {
     fn default() -> Self {
         // This is used only in tests, create a dummy engine
-        use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+        use crate::infrastructure::interpolation::minijinja_engine::{
+            MiniJinjaEngine, SafeShellExecutor,
+        };
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         Self::new(engine)
@@ -42,14 +44,14 @@ impl Default for TemplateServiceImpl {
 impl TemplateServiceImpl {
     pub fn new(interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
         let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-        Self { 
+        Self {
             editor,
             interpolation_engine,
         }
     }
 
     pub fn with_editor(editor: String, interpolation_engine: Arc<dyn InterpolationEngine>) -> Self {
-        Self { 
+        Self {
             editor,
             interpolation_engine,
         }
@@ -76,8 +78,7 @@ impl TemplateService for TemplateServiceImpl {
             BookmarkTemplate::for_type(SystemTag::Uri)
         };
 
-        let mut temp_file = NamedTempFile::new()
-            .app_context("Failed to create temporary file")?;
+        let mut temp_file = NamedTempFile::new().app_context("Failed to create temporary file")?;
 
         debug!("Temporary file for editing: {:?}", temp_file.path());
 
@@ -85,7 +86,8 @@ impl TemplateService for TemplateServiceImpl {
             .write_all(template.to_string().as_bytes())
             .app_context("Failed to write to temporary file")?;
 
-        temp_file.flush()
+        temp_file
+            .flush()
             .app_context("Failed to flush temporary file")?;
         let path = temp_file.path().to_path_buf();
         let modified_before = fs::metadata(&path)?.modified()?;
@@ -109,8 +111,8 @@ impl TemplateService for TemplateServiceImpl {
         let was_modified = modified_after > modified_before;
 
         // Read the edited file
-        let edited_content = fs::read_to_string(temp_file.path())
-            .app_context("Failed to read temporary file")?;
+        let edited_content =
+            fs::read_to_string(temp_file.path()).app_context("Failed to read temporary file")?;
 
         // Parse the interpolation back into a bookmark
         let edited_template = BookmarkTemplate::from_string(&edited_content)?;
@@ -120,7 +122,7 @@ impl TemplateService for TemplateServiceImpl {
 
         Ok((bookmark, was_modified))
     }
-    
+
     #[instrument(level = "debug", skip(self, bookmark))]
     fn render_bookmark_url(&self, bookmark: &Bookmark) -> ApplicationResult<String> {
         self.interpolation_engine
@@ -157,7 +159,9 @@ mod tests {
         )
         .unwrap();
 
-        use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+        use crate::infrastructure::interpolation::minijinja_engine::{
+            MiniJinjaEngine, SafeShellExecutor,
+        };
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let service = TemplateServiceImpl::with_editor("vim".to_string(), engine);

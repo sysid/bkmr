@@ -1,9 +1,9 @@
 use crate::application::error::ApplicationError;
-use crate::domain::error::DomainError;
 use crate::cli::error::CliError;
+use crate::domain::error::DomainError;
 
 /// Trait for providing contextual error information
-/// 
+///
 /// This trait standardizes error context handling across the application
 /// by providing a consistent way to add context to errors without
 /// manual string formatting.
@@ -12,7 +12,7 @@ pub trait ErrorContext<T> {
     fn with_context<F>(self, f: F) -> Result<T, DomainError>
     where
         F: FnOnce() -> String;
-    
+
     /// Add context to an error result with a static string
     fn context(self, msg: &'static str) -> Result<T, DomainError>;
 }
@@ -23,7 +23,7 @@ pub trait ApplicationErrorContext<T> {
     fn with_app_context<F>(self, f: F) -> Result<T, ApplicationError>
     where
         F: FnOnce() -> String;
-    
+
     /// Add context to an application error result with a static string
     fn app_context(self, msg: &'static str) -> Result<T, ApplicationError>;
 }
@@ -34,7 +34,7 @@ pub trait CliErrorContext<T> {
     fn with_cli_context<F>(self, f: F) -> Result<T, CliError>
     where
         F: FnOnce() -> String;
-    
+
     /// Add context to a CLI error result with a static string
     fn cli_context(self, msg: &'static str) -> Result<T, CliError>;
 }
@@ -50,7 +50,7 @@ where
     {
         self.map_err(|e| e.into().context(f()))
     }
-    
+
     fn context(self, msg: &'static str) -> Result<T, DomainError> {
         self.map_err(|e| e.into().context(msg))
     }
@@ -67,7 +67,7 @@ where
     {
         self.map_err(|e| e.into().context(f()))
     }
-    
+
     fn app_context(self, msg: &'static str) -> Result<T, ApplicationError> {
         self.map_err(|e| e.into().context(msg))
     }
@@ -84,7 +84,7 @@ where
     {
         self.map_err(|e| e.into().context(f()))
     }
-    
+
     fn cli_context(self, msg: &'static str) -> Result<T, CliError> {
         self.map_err(|e| e.into().context(msg))
     }
@@ -94,10 +94,10 @@ where
 pub trait ErrorConversion {
     /// Convert to DomainError with context
     fn to_domain_error(self, context: &'static str) -> DomainError;
-    
+
     /// Convert to ApplicationError with context
     fn to_app_error(self, context: &'static str) -> ApplicationError;
-    
+
     /// Convert to CliError with context
     fn to_cli_error(self, context: &'static str) -> CliError;
 }
@@ -107,11 +107,11 @@ impl ErrorConversion for std::io::Error {
     fn to_domain_error(self, context: &'static str) -> DomainError {
         DomainError::Io(self).context(context)
     }
-    
+
     fn to_app_error(self, context: &'static str) -> ApplicationError {
         ApplicationError::Domain(DomainError::Io(self)).context(context)
     }
-    
+
     fn to_cli_error(self, context: &'static str) -> CliError {
         CliError::Io(self).context(context)
     }
@@ -121,13 +121,17 @@ impl ErrorConversion for serde_json::Error {
     fn to_domain_error(self, context: &'static str) -> DomainError {
         DomainError::DeserializationError(self.to_string()).context(context)
     }
-    
+
     fn to_app_error(self, context: &'static str) -> ApplicationError {
-        ApplicationError::Domain(DomainError::DeserializationError(self.to_string())).context(context)
+        ApplicationError::Domain(DomainError::DeserializationError(self.to_string()))
+            .context(context)
     }
-    
+
     fn to_cli_error(self, context: &'static str) -> CliError {
-        CliError::Application(ApplicationError::Domain(DomainError::DeserializationError(self.to_string()))).context(context)
+        CliError::Application(ApplicationError::Domain(DomainError::DeserializationError(
+            self.to_string(),
+        )))
+        .context(context)
     }
 }
 
@@ -138,27 +142,35 @@ mod tests {
 
     #[test]
     fn test_error_context_with_io_error() {
-        let result: Result<(), io::Error> = Err(io::Error::new(io::ErrorKind::NotFound, "file not found"));
+        let result: Result<(), io::Error> =
+            Err(io::Error::new(io::ErrorKind::NotFound, "file not found"));
         let contextual_result = result.context("reading configuration");
-        
+
         assert!(contextual_result.is_err());
-        assert!(contextual_result.unwrap_err().to_string().contains("reading configuration"));
+        assert!(contextual_result
+            .unwrap_err()
+            .to_string()
+            .contains("reading configuration"));
     }
 
     #[test]
     fn test_application_error_context() {
-        let result: Result<(), ApplicationError> = Err(ApplicationError::Other("test error".to_string()));
+        let result: Result<(), ApplicationError> =
+            Err(ApplicationError::Other("test error".to_string()));
         let contextual_result = result.app_context("during operation");
-        
+
         assert!(contextual_result.is_err());
-        assert!(contextual_result.unwrap_err().to_string().contains("during operation"));
+        assert!(contextual_result
+            .unwrap_err()
+            .to_string()
+            .contains("during operation"));
     }
 
     #[test]
     fn test_error_conversion() {
         let io_error = io::Error::new(io::ErrorKind::PermissionDenied, "access denied");
         let domain_error = io_error.to_domain_error("file operation");
-        
+
         assert!(domain_error.to_string().contains("file operation"));
         assert!(domain_error.to_string().contains("access denied"));
     }

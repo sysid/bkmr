@@ -3,10 +3,12 @@
 //! Provides a unified way to create isolated test environments with proper
 //! database setup, service configuration, and resource management.
 
-use std::sync::Arc;
 use std::collections::HashSet;
+use std::sync::Arc;
 
-use crate::application::services::{BookmarkService, BookmarkServiceImpl, TagService, TagServiceImpl};
+use crate::application::services::{
+    BookmarkService, BookmarkServiceImpl, TagService, TagServiceImpl, TemplateService,
+};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::embedding::Embedder;
 use crate::domain::tag::Tag;
@@ -29,7 +31,7 @@ pub struct LspServiceBundle {
 }
 
 /// Comprehensive test context providing isolated database and pre-configured services
-/// 
+///
 /// This abstraction ensures consistent test setup across the entire codebase,
 /// eliminates boilerplate, and provides proper isolation for database-accessing tests.
 #[derive(Debug)]
@@ -38,17 +40,21 @@ pub struct TestContext {
     repository: Arc<SqliteBookmarkRepository>,
     embedder: Arc<dyn Embedder>,
     bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>,
 }
 
 impl TestContext {
     /// Create a new isolated test context
-    /// 
+    ///
     /// This sets up:
     /// - Test environment with proper logging and configuration
     /// - Isolated test database with fresh schema
     /// - Dummy embedding provider for consistent behavior
     /// - Pre-configured bookmark service
+    /// - Template service for interpolation
     pub fn new() -> Self {
+        use crate::application::services::factory;
+
         let _env = init_test_env();
         let _env_guard = EnvGuard::new();
         let repository = Arc::new(setup_test_db());
@@ -58,12 +64,14 @@ impl TestContext {
             embedder.clone(),
             Arc::new(FileImportRepository::new()),
         ));
+        let template_service = factory::create_template_service();
 
         Self {
             _env_guard,
             repository,
             embedder,
             bookmark_service,
+            template_service,
         }
     }
 
@@ -88,7 +96,9 @@ impl TestContext {
     }
 
     /// Create template service with test configuration
-    pub fn create_template_service(&self) -> Arc<dyn crate::application::services::TemplateService> {
+    pub fn create_template_service(
+        &self,
+    ) -> Arc<dyn crate::application::services::TemplateService> {
         use crate::application::services::factory;
         factory::create_template_service()
     }
@@ -100,7 +110,10 @@ impl TestContext {
 
     /// Create complete LSP service bundle for integration testing
     pub fn create_lsp_services(&self) -> LspServiceBundle {
-        let snippet_service = Arc::new(LspSnippetService::with_service(self.bookmark_service.clone()));
+        let snippet_service = Arc::new(LspSnippetService::with_services(
+            self.bookmark_service.clone(),
+            self.template_service.clone(),
+        ));
         let completion_service = CompletionService::new(snippet_service.clone());
         let command_service = self.create_command_service();
         let document_service = DocumentService::new();
@@ -114,7 +127,7 @@ impl TestContext {
     }
 
     /// Create a bookmark with the test embedder
-    /// 
+    ///
     /// This avoids global state dependencies in domain object creation
     pub fn create_bookmark(
         &self,
@@ -130,13 +143,17 @@ impl TestContext {
     pub fn create_test_bookmark(&self, title: &str) -> Bookmark {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
-        
+
         self.create_bookmark(
-            &format!("https://example.com/{}", title.replace(' ', "-").to_lowercase()),
+            &format!(
+                "https://example.com/{}",
+                title.replace(' ', "-").to_lowercase()
+            ),
             title,
             &format!("Test bookmark: {}", title),
             tags,
-        ).unwrap()
+        )
+        .unwrap()
     }
 }
 
@@ -145,7 +162,6 @@ impl Default for TestContext {
         Self::new()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -168,10 +184,10 @@ mod tests {
     #[tokio::test]
     async fn test_lsp_services_bundle() {
         use crate::lsp::services::snippet_service::AsyncSnippetService;
-        
+
         let ctx = TestContext::new();
         let lsp_bundle = ctx.create_lsp_services();
-        
+
         // Verify all services are properly configured
         assert!(lsp_bundle.snippet_service.health_check().await.is_ok());
         assert!(lsp_bundle.completion_service.health_check().await.is_ok());

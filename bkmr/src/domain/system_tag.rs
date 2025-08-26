@@ -51,7 +51,6 @@ impl Tag {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use crate::app_state::AppState;

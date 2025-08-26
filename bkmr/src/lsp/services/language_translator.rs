@@ -1,10 +1,10 @@
-use tower_lsp::lsp_types::Url;
-use tracing::{debug, instrument};
 use regex::{Regex, RegexBuilder};
 use std::sync::OnceLock;
+use tower_lsp::lsp_types::Url;
+use tracing::{debug, instrument};
 
+use crate::domain::error::{DomainError, DomainResult};
 use crate::lsp::domain::{LanguageInfo, LanguageRegistry, Snippet};
-use crate::domain::error::{DomainResult, DomainError};
 
 // Pre-compiled regex patterns for performance (modern replacement for lazy_static)
 static LINE_COMMENT_START: OnceLock<Regex> = OnceLock::new();
@@ -12,9 +12,8 @@ static LINE_COMMENT_END: OnceLock<Regex> = OnceLock::new();
 static RUST_INDENT: OnceLock<Regex> = OnceLock::new();
 
 fn get_line_comment_start() -> &'static Regex {
-    LINE_COMMENT_START.get_or_init(|| {
-        Regex::new(r"^(\s*)//\s*(.*)$").expect("compile line comment start regex")
-    })
+    LINE_COMMENT_START
+        .get_or_init(|| Regex::new(r"^(\s*)//\s*(.*)$").expect("compile line comment start regex"))
 }
 
 fn get_line_comment_end() -> &'static Regex {
@@ -24,22 +23,28 @@ fn get_line_comment_end() -> &'static Regex {
 }
 
 fn get_rust_indent() -> &'static Regex {
-    RUST_INDENT.get_or_init(|| {
-        Regex::new(r"^( {4})+").expect("compile rust indentation regex")
-    })
+    RUST_INDENT.get_or_init(|| Regex::new(r"^( {4})+").expect("compile rust indentation regex"))
 }
+
 
 /// Service for translating Rust syntax patterns to target languages
 pub struct LanguageTranslator;
 
 impl LanguageTranslator {
+
     /// Translate Rust syntax patterns in universal snippets to target language
     #[instrument(skip(snippet))]
-    pub fn translate_snippet(snippet: &Snippet, language_id: &str, uri: &Url) -> DomainResult<String> {
+    pub fn translate_snippet(
+        snippet: &Snippet,
+        language_id: &str,
+        uri: &Url,
+    ) -> DomainResult<String> {
+        // Snippet content is already processed (interpolated + raw blocks handled) by LspSnippetService
+        // We just need to apply language translation
         let content = if snippet.is_universal() {
             debug!("Processing universal snippet: {}", snippet.title);
-            debug!("Original content: {:?}", snippet.get_content());
-
+            debug!("Content: {:?}", snippet.get_content());
+            
             Self::translate_rust_patterns(snippet.get_content(), language_id, uri)?
         } else {
             // Regular snippet - return content as-is
@@ -50,9 +55,14 @@ impl LanguageTranslator {
         Ok(content)
     }
 
+
     /// Translate Rust syntax patterns in content to target language
     #[instrument(skip(content))]
-    pub fn translate_rust_patterns(content: &str, language_id: &str, uri: &Url) -> DomainResult<String> {
+    pub fn translate_rust_patterns(
+        content: &str,
+        language_id: &str,
+        uri: &Url,
+    ) -> DomainResult<String> {
         let target_lang = LanguageRegistry::get_language_info(language_id);
 
         debug!("Translating Rust patterns for language: {}", language_id);
@@ -61,15 +71,18 @@ impl LanguageTranslator {
 
         // Use line-by-line processing to preserve newlines
         let mut processed_content =
-            Self::translate_rust_patterns_line_by_line(content, &target_lang)
-                .map_err(|e| DomainError::Other(format!("Failed to process content line by line: {}", e)))?;
+            Self::translate_rust_patterns_line_by_line(content, &target_lang).map_err(|e| {
+                DomainError::Other(format!("Failed to process content line by line: {}", e))
+            })?;
 
         // Replace Rust block comments (/* */) with target language block comments
         if let Some((target_start, target_end)) = &target_lang.block_comment {
             let block_comment_regex = RegexBuilder::new(r"/\*(.*?)\*/")
                 .dot_matches_new_line(true)
                 .build()
-                .map_err(|e| DomainError::Other(format!("Failed to compile block comment regex: {}", e)))?;
+                .map_err(|e| {
+                    DomainError::Other(format!("Failed to compile block comment regex: {}", e))
+                })?;
 
             processed_content = block_comment_regex
                 .replace_all(&processed_content, |caps: &regex::Captures| {
@@ -267,4 +280,5 @@ block comment
         let translated = result.expect("valid translation result");
         assert!(translated.contains("// File: example.rs"));
     }
+
 }

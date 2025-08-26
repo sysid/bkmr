@@ -8,8 +8,8 @@ use crate::application::services::factory::{create_action_service, create_interp
 use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{
-    clone_bookmark, copy_bookmark_url_to_clipboard, copy_url_to_clipboard, delete_bookmarks, edit_bookmarks,
-    execute_bookmark_default_action,
+    clone_bookmark, copy_bookmark_url_to_clipboard, copy_url_to_clipboard, delete_bookmarks,
+    edit_bookmarks, execute_bookmark_default_action,
 };
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
@@ -113,12 +113,17 @@ impl SkimItem for AlignedBookmark {
 
         // Add file info line if present and enabled
         if fzf_opts.show_file_info {
-            if let (Some(file_path), Some(file_mtime)) = (&self.bookmark.file_path, self.bookmark.file_mtime) {
+            if let (Some(file_path), Some(file_mtime)) =
+                (&self.bookmark.file_path, self.bookmark.file_mtime)
+            {
                 // Add padding to align with bookmark content
                 let padding = " ".repeat(self.max_id_width + 2); // +2 for ": "
                 let formatted_path = format_file_path(file_path, 120);
                 let formatted_time = format_mtime(file_mtime);
-                text.push_str(&format!("\n{}📁 {} ({})", padding, formatted_path, formatted_time));
+                text.push_str(&format!(
+                    "\n{}📁 {} ({})",
+                    padding, formatted_path, formatted_time
+                ));
             }
         }
 
@@ -194,10 +199,11 @@ impl SkimItem for AlignedBookmark {
         if fzf_opts.show_file_info {
             if let Some(file_info_start) = text.find("📁") {
                 // Find the end of the file info line (next newline or end of string)
-                let file_info_end = text[file_info_start..].find('\n')
+                let file_info_end = text[file_info_start..]
+                    .find('\n')
                     .map(|pos| file_info_start + pos)
                     .unwrap_or(text.len());
-                
+
                 attr_segments.push((
                     Attr {
                         fg: Color::LIGHT_BLACK, // Grey color
@@ -228,10 +234,15 @@ impl SkimItem for AlignedBookmark {
         );
 
         // Add file info if present
-        if let (Some(file_path), Some(file_mtime)) = (&self.bookmark.file_path, self.bookmark.file_mtime) {
+        if let (Some(file_path), Some(file_mtime)) =
+            (&self.bookmark.file_path, self.bookmark.file_mtime)
+        {
             let formatted_path = format_file_path(file_path, 120);
             let formatted_time = format_mtime(file_mtime);
-            preview_text.push_str(&format!("\n\nSource: {} ({})", formatted_path, formatted_time));
+            preview_text.push_str(&format!(
+                "\n\nSource: {} ({})",
+                formatted_path, formatted_time
+            ));
         }
 
         ItemPreview::AnsiText(format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text))
@@ -253,7 +264,7 @@ fn create_enhanced_skim_items(
 ) -> Vec<Arc<dyn SkimItem>> {
     // Get action service to determine action descriptions
     let action_service = create_action_service();
-    
+
     // Get interpolation service to render URLs
     let interpolation_service = create_interpolation_service();
 
@@ -281,7 +292,11 @@ fn create_enhanced_skim_items(
             };
 
             // Format tags for display
-            let tags_str = bookmark.formatted_tags().replace(',', " ").trim().to_string();
+            let tags_str = bookmark
+                .formatted_tags()
+                .replace(',', " ")
+                .trim()
+                .to_string();
             let has_tags = !tags_str.is_empty();
 
             // Format preview with proper spacing and respecting show_action config
@@ -302,19 +317,26 @@ fn create_enhanced_skim_items(
                     "Default Action".magenta().bold(),
                     action_description
                 );
-                
+
                 // Add tags section if there are any tags
                 if has_tags {
                     preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
                 }
-                
+
                 // Add file info if present
-                if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, &bookmark.file_mtime) {
+                if let (Some(file_path), Some(file_mtime)) =
+                    (&bookmark.file_path, &bookmark.file_mtime)
+                {
                     let formatted_path = format_file_path(file_path, 120);
                     let formatted_time = format_mtime(*file_mtime);
-                    preview_text.push_str(&format!("\n\n{}: {} ({})", "Source File".dark_grey().bold(), formatted_path, formatted_time));
+                    preview_text.push_str(&format!(
+                        "\n\n{}: {} ({})",
+                        "Source File".dark_grey().bold(),
+                        formatted_path,
+                        formatted_time
+                    ));
                 }
-                
+
                 preview_text
             } else {
                 // Omit the default action in preview but still include tags at the bottom
@@ -331,19 +353,26 @@ fn create_enhanced_skim_items(
                     "URL/Content".cyan().bold(),
                     rendered_url // Use the rendered URL instead of raw URL
                 );
-                
+
                 // Add tags section if there are any tags
                 if has_tags {
                     preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
                 }
-                
+
                 // Add file info if present
-                if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, &bookmark.file_mtime) {
+                if let (Some(file_path), Some(file_mtime)) =
+                    (&bookmark.file_path, &bookmark.file_mtime)
+                {
                     let formatted_path = format_file_path(file_path, 120);
                     let formatted_time = format_mtime(*file_mtime);
-                    preview_text.push_str(&format!("\n\n{}: {} ({})", "Source File".dark_grey().bold(), formatted_path, formatted_time));
+                    preview_text.push_str(&format!(
+                        "\n\n{}: {} ({})",
+                        "Source File".dark_grey().bold(),
+                        formatted_path,
+                        formatted_time
+                    ));
                 }
-                
+
                 preview_text
             };
 
@@ -564,12 +593,15 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                 // clear_fzf_artifacts();
                 if let Some(bookmark) = selected_bookmarks.first() {
                     // Check if this is a shell script
-                    let is_shell_script = bookmark.tags.iter()
+                    let is_shell_script = bookmark
+                        .tags
+                        .iter()
                         .any(|tag| tag.is_system_tag_of(SystemTag::Shell));
-                    
+
                     if is_shell_script {
                         // For shell scripts, copy the bkmr open command instead of URL content
-                        let command = format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
+                        let command =
+                            format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
                         copy_url_to_clipboard(&command)?;
                     } else {
                         // For all other types, copy URL to clipboard with interpolation

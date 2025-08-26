@@ -408,7 +408,9 @@ pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool) -> CliResult<()> {
                 eprintln!("  Failed to edit source file: {}", e);
                 eprintln!("  Falling back to database content editing...");
                 // Fall back to regular database editing
-                if let Err(e2) = edit_database_content(bookmark, &template_service, &bookmark_service) {
+                if let Err(e2) =
+                    edit_database_content(bookmark, &template_service, &bookmark_service)
+                {
                     eprintln!("  Failed to edit database content: {}", e2);
                 } else {
                     updated_count += 1;
@@ -597,7 +599,9 @@ fn edit_source_file_and_sync(
     use std::process::Command;
 
     // Get the file path
-    let file_path_str = bookmark.file_path.as_ref()
+    let file_path_str = bookmark
+        .file_path
+        .as_ref()
         .ok_or_else(|| CliError::InvalidInput("No file path for this bookmark".to_string()))?;
 
     // Load settings to resolve base path variables
@@ -625,7 +629,9 @@ fn edit_source_file_and_sync(
     let status = Command::new(&editor)
         .arg(&resolved_path)
         .status()
-        .map_err(|e| CliError::CommandFailed(format!("Failed to start editor '{}': {}", editor, e)))?;
+        .map_err(|e| {
+            CliError::CommandFailed(format!("Failed to start editor '{}': {}", editor, e))
+        })?;
 
     if !status.success() {
         return Err(CliError::CommandFailed(format!(
@@ -708,42 +714,46 @@ fn sync_file_to_bookmark(
 
     // Process the file to get updated metadata and content
     let file_repo = FileImportRepository::new();
-    let file_data = file_repo.process_file(Path::new(file_path))
+    let file_data = file_repo
+        .process_file(Path::new(file_path))
         .map_err(|e| CliError::Other(format!("Failed to process file: {}", e)))?;
 
     // Ensure the bookmark has an ID for updating
-    let _bookmark_id = original_bookmark.id
+    let _bookmark_id = original_bookmark
+        .id
         .ok_or_else(|| CliError::InvalidInput("Bookmark has no ID".to_string()))?;
 
     // Create an updated bookmark based on the original but with new file data
     let mut updated_bookmark = original_bookmark.clone();
-    
+
     // Update core content and metadata from file
-    updated_bookmark.title = file_data.name;  // frontmatter name becomes title
-    updated_bookmark.url = file_data.content;  // file content goes to url field
-    
+    updated_bookmark.title = file_data.name; // frontmatter name becomes title
+    updated_bookmark.url = file_data.content; // file content goes to url field
+
     // Parse and update tags
     updated_bookmark.tags = file_data.tags;
-    
+
     // Update file tracking information
     updated_bookmark.file_path = Some(file_data.file_path.display().to_string());
     updated_bookmark.file_mtime = Some(file_data.file_mtime as i32);
     updated_bookmark.file_hash = Some(file_data.file_hash);
-    
+
     // Update the content type if specified in frontmatter
     if !file_data.content_type.is_empty() {
         use crate::domain::system_tag::SystemTag;
-        
+
         // Remove old content type system tags
-        let system_tags_to_remove: Vec<_> = updated_bookmark.tags.iter()
+        let system_tags_to_remove: Vec<_> = updated_bookmark
+            .tags
+            .iter()
             .filter(|tag| tag.is_known_system_tag())
             .cloned()
             .collect();
-        
+
         for tag in system_tags_to_remove {
             updated_bookmark.tags.remove(&tag);
         }
-        
+
         // Add new content type tag
         let system_tag = match file_data.content_type.as_str() {
             "_snip_" => Some(SystemTag::Snippet),
@@ -753,7 +763,7 @@ fn sync_file_to_bookmark(
             "_imported_" => Some(SystemTag::Text),
             _ => None,
         };
-        
+
         if let Some(sys_tag) = system_tag {
             if let Ok(tag) = sys_tag.to_tag() {
                 updated_bookmark.tags.insert(tag);
@@ -762,8 +772,9 @@ fn sync_file_to_bookmark(
     }
 
     // Update the bookmark in the database
-    bookmark_service.update_bookmark(updated_bookmark, false)
-        .map_err(|e| CliError::Application(e))?;
+    bookmark_service
+        .update_bookmark(updated_bookmark, false)
+        .map_err(CliError::Application)?;
 
     Ok(())
 }

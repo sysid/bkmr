@@ -1,5 +1,5 @@
-use crate::domain::{bookmark::Bookmark, error::DomainResult, error::DomainError};
 use crate::application::services::TemplateService;
+use crate::domain::{bookmark::Bookmark, error::DomainError, error::DomainResult};
 use std::sync::Arc;
 
 /// Utility for handling common interpolation patterns across actions
@@ -7,13 +7,13 @@ pub struct InterpolationHelper;
 
 impl InterpolationHelper {
     /// Renders bookmark content if it contains template variables, otherwise returns the content as-is
-    /// 
+    ///
     /// # Arguments
     /// * `content` - The content to potentially interpolate
     /// * `bookmark` - The bookmark context for interpolation
     /// * `service` - The template service to use
     /// * `context_name` - Name of the context for error messages (e.g., "shell script", "snippet")
-    /// 
+    ///
     /// # Returns
     /// * `Ok(String)` - The rendered content (interpolated or original)
     /// * `Err(DomainError)` - If interpolation fails
@@ -24,9 +24,9 @@ impl InterpolationHelper {
         context_name: &str,
     ) -> DomainResult<String> {
         if content.contains("{{") || content.contains("{%") {
-            service
-                .render_bookmark_url(bookmark)
-                .map_err(|e| DomainError::Other(format!("Failed to render {}: {}", context_name, e)))
+            service.render_bookmark_url(bookmark).map_err(|e| {
+                DomainError::Other(format!("Failed to render {}: {}", context_name, e))
+            })
         } else {
             Ok(content.to_string())
         }
@@ -36,9 +36,9 @@ impl InterpolationHelper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::bookmark::Bookmark;
+    use crate::application::error::{ApplicationError, ApplicationResult};
     use crate::application::services::TemplateService;
-    use crate::application::error::{ApplicationResult, ApplicationError};
+    use crate::domain::bookmark::Bookmark;
     use std::sync::Arc;
 
     #[derive(Debug)]
@@ -53,10 +53,12 @@ mod tests {
         ) -> ApplicationResult<(Bookmark, bool)> {
             unimplemented!("Not needed for interpolation helper tests")
         }
-        
+
         fn render_bookmark_url(&self, _bookmark: &Bookmark) -> ApplicationResult<String> {
             if self.should_fail {
-                Err(ApplicationError::Other("Mock interpolation error".to_string()))
+                Err(ApplicationError::Other(
+                    "Mock interpolation error".to_string(),
+                ))
             } else {
                 Ok("rendered content".to_string())
             }
@@ -71,30 +73,28 @@ mod tests {
             "Test Bookmark".to_string(),
             "Test description".to_string(),
             "".to_string(), // tag string
-            0, // access count
+            0,              // access count
             Some(Utc::now()),
             Utc::now(),
-            None, // embedding
-            None, // content hash
+            None,  // embedding
+            None,  // content hash
             false, // embeddable
-            None, // file_path
-            None, // file_mtime
-            None, // file_hash
-        ).unwrap()
+            None,  // file_path
+            None,  // file_mtime
+            None,  // file_hash
+        )
+        .unwrap()
     }
 
     #[test]
     fn test_render_if_needed_no_interpolation() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> = Arc::new(MockInterpolationService { should_fail: false });
+        let service: Arc<dyn TemplateService> =
+            Arc::new(MockInterpolationService { should_fail: false });
         let content = "simple content without templates";
 
-        let result = InterpolationHelper::render_if_needed(
-            content, 
-            &bookmark, 
-            &service, 
-            "test"
-        ).unwrap();
+        let result =
+            InterpolationHelper::render_if_needed(content, &bookmark, &service, "test").unwrap();
 
         assert_eq!(result, "simple content without templates");
     }
@@ -102,15 +102,12 @@ mod tests {
     #[test]
     fn test_render_if_needed_with_interpolation() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> = Arc::new(MockInterpolationService { should_fail: false });
+        let service: Arc<dyn TemplateService> =
+            Arc::new(MockInterpolationService { should_fail: false });
         let content = "content with {{ template }}";
 
-        let result = InterpolationHelper::render_if_needed(
-            content, 
-            &bookmark, 
-            &service, 
-            "test"
-        ).unwrap();
+        let result =
+            InterpolationHelper::render_if_needed(content, &bookmark, &service, "test").unwrap();
 
         assert_eq!(result, "rendered content");
     }
@@ -118,32 +115,29 @@ mod tests {
     #[test]
     fn test_render_if_needed_interpolation_failure() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> = Arc::new(MockInterpolationService { should_fail: true });
+        let service: Arc<dyn TemplateService> =
+            Arc::new(MockInterpolationService { should_fail: true });
         let content = "content with {{ template }}";
 
-        let result = InterpolationHelper::render_if_needed(
-            content, 
-            &bookmark, 
-            &service, 
-            "shell script"
-        );
+        let result =
+            InterpolationHelper::render_if_needed(content, &bookmark, &service, "shell script");
 
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to render shell script"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Failed to render shell script"));
     }
 
     #[test]
     fn test_render_if_needed_jinja_syntax() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> = Arc::new(MockInterpolationService { should_fail: false });
+        let service: Arc<dyn TemplateService> =
+            Arc::new(MockInterpolationService { should_fail: false });
         let content = "content with {% if condition %}";
 
-        let result = InterpolationHelper::render_if_needed(
-            content, 
-            &bookmark, 
-            &service, 
-            "test"
-        ).unwrap();
+        let result =
+            InterpolationHelper::render_if_needed(content, &bookmark, &service, "test").unwrap();
 
         assert_eq!(result, "rendered content");
     }

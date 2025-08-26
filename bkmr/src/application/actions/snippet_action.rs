@@ -36,10 +36,10 @@ impl BookmarkAction for SnippetAction {
 
         // Apply any interpolation if the snippet contains template variables
         let rendered_content = InterpolationHelper::render_if_needed(
-            &content,
+            content,
             bookmark,
             &self.template_service,
-            "snippet"
+            "snippet",
         )?;
 
         eprintln!("Copied to clipboard:\n{}", rendered_content);
