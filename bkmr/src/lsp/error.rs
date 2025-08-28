@@ -30,6 +30,22 @@ pub enum LspError {
 }
 
 impl LspError {
+    /// Add context to an LSP error
+    pub fn context<C: Into<String>>(self, context: C) -> Self {
+        match self {
+            LspError::Internal(msg) => {
+                LspError::Internal(format!("{}: {}", context.into(), msg))
+            }
+            LspError::Domain(err) => {
+                LspError::Domain(err.context(context))
+            }
+            LspError::Application(err) => {
+                LspError::Application(err.context(context))
+            }
+            err => LspError::Internal(format!("{}: {}", context.into(), err)),
+        }
+    }
+
     /// Convert error to LSP JSON response
     pub fn to_lsp_response(&self) -> Value {
         let (code, message) = match self {

@@ -18,6 +18,18 @@ pub enum CliError {
     #[error("Operation aborted by user")]
     OperationAborted,
 
+    #[error("Configuration error: {0}")]
+    Configuration(String),
+
+    #[error("File not found: {0}")]
+    FileNotFound(String),
+
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
+
+    #[error("Network error: {0}")]
+    Network(String),
+
     #[error("Application error: {0}")]
     Application(#[from] ApplicationError),
 
@@ -37,6 +49,18 @@ impl CliError {
             }
             CliError::InvalidInput(msg) => {
                 CliError::InvalidInput(format!("{}: {}", context.into(), msg))
+            }
+            CliError::Configuration(msg) => {
+                CliError::Configuration(format!("{}: {}", context.into(), msg))
+            }
+            CliError::FileNotFound(msg) => {
+                CliError::FileNotFound(format!("{}: {}", context.into(), msg))
+            }
+            CliError::PermissionDenied(msg) => {
+                CliError::PermissionDenied(format!("{}: {}", context.into(), msg))
+            }
+            CliError::Network(msg) => {
+                CliError::Network(format!("{}: {}", context.into(), msg))
             }
             CliError::Application(err) => CliError::Application(err.context(context)),
             CliError::Other(msg) => CliError::Other(format!("{}: {}", context.into(), msg)),
