@@ -8,6 +8,7 @@ use crate::application::services::template_service::TemplateService;
 use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
+use crate::domain::embedding::Embedder;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::embeddings::DummyEmbedding;
@@ -36,14 +37,14 @@ impl TestServiceContainer {
         
         // Create test repository (shared SQLite instance)
         let repository = Arc::new(setup_test_db());
-        let embedder = Arc::new(DummyEmbedding);
+        let embedder: Arc<dyn Embedder> = Arc::new(DummyEmbedding);
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
         let template_service = Self::create_test_template_service();
         
         // Application services with test dependencies
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             repository.clone(),
-            embedder,
+            embedder.clone(),
             Arc::new(FileImportRepository::new()),
         ));
         
@@ -52,7 +53,8 @@ impl TestServiceContainer {
         let action_service = Self::create_test_action_service(
             &repository, 
             &template_service, 
-            &(clipboard_service.clone() as Arc<dyn ClipboardService>)
+            &(clipboard_service.clone() as Arc<dyn ClipboardService>),
+            &embedder
         );
         
         Self {
@@ -74,10 +76,11 @@ impl TestServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         template_service: &Arc<dyn TemplateService>,
         clipboard_service: &Arc<dyn ClipboardService>,
+        embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionService> {
         // Create test action resolver with mock dependencies
         let resolver = Self::create_test_action_resolver(
-            repository, template_service, clipboard_service
+            repository, template_service, clipboard_service, embedder
         );
         Arc::new(ActionServiceImpl::new(resolver, repository.clone()))
     }
@@ -86,6 +89,7 @@ impl TestServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         template_service: &Arc<dyn TemplateService>,
         clipboard_service: &Arc<dyn ClipboardService>,
+        embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionResolver> {
         // Create all actions with explicit dependencies - test configuration
         let uri_action: Box<dyn BookmarkAction> = 
@@ -107,7 +111,7 @@ impl TestServiceContainer {
         ));
         
         let markdown_action: Box<dyn BookmarkAction> = 
-            Box::new(MarkdownAction::new_with_repository(repository.clone()));
+            Box::new(MarkdownAction::new_with_repository(repository.clone(), embedder.clone()));
             
         let env_action: Box<dyn BookmarkAction> = 
             Box::new(EnvAction::new(template_service.clone()));

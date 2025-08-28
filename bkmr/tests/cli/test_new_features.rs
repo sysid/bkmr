@@ -9,9 +9,8 @@ use std::io::Write;
 use tempfile::NamedTempFile;
 
 fn create_test_repository() -> SqliteBookmarkRepository {
-    let app_state = bkmr::app_state::AppState::read_global();
-    let repository = SqliteBookmarkRepository::from_url(&app_state.settings.db_url)
-        .expect("Could not create test repository");
+    // Use test infrastructure instead of global state
+    let repository = bkmr::util::testing::setup_test_db();
 
     // Clean the database for test isolation
     repository

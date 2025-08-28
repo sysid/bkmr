@@ -75,7 +75,6 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         script_args: &[String],
     ) -> DomainResult<()> {
         use crate::application::actions::shell_action::ShellAction;
-        use crate::application::services::TemplateService;
         use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
         use std::sync::Arc;
         use crate::domain::action::BookmarkAction;

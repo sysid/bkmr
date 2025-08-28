@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::application::services::{BookmarkService, TagService, TemplateService};
+use crate::application::services::{BookmarkService, TagService};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::embedding::Embedder;
 use crate::domain::tag::Tag;

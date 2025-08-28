@@ -696,7 +696,6 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::domain::repositories::query::TextSearchSpecification;
     use crate::util::testing::{init_test_env, setup_test_db};
     use std::collections::HashSet;
@@ -711,9 +710,8 @@ mod tests {
             .map(Tag::new)
             .collect::<Result<HashSet<_>, _>>()?;
 
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
-        Bookmark::new(url, title, "Test description", tag_set, embedder)
+        let embedder = crate::infrastructure::embeddings::DummyEmbedding;
+        Bookmark::new(url, title, "Test description", tag_set, &embedder)
     }
 
     #[test]

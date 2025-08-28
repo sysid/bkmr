@@ -53,7 +53,6 @@ impl Tag {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::domain::bookmark::Bookmark;
     use crate::util::testing::init_test_env;
     use std::collections::HashSet;
@@ -120,7 +119,7 @@ mod tests {
             "JavaScript Hello World",
             "A simple JavaScript snippet",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -149,7 +148,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 

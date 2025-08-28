@@ -345,7 +345,6 @@ impl fmt::Debug for Bookmark {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::util::testing::init_test_env;
 
     #[test]
@@ -359,7 +358,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -382,7 +381,7 @@ mod tests {
             "Shell Command",
             "A shell command",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         );
         assert!(shell_url.is_ok());
 
@@ -392,7 +391,7 @@ mod tests {
             "File Path",
             "A file path",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         );
         assert!(file_url.is_ok());
 
@@ -402,7 +401,7 @@ mod tests {
             "Home Path",
             "A path in home directory",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         );
         assert!(home_url.is_ok());
     }
@@ -418,7 +417,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -448,7 +447,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -473,7 +472,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -498,7 +497,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -518,7 +517,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -542,7 +541,7 @@ mod tests {
             "Example Site",
             "An example website",
             bookmark_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -604,7 +603,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -636,7 +635,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -664,7 +663,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -688,7 +687,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -716,7 +715,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -736,7 +735,7 @@ mod tests {
             "Example Site",
             "A website with no system tags",
             tags_uri,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -748,7 +747,7 @@ mod tests {
             "Python Snippet",
             "A Python code snippet",
             tags_snippet,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -768,7 +767,7 @@ mod tests {
             "Example Site",
             "A website",
             tags_uri,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -781,7 +780,7 @@ mod tests {
             "Python Snippet",
             "A Python code snippet",
             tags_snippet,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 

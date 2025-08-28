@@ -1,5 +1,4 @@
 use super::error::{SqliteRepositoryError, SqliteResult};
-use crate::app_state::AppState;
 use crate::infrastructure::repositories::sqlite::migration::MIGRATIONS;
 use chrono::Local;
 use diesel::r2d2::{self, ConnectionManager};
@@ -31,7 +30,7 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
         .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))?;
 
     // Run migrations
-    run_pending_migrations(&pool)?;
+    run_pending_migrations(&pool, database_url)?;
 
     info!("Connection pool initialized successfully");
     Ok(pool)
@@ -39,7 +38,7 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
 
 /// Run any pending database migrations
 #[instrument(level = "info")]
-pub fn run_pending_migrations(pool: &ConnectionPool) -> SqliteResult<()> {
+pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> SqliteResult<()> {
     let mut conn = pool
         .get()
         .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))?;
@@ -60,10 +59,8 @@ pub fn run_pending_migrations(pool: &ConnectionPool) -> SqliteResult<()> {
         eprintln!("  - {}", migration.name());
     }
 
-    // Get the database path from the pool connection
-    let app_state = AppState::read_global();
-    let db_path = &app_state.settings.db_url;
-    let db_path = Path::new(db_path);
+    // Get the database path from the parameter
+    let db_path = Path::new(database_url);
 
     // Only create a backup if the database file already exists
     if db_path.exists() {

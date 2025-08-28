@@ -1,6 +1,5 @@
 // src/cli/display.rs
 
-use crate::app_state::AppState;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crate::util::helper::{format_file_path, format_mtime};
@@ -194,7 +193,7 @@ impl Default for DisplayBookmark {
 }
 
 /// Display bookmarks with color formatting
-pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
+pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField], settings: &crate::config::Settings) {
     if bookmarks.is_empty() {
         eprintln!("No bookmarks to display");
         return;
@@ -355,8 +354,7 @@ pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField]) {
         }
 
         // File info (grey) - show if present and enabled
-        let app_state = AppState::read_global();
-        if app_state.settings.fzf_opts.show_file_info {
+        if settings.fzf_opts.show_file_info {
             if let (Some(file_path), Some(file_mtime)) = (&bm.file_path, bm.file_mtime) {
                 if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Ansi256(8)))) {
                     // Use Ansi256 color 8 which is bright black (grey)
@@ -448,7 +446,8 @@ mod display_tests {
     fn test_show_bookmarks_visual() {
         println!("\n\nTEST: Colored Bookmark Display - Default Fields\n");
         let bookmarks = create_test_bookmarks();
-        show_bookmarks(&bookmarks, DEFAULT_FIELDS);
+        let settings = crate::config::Settings::default();
+        show_bookmarks(&bookmarks, DEFAULT_FIELDS, &settings);
     }
 
     #[test]
@@ -469,14 +468,16 @@ mod display_tests {
             DisplayField::Embedding,
         ];
 
-        show_bookmarks(&bookmarks, extended_fields);
+        let settings = crate::config::Settings::default();
+        show_bookmarks(&bookmarks, extended_fields, &settings);
     }
 
     #[test]
     fn test_show_bookmarks_empty() {
         println!("\n\nTEST: Empty Bookmark List\n");
         let empty_bookmarks: Vec<DisplayBookmark> = Vec::new();
-        show_bookmarks(&empty_bookmarks, DEFAULT_FIELDS);
+        let settings = crate::config::Settings::default();
+        show_bookmarks(&empty_bookmarks, DEFAULT_FIELDS, &settings);
     }
 
     #[test]

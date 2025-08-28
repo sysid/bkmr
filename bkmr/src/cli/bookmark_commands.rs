@@ -1,5 +1,5 @@
 // src/cli/bookmark_commands.rs
-use crate::app_state::AppState;
+use crate::config::Settings;
 use crate::application::actions::MarkdownAction;
 // Service container dependency injection implemented via SearchCommandHandler
 use crate::infrastructure::di::ServiceContainer;
@@ -28,6 +28,7 @@ use crossterm::style::Stylize;
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 use std::{fs, io};
 use termcolor::StandardStream;
 use tracing::{instrument, warn};
@@ -182,8 +183,9 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
 
     eprintln!("Rendering file: {}", filename);
 
-    // Create markdown action (reuses existing file reading logic)
-    let markdown_action = MarkdownAction::new();
+    // Create markdown action with dummy embedder (reuses existing file reading logic)
+    let embedder = Arc::new(DummyEmbedding);
+    let markdown_action = MarkdownAction::new(embedder);
 
     // Create a minimal bookmark structure - the MarkdownAction already handles file paths in url field
     let mut tags = HashSet::new();
@@ -465,7 +467,7 @@ pub fn update(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn edit(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+pub fn edit(cli: Cli, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
         let bookmark_service = services.bookmark_service.clone();
 
@@ -486,7 +488,7 @@ pub fn edit(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             return Ok(());
         }
 
-        edit_bookmarks(id_list, force_db, services)?;
+        edit_bookmarks(id_list, force_db, services, settings)?;
     }
     Ok(())
 }
@@ -599,18 +601,17 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn create_db(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+pub fn create_db(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
         // Get the database path from either the command-line argument or the config system
         let db_path = match path {
             Some(p) => p,
             None => {
-                // Get from config system via app_state
-                let app_state = AppState::read_global();
-                let configured_path = &app_state.settings.db_url;
+                // Get from config system via settings parameter
+                let configured_path = &settings.db_url;
 
                 // Check if we're using default configuration
-                if app_state.settings.config_source == ConfigSource::Default {
+                if settings.config_source == ConfigSource::Default {
                     eprintln!(
                         "{}",
                         "Warning: Using default database path. No configuration found.".yellow()
@@ -671,7 +672,7 @@ pub fn create_db(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         // Pre-fill the database with demo entries if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            pre_fill_database(&repository)?;
+            pre_fill_database(&repository, services)?;
             eprintln!("Demo entries added successfully!");
         }
     }
@@ -717,8 +718,8 @@ pub fn set_embeddable(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 #[instrument(skip(cli), level = "debug")]
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
-        let app_state = AppState::read_global();
-        if app_state.context.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
+        // Check embedder type using services instead of global state
+        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
         {
             eprintln!("{}", "Error: Cannot backfill embeddings with DummyEmbedding active. Please use --openai flag.".red());
             return Err(CliError::CommandFailed(
@@ -808,8 +809,8 @@ pub fn load_texts(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         path,
     } = cli.command.unwrap()
     {
-        let app_state = AppState::read_global();
-        if app_state.context.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
+        // Check embedder type using services instead of global state
+        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
         {
             eprintln!(
                 "{}",
@@ -840,24 +841,24 @@ pub fn load_texts(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn info(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     if let Commands::Info { show_schema } = cli.command.unwrap() {
-        let app_state = AppState::read_global();
-        let repository = SqliteBookmarkRepository::from_url(&app_state.settings.db_url)?;
+        // Use settings parameter and services instead of global state
+        let repository = SqliteBookmarkRepository::from_url(&settings.db_url)?;
 
         // Program version
         println!("Program Version: {}", env!("CARGO_PKG_VERSION"));
 
         // App configuration
         println!("\nConfiguration:");
-        println!("  Database URL: {}", app_state.settings.db_url);
-        println!("  FZF Height: {}", app_state.settings.fzf_opts.height);
-        println!("  FZF Reverse: {}", app_state.settings.fzf_opts.reverse);
-        println!("  FZF Show Tags: {}", app_state.settings.fzf_opts.show_tags);
-        println!("  FZF Hide URL: {}", app_state.settings.fzf_opts.no_url);
+        println!("  Database URL: {}", settings.db_url);
+        println!("  FZF Height: {}", settings.fzf_opts.height);
+        println!("  FZF Reverse: {}", settings.fzf_opts.reverse);
+        println!("  FZF Show Tags: {}", settings.fzf_opts.show_tags);
+        println!("  FZF Hide URL: {}", settings.fzf_opts.no_url);
 
-        // Embedder type
-        let embedder_type = if app_state.context.embedder.as_any().type_id()
+        // Embedder type using services
+        let embedder_type = if services.embedder.as_any().type_id()
             == std::any::TypeId::of::<DummyEmbedding>()
         {
             "DummyEmbedding (embeddings disabled)"
@@ -937,9 +938,8 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 }
 
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
-fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
-    let app_state = AppState::read_global();
-    let embedder = &*app_state.context.embedder;
+fn pre_fill_database(repository: &SqliteBookmarkRepository, services: &ServiceContainer) -> CliResult<()> {
+    let embedder = &*services.embedder;
 
     // Create demo entries
     let demo_entries = vec![
@@ -1260,8 +1260,19 @@ mod tests {
             "Database should be empty initially"
         );
 
-        // Act
-        pre_fill_database(&repository).expect("Failed to pre-fill database");
+        // Act - Create minimal service container for the test
+        use crate::util::test_service_container::TestServiceContainer;
+        let test_container = TestServiceContainer::new();
+        let dummy_services = crate::infrastructure::di::service_container::ServiceContainer {
+            bookmark_repository: test_container.bookmark_repository.clone(),
+            embedder: test_container.embedder.clone(),
+            bookmark_service: test_container.bookmark_service.clone(),
+            tag_service: test_container.tag_service.clone(),
+            action_service: test_container.action_service.clone(),
+            clipboard_service: test_container.clipboard_service.clone(),
+            template_service: test_container.template_service.clone(),
+        };
+        pre_fill_database(&repository, &dummy_services).expect("Failed to pre-fill database");
 
         // Assert
         let bookmarks = repository.get_all().expect("Failed to get bookmarks");

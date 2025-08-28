@@ -13,7 +13,7 @@ use crate::util::helper::{confirm, ensure_int_vector};
 
 /// Process a list of bookmarks interactively
 #[instrument(skip_all, level = "debug")]
-pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     if bookmarks.is_empty() {
         return Ok(());
     }
@@ -59,7 +59,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult
             }
             "d" => {
                 if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    delete_bookmarks_by_indices(indices, bookmarks, services)?;
+                    delete_bookmarks_by_indices(indices, bookmarks, services, settings)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -69,9 +69,9 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult
             "e" => {
                 if tokens.len() == 1 {
                     // Just "e" command with no indices - edit all bookmarks
-                    edit_all_bookmarks(bookmarks, services)?;
+                    edit_all_bookmarks(bookmarks, services, settings)?;
                 } else if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    edit_bookmarks_by_indices(indices, bookmarks, services)?;
+                    edit_bookmarks_by_indices(indices, bookmarks, services, settings)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -80,7 +80,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult
             }
             "t" => {
                 if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    touch_bookmarks_by_indices(indices, bookmarks, services)?;
+                    touch_bookmarks_by_indices(indices, bookmarks, services, settings)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -233,8 +233,8 @@ pub fn open_bookmark(bookmark: &Bookmark, services: &ServiceContainer) -> CliRes
 }
 
 /// Touch (update timestamp) of bookmarks by indices
-#[instrument(skip(bookmarks, services), level = "debug")]
-fn touch_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(bookmarks, services, settings), level = "debug")]
+fn touch_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     debug!("Touching bookmarks at indices: {:?}", indices);
     let service = &services.bookmark_service;
 
@@ -248,7 +248,7 @@ fn touch_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], service
 
                     // Display the updated bookmark
                     if let Ok(Some(updated)) = service.get_bookmark(id) {
-                        show_bookmarks(&[DisplayBookmark::from_domain(&updated)], ALL_FIELDS);
+                        show_bookmarks(&[DisplayBookmark::from_domain(&updated)], ALL_FIELDS, settings);
                     }
                 }
             }
@@ -322,8 +322,8 @@ fn print_all_bookmark_ids(bookmarks: &[Bookmark]) -> CliResult<()> {
 }
 
 /// Edit all bookmarks in the list
-#[instrument(skip(bookmarks, services), level = "debug")]
-fn edit_all_bookmarks(bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(bookmarks, services, settings), level = "debug")]
+fn edit_all_bookmarks(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     // Get IDs from all bookmarks
     let mut bookmark_ids = Vec::new();
     for bookmark in bookmarks {
@@ -338,12 +338,12 @@ fn edit_all_bookmarks(bookmarks: &[Bookmark], services: &ServiceContainer) -> Cl
     }
 
     // Call the edit function with all IDs
-    edit_bookmarks(bookmark_ids, false, services)
+    edit_bookmarks(bookmark_ids, false, services, settings)
 }
 
 /// Edit bookmarks by their indices
-#[instrument(skip(bookmarks, services), level = "debug")]
-fn edit_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(bookmarks, services, settings), level = "debug")]
+fn edit_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     // Get IDs from indices
     let mut bookmark_ids = Vec::new();
     for index in indices {
@@ -357,12 +357,12 @@ fn edit_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services
     }
 
     // Call the edit function with actual IDs
-    edit_bookmarks(bookmark_ids, false, services)
+    edit_bookmarks(bookmark_ids, false, services, settings)
 }
 
 /// Edit bookmarks by IDs
-#[instrument(level = "debug")]
-pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(settings), level = "debug")]
+pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     let bookmark_service = &services.bookmark_service;
     let template_service = &services.template_service;
     let mut bookmarks_to_edit = Vec::new();
@@ -388,7 +388,7 @@ pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer
         .map(DisplayBookmark::from_domain)
         .collect();
 
-    show_bookmarks(&display_bookmarks, DEFAULT_FIELDS);
+    show_bookmarks(&display_bookmarks, DEFAULT_FIELDS, settings);
 
     // Process each bookmark with smart edit strategy
     for bookmark in &bookmarks_to_edit {
@@ -430,8 +430,8 @@ pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer
 }
 
 /// Delete bookmarks by their indices in the displayed list
-#[instrument(skip(bookmarks, services), level = "debug")]
-fn delete_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(bookmarks, services, settings), level = "debug")]
+fn delete_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     // Get IDs from indices
     let mut bookmark_ids = Vec::new();
     for index in indices {
@@ -445,12 +445,12 @@ fn delete_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], servic
     }
 
     // Call the delete function with actual IDs
-    delete_bookmarks(bookmark_ids, services)
+    delete_bookmarks(bookmark_ids, services, settings)
 }
 
 /// Delete bookmarks by their IDs
-#[instrument(level = "debug")]
-pub fn delete_bookmarks(ids: Vec<i32>, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(settings), level = "debug")]
+pub fn delete_bookmarks(ids: Vec<i32>, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     let service = &services.bookmark_service;
 
     // Display bookmarks to be deleted
@@ -466,7 +466,7 @@ pub fn delete_bookmarks(ids: Vec<i32>, services: &ServiceContainer) -> CliResult
         return Ok(());
     }
 
-    show_bookmarks(&bookmarks_to_display, DEFAULT_FIELDS);
+    show_bookmarks(&bookmarks_to_display, DEFAULT_FIELDS, settings);
 
     // Confirm deletion
     if !confirm("Delete these bookmarks?") {

@@ -141,7 +141,6 @@ impl SemanticSearchResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::domain::tag::Tag;
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::util::testing::init_test_env;
@@ -151,8 +150,7 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
 
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
+        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         let mut bookmark =
             Bookmark::new("https://example.com", title, content, tags, embedder).unwrap();

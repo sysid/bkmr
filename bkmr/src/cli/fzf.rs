@@ -57,22 +57,29 @@ struct AlignedBookmark {
     bookmark: Bookmark,
     max_id_width: usize,
     action_description: String,
-    display_text: String,
-    preview_text: String,
+    settings: crate::config::Settings,
 }
 
 impl SkimItem for AlignedBookmark {
     fn text(&self) -> Cow<'_, str> {
-        Cow::Borrowed(&self.display_text)
+        let display_text = create_bookmark_display_text(
+            &self.bookmark, 
+            self.max_id_width, 
+            &self.action_description, 
+            &self.settings
+        );
+        Cow::Owned(display_text)
     }
 
     fn display<'a>(&'a self, _context: DisplayContext<'a>) -> AnsiString<'a> {
         // Simple display without complex coloring to avoid dependency injection issues
-        AnsiString::parse(&self.display_text)
+        let display_text = self.text();
+        AnsiString::parse(&display_text)
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
-        ItemPreview::AnsiText(self.preview_text.clone())
+        let preview_text = create_bookmark_preview_text(&self.bookmark, &self.action_description);
+        ItemPreview::AnsiText(preview_text)
     }
 
     fn output(&self) -> Cow<'_, str> {
@@ -410,16 +417,11 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
             // Get action description
             let action_description = services.action_service.get_default_action_description(bookmark);
             
-            // Pre-compute display and preview text
-            let display_text = create_bookmark_display_text(bookmark, max_id_width, &action_description, settings);
-            let preview_text = create_bookmark_preview_text(bookmark, &action_description);
-            
             let item = Arc::new(AlignedBookmark {
                 bookmark: bookmark.clone(),
                 max_id_width,
                 action_description: action_description.to_string(),
-                display_text,
-                preview_text,
+                settings: settings.clone(),
             });
             tx_item.send(item).map_err(|_| {
                 crate::cli::error::CliError::CommandFailed(
@@ -493,12 +495,12 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
             Key::Ctrl('e') => {
                 clear_fzf_artifacts();
                 // Edit selected bookmarks
-                edit_bookmarks(ids, false, services)?;
+                edit_bookmarks(ids, false, services, settings)?;
             }
             Key::Ctrl('d') => {
                 // clear_fzf_artifacts();
                 // Delete selected bookmarks
-                delete_bookmarks(ids, services)?;
+                delete_bookmarks(ids, services, settings)?;
             }
             Key::Ctrl('a') => {
                 // clear_fzf_artifacts();

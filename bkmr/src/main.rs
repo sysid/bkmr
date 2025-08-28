@@ -85,7 +85,7 @@ fn handle_lsp_command(
 
     // Run the LSP server (for now, use existing implementation)
     rt.block_on(async {
-        bkmr::lsp::run_lsp_server(no_interpolation).await;
+        bkmr::lsp::run_lsp_server(&settings, no_interpolation).await;
     });
 
     Ok(())

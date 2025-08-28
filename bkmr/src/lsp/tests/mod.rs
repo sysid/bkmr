@@ -1,10 +1,10 @@
 #[cfg(test)]
 mod integration_tests {
-    use crate::lsp::backend::BkmrConfig;
+    
     use crate::lsp::domain::{CompletionContext, Snippet};
-    use crate::lsp::services::{CompletionService, LspSnippetService};
+    
     use crate::util::testing::{init_test_env, EnvGuard};
-    use std::sync::Arc;
+    
     use tower_lsp::lsp_types::{Position, Url};
 
     /*
@@ -81,7 +81,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn given_plain_snippet_when_creating_completion_then_uses_plain_text_format() {
-        use crate::lsp::services::CompletionService;
+        
         use tower_lsp::lsp_types::{CompletionItemKind, InsertTextFormat};
 
         // Arrange
@@ -114,7 +114,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn given_regular_snippet_when_creating_completion_then_uses_snippet_format() {
-        use crate::lsp::services::CompletionService;
+        
         use tower_lsp::lsp_types::{CompletionItemKind, InsertTextFormat};
 
         // Arrange
@@ -207,7 +207,7 @@ mod integration_tests {
     async fn given_create_snippet_command_when_executed_then_creates_snippet() {
         // Arrange
         use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
-        use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
@@ -255,7 +255,7 @@ mod integration_tests {
     async fn given_list_snippets_command_when_executed_then_returns_filtered_list() {
         // Arrange
         use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
-        use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
@@ -332,7 +332,7 @@ mod integration_tests {
     async fn given_update_snippet_command_when_executed_then_updates_and_preserves_system_tag() {
         // Arrange
         use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
-        use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
@@ -409,7 +409,7 @@ mod integration_tests {
     async fn given_delete_snippet_command_when_executed_then_deletes_snippet() {
         // Arrange
         use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
-        use crate::lsp::services::{CommandService, CompletionService, DocumentService};
+        
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};

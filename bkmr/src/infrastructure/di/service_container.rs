@@ -59,6 +59,7 @@ impl ServiceContainer {
             &bookmark_repository,
             &template_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
+            &embedder,
             config
         )?;
         
@@ -111,10 +112,11 @@ impl ServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         template_service: &Arc<dyn TemplateService>,
         clipboard_service: &Arc<dyn ClipboardService>,
+        embedder: &Arc<dyn Embedder>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionService>> {
         let resolver = Self::create_action_resolver(
-            repository, template_service, clipboard_service, config
+            repository, template_service, clipboard_service, embedder, config
         )?;
         Ok(Arc::new(ActionServiceImpl::new(resolver, repository.clone())))
     }
@@ -123,6 +125,7 @@ impl ServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         template_service: &Arc<dyn TemplateService>,
         clipboard_service: &Arc<dyn ClipboardService>,
+        embedder: &Arc<dyn Embedder>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionResolver>> {
         // Create all actions with explicit dependencies
@@ -145,7 +148,7 @@ impl ServiceContainer {
         ));
         
         let markdown_action: Box<dyn BookmarkAction> = 
-            Box::new(MarkdownAction::new_with_repository(repository.clone()));
+            Box::new(MarkdownAction::new_with_repository(repository.clone(), embedder.clone()));
             
         let env_action: Box<dyn BookmarkAction> = 
             Box::new(EnvAction::new(template_service.clone()));

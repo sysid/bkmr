@@ -494,7 +494,6 @@ pub enum SortDirection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::util::testing::init_test_env;
 
     #[test]
@@ -515,7 +514,7 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -525,7 +524,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -551,7 +550,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -560,7 +559,7 @@ mod tests {
             "Python",
             "Learn Python",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -569,7 +568,7 @@ mod tests {
             "JavaScript",
             "Learn JavaScript",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -591,7 +590,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -600,7 +599,7 @@ mod tests {
             "Python",
             "Learn Python",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -639,7 +638,7 @@ mod tests {
             "Rust Web",
             "Web development with Rust",
             rust_web_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -651,7 +650,7 @@ mod tests {
             "Web Programming",
             "Web development programming",
             programming_web_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -663,7 +662,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             rust_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -682,7 +681,7 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -702,8 +701,7 @@ mod tests {
         let _ = init_test_env();
 
         // Create test bookmarks with various properties
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
+        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         // Create some test bookmarks
         let now = chrono::Utc::now();
@@ -921,8 +919,7 @@ mod tests {
 
         // Create test bookmarks
         let tags = HashSet::new();
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
+        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         let bookmark = Bookmark::new(
             "https://example.com",

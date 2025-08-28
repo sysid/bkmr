@@ -14,6 +14,6 @@ mod tests;
 
 pub use backend::BkmrLspBackend;
 
-pub async fn run_lsp_server(no_interpolation: bool) {
-    backend::run_server(no_interpolation).await;
+pub async fn run_lsp_server(settings: &crate::config::Settings, no_interpolation: bool) {
+    backend::run_server(settings, no_interpolation).await;
 }

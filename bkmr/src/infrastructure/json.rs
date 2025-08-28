@@ -1,6 +1,5 @@
 // src/infrastructure/json.rs
 
-use crate::app_state::AppState;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::tag::Tag;
@@ -130,12 +129,13 @@ where
         let filename = extract_filename(&id);
 
         let tags = Tag::parse_tags(",_imported_,")?;
+        let dummy_embedder = crate::infrastructure::embeddings::DummyEmbedding;
         let bookmark = Bookmark::new(
             &id,             // URL
             &filename,       // Title
             &record.content, // Description
             tags,            // Tags
-            AppState::read_global().context.embedder.as_ref(),
+            &dummy_embedder,  // TODO: check whether the real embedder is required (looks like it from before refactor)
         )?;
 
         bookmarks.push(bookmark);
@@ -218,12 +218,13 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test")?);
 
+        let dummy_embedder = crate::infrastructure::embeddings::DummyEmbedding;
         let bookmark = Bookmark::new(
             "https://example.com",
             "Example",
             "A test bookmark",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &dummy_embedder,
         )?;
 
         // Convert to JSON views

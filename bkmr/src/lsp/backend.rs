@@ -12,7 +12,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::lsp::domain::{CompletionContext, CompletionQuery};
 use crate::lsp::error::LspError;
-use crate::lsp::services::{CommandService, CompletionService, DocumentService, LspSnippetService};
+use crate::lsp::services::{CommandService, CompletionService, DocumentService};
 
 /// Configuration for the bkmr-lsp server
 #[derive(Debug, Clone)]
@@ -550,7 +550,7 @@ impl LanguageServer for BkmrLspBackend {
 }
 
 /// Run the LSP server
-pub async fn run_server(no_interpolation: bool) {
+pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bool) {
     // Logging is now initialized in main.rs with proper color control
     // No need for duplicate initialization here
 
@@ -578,10 +578,8 @@ pub async fn run_server(no_interpolation: bool) {
 
     // Create service containers with proper dependency injection
     use crate::infrastructure::di::ServiceContainer;
-    use crate::app_state::AppState;
     
-    let app_state = AppState::read_global();
-    let service_container = ServiceContainer::new(&app_state.settings)
+    let service_container = ServiceContainer::new(settings)
         .expect("Failed to create service container");
 
     // Set up the LSP service with proper dependency injection

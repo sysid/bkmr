@@ -1,11 +1,10 @@
 // bkmr/src/app_state.rs
 use crate::domain::embedding::Embedder;
-use crate::domain::error::{DomainError, DomainResult};
 use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
 use std::fmt;
 use std::path::Path;
-use std::sync::{Arc, OnceLock, RwLock};
-use tracing::{debug, instrument};
+use std::sync::Arc;
+use tracing::debug;
 
 // Import our new config module
 use crate::config::{load_settings, Settings};
@@ -94,50 +93,7 @@ impl AppState {
     }
 }
 
-pub static APP_STATE: OnceLock<RwLock<AppState>> = OnceLock::new();
-
-//
-// --- Public API for global access ---
-impl AppState {
-    /// Returns the global AppState lock (initializing if necessary).
-    pub fn global() -> &'static RwLock<AppState> {
-        APP_STATE.get_or_init(|| RwLock::new(AppState::new(Arc::new(DummyEmbedding))))
-    }
-
-    /// Acquire a read guard for the global AppState.
-    #[instrument(level = "debug")]
-    pub fn read_global() -> std::sync::RwLockReadGuard<'static, AppState> {
-        Self::global()
-            .read()
-            .expect("Failed to acquire read lock for AppState")
-    }
-
-    /// Acquire a write guard and replace the global AppState.
-    #[instrument(level = "debug")]
-    pub fn update_global(new_state: AppState) -> DomainResult<()> {
-        let mut guard = Self::global()
-            .write()
-            .map_err(|e| DomainError::Other(format!("Write lock error: {}", e)))?;
-        *guard = new_state;
-        Ok(())
-    }
-
-    /// Reload settings from the configuration files and environment variables.
-    pub fn reload_settings() -> DomainResult<()> {
-        Self::reload_settings_with_config(None)
-    }
-
-    /// Reload settings with a specific config file
-    pub fn reload_settings_with_config(config_file: Option<&Path>) -> DomainResult<()> {
-        let mut guard = Self::global()
-            .write()
-            .map_err(|e| DomainError::Other(format!("Write lock error: {}", e)))?;
-
-        // Use the new configuration system
-        guard.settings = load_settings(config_file)?;
-        Ok(())
-    }
-}
+// Global state methods removed - using dependency injection instead
 
 // Implement tests for backward compatibility
 #[cfg(test)]
@@ -203,29 +159,30 @@ mod tests {
         assert!(state.settings.fzf_opts.show_tags);
     }
 
-    #[test]
-    fn given_global_state_when_update_then_state_changes() {
-        let _guard = EnvGuard::new();
-        let mut state = AppState::default();
-        state.settings.db_url = "/some/db/path.db".to_string();
-        AppState::update_global(state).unwrap();
-
-        let global = AppState::read_global();
-        assert_eq!(global.settings.db_url, "/some/db/path.db");
-    }
-
-    #[test]
-    fn given_modified_env_when_reload_then_settings_change() {
-        let _guard = EnvGuard::new();
-
-        let mut initial = AppState::default();
-        initial.settings.db_url = "/before-reload.db".to_string();
-        AppState::update_global(initial).unwrap();
-
-        env::set_var("BKMR_DB_URL", "/after-reload.db");
-        AppState::reload_settings().unwrap();
-
-        let reloaded = AppState::read_global();
-        assert_eq!(reloaded.settings.db_url, "/after-reload.db");
-    }
+    // Tests for global state methods - disabled after removing global state pattern
+    // #[test]
+    // fn given_global_state_when_update_then_state_changes() {
+    //     let _guard = EnvGuard::new();
+    //     let mut state = AppState::default();
+    //     state.settings.db_url = "/some/db/path.db".to_string();
+    //     AppState::update_global(state).unwrap();
+    //
+    //     let global = AppState::read_global();
+    //     assert_eq!(global.settings.db_url, "/some/db/path.db");
+    // }
+    //
+    // #[test]
+    // fn given_modified_env_when_reload_then_settings_change() {
+    //     let _guard = EnvGuard::new();
+    //
+    //     let mut initial = AppState::default();
+    //     initial.settings.db_url = "/before-reload.db".to_string();
+    //     AppState::update_global(initial).unwrap();
+    //
+    //     env::set_var("BKMR_DB_URL", "/after-reload.db");
+    //     AppState::reload_settings().unwrap();
+    //
+    //     let reloaded = AppState::read_global();
+    //     assert_eq!(reloaded.settings.db_url, "/after-reload.db");
+    // }
 }

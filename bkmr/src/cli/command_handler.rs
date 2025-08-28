@@ -174,7 +174,7 @@ impl SearchCommandHandler {
         let display_bookmarks: Vec<DisplayBookmark> =
             bookmarks.iter().map(DisplayBookmark::from_domain).collect();
 
-        show_bookmarks(&display_bookmarks, fields);
+        show_bookmarks(&display_bookmarks, fields, &self.settings);
         eprintln!("Found {} bookmarks", bookmarks.len());
 
         if non_interactive {
@@ -195,7 +195,7 @@ impl SearchCommandHandler {
             writeln!(stderr, "Selection: ").cli_context("Failed to write to stderr")?;
             stderr.reset().cli_context("Failed to reset color")?;
 
-            process(bookmarks, &self.services)?;
+            process(bookmarks, &self.services, &self.settings)?;
         }
         Ok(())
     }

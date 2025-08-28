@@ -64,6 +64,7 @@ impl TestServiceContainer {
             &bookmark_repository,
             &template_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
+            &embedder,
         );
         
         Self {
@@ -101,9 +102,10 @@ impl TestServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         template_service: &Arc<dyn TemplateService>,
         clipboard_service: &Arc<dyn ClipboardService>,
+        embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionService> {
         let resolver = Self::create_test_action_resolver(
-            repository, template_service, clipboard_service
+            repository, template_service, clipboard_service, embedder
         );
         Arc::new(ActionServiceImpl::new(resolver, repository.clone()))
     }
@@ -113,6 +115,7 @@ impl TestServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         template_service: &Arc<dyn TemplateService>,
         clipboard_service: &Arc<dyn ClipboardService>,
+        embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionResolver> {
         // Create all actions with explicit dependencies - using test-friendly settings
         let uri_action: Box<dyn BookmarkAction> = 
@@ -135,7 +138,7 @@ impl TestServiceContainer {
         ));
         
         let markdown_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::MarkdownAction::new_with_repository(repository.clone()));
+            Box::new(crate::application::actions::MarkdownAction::new_with_repository(repository.clone(), embedder.clone()));
             
         let env_action: Box<dyn BookmarkAction> = 
             Box::new(crate::application::actions::EnvAction::new(template_service.clone()));
