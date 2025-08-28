@@ -56,10 +56,12 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli, services: &ServiceC
         let search = SemanticSearch::new(query, limit.map(|l| l as usize));
 
         // Perform semantic search
-        let results = bookmark_service.semantic_search(&search)?;
+        let results = bookmark_service.semantic_search(&search)
+            .cli_context("performing semantic search on bookmarks")?;
 
         if results.is_empty() {
-            writeln!(stderr, "{}", "No bookmarks found".yellow())?;
+            writeln!(stderr, "{}", "No bookmarks found".yellow())
+                .cli_context("writing empty search result to stderr")?;
             return Ok(());
         }
 
@@ -105,15 +107,19 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli, services: &ServiceC
         if !non_interactive && !is_piped && !results.is_empty() && confirm("Open bookmark(s)?") {
             // Prompt for which bookmark to open
             print!("Enter ID(s) to open (comma-separated): ");
-            io::stdout().flush()?;
+            io::stdout().flush()
+                .cli_context("flushing stdout after prompt")?;
 
             let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
+            io::stdin().read_line(&mut input)
+                .cli_context("reading user input for bookmark IDs")?;
 
-            let ids = get_ids(input.trim().to_string())?;
+            let ids = get_ids(input.trim().to_string())
+                .cli_context("parsing bookmark IDs from user input")?;
             for id in ids {
                 if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    execute_bookmark_default_action(&result.bookmark, services)?;
+                    execute_bookmark_default_action(&result.bookmark, services)
+                        .cli_context("executing default action for selected bookmark")?;
                 } else {
                     writeln!(stderr, "Bookmark with ID {} not found in results", id)?;
                 }
@@ -134,14 +140,17 @@ pub fn open(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     {
         if file {
             // Handle direct file viewing
-            handle_file_viewing(&ids)?;
+            handle_file_viewing(&ids)
+                .cli_context("handling direct file viewing")?;
         } else {
             // Handle bookmark opening (existing logic)
             let bookmark_service = services.bookmark_service.clone();
             let action_service = services.action_service.clone();
 
-            for id in get_ids(ids)? {
-                if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+            for id in get_ids(ids)
+                .cli_context("parsing bookmark IDs for opening")? {
+                if let Some(bookmark) = bookmark_service.get_bookmark(id)
+                    .cli_context("retrieving bookmark for opening")? {
                     // Use action service to execute default action
                     let action_type = action_service.get_default_action_description(&bookmark);
                     eprintln!("Performing '{}' for: {}", action_type, bookmark.title);

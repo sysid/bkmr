@@ -23,6 +23,15 @@ pub enum DomainError {
     #[error("Cannot fetch metadata: {0}")]
     CannotFetchMetadata(String),
 
+    #[error("Configuration error: {0}")]
+    ConfigurationError(String),
+
+    #[error("Permission denied: {0}")]
+    PermissionDenied(String),
+
+    #[error("File system error: {0}")]
+    FileSystemError(String),
+
     #[error("Repository error: {0}")]
     RepositoryError(#[from] RepositoryError),
 
@@ -71,6 +80,15 @@ impl DomainError {
             DomainError::Other(msg) => DomainError::Other(format!("{}: {}", context.into(), msg)),
             DomainError::BookmarkOperationFailed(msg) => {
                 DomainError::BookmarkOperationFailed(format!("{}: {}", context.into(), msg))
+            }
+            DomainError::ConfigurationError(msg) => {
+                DomainError::ConfigurationError(format!("{}: {}", context.into(), msg))
+            }
+            DomainError::PermissionDenied(msg) => {
+                DomainError::PermissionDenied(format!("{}: {}", context.into(), msg))
+            }
+            DomainError::FileSystemError(msg) => {
+                DomainError::FileSystemError(format!("{}: {}", context.into(), msg))
             }
             DomainError::RepositoryError(err) => {
                 DomainError::RepositoryError(RepositoryError::context(err, context))

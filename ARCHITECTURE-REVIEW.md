@@ -91,42 +91,6 @@ Same factory method issues propagate to LSP layer.
 
 # 7. Actionable Refactoring Plan
 
-Phase 1: Eliminate Factory Methods (Critical)
-
-// ❌ Remove this pattern:
-pub fn create_bookmark_service() -> Arc<dyn BookmarkService> {
-    let app_state = AppState::read_global();
-    // ...
-}
-
-// ✅ Use only this pattern:
-pub fn new(
-    repository: Arc<dyn BookmarkRepository>,
-    embedder: Arc<dyn Embedder>,
-) -> Self {
-    // ...
-}
-
-Phase 2: Dependency Injection at Root
-
-// In main.rs
-fn main() {
-    let config = load_config();
-    let repository = create_repository(&config.db_url);
-    let embedder = create_embedder(&config);
-    let bookmark_service = BookmarkServiceImpl::new(repository, embedder);
-
-    // Pass dependencies explicitly
-    let cli = CliApp::new(bookmark_service, tag_service, ...);
-    cli.run();
-}
-
-Phase 3: Remove Global State
-
-1. Eliminate APP_STATE singleton
-2. Pass configuration through dependency injection
-3. Create proper test isolation without environment manipulation
-
 Phase 4: Enable Parallel Testing
 
 // After refactoring, tests can run in parallel:

@@ -59,7 +59,8 @@ impl SqliteBookmarkRepository {
     /// Create a new SQLite repository with the provided database URL
     #[instrument(skip_all, level = "debug")]
     pub fn from_url(database_url: &str) -> SqliteResult<Self> {
-        let pool = super::connection::init_pool(database_url)?;
+        let pool = super::connection::init_pool(database_url)
+            .map_err(|e| e.context("initializing database connection pool"))?;
         Ok(Self { pool })
     }
 
@@ -69,6 +70,7 @@ impl SqliteBookmarkRepository {
         self.pool
             .get()
             .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))
+            .map_err(|e| e.context("getting database connection from pool"))
     }
 
     /// Cleans the table by deleting all bookmarks except ID 1
@@ -79,7 +81,8 @@ impl SqliteBookmarkRepository {
         // sql_query("DELETE FROM bookmarks WHERE id != 1;")
         sql_query("DELETE FROM bookmarks;")
             .execute(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| e.context("executing table cleanup query"))?;
 
         debug!("Cleaned table.");
         Ok(())
@@ -152,17 +155,23 @@ impl SqliteBookmarkRepository {
 impl BookmarkRepository for SqliteBookmarkRepository {
     #[instrument(skip_all, level = "debug")]
     fn get_by_id(&self, id: i32) -> Result<Option<Bookmark>, DomainError> {
-        let mut conn = self.get_connection()?;
+        let mut conn = self.get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for bookmark lookup"))?;
 
         let result = dsl::bookmarks
             .filter(dsl::id.eq(id))
             .first::<DbBookmark>(&mut conn)
             .optional()
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context(format!("querying bookmark by ID {}", id)))?;
 
         match result {
             Some(db_bookmark) => {
-                let bookmark = self.to_domain_model(db_bookmark)?;
+                let bookmark = self.to_domain_model(db_bookmark)
+                    .map_err(|e| DomainError::RepositoryError(e.into()))
+                    .map_err(|e| e.context(format!("converting database model to domain model for bookmark ID {}", id)))?;
                 Ok(Some(bookmark))
             }
             None => Ok(None),
@@ -171,7 +180,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
     #[instrument(skip_all, level = "debug")]
     fn get_by_url(&self, url: &str) -> Result<Option<Bookmark>, DomainError> {
-        let mut conn = self.get_connection()?;
+        let mut conn = self.get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for URL lookup"))?;
 
         // Escape special characters in URL for SQLite query
         let escaped_url = url.replace('\'', "''");
@@ -180,11 +191,15 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             .filter(dsl::URL.eq(escaped_url))
             .first::<DbBookmark>(&mut conn)
             .optional()
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context(format!("querying bookmark by URL: {}", url)))?;
 
         match result {
             Some(db_bookmark) => {
-                let bookmark = self.to_domain_model(db_bookmark)?;
+                let bookmark = self.to_domain_model(db_bookmark)
+                    .map_err(|e| DomainError::RepositoryError(e.into()))
+                    .map_err(|e| e.context(format!("converting database model to domain model for URL: {}", url)))?;
                 Ok(Some(bookmark))
             }
             None => Ok(None),
@@ -193,23 +208,30 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
     #[instrument(skip_all, level = "debug")]
     fn search(&self, query: &BookmarkQuery) -> Result<Vec<Bookmark>, DomainError> {
-        let mut conn = self.get_connection()?;
+        let mut conn = self.get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for bookmark search"))?;
 
         // First, handle text query with FTS if present
         let bookmark_ids = if let Some(text_query) = &query.text_query {
             if !text_query.is_empty() {
                 // Use FTS to get matching bookmark IDs
                 debug!("Using FTS search for query: {}", text_query);
-                self.get_bookmarks_fts(text_query)?
+                self.get_bookmarks_fts(text_query)
+                    .map_err(|e| e.context(format!("performing FTS search for query: {}", text_query)))?
             } else {
                 // Empty text query, get all IDs
                 debug!("Empty text query, retrieving all bookmark IDs");
-                self.get_all_bookmark_ids(&mut conn)?
+                self.get_all_bookmark_ids(&mut conn)
+                    .map_err(|e| DomainError::RepositoryError(e.into()))
+                    .map_err(|e| e.context("retrieving all bookmark IDs for empty text query"))?
             }
         } else {
             // No text query, get all IDs
             debug!("No text query, retrieving all bookmark IDs");
-            self.get_all_bookmark_ids(&mut conn)?
+            self.get_all_bookmark_ids(&mut conn)
+                .map_err(|e| DomainError::RepositoryError(e.into()))
+                .map_err(|e| e.context("retrieving all bookmark IDs for no text query"))?
         };
 
         // If we have no IDs after FTS, return empty result quickly
@@ -219,7 +241,8 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         }
 
         // Fetch the complete bookmark objects for the matching IDs
-        let bookmarks = self.get_bookmarks_by_ids(&bookmark_ids)?;
+        let bookmarks = self.get_bookmarks_by_ids(&bookmark_ids)
+            .map_err(|e| e.context("fetching complete bookmark objects by IDs"))?;
 
         // Apply all other filters from the query
         let filtered_bookmarks = query.apply_non_text_filters(&bookmarks);
@@ -239,7 +262,8 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let ids = dsl::bookmarks
             .select(dsl::id)
             .load::<i32>(conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| e.context("loading all bookmark IDs from database"))?;
 
         Ok(ids)
     }
@@ -250,12 +274,16 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             return Ok(Vec::new());
         }
 
-        let mut conn = self.get_connection()?;
+        let mut conn = self.get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for bulk bookmark retrieval"))?;
 
         let db_bookmarks = dsl::bookmarks
             .filter(dsl::id.eq_any(ids))
             .load::<DbBookmark>(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context(format!("querying bookmarks by IDs: {:?}", ids)))?;
 
         let bookmarks = db_bookmarks
             .into_iter()
@@ -273,11 +301,15 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
     #[instrument(skip_all, level = "debug")]
     fn get_all(&self) -> Result<Vec<Bookmark>, DomainError> {
-        let mut conn = self.get_connection()?;
+        let mut conn = self.get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for retrieving all bookmarks"))?;
 
         let db_bookmarks = dsl::bookmarks
             .load::<DbBookmark>(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("loading all bookmarks from database"))?;
 
         let mut bookmarks = Vec::new();
         for db_bookmark in db_bookmarks {
@@ -292,7 +324,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
     #[instrument(skip_all, level = "debug")]
     fn add(&self, bookmark: &mut Bookmark) -> Result<(), DomainError> {
-        let mut conn = self.get_connection()?;
+        let mut conn = self.get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for adding bookmark"))?;
 
         // Begin transaction
         conn.transaction::<_, diesel::result::Error, _>(|conn| {
