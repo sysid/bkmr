@@ -43,36 +43,8 @@ pub struct BkmrLspBackend {
 }
 
 impl BkmrLspBackend {
-    pub fn new(client: Client) -> Self {
-        Self::with_config(client, BkmrConfig::default())
-    }
 
-    pub fn with_config(client: Client, config: BkmrConfig) -> Self {
-        debug!("Creating BkmrLspBackend with config: {:?}", config);
-
-        // Create snippet service
-        let snippet_service = Arc::new(LspSnippetService::new());
-
-        // Create completion service with configuration
-        let completion_service = CompletionService::with_config(snippet_service, config.clone());
-
-        // Create document service
-        let document_service = DocumentService::new();
-
-        // Create command service
-        let command_service = CommandService::new();
-
-        Self {
-            client,
-            config,
-            completion_service,
-            document_service,
-            command_service,
-        }
-    }
-
-    /// Create BkmrLspBackend with specific services (for testing)
-    #[cfg(test)]
+    /// Create backend with dependency injection (recommended)
     pub fn with_services(
         client: Client,
         config: BkmrConfig,
@@ -80,8 +52,6 @@ impl BkmrLspBackend {
         document_service: DocumentService,
         command_service: CommandService,
     ) -> Self {
-        debug!("Creating BkmrLspBackend with test services");
-
         Self {
             client,
             config,
@@ -90,6 +60,8 @@ impl BkmrLspBackend {
             command_service,
         }
     }
+
+
 
     /// Extract word backwards from cursor position and return both query and range
     /// Delegates to DocumentService
@@ -604,9 +576,43 @@ pub async fn run_server(no_interpolation: bool) {
         std::process::exit(1);
     }
 
-    // Set up the LSP service
-    let (service, socket) =
-        LspService::new(|client| BkmrLspBackend::with_config(client, config.clone()));
+    // Create service containers with proper dependency injection
+    use crate::infrastructure::di::ServiceContainer;
+    use crate::app_state::AppState;
+    
+    let app_state = AppState::read_global();
+    let service_container = ServiceContainer::new(&app_state.settings)
+        .expect("Failed to create service container");
+
+    // Set up the LSP service with proper dependency injection
+    // Note: We need to recreate services inside the closure since they're not Clone
+    let (service, socket) = LspService::new({
+        let config = config.clone();
+        let service_container = service_container;
+        move |client| {
+            use crate::lsp::services::{CompletionService, DocumentService, CommandService, LspSnippetService};
+            
+            // Create LSP services inside the closure
+            let snippet_service = Arc::new(LspSnippetService::with_services(
+                service_container.bookmark_service.clone(),
+                service_container.template_service.clone(),
+            ));
+            
+            let completion_service = CompletionService::new(snippet_service);
+            let document_service = DocumentService::new();
+            let command_service = CommandService::with_service(
+                service_container.bookmark_service.clone()
+            );
+            
+            BkmrLspBackend::with_services(
+                client,
+                config,
+                completion_service,
+                document_service,
+                command_service,
+            )
+        }
+    });
 
     eprintln!("LSP service created, starting server on stdin/stdout");
     info!("LSP service created, starting server on stdin/stdout");

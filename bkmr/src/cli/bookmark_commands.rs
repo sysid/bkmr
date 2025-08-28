@@ -1,9 +1,8 @@
 // src/cli/bookmark_commands.rs
 use crate::app_state::AppState;
 use crate::application::actions::MarkdownAction;
-use crate::application::services::factory::{
-    create_action_service, create_bookmark_service, create_tag_service, create_template_service,
-};
+// Service container dependency injection implemented via SearchCommandHandler
+use crate::infrastructure::di::ServiceContainer;
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
@@ -43,14 +42,14 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
 }
 
 #[instrument(skip(stderr, cli))]
-pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
+pub fn semantic_search(mut stderr: StandardStream, cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::SemSearch {
         query,
         limit,
         non_interactive,
     } = cli.command.unwrap()
     {
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         // Create the semantic search domain object
         let search = SemanticSearch::new(query, limit.map(|l| l as usize));
@@ -113,7 +112,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
             let ids = get_ids(input.trim().to_string())?;
             for id in ids {
                 if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    execute_bookmark_default_action(&result.bookmark)?;
+                    execute_bookmark_default_action(&result.bookmark, services)?;
                 } else {
                     writeln!(stderr, "Bookmark with ID {} not found in results", id)?;
                 }
@@ -124,7 +123,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn open(cli: Cli) -> CliResult<()> {
+pub fn open(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Open {
         ids,
         no_edit,
@@ -137,8 +136,8 @@ pub fn open(cli: Cli) -> CliResult<()> {
             handle_file_viewing(&ids)?;
         } else {
             // Handle bookmark opening (existing logic)
-            let bookmark_service = create_bookmark_service();
-            let action_service = create_action_service();
+            let bookmark_service = services.bookmark_service.clone();
+            let action_service = services.action_service.clone();
 
             for id in get_ids(ids)? {
                 if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
@@ -232,7 +231,7 @@ fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
 }
 
 #[instrument(skip(cli))]
-pub fn add(cli: Cli) -> CliResult<()> {
+pub fn add(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Add {
         url,
         tags,
@@ -245,8 +244,8 @@ pub fn add(cli: Cli) -> CliResult<()> {
         stdin,
     } = cli.command.unwrap()
     {
-        let bookmark_service = create_bookmark_service();
-        let template_service = create_template_service();
+        let bookmark_service = &services.bookmark_service;
+        let template_service = &services.template_service;
 
         // Convert bookmark_type string to SystemTag
         let system_tag = match bookmark_type.to_lowercase().as_str() {
@@ -385,9 +384,9 @@ pub fn add(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn delete(cli: Cli) -> CliResult<()> {
+pub fn delete(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Delete { ids } = cli.command.unwrap() {
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         let id_list = get_ids(ids)?;
 
@@ -413,7 +412,7 @@ pub fn delete(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn update(cli: Cli) -> CliResult<()> {
+pub fn update(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Update {
         ids,
         tags,
@@ -421,8 +420,8 @@ pub fn update(cli: Cli) -> CliResult<()> {
         force,
     } = cli.command.unwrap()
     {
-        let bookmark_service = create_bookmark_service();
-        let tag_service = create_tag_service();
+        let bookmark_service = services.bookmark_service.clone();
+        let tag_service = services.tag_service.clone();
 
         let id_list = get_ids(ids)?;
 
@@ -466,9 +465,9 @@ pub fn update(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn edit(cli: Cli) -> CliResult<()> {
+pub fn edit(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         let id_list = get_ids(ids)?;
 
@@ -487,15 +486,15 @@ pub fn edit(cli: Cli) -> CliResult<()> {
             return Ok(());
         }
 
-        edit_bookmarks(id_list, force_db)?;
+        edit_bookmarks(id_list, force_db, services)?;
     }
     Ok(())
 }
 
 #[instrument(skip(cli))]
-pub fn show(cli: Cli) -> CliResult<()> {
+pub fn show(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Show { ids, is_json } = cli.command.unwrap() {
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         let id_list = get_ids(ids)?;
         let mut bookmarks = Vec::new();
@@ -516,7 +515,7 @@ pub fn show(cli: Cli) -> CliResult<()> {
         } else {
             // Output bookmarks in detailed format (existing behavior)
             for bookmark in &bookmarks {
-                print!("{}", show_bookmark_details(bookmark));
+                print!("{}", show_bookmark_details(bookmark, services));
             }
         }
     }
@@ -525,9 +524,9 @@ pub fn show(cli: Cli) -> CliResult<()> {
 
 /// Shows detailed information about a bookmark, can be used by both show command and FZF CTRL-P
 #[instrument(level = "debug")]
-pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
+pub fn show_bookmark_details(bookmark: &Bookmark, services: &ServiceContainer) -> String {
     // Get the action service
-    let action_service = create_action_service();
+    let action_service = services.action_service.clone();
 
     // Get the action description
     let action_description = action_service.get_default_action_description(bookmark);
@@ -566,10 +565,10 @@ pub fn show_bookmark_details(bookmark: &Bookmark) -> String {
 }
 
 #[instrument(skip(cli))]
-pub fn surprise(cli: Cli) -> CliResult<()> {
+pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Surprise { n } = cli.command.unwrap() {
-        let bookmark_service = create_bookmark_service();
-        let action_service = create_action_service();
+        let bookmark_service = services.bookmark_service.clone();
+        let action_service = services.action_service.clone();
 
         // Get random bookmarks
         let count = if n < 1 { 1 } else { n as usize };
@@ -600,7 +599,7 @@ pub fn surprise(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn create_db(cli: Cli) -> CliResult<()> {
+pub fn create_db(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
         // Get the database path from either the command-line argument or the config system
         let db_path = match path {
@@ -680,14 +679,14 @@ pub fn create_db(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn set_embeddable(cli: Cli) -> CliResult<()> {
+pub fn set_embeddable(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::SetEmbeddable {
         id,
         enable,
         disable,
     } = cli.command.unwrap()
     {
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         // Ensure that exactly one flag is provided
         if enable == disable {
@@ -716,7 +715,7 @@ pub fn set_embeddable(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli), level = "debug")]
-pub fn backfill(cli: Cli) -> CliResult<()> {
+pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         let app_state = AppState::read_global();
         if app_state.context.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
@@ -726,7 +725,7 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
                 "DummyEmbedding active - embeddings not available".to_string(),
             ));
         }
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         // Get bookmarks to process based on force flag
         let bookmarks = if force {
@@ -776,11 +775,11 @@ pub fn backfill(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn load_json(cli: Cli) -> CliResult<()> {
+pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::LoadJson { path, dry_run } = cli.command.unwrap() {
         eprintln!("Loading bookmarks from JSON array: {}", path);
 
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         if dry_run {
             let count = bookmark_service.load_json_bookmarks(&path, true)?;
@@ -802,7 +801,7 @@ pub fn load_json(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli), level = "debug")]
-pub fn load_texts(cli: Cli) -> CliResult<()> {
+pub fn load_texts(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::LoadTexts {
         dry_run,
         force,
@@ -825,7 +824,7 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
         eprintln!("Loading text documents from NDJSON file: {}", path);
         eprintln!("(Expecting one JSON document per line)");
 
-        let bookmark_service = create_bookmark_service();
+        let bookmark_service = services.bookmark_service.clone();
 
         if dry_run {
             let count = bookmark_service.load_texts(&path, true, force)?;
@@ -841,7 +840,7 @@ pub fn load_texts(cli: Cli) -> CliResult<()> {
 }
 
 #[instrument(skip(cli))]
-pub fn info(cli: Cli) -> CliResult<()> {
+pub fn info(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Info { show_schema } = cli.command.unwrap() {
         let app_state = AppState::read_global();
         let repository = SqliteBookmarkRepository::from_url(&app_state.settings.db_url)?;
@@ -1125,7 +1124,7 @@ fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
     Ok(())
 }
 
-pub fn import_files(cli: Cli) -> CliResult<()> {
+pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     use crate::application::error::ApplicationError;
     use crate::config::{has_base_path, load_settings};
     use crate::exitcode;
@@ -1160,7 +1159,7 @@ pub fn import_files(cli: Cli) -> CliResult<()> {
             }
         }
 
-        let service = create_bookmark_service();
+        let service = services.bookmark_service.clone();
 
         if dry_run {
             println!("{}", "Dry run mode - showing what would be done:".green());
@@ -1331,3 +1330,5 @@ mod tests {
         assert!(snippets > 0, "Database should contain snippet entries");
     }
 }
+
+// Temporary helper functions removed - using proper dependency injection

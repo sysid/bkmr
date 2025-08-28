@@ -98,6 +98,44 @@ impl SemanticSearchResult {
     pub fn similarity_percentage(&self) -> String {
         format!("{:.1}%", self.similarity * 100.0)
     }
+    
+    /// Create a new semantic search result with additional display metadata
+    pub fn new(bookmark: Bookmark, similarity: f32) -> Self {
+        Self { bookmark, similarity }
+    }
+    
+    /// Simple display text for semantic search results in fzf interface
+    /// This provides basic display formatting - enhanced formatting should be implemented
+    /// at the application layer where services are available
+    pub fn display(&self) -> String {
+        use crossterm::style::Stylize;
+        
+        let id = self.bookmark.id.unwrap_or(0);
+        let title = &self.bookmark.title;
+        let url = &self.bookmark.url;
+        let binding = self.bookmark.formatted_tags();
+        let tags_str = binding.trim_matches(',');
+        let similarity = format!("{:.1}%", self.similarity * 100.0);
+
+        // Format with colors similar to main branch implementation
+        let tags_display = if !tags_str.is_empty() {
+            format!(" [{}]", tags_str.magenta())
+        } else {
+            String::new()
+        };
+
+        let action_display = " (default)".cyan();
+
+        format!(
+            "{}: {} <{}> ({}%){}{}",
+            id.to_string().blue(),
+            title.clone().green(), 
+            url.clone().yellow(), 
+            similarity.cyan(),
+            action_display,
+            tags_display
+        )
+    }
 }
 
 #[cfg(test)]

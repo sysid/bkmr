@@ -6,20 +6,16 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::application::services::{
-    BookmarkService, BookmarkServiceImpl, TagService, TagServiceImpl, TemplateService,
-};
+use crate::application::services::{BookmarkService, TagService, TemplateService};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::embedding::Embedder;
 use crate::domain::tag::Tag;
-use crate::infrastructure::embeddings::DummyEmbedding;
-use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crate::lsp::services::command_service::CommandService;
 use crate::lsp::services::completion_service::CompletionService;
 use crate::lsp::services::document_service::DocumentService;
 use crate::lsp::services::snippet_service::LspSnippetService;
-use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
+use crate::util::test_service_container::TestServiceContainer;
 
 /// Bundle of LSP services pre-configured for testing
 #[derive(Debug)]
@@ -34,13 +30,11 @@ pub struct LspServiceBundle {
 ///
 /// This abstraction ensures consistent test setup across the entire codebase,
 /// eliminates boilerplate, and provides proper isolation for database-accessing tests.
+/// 
+/// Now delegates to TestServiceContainer for centralized service management.
 #[derive(Debug)]
 pub struct TestContext {
-    _env_guard: EnvGuard,
-    repository: Arc<SqliteBookmarkRepository>,
-    embedder: Arc<dyn Embedder>,
-    bookmark_service: Arc<dyn BookmarkService>,
-    template_service: Arc<dyn TemplateService>,
+    container: TestServiceContainer,
 }
 
 impl TestContext {
@@ -53,76 +47,52 @@ impl TestContext {
     /// - Pre-configured bookmark service
     /// - Template service for interpolation
     pub fn new() -> Self {
-        use crate::application::services::factory;
-
-        let _env = init_test_env();
-        let _env_guard = EnvGuard::new();
-        let repository = Arc::new(setup_test_db());
-        let embedder = Arc::new(DummyEmbedding);
-        let bookmark_service = Arc::new(BookmarkServiceImpl::new(
-            repository.clone(),
-            embedder.clone(),
-            Arc::new(FileImportRepository::new()),
-        ));
-        let template_service = factory::create_template_service();
-
-        Self {
-            _env_guard,
-            repository,
-            embedder,
-            bookmark_service,
-            template_service,
-        }
+        let container = TestServiceContainer::new();
+        Self { container }
     }
 
     /// Get the bookmark service
     pub fn bookmark_service(&self) -> Arc<dyn BookmarkService> {
-        self.bookmark_service.clone()
+        self.container.bookmark_service.clone()
     }
 
     /// Get the repository
     pub fn repository(&self) -> Arc<SqliteBookmarkRepository> {
-        self.repository.clone()
+        self.container.bookmark_repository.clone()
     }
 
     /// Get the embedder
     pub fn embedder(&self) -> Arc<dyn Embedder> {
-        self.embedder.clone()
+        self.container.embedder.clone()
     }
 
     /// Create tag service with test configuration  
     pub fn create_tag_service(&self) -> Arc<dyn TagService> {
-        Arc::new(TagServiceImpl::new(self.repository.clone()))
+        self.container.tag_service.clone()
     }
 
     /// Create template service with test configuration
     pub fn create_template_service(
         &self,
     ) -> Arc<dyn crate::application::services::TemplateService> {
-        use crate::application::services::factory;
-        factory::create_template_service()
+        self.container.template_service.clone()
     }
 
     /// Create LSP command service with test configuration
     pub fn create_command_service(&self) -> CommandService {
-        CommandService::with_service(self.bookmark_service.clone())
+        CommandService::with_service(self.container.bookmark_service.clone())
     }
 
     /// Create complete LSP service bundle for integration testing
     pub fn create_lsp_services(&self) -> LspServiceBundle {
-        let snippet_service = Arc::new(LspSnippetService::with_services(
-            self.bookmark_service.clone(),
-            self.template_service.clone(),
-        ));
-        let completion_service = CompletionService::new(snippet_service.clone());
-        let command_service = self.create_command_service();
-        let document_service = DocumentService::new();
-
+        let bundle = self.container.create_lsp_services();
+        
+        // Convert from TestServiceContainer's LspServiceBundle to TestContext's LspServiceBundle
         LspServiceBundle {
-            snippet_service,
-            completion_service,
-            command_service,
-            document_service,
+            snippet_service: bundle.snippet_service,
+            completion_service: bundle.completion_service,
+            command_service: bundle.command_service,
+            document_service: bundle.document_service,
         }
     }
 
@@ -136,7 +106,7 @@ impl TestContext {
         description: &str,
         tags: HashSet<Tag>,
     ) -> Result<Bookmark, crate::domain::error::DomainError> {
-        Bookmark::new(url, title, description, tags, self.embedder.as_ref())
+        Bookmark::new(url, title, description, tags, self.container.embedder.as_ref())
     }
 
     /// Create a simple bookmark with default values for testing

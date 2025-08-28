@@ -1,5 +1,4 @@
-use crate::application::services::factory::{create_bookmark_service, create_template_service};
-use crate::application::services::{BookmarkService, TemplateService};
+use crate::infrastructure::di::ServiceContainer;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField};
 use crate::cli::error::{CliError, CliResult};
@@ -14,7 +13,6 @@ use crate::util::helper::create_shell_function_name;
 use crossterm::style::Stylize;
 use itertools::Itertools;
 use std::io::Write;
-use std::sync::Arc;
 use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::{instrument, warn};
 
@@ -27,45 +25,19 @@ fn determine_sort_direction(order_desc: bool, order_asc: bool) -> SortDirection 
     }
 }
 
-/// Common service dependencies for command handlers
-pub struct CommandServices {
-    pub bookmark_service: Arc<dyn BookmarkService>,
-    pub template_service: Arc<dyn TemplateService>,
-}
-
-impl CommandServices {
-    pub fn new() -> Self {
-        Self {
-            bookmark_service: create_bookmark_service(),
-            template_service: create_template_service(),
-        }
-    }
-}
-
-impl Default for CommandServices {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Trait for handling common command patterns
-pub trait CommandHandler {
-    /// Execute a command with standardized error handling and service management
-    fn execute(&self, cli: Cli) -> CliResult<()>;
-
-    /// Get the services needed for this command
-    fn services(&self) -> &CommandServices;
-}
 
 /// Handler for search command and its sub-operations
 pub struct SearchCommandHandler {
-    services: CommandServices,
+    services: ServiceContainer,
+    settings: crate::config::Settings,
 }
 
 impl SearchCommandHandler {
-    pub fn new() -> Self {
-        Self {
-            services: CommandServices::new(),
+    /// Create handler with dependency injection (single composition root)
+    pub fn with_services(service_container: ServiceContainer, settings: crate::config::Settings) -> Self {
+        Self { 
+            services: service_container,
+            settings,
         }
     }
 
@@ -163,7 +135,7 @@ impl SearchCommandHandler {
         match (is_fuzzy, is_json) {
             (true, _) => {
                 let style = fzf_style.as_deref().unwrap_or("classic");
-                fzf_process(bookmarks, style)?;
+                fzf_process(bookmarks, style, &self.services, &self.settings)?;
             }
             (_, true) => {
                 let json_views = JsonBookmarkView::from_domain_collection(bookmarks);
@@ -195,7 +167,7 @@ impl SearchCommandHandler {
                 bookmark.id.unwrap_or(0)
             )?;
 
-            return execute_bookmark_default_action(bookmark);
+            return execute_bookmark_default_action(bookmark, &self.services);
         }
 
         // Convert to display bookmarks
@@ -223,21 +195,16 @@ impl SearchCommandHandler {
             writeln!(stderr, "Selection: ").cli_context("Failed to write to stderr")?;
             stderr.reset().cli_context("Failed to reset color")?;
 
-            process(bookmarks)?;
+            process(bookmarks, &self.services)?;
         }
         Ok(())
     }
 }
 
-impl Default for SearchCommandHandler {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
-impl CommandHandler for SearchCommandHandler {
+impl SearchCommandHandler {
     #[instrument(skip(self, cli))]
-    fn execute(&self, cli: Cli) -> CliResult<()> {
+    pub fn execute(&self, cli: Cli) -> CliResult<()> {
         if let Commands::Search {
             fts_query,
             tags_exact,
@@ -312,10 +279,6 @@ impl CommandHandler for SearchCommandHandler {
             )?;
         }
         Ok(())
-    }
-
-    fn services(&self) -> &CommandServices {
-        &self.services
     }
 }
 

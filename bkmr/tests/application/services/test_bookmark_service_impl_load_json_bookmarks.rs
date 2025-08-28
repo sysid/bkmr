@@ -1,28 +1,18 @@
-use bkmr::app_state::AppState;
 use bkmr::application::error::ApplicationResult;
-use bkmr::application::services::factory;
 use bkmr::domain::repositories::repository::BookmarkRepository;
-use bkmr::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
-use bkmr::util::testing::{init_test_env, EnvGuard};
+use bkmr::util::test_service_container::TestServiceContainer;
 use std::path::Path;
 
 #[test]
 fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_database(
 ) -> ApplicationResult<()> {
     // Arrange
-    let _ = init_test_env();
-    let _guard = EnvGuard::new();
-
-    // Clean database for the test
-    let app_state = AppState::read_global();
-    let repository = SqliteBookmarkRepository::from_url(&app_state.settings.db_url)
-        .expect("Could not load bookmarks database");
-    repository
-        .empty_bookmark_table()
-        .expect("Failed to empty bookmark table");
-
-    // Create service with real dependencies
-    let bookmark_service = factory::create_bookmark_service();
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
+    
+    // Get initial bookmark count (shared database has baseline data)
+    let initial_bookmarks = test_container.bookmark_repository.get_all()?;
+    let initial_count = initial_bookmarks.len();
 
     // Path to test file
     let test_file_path = Path::new("tests/resources/bookmarks.ndjson")
@@ -41,8 +31,8 @@ fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_datab
     );
 
     // Get all bookmarks from the database
-    let bookmarks = repository.get_all()?;
-    assert_eq!(bookmarks.len(), 2, "Database should contain 2 bookmarks");
+    let bookmarks = test_container.bookmark_repository.get_all()?;
+    assert_eq!(bookmarks.len(), initial_count + 2, "Database should contain {} bookmarks (initial {} + 2 added)", initial_count + 2, initial_count);
 
     // Verify the first bookmark was added correctly
     let first_bookmark = bookmarks

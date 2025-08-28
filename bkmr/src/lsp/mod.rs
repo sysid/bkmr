@@ -4,6 +4,7 @@
 //! and editing in editors that support the Language Server Protocol.
 
 pub mod backend;
+pub mod di;
 pub mod domain;
 pub mod error;
 pub mod services;

@@ -2,7 +2,6 @@
 pub mod action_service;
 pub mod bookmark_service;
 pub mod bookmark_service_impl;
-pub mod factory;
 pub mod tag_service;
 pub mod tag_service_impl;
 pub mod template_service;
@@ -14,6 +13,7 @@ pub use tag_service::TagService;
 pub use template_service::TemplateService;
 
 // Re-export service implementations
+pub use action_service::ActionServiceImpl;
 pub use bookmark_service_impl::BookmarkServiceImpl;
 pub use tag_service_impl::TagServiceImpl;
 pub use template_service::TemplateServiceImpl;

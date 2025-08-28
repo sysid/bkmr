@@ -28,20 +28,9 @@ mod integration_tests {
     #[tokio::test]
     async fn given_context_when_getting_completions_then_returns_items() {
         // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
-        let config = BkmrConfig::default();
-        let service = CompletionService::with_config(snippet_service, config);
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        let service = lsp_services.completion_service;
 
         let uri = Url::parse("file:///test.rs").expect("parse URI");
         let context = CompletionContext::new(
@@ -104,17 +93,10 @@ mod integration_tests {
             vec!["plain".to_string(), "_snip_".to_string()],
         );
 
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
-        let service = CompletionService::new(snippet_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        let service = lsp_services.completion_service;
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
         // Act
@@ -144,17 +126,10 @@ mod integration_tests {
             vec!["rust".to_string(), "_snip_".to_string()],
         );
 
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
-        let service = CompletionService::new(snippet_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        let service = lsp_services.completion_service;
         let uri = Url::parse("file:///test.rs").expect("parse URI");
 
         // Act
@@ -216,17 +191,10 @@ mod integration_tests {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service, template_service));
-        let service = CompletionService::new(snippet_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        let service = lsp_services.completion_service;
 
         // Act
         let result = service.health_check().await;
@@ -244,31 +212,18 @@ mod integration_tests {
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
 
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-
-        // Create LSP services with test setup
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
-        let completion_service = CompletionService::new(snippet_service);
-        let document_service = DocumentService::new();
-        let command_service = CommandService::with_service(bookmark_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        // Use services from container
 
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 BkmrConfig::default(),
-                completion_service,
-                document_service,
-                command_service,
+                lsp_services.completion_service,
+                lsp_services.document_service,
+                lsp_services.command_service,
             )
         });
         let backend = service.inner();
@@ -305,31 +260,18 @@ mod integration_tests {
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
 
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-
-        // Create LSP services with test setup
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
-        let completion_service = CompletionService::new(snippet_service);
-        let document_service = DocumentService::new();
-        let command_service = CommandService::with_service(bookmark_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        // Use services from container
 
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 BkmrConfig::default(),
-                completion_service,
-                document_service,
-                command_service,
+                lsp_services.completion_service,
+                lsp_services.document_service,
+                lsp_services.command_service,
             )
         });
         let backend = service.inner();
@@ -395,31 +337,18 @@ mod integration_tests {
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
 
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-
-        // Create LSP services with test setup
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
-        let completion_service = CompletionService::new(snippet_service);
-        let document_service = DocumentService::new();
-        let command_service = CommandService::with_service(bookmark_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        // Use services from container
 
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 BkmrConfig::default(),
-                completion_service,
-                document_service,
-                command_service,
+                lsp_services.completion_service,
+                lsp_services.document_service,
+                lsp_services.command_service,
             )
         });
         let backend = service.inner();
@@ -485,31 +414,18 @@ mod integration_tests {
         use tower_lsp::lsp_types::ExecuteCommandParams;
         use tower_lsp::{Client, LanguageServer};
 
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let repository = crate::util::testing::setup_test_db();
-        let repository_arc = Arc::new(repository);
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let bookmark_service = Arc::new(crate::application::services::bookmark_service_impl::BookmarkServiceImpl::new(
-            repository_arc,
-            embedder,
-            Arc::new(crate::infrastructure::repositories::json_import_repository::JsonImportRepository::new()),
-        ));
-
-        // Create LSP services with test setup
-        let template_service = crate::application::services::factory::create_template_service();
-        let snippet_service = Arc::new(LspSnippetService::with_services(bookmark_service.clone(), template_service));
-        let completion_service = CompletionService::new(snippet_service);
-        let document_service = DocumentService::new();
-        let command_service = CommandService::with_service(bookmark_service);
+        // Use centralized test service container
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let lsp_services = test_container.create_lsp_services();
+        // Use services from container
 
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 BkmrConfig::default(),
-                completion_service,
-                document_service,
-                command_service,
+                lsp_services.completion_service,
+                lsp_services.document_service,
+                lsp_services.command_service,
             )
         });
         let backend = service.inner();

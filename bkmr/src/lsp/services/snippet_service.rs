@@ -3,7 +3,6 @@
 //! Provides async wrapper around bkmr bookmark service for snippet operations
 
 use crate::application::services::bookmark_service::BookmarkService;
-use crate::application::services::factory;
 use crate::application::services::TemplateService;
 use crate::domain::repositories::query::BookmarkQuery;
 use crate::lsp::domain::{Snippet, SnippetFilter};
@@ -32,15 +31,7 @@ pub struct LspSnippetService {
 }
 
 impl LspSnippetService {
-    /// Create a new LSP snippet service using the existing bookmark service
-    pub fn new() -> Self {
-        let bookmark_service = factory::create_bookmark_service();
-        let template_service = factory::create_template_service();
-        Self {
-            bookmark_service,
-            template_service,
-        }
-    }
+    // Remove factory-based constructor - use dependency injection only
 
     /// Create with specific services (for testing)
     pub fn with_services(
@@ -55,7 +46,14 @@ impl LspSnippetService {
 
     /// Create with a specific bookmark service (for testing) - backward compatibility
     pub fn with_service(bookmark_service: Arc<dyn BookmarkService>) -> Self {
-        let template_service = factory::create_template_service();
+        use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+        use crate::application::services::TemplateServiceImpl;
+        use std::sync::Arc;
+        
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        let template_service = Arc::new(TemplateServiceImpl::new(template_engine));
+        
         Self {
             bookmark_service,
             template_service,
@@ -205,8 +203,4 @@ impl AsyncSnippetService for LspSnippetService {
     }
 }
 
-impl Default for LspSnippetService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// Remove Default implementation - require explicit dependency injection
