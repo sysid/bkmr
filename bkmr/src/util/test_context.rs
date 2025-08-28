@@ -138,13 +138,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_context_creation() {
+    fn given_new_test_context_when_created_then_bookmark_service_accessible() {
         let ctx = TestContext::new();
         assert!(ctx.bookmark_service().get_all_bookmarks(None, None).is_ok());
     }
 
     #[test]
-    fn test_bookmark_creation_with_context() {
+    fn given_test_context_when_create_test_bookmark_then_returns_configured_bookmark() {
         let ctx = TestContext::new();
         let bookmark = ctx.create_test_bookmark("Test Bookmark");
         assert_eq!(bookmark.title, "Test Bookmark");
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_lsp_services_bundle() {
+    async fn given_test_context_when_create_lsp_services_then_all_services_healthy() {
         use crate::lsp::services::snippet_service::AsyncSnippetService;
 
         let ctx = TestContext::new();
@@ -165,7 +165,7 @@ mod tests {
 
     // Example of non-database test that can run in parallel
     #[test]
-    fn test_pure_domain_logic() {
+    fn given_tag_value_when_create_tag_then_returns_tag_with_value() {
         let tag = Tag::new("test").unwrap();
         assert_eq!(tag.value(), "test");
     }

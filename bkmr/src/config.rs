@@ -349,7 +349,7 @@ mod tests {
     }
 
     #[test]
-    fn test_default_settings() {
+    fn given_no_config_file_when_load_settings_then_uses_defaults() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
         env::remove_var("BKMR_FZF_OPTS");
@@ -365,7 +365,7 @@ mod tests {
     }
 
     #[test]
-    fn test_specific_config_file() {
+    fn given_custom_config_file_when_load_settings_then_uses_file_values() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
         env::remove_var("BKMR_FZF_OPTS");
@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn test_environment_variables_override_config_file() {
+    fn given_env_vars_and_config_file_when_load_settings_then_env_vars_override() {
         let _guard = EnvGuard::new();
 
         // Create a custom config file
@@ -433,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn test_nonexistent_config_file() {
+    fn given_nonexistent_config_file_when_load_settings_then_uses_defaults() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
         env::remove_var("BKMR_FZF_OPTS");
@@ -451,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn test_environment_variables_override() {
+    fn given_env_vars_when_load_settings_then_overrides_defaults() {
         let _guard = EnvGuard::new();
 
         // Set environment variables
@@ -469,7 +469,7 @@ mod tests {
     }
 
     #[test]
-    fn test_partial_environment_override() {
+    fn given_partial_env_vars_when_load_settings_then_overrides_only_specified() {
         let _guard = EnvGuard::new();
 
         // Set only DB URL
@@ -485,7 +485,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_fzf_opts() {
+    fn given_fzf_option_string_when_parse_fzf_opts_then_returns_parsed_options() {
         // Test with all options
         let opts = parse_fzf_opts("--height 80% --reverse --show-tags --no-url");
         assert_eq!(opts.height, "80%");
@@ -514,7 +514,7 @@ mod tests {
     }
 
     #[test]
-    fn test_config_file_loading() {
+    fn given_config_file_content_when_create_settings_then_matches_expected_values() {
         let _guard = EnvGuard::new();
         env::remove_var("BKMR_DB_URL");
         env::remove_var("BKMR_FZF_OPTS");
@@ -563,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    fn test_environment_overrides_config_file() {
+    fn given_env_vars_and_config_content_when_load_settings_then_env_overrides_config() {
         let _guard = EnvGuard::new();
 
         // Set environment variables
@@ -597,14 +597,14 @@ mod tests {
     }
 
     #[test]
-    fn test_default_db_path() {
+    fn given_no_custom_path_when_default_db_path_then_contains_bkmr_db() {
         // Test the default path generation
         let path = default_db_path();
         assert!(path.contains("bkmr.db"));
     }
 
     #[test]
-    fn test_shell_interactive_environment_override() {
+    fn given_shell_interactive_env_var_when_load_settings_then_overrides_default() {
         let _guard = EnvGuard::new();
 
         // Set environment variable to disable interactive mode

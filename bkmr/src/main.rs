@@ -160,7 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn verify_cli() {
+    fn given_cli_command_when_verify_then_debug_asserts_pass() {
         use clap::CommandFactory;
         Cli::command().debug_assert()
     }

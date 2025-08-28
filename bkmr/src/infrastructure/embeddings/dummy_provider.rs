@@ -23,7 +23,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_dummy_embedding_returns_none() {
+    fn given_text_input_when_create_dummy_embedding_then_returns_none() {
         let dummy = DummyEmbedding;
         let result = dummy.embed("test text").unwrap();
         assert!(result.is_none());

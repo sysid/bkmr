@@ -443,7 +443,7 @@ mod display_tests {
     }
 
     #[test]
-    fn test_show_bookmarks_visual() {
+    fn given_bookmarks_when_show_with_default_fields_then_displays_colored_output() {
         println!("\n\nTEST: Colored Bookmark Display - Default Fields\n");
         let bookmarks = create_test_bookmarks();
         let settings = crate::config::Settings::default();
@@ -451,7 +451,7 @@ mod display_tests {
     }
 
     #[test]
-    fn test_show_bookmarks_visual_all_fields() {
+    fn given_bookmarks_when_show_with_all_fields_then_displays_extended_output() {
         println!("\n\nTEST: Colored Bookmark Display - All Fields\n");
         let bookmarks = create_test_bookmarks();
 
@@ -473,7 +473,7 @@ mod display_tests {
     }
 
     #[test]
-    fn test_show_bookmarks_empty() {
+    fn given_empty_bookmark_list_when_show_then_displays_nothing() {
         println!("\n\nTEST: Empty Bookmark List\n");
         let empty_bookmarks: Vec<DisplayBookmark> = Vec::new();
         let settings = crate::config::Settings::default();
@@ -481,7 +481,7 @@ mod display_tests {
     }
 
     #[test]
-    fn test_output_to_file() -> io::Result<()> {
+    fn given_bookmarks_when_output_to_file_then_creates_file_successfully() -> io::Result<()> {
         use std::io::Write;
 
         // Create output directory if it doesn't exist

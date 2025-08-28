@@ -119,7 +119,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_ensure_int_vector_valid() {
+    fn given_valid_string_numbers_when_ensure_int_vector_then_returns_sorted_integers() {
         let input = vec!["3".to_string(), "1".to_string(), "2".to_string()];
         let result = ensure_int_vector(&input);
         // Expected vector is sorted in ascending order.
@@ -127,14 +127,14 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_int_vector_invalid() {
+    fn given_invalid_string_numbers_when_ensure_int_vector_then_returns_none() {
         let input = vec!["3".to_string(), "abc".to_string(), "2".to_string()];
         let result = ensure_int_vector(&input);
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_calc_content_hash() {
+    fn given_content_string_when_calc_content_hash_then_returns_sha256_hash() {
         let content = "hello world";
         let hash = calc_content_hash(content);
         // Using md5 directly to get the expected hash.
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_file_path() {
+    fn given_file_path_when_format_file_path_then_truncates_long_paths() {
         // Short paths should not be truncated
         assert_eq!(
             format_file_path("/home/user/file.txt", 120),
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_mtime() {
+    fn given_unix_timestamp_when_format_mtime_then_returns_formatted_datetime() {
         // Test with a known timestamp
         let timestamp = 1704067200; // 2024-01-01 00:00:00 UTC
         assert_eq!(format_mtime(timestamp), "2024-01-01 00:00:00");
@@ -182,7 +182,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_shell_function_name() {
+    fn given_various_titles_when_create_shell_function_name_then_returns_valid_function_name() {
         // Test basic alphanumeric names
         assert_eq!(create_shell_function_name("backup_script"), "backup_script");
         assert_eq!(create_shell_function_name("backup-script"), "backup-script");

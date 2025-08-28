@@ -497,7 +497,7 @@ mod tests {
     use crate::util::testing::init_test_env;
 
     #[test]
-    fn test_and_specification() {
+    fn given_multiple_specifications_when_and_then_combines_with_logical_and() {
         let _ = init_test_env();
 
         // Create two simple specifications
@@ -534,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn test_or_specification() {
+    fn given_multiple_specifications_when_or_then_combines_with_logical_or() {
         let _ = init_test_env();
         // Create two simple specifications
         let spec1 = TextSearchSpecification::new("rust".to_string());
@@ -579,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn test_not_specification() {
+    fn given_specification_when_not_then_inverts_logic() {
         let _ = init_test_env();
         let spec = TextSearchSpecification::new("rust".to_string());
         let not_spec = spec.not();
@@ -608,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complex_specification() {
+    fn given_complex_nested_specifications_when_evaluate_then_applies_correct_logic() {
         let _ = init_test_env();
         // Create test tags
         let rust_tag = Tag::new("rust").unwrap();
@@ -673,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bookmark_query() {
+    fn given_query_builder_when_build_then_creates_valid_query() {
         let _ = init_test_env();
         let tags = HashSet::new();
         let bookmark = Bookmark::new(
@@ -697,7 +697,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_non_text_filters() {
+    fn given_non_text_filters_when_apply_then_filters_bookmarks() {
         let _ = init_test_env();
 
         // Create test bookmarks with various properties
@@ -888,7 +888,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_non_text_filters_empty_bookmarks() {
+    fn given_empty_bookmarks_when_apply_non_text_filters_then_returns_empty() {
         let _ = init_test_env();
 
         // Create an empty collection of bookmarks
@@ -914,7 +914,7 @@ mod tests {
     }
 
     #[test]
-    fn test_specification_boxed() {
+    fn given_boxed_specification_when_evaluate_then_works_correctly() {
         let _ = init_test_env();
 
         // Create test bookmarks

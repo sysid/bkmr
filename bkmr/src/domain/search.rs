@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_empty_bookmarks() {
+    fn given_empty_bookmark_list_when_semantic_search_then_returns_empty_results() {
         let _ = init_test_env();
         let search = SemanticSearch::new("test query", None);
         let embedder = DummyEmbedding;
@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_with_results() {
+    fn given_matching_bookmarks_when_semantic_search_then_returns_sorted_results() {
         let _ = init_test_env();
         let embedder = DummyEmbedding;
 
@@ -193,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_respects_limit() {
+    fn given_search_limit_when_semantic_search_then_respects_limit() {
         let _ = init_test_env();
         let embedder = DummyEmbedding;
 
@@ -217,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_result_percentage() {
+    fn given_similarity_score_when_format_percentage_then_returns_correct_format() {
         let _ = init_test_env();
         let bookmark = create_test_bookmark("Test", "Content", true);
 

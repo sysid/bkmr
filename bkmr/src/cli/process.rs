@@ -784,7 +784,7 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn test_parse_input() {
+    fn given_input_string_when_parse_input_then_returns_sorted_tokens() {
         let input = "  1 2,  3  ";
         let tokens = parse_input(input);
         assert_eq!(tokens, vec!["1", "2", "3"]);
@@ -795,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_bookmark_by_index() {
+    fn given_bookmarks_and_valid_index_when_get_bookmark_by_index_then_returns_bookmark() {
         // Create test bookmarks
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -851,7 +851,7 @@ mod tests {
     }
 
     #[test]
-    fn test_yank_bookmark_urls_by_indices() {
+    fn given_bookmarks_and_indices_when_yank_urls_then_copies_urls_to_clipboard() {
         // Arrange
         let _ = init_test_env();
 

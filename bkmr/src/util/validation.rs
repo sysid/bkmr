@@ -71,13 +71,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_bookmark_id_valid() {
+    fn given_positive_bookmark_id_when_validate_then_returns_ok() {
         let result = ValidationHelper::validate_bookmark_id(1);
         assert!(result.is_ok());
     }
 
     #[test]
-    fn test_validate_bookmark_id_zero() {
+    fn given_zero_bookmark_id_when_validate_then_returns_error() {
         let result = ValidationHelper::validate_bookmark_id(0);
         assert!(result.is_err());
         assert!(result
@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_bookmark_id_negative() {
+    fn given_negative_bookmark_id_when_validate_then_returns_error() {
         let result = ValidationHelper::validate_bookmark_id(-1);
         assert!(result.is_err());
         assert!(result

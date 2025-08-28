@@ -64,7 +64,7 @@ mod tests {
     use super::*;
     #[test]
     #[ignore]
-    fn test_load_url_details() -> DomainResult<()> {
+    fn given_valid_url_when_load_details_then_returns_title() -> DomainResult<()> {
         // let _ = init_test_env();
         // let _guard = EnvGuard::new();
 
@@ -85,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_website() {
+    fn given_website_url_when_check_then_returns_accessibility_status() {
         // This test depends on network availability.
         let (accessible, duration) = check_website("https://google.com", 2000);
         assert!(accessible, "Expected example.com to be accessible");

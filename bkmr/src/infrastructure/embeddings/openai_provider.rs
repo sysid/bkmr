@@ -87,7 +87,7 @@ mod tests {
     use crate::util::testing::init_test_env;
 
     #[test]
-    fn test_openai_embedding() {
+    fn given_text_input_when_create_embedding_then_returns_vector() {
         let _ = init_test_env();
         if env::var("OPENAI_API_KEY").is_err() {
             // exit early if no API key is set
@@ -102,7 +102,7 @@ mod tests {
     }
 
     #[test]
-    fn test_openai_embedding_fails_without_api_key() {
+    fn given_missing_api_key_when_create_embedding_then_returns_error() {
         // Temporarily unset the API key if it exists
         let key_exists = env::var("OPENAI_API_KEY").is_ok();
         let api_key_backup = if key_exists {

@@ -141,7 +141,7 @@ mod tests {
     use std::io;
 
     #[test]
-    fn test_error_context_with_io_error() {
+    fn given_io_error_when_add_context_then_returns_formatted_error() {
         let result: Result<(), io::Error> =
             Err(io::Error::new(io::ErrorKind::NotFound, "file not found"));
         let contextual_result = result.context("reading configuration");
@@ -154,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    fn test_application_error_context() {
+    fn given_application_error_when_add_context_then_returns_contextual_error() {
         let result: Result<(), ApplicationError> =
             Err(ApplicationError::Other("test error".to_string()));
         let contextual_result = result.app_context("during operation");
@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn test_error_conversion() {
+    fn given_error_when_convert_with_context_then_preserves_message() {
         let io_error = io::Error::new(io::ErrorKind::PermissionDenied, "access denied");
         let domain_error = io_error.to_domain_error("file operation");
 

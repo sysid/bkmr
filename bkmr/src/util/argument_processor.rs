@@ -103,7 +103,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_tag_string_valid() {
+    fn given_valid_tag_string_when_parse_tag_string_then_returns_tag_set() {
         let tag_str = Some("tag1,tag2,tag3".to_string());
         let result = ArgumentProcessor::parse_tag_string(&tag_str);
 
@@ -116,13 +116,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tag_string_none() {
+    fn given_none_tag_string_when_parse_tag_string_then_returns_none() {
         let result = ArgumentProcessor::parse_tag_string(&None);
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_apply_prefix_tags_both_some() {
+    fn given_base_and_prefix_tags_when_apply_prefix_tags_then_returns_merged_set() {
         let base = {
             let mut set = HashSet::new();
             set.insert(Tag::new("base1").unwrap());
@@ -147,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_prefix_tags_base_only() {
+    fn given_only_base_tags_when_apply_prefix_tags_then_returns_base_set() {
         let base = {
             let mut set = HashSet::new();
             set.insert(Tag::new("base1").unwrap());
@@ -163,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_prefix_tags_prefix_only() {
+    fn given_only_prefix_tags_when_apply_prefix_tags_then_returns_prefix_set() {
         let prefix = {
             let mut set = HashSet::new();
             set.insert(Tag::new("prefix1").unwrap());
@@ -179,13 +179,13 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_prefix_tags_both_none() {
+    fn given_no_tags_when_apply_prefix_tags_then_returns_none() {
         let result = ArgumentProcessor::apply_prefix_tags(None, None);
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_parse_tags_with_error_handling_valid() {
+    fn given_valid_tag_string_when_parse_tags_with_error_handling_then_returns_ok_result() {
         let tag_str = Some("tag1,tag2".to_string());
         let result = ArgumentProcessor::parse_tags_with_error_handling(&tag_str);
 
@@ -195,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tags_with_error_handling_none() {
+    fn given_none_tag_string_when_parse_tags_with_error_handling_then_returns_ok_none() {
         let result = ArgumentProcessor::parse_tags_with_error_handling(&None);
 
         assert!(result.is_ok());

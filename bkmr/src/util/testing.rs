@@ -185,7 +185,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn my_test() {
+    fn given_test_env_when_init_then_db_path_exists() {
         let test_env = init_test_env();
         let _guard = EnvGuard::new();
         assert!(test_env.db_path.exists());
@@ -193,14 +193,14 @@ mod tests {
     }
 
     #[test]
-    fn test_setup_test_db() {
+    fn given_test_env_when_setup_test_db_then_returns_working_repository() {
         let _ = init_test_env();
         let repo = setup_test_db();
         assert!(repo.get_connection().is_ok());
     }
 
     #[test]
-    fn test_setup_temp_dir() {
+    fn given_test_env_when_setup_temp_dir_then_creates_directory_with_resources() {
         let _ = init_test_env();
         let temp_dir = setup_temp_dir();
         assert!(temp_dir.exists());

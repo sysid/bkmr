@@ -143,7 +143,7 @@ mod tests {
     // A mock editor function that writes predetermined content to a file
     #[test]
     #[ignore = "Manual test"]
-    fn test_edit_bookmark_with_template() {
+    fn given_bookmark_when_edit_with_template_then_returns_modified_bookmark() {
         let _ = init_test_env();
 
         // Create a test bookmark

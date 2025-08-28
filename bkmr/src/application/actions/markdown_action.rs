@@ -886,7 +886,7 @@ mod tests {
 
     // Test reading markdown from a file
     #[test]
-    fn test_read_markdown_from_file() {
+    fn given_markdown_file_when_read_then_returns_content() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -912,7 +912,7 @@ mod tests {
     // Test embedding eligibility check
     // TODO: check the purpose of this test
     #[test]
-    fn test_can_update_embedding() {
+    fn given_action_when_check_embedding_update_then_returns_eligibility() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -984,7 +984,7 @@ mod tests {
 
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
-    fn test_execute_with_direct_markdown() {
+    fn given_markdown_content_when_execute_then_renders_html() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -1031,7 +1031,7 @@ mod tests {
 
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
-    fn test_execute_with_markdown_table() {
+    fn given_markdown_with_table_when_execute_then_renders_with_table_styles() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -1078,7 +1078,7 @@ mod tests {
 
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
-    fn test_execute_with_code_highlighting() {
+    fn given_markdown_with_code_when_execute_then_renders_with_highlighting() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
@@ -1125,7 +1125,7 @@ mod tests {
 
     // Tests for TOC functionality
     #[test]
-    fn test_extract_and_process_headers_basic() {
+    fn given_markdown_headers_when_extract_and_process_then_generates_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1165,7 +1165,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_with_existing_ids() {
+    fn given_headers_with_existing_ids_when_extract_then_preserves_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1188,7 +1188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_duplicate_titles() {
+    fn given_duplicate_header_titles_when_extract_then_creates_unique_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1214,7 +1214,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_with_html_content() {
+    fn given_headers_with_html_content_when_extract_then_cleans_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1237,7 +1237,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_empty_content() {
+    fn given_empty_content_when_extract_headers_then_returns_empty() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1252,7 +1252,7 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_ignores_h4_and_higher() {
+    fn given_h4_and_higher_headers_when_extract_then_ignores_them() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1280,7 +1280,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_header_id() {
+    fn given_header_text_when_generate_id_then_creates_valid_id() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1313,7 +1313,7 @@ mod tests {
     }
 
     #[test]
-    fn test_clean_html_content() {
+    fn given_html_content_when_clean_then_removes_tags() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1351,7 +1351,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_toc_html_empty() {
+    fn given_empty_headers_when_generate_toc_then_returns_empty_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1365,7 +1365,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_toc_html_with_entries() {
+    fn given_header_entries_when_generate_toc_then_creates_html_list() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -1407,7 +1407,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_toc_html_special_characters_in_titles() {
+    fn given_special_characters_in_titles_when_generate_toc_then_escapes_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 

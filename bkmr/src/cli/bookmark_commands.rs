@@ -1225,7 +1225,7 @@ mod tests {
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
 
     #[test]
-    fn test_get_ids_valid() {
+    fn given_valid_id_string_when_get_ids_then_returns_id_vector() {
         let ids = "1,2,3,4,5".to_string();
         let result = get_ids(ids);
         assert!(result.is_ok());
@@ -1234,14 +1234,14 @@ mod tests {
     }
 
     #[test]
-    fn test_get_ids_invalid() {
+    fn given_invalid_id_string_when_get_ids_then_returns_error() {
         let ids = "1,2,three,4,5".to_string();
         let result = get_ids(ids);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_pre_fill_database() {
+    fn given_empty_database_when_pre_fill_then_creates_sample_bookmarks() {
         // Arrange
         let _ = init_test_env();
         let _guard = EnvGuard::new();

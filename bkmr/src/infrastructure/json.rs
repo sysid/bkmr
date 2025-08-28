@@ -152,7 +152,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_check_json_format_valid() {
+    fn given_valid_json_file_when_check_format_then_returns_true() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
         let line = r#"{"id": "/a/b/readme.md:0", "content": "First record"}"#;
@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_json_format_invalid() {
+    fn given_invalid_json_file_when_check_format_then_returns_false() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
         let line = r#"{"id": "/a/b/readme.md:0"}"#; // Missing content
@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_ndjson_file_and_create_bookmarks() -> DomainResult<()> {
+    fn given_ndjson_file_when_read_then_creates_bookmarks() -> DomainResult<()> {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     #[ignore = "This is a visual test that would output to stdout"]
-    fn test_write_bookmarks_as_json() -> DomainResult<()> {
+    fn given_bookmarks_when_write_as_json_then_creates_valid_file() -> DomainResult<()> {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 

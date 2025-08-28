@@ -93,7 +93,7 @@ mod tests {
     const EPSILON: f32 = 1e-6;
 
     #[test]
-    fn test_cosine_similarity() {
+    fn given_two_vectors_when_calculate_cosine_similarity_then_returns_similarity_score() {
         let vec1 = array![1.0, 0.0];
         let vec2 = array![0.0, 1.0];
 
@@ -109,7 +109,7 @@ mod tests {
     }
 
     #[test]
-    fn test_serialization_roundtrip() {
+    fn given_embedding_vector_when_serialize_deserialize_then_preserves_data() {
         let original = vec![1.0f32, 2.0, 3.0];
 
         let bytes = serialize_embedding(original.clone()).unwrap();
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn test_array_conversion_roundtrip() {
+    fn given_array_when_convert_to_from_bytes_then_preserves_data() {
         let original = array![1.0f32, 2.0, 3.0, 4.0];
 
         let bytes = array_to_bytes(&original).unwrap();

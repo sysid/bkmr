@@ -63,7 +63,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_generate_bash_completion() -> io::Result<()> {
+    fn given_bash_shell_when_generate_completion_then_creates_valid_completion_script() -> io::Result<()> {
         // Create a buffer to capture output
         let mut buffer = Vec::new();
 
@@ -91,7 +91,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_zsh_completion() -> io::Result<()> {
+    fn given_zsh_shell_when_generate_completion_then_creates_valid_completion_script() -> io::Result<()> {
         // Create a buffer to capture output
         let mut buffer = Vec::new();
 
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_fish_completion() -> io::Result<()> {
+    fn given_fish_shell_when_generate_completion_then_creates_valid_completion_script() -> io::Result<()> {
         // Create a buffer to capture output
         let mut buffer = Vec::new();
 
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_shell() {
+    fn given_invalid_shell_when_generate_completion_then_returns_error() {
         // Test with an invalid shell
         let result = generate_completion("invalid");
 

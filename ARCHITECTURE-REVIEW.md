@@ -17,34 +17,6 @@ Strengths:
 
 # 2. Critical Issues Identified
 
-🔴 Issue #1: Factory Method Anti-Pattern
-
-Location: src/application/services/factory.rs
-
-pub fn create_bookmark_service() -> Arc<dyn BookmarkService> {
-    let app_state = AppState::read_global(); // ❌ Hidden global dependency
-    let embedder = Arc::clone(&app_state.context.embedder);
-    // ...
-}
-
-Impact:
-- Violates dependency inversion principle
-- Forces single-threaded test execution (--test-threads=1)
-- Creates dual constructor patterns throughout codebase
-- 22 files affected with factory dependencies
-
-🔴 Issue #2: Global State Singleton
-
-Location: src/app_state.rs:97
-
-pub static APP_STATE: OnceLock<RwLock<AppState>> = OnceLock::new();
-
-Problems:
-- Service locator anti-pattern
-- Lock contention on every service access
-- Test isolation requires environment manipulation
-- Prevents parallel test execution
-
 🔴 Issue #3: Testing Architecture Constraints
 
 CRITICAL: Tests must run single-threaded due to shared database state:

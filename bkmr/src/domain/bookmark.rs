@@ -348,7 +348,7 @@ mod tests {
     use crate::util::testing::init_test_env;
 
     #[test]
-    fn test_new_bookmark_valid() {
+    fn given_valid_bookmark_data_when_new_then_creates_bookmark() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -371,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn test_special_urls_are_valid() {
+    fn given_special_urls_when_validate_then_accepts_as_valid() {
         let _ = init_test_env();
         let tags = HashSet::new();
 
@@ -407,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_remove_tags() {
+    fn given_bookmark_when_add_remove_tags_then_updates_tag_set() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("initial").unwrap());
@@ -437,7 +437,7 @@ mod tests {
     }
 
     #[test]
-    fn test_set_tags() {
+    fn given_bookmark_when_set_tags_then_replaces_tag_set() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("initial").unwrap());
@@ -462,7 +462,7 @@ mod tests {
     }
 
     #[test]
-    fn test_record_access() {
+    fn given_bookmark_when_record_access_then_increments_count() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -486,7 +486,7 @@ mod tests {
     }
 
     #[test]
-    fn test_formatted_tags() {
+    fn given_bookmark_with_tags_when_format_then_returns_formatted_string() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("tag1").unwrap());
@@ -506,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_content_for_embedding() {
+    fn given_bookmark_when_get_embedding_content_then_returns_concatenated_text() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("visible").unwrap());
@@ -529,7 +529,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tag_matching() {
+    fn given_bookmark_with_tags_when_match_then_validates_tag_presence() {
         let _ = init_test_env();
         let mut bookmark_tags = HashSet::new();
         bookmark_tags.insert(Tag::new("tag1").unwrap());
@@ -584,7 +584,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_system_tags() {
+    fn given_bookmark_with_mixed_tags_when_get_system_tags_then_filters_system_only() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
 
@@ -617,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_tags() {
+    fn given_bookmark_with_mixed_tags_when_get_tags_then_filters_user_only() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
 
@@ -650,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_tags_with_only_system_tags() {
+    fn given_bookmark_with_only_system_tags_when_get_tags_then_returns_empty() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
 
@@ -677,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn test_embeddable_flag() {
+    fn given_bookmark_when_set_embeddable_then_updates_flag() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -703,7 +703,7 @@ mod tests {
         assert!(!bookmark.embeddable);
     }
     #[test]
-    fn test_is_system_tag() {
+    fn given_tag_when_check_system_then_validates_system_status() {
         let _ = init_test_env();
 
         // Create a bookmark with the Text system tag
@@ -725,7 +725,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_uri() {
+    fn given_string_when_check_uri_then_validates_uri_format() {
         let _ = init_test_env();
 
         // Create a regular URI bookmark
@@ -757,7 +757,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_action_content() {
+    fn given_bookmark_when_get_action_content_then_returns_appropriate_content() {
         let _ = init_test_env();
 
         // Create a URI bookmark
