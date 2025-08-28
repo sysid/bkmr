@@ -20,6 +20,7 @@ use crossterm::{
     execute,
     terminal::{Clear, ClearType},
 };
+use skim::tuikit::attr::{Attr, Color};
 use skim::tuikit::raw::IntoRawMode;
 use skim::{
     prelude::*, AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem,
@@ -71,10 +72,90 @@ impl SkimItem for AlignedBookmark {
         Cow::Owned(display_text)
     }
 
-    fn display<'a>(&'a self, _context: DisplayContext<'a>) -> AnsiString<'a> {
-        // Simple display without complex coloring to avoid dependency injection issues
-        let display_text = self.text();
-        AnsiString::parse(&display_text)
+    fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
+        // Get the text representation
+        let text = self.text();
+
+        // Calculate padding width
+        let padding = self.max_id_width + 2; // ID width + ": "
+        let title = &self.bookmark.title;
+
+        // Create attribute for title (green)
+        let attr_title = Attr {
+            fg: Color::GREEN,
+            ..Attr::default()
+        };
+
+        // Create attribute segments
+        let mut attr_segments =
+            vec![(attr_title, (padding as u32, (padding + title.len()) as u32))];
+
+        // Get app settings from struct
+        let fzf_opts = &self.settings.fzf_opts;
+
+        // If showing URL, add yellow attribute for it
+        if !fzf_opts.no_url {
+            let start_idx_url = text.find('<').unwrap_or(0) as u32;
+            if start_idx_url > 0 {
+                let end_idx_url = text.find('>').unwrap_or(text.len()) as u32 + 1; // +1 for >
+                attr_segments.push((
+                    Attr {
+                        fg: Color::YELLOW,
+                        ..Attr::default()
+                    },
+                    (start_idx_url, end_idx_url),
+                ));
+            }
+        }
+
+        // If showing tags, add magenta attribute for tags
+        if fzf_opts.show_tags && !self.bookmark.tags.is_empty() {
+            let start_idx_tags = text.find('[').unwrap_or(0) as u32;
+            if start_idx_tags > 0 && start_idx_tags < text.len() as u32 {
+                let end_idx_tags = text.find(']').unwrap_or(text.len()) as u32 + 1; // +1 for ]
+                attr_segments.push((
+                    Attr {
+                        fg: Color::MAGENTA,
+                        ..Attr::default()
+                    },
+                    (start_idx_tags, end_idx_tags),
+                ));
+            }
+        }
+
+        // Add cyan attribute for action description in parentheses
+        if fzf_opts.show_action {
+            if let (Some(start), Some(end)) = (text.rfind('('), text.rfind(')')) {
+                attr_segments.push((
+                    Attr {
+                        fg: Color::CYAN,
+                        ..Attr::default()
+                    },
+                    (start as u32, end as u32 + 1),
+                ));
+            }
+        }
+
+        // Add grey attribute for file info line (if present)
+        if fzf_opts.show_file_info {
+            if let Some(file_info_start) = text.find("📁") {
+                // Find the end of the file info line (next newline or end of string)
+                let file_info_end = text[file_info_start..]
+                    .find('\n')
+                    .map(|pos| file_info_start + pos)
+                    .unwrap_or(text.len());
+
+                attr_segments.push((
+                    Attr {
+                        fg: Color::LIGHT_BLACK, // Grey color
+                        ..Attr::default()
+                    },
+                    (file_info_start as u32, file_info_end as u32),
+                ));
+            }
+        }
+
+        AnsiString::new_str(context.text, attr_segments)
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
