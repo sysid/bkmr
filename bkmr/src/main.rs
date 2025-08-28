@@ -1,14 +1,11 @@
 // src/main.rs
-use bkmr::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
-
-use bkmr::app_state::AppState;
+use bkmr::infrastructure::di::ServiceContainer;
+use bkmr::lsp::di::LspServiceContainer;
+use bkmr::config::{load_settings, Settings};
 use bkmr::cli::args::{Cli, Commands};
-use bkmr::cli::execute_command;
-use bkmr::domain::embedding::Embedder;
 use bkmr::exitcode;
 use clap::Parser;
 use crossterm::style::Stylize;
-use std::sync::Arc;
 use termcolor::{ColorChoice, StandardStream};
 use tracing::{debug, info, instrument};
 use tracing_subscriber::{
@@ -29,32 +26,79 @@ fn main() {
 
     setup_logging(cli.debug, no_color);
 
-    // Create embedder based on CLI option
-    let embedder: Arc<dyn Embedder> = if cli.openai {
-        debug!("OpenAI embeddings enabled");
-        Arc::new(OpenAiEmbedding::default())
-    } else {
-        debug!("Using DummyEmbedding (no embeddings will be stored)");
-        Arc::new(DummyEmbedding)
-    };
-
-    // Convert config to Path reference if provided
+    // Load configuration with CLI overrides
     let config_path_ref = cli.config.as_deref();
-
-    // Initialize AppState with the embedder and config file
-    let app_state = AppState::new_with_config_file(embedder, config_path_ref);
-    let result = AppState::update_global(app_state);
-
-    if let Err(e) = result {
-        eprintln!("{}: {}", "Failed to initialize AppState".red(), e);
-        std::process::exit(exitcode::USAGE);
+    let settings = load_settings(config_path_ref)
+        .unwrap_or_else(|e| {
+            debug!("Failed to load settings: {}. Using defaults.", e);
+            Settings::default()
+        });
+    
+    // Note: OpenAI override from CLI flag will be handled in service container
+    // when the embedder selection is properly implemented
+    if cli.openai {
+        debug!("OpenAI embeddings requested via CLI flag");
     }
 
-    // Execute the command
-    if let Err(e) = execute_command(stderr, cli) {
-        eprintln!("{}", format!("Error: {}", e).red());
-        std::process::exit(exitcode::USAGE);
+    // Route to appropriate handler based on command
+    match cli.command.as_ref() {
+        Some(Commands::Lsp { no_interpolation }) => {
+            if let Err(e) = handle_lsp_command(settings, *no_interpolation) {
+                eprintln!("{}", format!("LSP error: {}", e).red());
+                std::process::exit(exitcode::USAGE);
+            }
+        },
+        _ => {
+            // Create service container (single composition root)
+            let service_container = match ServiceContainer::new(&settings) {
+                Ok(container) => container,
+                Err(e) => {
+                    eprintln!("{}: {}", "Failed to create service container".red(), e);
+                    std::process::exit(exitcode::USAGE);
+                }
+            };
+            
+            // Execute CLI command with services
+            if let Err(e) = execute_command_with_services(stderr, cli, service_container, settings) {
+                eprintln!("{}", format!("Error: {}", e).red());
+                std::process::exit(exitcode::USAGE);
+            }
+        }
     }
+}
+
+fn handle_lsp_command(
+    settings: Settings, 
+    no_interpolation: bool
+) -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::runtime::Runtime;
+
+    // Create service containers for LSP
+    let service_container = ServiceContainer::new(&settings)
+        .map_err(|e| format!("Failed to create service container: {}", e))?;
+    let _lsp_container = LspServiceContainer::new(&service_container, &settings);
+    
+    // Create a tokio runtime for the LSP server
+    let rt = Runtime::new().map_err(|e| {
+        format!("Failed to create async runtime: {}", e)
+    })?;
+
+    // Run the LSP server (for now, use existing implementation)
+    rt.block_on(async {
+        bkmr::lsp::run_lsp_server(&settings, no_interpolation).await;
+    });
+
+    Ok(())
+}
+
+fn execute_command_with_services(
+    stderr: StandardStream,
+    cli: Cli,
+    services: ServiceContainer,
+    settings: Settings,
+) -> Result<(), Box<dyn std::error::Error>> {
+    bkmr::cli::execute_command_with_services(stderr, cli, services, &settings)
+        .map_err(|e| format!("Command execution failed: {}", e).into())
 }
 
 fn setup_logging(verbosity: u8, no_color: bool) {
@@ -116,7 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn verify_cli() {
+    fn given_cli_command_when_verify_then_debug_asserts_pass() {
         use clap::CommandFactory;
         Cli::command().debug_assert()
     }

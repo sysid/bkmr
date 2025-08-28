@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_if_needed_no_interpolation() {
+    fn given_simple_content_when_render_if_needed_then_returns_unchanged() {
         let bookmark = create_test_bookmark();
         let service: Arc<dyn TemplateService> =
             Arc::new(MockInterpolationService { should_fail: false });
@@ -100,7 +100,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_if_needed_with_interpolation() {
+    fn given_template_content_when_render_if_needed_then_returns_interpolated() {
         let bookmark = create_test_bookmark();
         let service: Arc<dyn TemplateService> =
             Arc::new(MockInterpolationService { should_fail: false });
@@ -113,7 +113,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_if_needed_interpolation_failure() {
+    fn given_template_content_when_render_fails_then_returns_original() {
         let bookmark = create_test_bookmark();
         let service: Arc<dyn TemplateService> =
             Arc::new(MockInterpolationService { should_fail: true });
@@ -130,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_if_needed_jinja_syntax() {
+    fn given_jinja_syntax_when_render_if_needed_then_handles_correctly() {
         let bookmark = create_test_bookmark();
         let service: Arc<dyn TemplateService> =
             Arc::new(MockInterpolationService { should_fail: false });

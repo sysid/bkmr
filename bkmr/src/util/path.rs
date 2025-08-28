@@ -117,7 +117,7 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn test_abspath_removes_suffix() {
+    fn given_path_with_suffix_when_abspath_then_removes_suffix_and_canonicalizes() {
         // Create a temporary file.
         let temp_dir = env::temp_dir();
         let file_path = temp_dir.join("test_file.txt");
@@ -138,14 +138,14 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_filename() {
+    fn given_path_with_suffix_when_extract_filename_then_returns_filename_without_suffix() {
         let input = "/home/user/docs/report.pdf:0";
         let filename = extract_filename(input);
         assert_eq!(filename, "report.pdf");
     }
 
     #[test]
-    fn test_is_file_path_detection() {
+    fn given_various_strings_when_is_file_path_then_correctly_identifies_paths() {
         // Test cases
         assert!(is_file_path("/absolute/path/file.md"));
         assert!(is_file_path("~/relative/to/home.md"));

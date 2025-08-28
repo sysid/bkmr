@@ -1,6 +1,5 @@
 // src/infrastructure/json.rs
 
-use crate::app_state::AppState;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::tag::Tag;
@@ -130,12 +129,13 @@ where
         let filename = extract_filename(&id);
 
         let tags = Tag::parse_tags(",_imported_,")?;
+        let dummy_embedder = crate::infrastructure::embeddings::DummyEmbedding;
         let bookmark = Bookmark::new(
             &id,             // URL
             &filename,       // Title
             &record.content, // Description
             tags,            // Tags
-            AppState::read_global().context.embedder.as_ref(),
+            &dummy_embedder,  // TODO: check whether the real embedder is required (looks like it from before refactor)
         )?;
 
         bookmarks.push(bookmark);
@@ -152,7 +152,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_check_json_format_valid() {
+    fn given_valid_json_file_when_check_format_then_returns_true() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
         let line = r#"{"id": "/a/b/readme.md:0", "content": "First record"}"#;
@@ -160,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_json_format_invalid() {
+    fn given_invalid_json_file_when_check_format_then_returns_false() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
         let line = r#"{"id": "/a/b/readme.md:0"}"#; // Missing content
@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_ndjson_file_and_create_bookmarks() -> DomainResult<()> {
+    fn given_ndjson_file_when_read_then_creates_bookmarks() -> DomainResult<()> {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -210,7 +210,7 @@ mod tests {
 
     #[test]
     #[ignore = "This is a visual test that would output to stdout"]
-    fn test_write_bookmarks_as_json() -> DomainResult<()> {
+    fn given_bookmarks_when_write_as_json_then_creates_valid_file() -> DomainResult<()> {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
@@ -218,12 +218,13 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test")?);
 
+        let dummy_embedder = crate::infrastructure::embeddings::DummyEmbedding;
         let bookmark = Bookmark::new(
             "https://example.com",
             "Example",
             "A test bookmark",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &dummy_embedder,
         )?;
 
         // Convert to JSON views

@@ -1,7 +1,8 @@
 // bkmr/src/cli/mod.rs
 use crate::cli::args::{Cli, Commands};
-use crate::cli::command_handler::CommandHandler;
 use crate::cli::error::CliResult;
+use crate::infrastructure::di::ServiceContainer;
+use crate::config::Settings;
 use termcolor::StandardStream;
 
 pub mod args;
@@ -14,34 +15,41 @@ pub mod fzf;
 pub mod process;
 pub mod tag_commands;
 
-pub fn execute_command(stderr: StandardStream, cli: Cli) -> CliResult<()> {
+// Old execute_command removed - use execute_command_with_services with dependency injection
+
+pub fn execute_command_with_services(
+    stderr: StandardStream, 
+    cli: Cli, 
+    services: ServiceContainer,
+    settings: &Settings,
+) -> CliResult<()> {
     if cli.generate_config {
         println!("{}", crate::config::generate_default_config());
         return Ok(());
     }
     match cli.command {
         Some(Commands::Search { .. }) => {
-            let handler = command_handler::SearchCommandHandler::new();
+            let handler = command_handler::SearchCommandHandler::with_services(services, settings.clone());
             handler.execute(cli)
         }
-        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli),
-        Some(Commands::Open { .. }) => bookmark_commands::open(cli),
-        Some(Commands::Add { .. }) => bookmark_commands::add(cli),
-        Some(Commands::Delete { .. }) => bookmark_commands::delete(cli),
-        Some(Commands::Update { .. }) => bookmark_commands::update(cli),
-        Some(Commands::Edit { .. }) => bookmark_commands::edit(cli),
-        Some(Commands::Show { .. }) => bookmark_commands::show(cli),
-        Some(Commands::Tags { .. }) => tag_commands::show_tags(cli),
-        Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli),
-        Some(Commands::CreateDb { .. }) => bookmark_commands::create_db(cli),
-        Some(Commands::SetEmbeddable { .. }) => bookmark_commands::set_embeddable(cli),
-        Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli),
-        Some(Commands::LoadTexts { .. }) => bookmark_commands::load_texts(cli),
-        Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli),
-        Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli),
-        Some(Commands::Info { .. }) => bookmark_commands::info(cli),
+        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli, &services),
+        Some(Commands::Open { .. }) => bookmark_commands::open(cli, &services),
+        Some(Commands::Add { .. }) => bookmark_commands::add(cli, &services),
+        Some(Commands::Delete { .. }) => bookmark_commands::delete(cli, &services),
+        Some(Commands::Update { .. }) => bookmark_commands::update(cli, &services),
+        Some(Commands::Edit { .. }) => bookmark_commands::edit(cli, &services, settings),
+        Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services),
+        Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
+        Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
+        Some(Commands::CreateDb { .. }) => bookmark_commands::create_db(cli, &services, settings),
+        Some(Commands::SetEmbeddable { .. }) => bookmark_commands::set_embeddable(cli, &services),
+        Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli, &services),
+        Some(Commands::LoadTexts { .. }) => bookmark_commands::load_texts(cli, &services),
+        Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli, &services),
+        Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli, &services),
+        Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),
         Some(Commands::Completion { shell }) => handle_completion(shell),
-        Some(Commands::Lsp { no_interpolation }) => handle_lsp(no_interpolation),
+        Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
             Ok(())
@@ -94,7 +102,7 @@ fn handle_completion(shell: String) -> CliResult<()> {
     }
 }
 
-fn handle_lsp(no_interpolation: bool) -> CliResult<()> {
+fn handle_lsp(settings: &Settings, no_interpolation: bool) -> CliResult<()> {
     use tokio::runtime::Runtime;
 
     // Create a tokio runtime for the LSP server
@@ -104,7 +112,7 @@ fn handle_lsp(no_interpolation: bool) -> CliResult<()> {
 
     // Run the LSP server
     rt.block_on(async {
-        crate::lsp::run_lsp_server(no_interpolation).await;
+        crate::lsp::run_lsp_server(settings, no_interpolation).await;
     });
 
     Ok(())

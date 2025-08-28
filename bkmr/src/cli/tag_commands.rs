@@ -1,14 +1,14 @@
 // src/cli/tag_commands.rs
-use crate::application::services::factory;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::CliResult;
 use crate::domain::tag::Tag;
 use crate::util::helper::is_stdout_piped;
+use crate::infrastructure::di::ServiceContainer;
 use crossterm::style::Stylize;
 
-pub fn show_tags(cli: Cli) -> CliResult<()> {
+pub fn show_tags(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Tags { tag } = cli.command.unwrap() {
-        let tag_service = factory::create_tag_service();
+        let tag_service = &services.tag_service;
 
         // Determine if stdout is being piped to another process
         let is_piped = is_stdout_piped();

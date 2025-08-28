@@ -12,7 +12,6 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-use crate::app_state::AppState;
 use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 
@@ -53,7 +52,8 @@ pub fn init_test_env() -> &'static TestEnv {
     let env_data = TEST_ENV.get_or_init(|| {
         let data = TestEnv::new();
         setup_test_logging(); // set up logger only once
-        AppState::update_global(AppState::default()).expect("Failed to update global AppState");
+        // Global AppState removed - tests should use dependency injection instead
+        // AppState::update_global(AppState::default()).expect("Failed to update global AppState");
         info!("Test environment initialized with DummyEmbedding");
         data
     });
@@ -185,7 +185,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn my_test() {
+    fn given_test_env_when_init_then_db_path_exists() {
         let test_env = init_test_env();
         let _guard = EnvGuard::new();
         assert!(test_env.db_path.exists());
@@ -193,14 +193,14 @@ mod tests {
     }
 
     #[test]
-    fn test_setup_test_db() {
+    fn given_test_env_when_setup_test_db_then_returns_working_repository() {
         let _ = init_test_env();
         let repo = setup_test_db();
         assert!(repo.get_connection().is_ok());
     }
 
     #[test]
-    fn test_setup_temp_dir() {
+    fn given_test_env_when_setup_temp_dir_then_creates_directory_with_resources() {
         let _ = init_test_env();
         let temp_dir = setup_temp_dir();
         assert!(temp_dir.exists());

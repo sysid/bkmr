@@ -346,7 +346,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_template_roundtrip() {
+    fn given_bookmark_when_convert_to_template_and_back_then_preserves_data() {
         // Create a template
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -378,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn test_template_with_empty_lines() {
+    fn given_template_with_empty_lines_when_parse_then_handles_correctly() {
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -412,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_id_creates_new_bookmark() {
+    fn given_template_with_empty_id_when_parse_then_creates_new_bookmark() {
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -434,7 +434,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_tags_returns_error() {
+    fn given_template_with_invalid_tags_when_parse_then_returns_error() {
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    fn test_missing_section_uses_default() {
+    fn given_template_with_missing_section_when_parse_then_uses_default() {
         let template_str = "\
             # Bookmark Template\n\
             === ID ===\n\
@@ -481,7 +481,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complex_markdown_with_dashes() {
+    fn given_complex_markdown_with_dashes_when_parse_then_handles_correctly() {
         // Create a template with complex markdown content that includes dashes
         let template_str = "\
             # Bookmark Template\n\
@@ -525,7 +525,7 @@ mod tests {
     }
 
     #[test]
-    fn test_content_with_section_like_text() {
+    fn given_content_with_section_markers_when_parse_then_distinguishes_sections() {
         // Create a template with text that might be confused with section markers
         let template_str = "\
             # Bookmark Template\n\
@@ -562,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn test_section_marker_at_end_of_file() {
+    fn given_section_marker_at_file_end_when_parse_then_handles_correctly() {
         // Test with a section marker at the end of the file and no content after it
         let template_str = "\
             # Bookmark Template\n\
@@ -587,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_sections() {
+    fn given_template_with_empty_sections_when_parse_then_uses_defaults() {
         // Test with some empty sections
         let template_str = "\
             # Bookmark Template\n\
@@ -613,7 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn test_adjacent_sections() {
+    fn given_template_with_adjacent_sections_when_parse_then_handles_correctly() {
         // Test with sections right next to each other
         let template_str = "\
             # Bookmark Template\n\

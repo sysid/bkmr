@@ -68,7 +68,7 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn test_env_action_prints_content() {
+    fn given_env_bookmark_when_execute_then_prints_content() {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
@@ -106,7 +106,7 @@ mod tests {
     }
 
     #[test]
-    fn test_env_action_with_interpolation() {
+    fn given_env_with_template_when_execute_then_interpolates_and_prints() {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));

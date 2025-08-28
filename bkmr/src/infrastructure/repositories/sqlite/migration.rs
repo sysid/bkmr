@@ -46,6 +46,7 @@ pub fn init_db(
     Ok(())
 }
 
+
 /// Checks if the schema migrations table exists
 #[instrument(skip(conn), level = "debug")]
 pub fn check_schema_migrations_exists(

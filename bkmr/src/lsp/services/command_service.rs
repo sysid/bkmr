@@ -2,7 +2,6 @@
 //!
 //! Provides functionality for executing LSP commands including snippet CRUD operations.
 
-use crate::application::services::factory::create_bookmark_service;
 use crate::application::services::BookmarkService;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
@@ -23,16 +22,11 @@ pub struct CommandService {
 }
 
 impl CommandService {
-    /// Create a new CommandService instance
-    pub fn new() -> Self {
-        Self {
-            bookmark_service: create_bookmark_service(),
-        }
-    }
-
-    /// Create CommandService with specific bookmark service (for testing)
+    /// Create CommandService with dependency injection
     pub fn with_service(bookmark_service: Arc<dyn BookmarkService>) -> Self {
-        Self { bookmark_service }
+        Self {
+            bookmark_service,
+        }
     }
 
     /// Create a new snippet

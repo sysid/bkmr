@@ -178,7 +178,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn test_import_json_array_bookmarks() -> DomainResult<()> {
+    fn given_json_array_file_when_import_bookmarks_then_creates_bookmark_data() -> DomainResult<()> {
         // Create a temporary test file with a JSON array
         let mut temp_file = NamedTempFile::new()?;
         write!(
@@ -213,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn test_import_ndjson_as_bookmarks_should_fail() {
+    fn given_ndjson_file_when_import_as_bookmarks_then_returns_error() {
         // Create a temporary test file with NDJSON format which should now fail
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(
@@ -234,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn test_import_text_documents_as_ndjson() -> DomainResult<()> {
+    fn given_ndjson_file_when_import_text_documents_then_creates_document_data() -> DomainResult<()> {
         // Create temporary test file with NDJSON format
         let mut temp_file = NamedTempFile::new()?;
         writeln!(
@@ -264,7 +264,7 @@ mod tests {
     }
 
     #[test]
-    fn test_import_json_array_as_text_documents_should_fail() {
+    fn given_json_array_when_import_as_text_documents_then_returns_error() {
         // Create temporary test file with JSON array format
         let mut temp_file = NamedTempFile::new().unwrap();
         write!(
@@ -285,7 +285,7 @@ mod tests {
     }
 
     #[test]
-    fn test_import_text_documents_invalid_json() {
+    fn given_invalid_json_when_import_text_documents_then_returns_error() {
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, r#"{{"id": "doc1" invalid json}}"#).unwrap();
 

@@ -98,12 +98,49 @@ impl SemanticSearchResult {
     pub fn similarity_percentage(&self) -> String {
         format!("{:.1}%", self.similarity * 100.0)
     }
+    
+    /// Create a new semantic search result with additional display metadata
+    pub fn new(bookmark: Bookmark, similarity: f32) -> Self {
+        Self { bookmark, similarity }
+    }
+    
+    /// Simple display text for semantic search results in fzf interface
+    /// This provides basic display formatting - enhanced formatting should be implemented
+    /// at the application layer where services are available
+    pub fn display(&self) -> String {
+        use crossterm::style::Stylize;
+        
+        let id = self.bookmark.id.unwrap_or(0);
+        let title = &self.bookmark.title;
+        let url = &self.bookmark.url;
+        let binding = self.bookmark.formatted_tags();
+        let tags_str = binding.trim_matches(',');
+        let similarity = format!("{:.1}%", self.similarity * 100.0);
+
+        // Format with colors similar to main branch implementation
+        let tags_display = if !tags_str.is_empty() {
+            format!(" [{}]", tags_str.magenta())
+        } else {
+            String::new()
+        };
+
+        let action_display = " (default)".cyan();
+
+        format!(
+            "{}: {} <{}> ({}%){}{}",
+            id.to_string().blue(),
+            title.clone().green(), 
+            url.clone().yellow(), 
+            similarity.cyan(),
+            action_display,
+            tags_display
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::domain::tag::Tag;
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::util::testing::init_test_env;
@@ -113,8 +150,7 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
 
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
+        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         let mut bookmark =
             Bookmark::new("https://example.com", title, content, tags, embedder).unwrap();
@@ -124,7 +160,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_empty_bookmarks() {
+    fn given_empty_bookmark_list_when_semantic_search_then_returns_empty_results() {
         let _ = init_test_env();
         let search = SemanticSearch::new("test query", None);
         let embedder = DummyEmbedding;
@@ -134,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_with_results() {
+    fn given_matching_bookmarks_when_semantic_search_then_returns_sorted_results() {
         let _ = init_test_env();
         let embedder = DummyEmbedding;
 
@@ -157,7 +193,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_respects_limit() {
+    fn given_search_limit_when_semantic_search_then_respects_limit() {
         let _ = init_test_env();
         let embedder = DummyEmbedding;
 
@@ -181,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn test_semantic_search_result_percentage() {
+    fn given_similarity_score_when_format_percentage_then_returns_correct_format() {
         let _ = init_test_env();
         let bookmark = create_test_bookmark("Test", "Content", true);
 

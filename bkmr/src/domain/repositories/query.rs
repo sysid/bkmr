@@ -494,11 +494,10 @@ pub enum SortDirection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::util::testing::init_test_env;
 
     #[test]
-    fn test_and_specification() {
+    fn given_multiple_specifications_when_and_then_combines_with_logical_and() {
         let _ = init_test_env();
 
         // Create two simple specifications
@@ -515,7 +514,7 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -525,7 +524,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -535,7 +534,7 @@ mod tests {
     }
 
     #[test]
-    fn test_or_specification() {
+    fn given_multiple_specifications_when_or_then_combines_with_logical_or() {
         let _ = init_test_env();
         // Create two simple specifications
         let spec1 = TextSearchSpecification::new("rust".to_string());
@@ -551,7 +550,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -560,7 +559,7 @@ mod tests {
             "Python",
             "Learn Python",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -569,7 +568,7 @@ mod tests {
             "JavaScript",
             "Learn JavaScript",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -580,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn test_not_specification() {
+    fn given_specification_when_not_then_inverts_logic() {
         let _ = init_test_env();
         let spec = TextSearchSpecification::new("rust".to_string());
         let not_spec = spec.not();
@@ -591,7 +590,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags.clone(),
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -600,7 +599,7 @@ mod tests {
             "Python",
             "Learn Python",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -609,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn test_complex_specification() {
+    fn given_complex_nested_specifications_when_evaluate_then_applies_correct_logic() {
         let _ = init_test_env();
         // Create test tags
         let rust_tag = Tag::new("rust").unwrap();
@@ -639,7 +638,7 @@ mod tests {
             "Rust Web",
             "Web development with Rust",
             rust_web_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -651,7 +650,7 @@ mod tests {
             "Web Programming",
             "Web development programming",
             programming_web_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -663,7 +662,7 @@ mod tests {
             "Rust",
             "Learn Rust",
             rust_tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -674,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bookmark_query() {
+    fn given_query_builder_when_build_then_creates_valid_query() {
         let _ = init_test_env();
         let tags = HashSet::new();
         let bookmark = Bookmark::new(
@@ -682,7 +681,7 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -698,12 +697,11 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_non_text_filters() {
+    fn given_non_text_filters_when_apply_then_filters_bookmarks() {
         let _ = init_test_env();
 
         // Create test bookmarks with various properties
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
+        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         // Create some test bookmarks
         let now = chrono::Utc::now();
@@ -890,7 +888,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_non_text_filters_empty_bookmarks() {
+    fn given_empty_bookmarks_when_apply_non_text_filters_then_returns_empty() {
         let _ = init_test_env();
 
         // Create an empty collection of bookmarks
@@ -916,13 +914,12 @@ mod tests {
     }
 
     #[test]
-    fn test_specification_boxed() {
+    fn given_boxed_specification_when_evaluate_then_works_correctly() {
         let _ = init_test_env();
 
         // Create test bookmarks
         let tags = HashSet::new();
-        let app_state = AppState::read_global();
-        let embedder = &*app_state.context.embedder;
+        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         let bookmark = Bookmark::new(
             "https://example.com",

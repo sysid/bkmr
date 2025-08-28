@@ -116,7 +116,7 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn test_tag_creation_valid() {
+    fn given_valid_tag_value_when_create_tag_then_returns_tag() {
         let tag = Tag::new("test").unwrap();
         assert_eq!(tag.value(), "test");
 
@@ -130,7 +130,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tag_creation_invalid() {
+    fn given_invalid_tag_value_when_create_tag_then_returns_error() {
         // Empty tag
         assert!(Tag::new("").is_err());
 
@@ -142,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tags() {
+    fn given_tag_string_when_parse_tags_then_returns_tag_set() {
         let tags = Tag::parse_tags("tag1,tag2,tag3").unwrap();
         assert_eq!(tags.len(), 3);
         assert!(tags.contains(&Tag::new("tag1").unwrap()));
@@ -155,7 +155,7 @@ mod tests {
     }
 
     #[test]
-    fn test_format_tags() {
+    fn given_tag_set_when_format_then_returns_formatted_string() {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("tag1").unwrap());
         tags.insert(Tag::new("tag2").unwrap());
@@ -170,7 +170,7 @@ mod tests {
     }
 
     #[test]
-    fn test_contains_all() {
+    fn given_tag_sets_when_contains_all_then_validates_subset() {
         let mut haystack = HashSet::new();
         haystack.insert(Tag::new("tag1").unwrap());
         haystack.insert(Tag::new("tag2").unwrap());
@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_contains_any() {
+    fn given_tag_sets_when_contains_any_then_validates_intersection() {
         let mut haystack = HashSet::new();
         haystack.insert(Tag::new("tag1").unwrap());
         haystack.insert(Tag::new("tag2").unwrap());
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tag_option_with_valid_string() {
+    fn given_valid_option_string_when_parse_tag_option_then_returns_tag_set() {
         let result = Tag::parse_tag_option(Some("tag1,tag2,tag3")).unwrap();
         assert!(result.is_some());
         let tags = result.unwrap();
@@ -223,25 +223,25 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tag_option_with_empty_string() {
+    fn given_empty_option_string_when_parse_tag_option_then_returns_empty_set() {
         let result = Tag::parse_tag_option(Some("")).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_parse_tag_option_with_none() {
+    fn given_none_option_when_parse_tag_option_then_returns_empty_set() {
         let result = Tag::parse_tag_option(None::<&str>).unwrap();
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_parse_tag_option_with_invalid_string() {
+    fn given_invalid_option_string_when_parse_tag_option_then_returns_empty_set() {
         let result = Tag::parse_tag_option(Some("invalid tag with space"));
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_parse_tag_str_with_valid_string() {
+    fn given_valid_tag_string_when_parse_tag_str_then_returns_tag_set() {
         let result = Tag::parse_tag_str("tag1,tag2,tag3").unwrap();
         assert!(result.is_some());
         let tags = result.unwrap();
@@ -252,13 +252,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_tag_str_with_empty_string() {
+    fn given_empty_tag_string_when_parse_tag_str_then_returns_empty_set() {
         let result = Tag::parse_tag_str("").unwrap();
         assert!(result.is_none());
     }
 
     #[test]
-    fn test_parse_tag_str_with_invalid_string() {
+    fn given_invalid_tag_string_when_parse_tag_str_then_returns_empty_set() {
         let result = Tag::parse_tag_str("invalid tag with space");
         assert!(result.is_err());
     }

@@ -1,5 +1,5 @@
 use assert_cmd::Command;
-use bkmr::application::services::factory::create_bookmark_service;
+use bkmr::util::test_service_container::TestServiceContainer;
 use bkmr::domain::tag::Tag;
 use bkmr::util::testing::{init_test_env, EnvGuard};
 use std::collections::HashSet;
@@ -9,12 +9,13 @@ fn test_search_command_with_tags() {
     let _env = init_test_env();
     let _guard = EnvGuard::new();
 
-    // Add test bookmarks with "aaa" tag to the database
-    let bookmark_service = create_bookmark_service();
+    // Add test bookmarks with unique tags to the database
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
 
     let mut tag_set = HashSet::new();
-    tag_set.insert(Tag::new("aaa").unwrap());
-    tag_set.insert(Tag::new("test").unwrap());
+    tag_set.insert(Tag::new("unique_test_tag").unwrap());
+    tag_set.insert(Tag::new("cli_search_test").unwrap());
 
     // Add test bookmarks (the test expects specific IDs but we'll work with what we get)
     let bookmark1 = bookmark_service
@@ -43,14 +44,14 @@ fn test_search_command_with_tags() {
     let result = cmd
         .arg("search")
         .arg("--tags")
-        .arg("aaa")
+        .arg("unique_test_tag")
         .arg("--np") // non-interactive mode
         .arg("--limit") // non-interactive mode
         .arg("4") // non-interactive mode
         .assert()
         .success();
 
-    // Verify the output contains expected bookmarks with tag "aaa"
+    // Verify the output contains expected bookmarks with tag "unique_test_tag"
     let output = result.get_output();
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -59,6 +60,10 @@ fn test_search_command_with_tags() {
     assert!(
         stderr.contains("bookmarks"),
         "Should show number of bookmarks found"
+    );
+    assert!(
+        stderr.contains("unique_test_tag"),
+        "Should have found bookmark with unique test tag"
     );
 
     // In non-interactive mode, the output should contain bookmark IDs

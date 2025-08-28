@@ -53,7 +53,6 @@ impl Tag {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_state::AppState;
     use crate::domain::bookmark::Bookmark;
     use crate::util::testing::init_test_env;
     use std::collections::HashSet;
@@ -72,7 +71,7 @@ mod tests {
     }
 
     #[test]
-    fn test_system_tag_to_tag_conversion() {
+    fn given_system_tag_when_convert_to_tag_then_returns_corresponding_tag() {
         let system_tag = SystemTag::Snippet;
         let tag = system_tag.to_tag().unwrap();
 
@@ -82,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tag_is_system_tag() {
+    fn given_various_tags_when_check_system_status_then_validates_correctly() {
         // System tag (enclosed with underscores)
         let system_tag = Tag::new("_snip_").unwrap();
         assert!(system_tag.is_system_tag());
@@ -104,7 +103,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bookmark_with_system_tags() {
+    fn given_bookmark_with_system_tags_when_filter_then_separates_system_and_user_tags() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
 
@@ -120,7 +119,7 @@ mod tests {
             "JavaScript Hello World",
             "A simple JavaScript snippet",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -139,7 +138,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bookmark_add_remove_system_tag() {
+    fn given_bookmark_when_add_remove_system_tag_then_updates_tag_collection() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("regular").unwrap());
@@ -149,7 +148,7 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            AppState::read_global().context.embedder.as_ref(),
+            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 

@@ -3,8 +3,8 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use crate::app_state::AppState;
-use crate::application::services::factory::{create_action_service, create_interpolation_service};
+// Service container dependency injection implemented  
+use crate::infrastructure::di::ServiceContainer;
 use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{
@@ -57,77 +57,19 @@ impl SkimItem for SnippetItem {
 struct AlignedBookmark {
     bookmark: Bookmark,
     max_id_width: usize,
+    action_description: String,
+    settings: crate::config::Settings,
 }
 
 impl SkimItem for AlignedBookmark {
     fn text(&self) -> Cow<'_, str> {
-        let id = self.bookmark.id.unwrap_or(0);
-        let title = &self.bookmark.title;
-        let url = &self.bookmark.url;
-        let binding = self.bookmark.formatted_tags();
-        let tags_str = binding.trim_matches(',');
-
-        // Get the action description
-        let action_service = create_action_service();
-        let action_description = action_service.get_default_action_description(&self.bookmark);
-
-        // Read app settings
-        let app_state = AppState::read_global();
-        let fzf_opts = &app_state.settings.fzf_opts;
-
-        // Format based on config options
-        let tags_display = if fzf_opts.show_tags {
-            format!(" [{}]", tags_str)
-        } else {
-            String::new()
-        };
-
-        // Show action description in display only if configured
-        let action_display = if fzf_opts.show_action {
-            format!(" ({})", action_description)
-        } else {
-            String::new()
-        };
-
-        // Construct display text with proper ID padding
-        let mut text = if fzf_opts.no_url {
-            format!(
-                "{:>width$}: {}{}{}",
-                id,
-                title,
-                action_display,
-                tags_display,
-                width = self.max_id_width
-            )
-        } else {
-            format!(
-                "{:>width$}: {} <{}>{}{}",
-                id,
-                title,
-                url,
-                action_display,
-                tags_display,
-                width = self.max_id_width
-            )
-        };
-
-        // Add file info line if present and enabled
-        if fzf_opts.show_file_info {
-            if let (Some(file_path), Some(file_mtime)) =
-                (&self.bookmark.file_path, self.bookmark.file_mtime)
-            {
-                // Add padding to align with bookmark content
-                let padding = " ".repeat(self.max_id_width + 2); // +2 for ": "
-                let formatted_path = format_file_path(file_path, 120);
-                let formatted_time = format_mtime(file_mtime);
-                text.push_str(&format!(
-                    "\n{}📁 {} ({})",
-                    padding, formatted_path, formatted_time
-                ));
-            }
-        }
-
-        Cow::Owned(text)
+        let display_text = create_bookmark_display_text(
+            &self.bookmark, 
+            self.max_id_width, 
+            &self.action_description, 
+            &self.settings
+        );
+        Cow::Owned(display_text)
     }
 
     fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
@@ -148,9 +90,8 @@ impl SkimItem for AlignedBookmark {
         let mut attr_segments =
             vec![(attr_title, (padding as u32, (padding + title.len()) as u32))];
 
-        // Read app settings
-        let app_state = AppState::read_global();
-        let fzf_opts = &app_state.settings.fzf_opts;
+        // Get app settings from struct
+        let fzf_opts = &self.settings.fzf_opts;
 
         // If showing URL, add yellow attribute for it
         if !fzf_opts.no_url {
@@ -218,34 +159,8 @@ impl SkimItem for AlignedBookmark {
     }
 
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
-        let action_service = create_action_service();
-        let action_description = action_service.get_default_action_description(&self.bookmark);
-
-        // Create a detailed preview
-        let mut preview_text = format!(
-            "ID: {}\nTitle: {}\nURL/Content: {}\nDescription: {}\nTags: {}\nAccess Count: {}\nDefault Action: {}",
-            self.bookmark.id.unwrap_or(0),
-            self.bookmark.title,
-            self.bookmark.url,
-            self.bookmark.description,
-            self.bookmark.formatted_tags().trim_matches(','),
-            self.bookmark.access_count,
-            action_description
-        );
-
-        // Add file info if present
-        if let (Some(file_path), Some(file_mtime)) =
-            (&self.bookmark.file_path, self.bookmark.file_mtime)
-        {
-            let formatted_path = format_file_path(file_path, 120);
-            let formatted_time = format_mtime(file_mtime);
-            preview_text.push_str(&format!(
-                "\n\nSource: {} ({})",
-                formatted_path, formatted_time
-            ));
-        }
-
-        ItemPreview::AnsiText(format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text))
+        let preview_text = create_bookmark_preview_text(&self.bookmark, &self.action_description);
+        ItemPreview::AnsiText(preview_text)
     }
 
     fn output(&self) -> Cow<'_, str> {
@@ -257,20 +172,103 @@ impl SkimItem for AlignedBookmark {
     }
 }
 
+/// Create display text for a bookmark with proper formatting
+fn create_bookmark_display_text(
+    bookmark: &Bookmark, 
+    max_id_width: usize, 
+    action_description: &str, 
+    settings: &crate::config::Settings
+) -> String {
+    let id = bookmark.id.unwrap_or(0);
+    let title = &bookmark.title;
+    let url = &bookmark.url;
+    let binding = bookmark.formatted_tags();
+    let tags_str = binding.trim_matches(',');
+    
+    let fzf_opts = &settings.fzf_opts;
+    
+    // Format based on config options
+    let tags_display = if fzf_opts.show_tags {
+        format!(" [{}]", tags_str)
+    } else {
+        String::new()
+    };
+    
+    let action_display = if fzf_opts.show_action {
+        format!(" ({})", action_description)
+    } else {
+        String::new()
+    };
+    
+    let mut text = if fzf_opts.no_url {
+        format!(
+            "{:>width$}: {}{}{}",
+            id, title, action_display, tags_display,
+            width = max_id_width
+        )
+    } else {
+        format!(
+            "{:>width$}: {} <{}>{}{}",
+            id, title, url, action_display, tags_display,
+            width = max_id_width
+        )
+    };
+    
+    // Add file info if present and enabled
+    if fzf_opts.show_file_info {
+        if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
+            let padding = " ".repeat(max_id_width + 2);
+            let formatted_path = format_file_path(file_path, 120);
+            let formatted_time = format_mtime(file_mtime);
+            text.push_str(&format!(
+                "\n{}📁 {} ({})",
+                padding, formatted_path, formatted_time
+            ));
+        }
+    }
+    
+    text
+}
+
+/// Create preview text for a bookmark
+fn create_bookmark_preview_text(bookmark: &Bookmark, action_description: &str) -> String {
+    let mut preview_text = format!(
+        "ID: {}\nTitle: {}\nURL/Content: {}\nDescription: {}\nTags: {}\nAccess Count: {}\nDefault Action: {}",
+        bookmark.id.unwrap_or(0),
+        bookmark.title,
+        bookmark.url,
+        bookmark.description,
+        bookmark.formatted_tags().trim_matches(','),
+        bookmark.access_count,
+        action_description
+    );
+
+    // Add file info if present
+    if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
+        let formatted_path = format_file_path(file_path, 120);
+        let formatted_time = format_mtime(file_mtime);
+        preview_text.push_str(&format!(
+            "\n\nSource: {} ({})",
+            formatted_path, formatted_time
+        ));
+    }
+
+    format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text)
+}
+
 /// Format bookmarks for enhanced display and preview
 fn create_enhanced_skim_items(
     bookmarks: &[Bookmark],
     max_id_width: usize,
+    services: &ServiceContainer,
+    _show_file_info: bool,
+    show_action: bool,
 ) -> Vec<Arc<dyn SkimItem>> {
     // Get action service to determine action descriptions
-    let action_service = create_action_service();
+    let action_service = &services.action_service;
 
     // Get interpolation service to render URLs
-    let interpolation_service = create_interpolation_service();
-
-    // Get app settings to respect configuration
-    let app_state = AppState::read_global();
-    let fzf_opts = &app_state.settings.fzf_opts;
+    let interpolation_service = &services.template_service;
 
     bookmarks
         .iter()
@@ -299,8 +297,8 @@ fn create_enhanced_skim_items(
                 .to_string();
             let has_tags = !tags_str.is_empty();
 
-            // Format preview with proper spacing and respecting show_action config
-            let preview = if fzf_opts.show_action {
+            // Format preview with proper spacing (simplified)
+            let preview = if show_action {
                 // Include the default action in preview and tags at the bottom
                 let mut preview_text = format!(
                     "{}: {}\n\n{}:\n{}\n\n{}:\n{}\n\n{}: {}",
@@ -420,53 +418,14 @@ fn get_selected_bookmarks_from_aligned(
 
 impl SkimItem for SemanticSearchResult {
     fn text(&self) -> Cow<'_, str> {
-        let id = self.bookmark.id.unwrap_or(0);
-        let title = &self.bookmark.title;
-        let url = &self.bookmark.url;
-        let binding = self.bookmark.formatted_tags();
-        let tags_str = binding.trim_matches(',');
-        let similarity = format!("{:.1}%", self.similarity * 100.0);
-
-        // Get the action description
-        let action_service = create_action_service();
-        let action_description = action_service.get_default_action_description(&self.bookmark);
-
-        // Read app settings
-        let app_state = AppState::read_global();
-        let fzf_opts = &app_state.settings.fzf_opts;
-
-        // Format based on config options
-        let tags_display = if fzf_opts.show_tags {
-            format!(" [{}]", tags_str)
-        } else {
-            String::new()
-        };
-
-        let action_display = if fzf_opts.show_action {
-            format!(" ({})", action_description)
-        } else {
-            String::new()
-        };
-
-        let text = if fzf_opts.no_url {
-            format!(
-                "{}: {} ({}%){}{}",
-                id, title, similarity, action_display, tags_display
-            )
-        } else {
-            format!(
-                "{}: {} <{}> ({}%){}{}",
-                id, title, url, similarity, action_display, tags_display
-            )
-        };
-
+        let text = self.display();
         Cow::Owned(text)
     }
 }
 
 /// Processes bookmarks using the fzf-like selector interface
 #[instrument(skip(bookmarks), level = "debug")]
-pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
+pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
     if bookmarks.is_empty() {
         eprintln!("No bookmarks to display");
         return Ok(());
@@ -483,9 +442,8 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         .max()
         .unwrap_or(0);
 
-    // Read app settings
-    let app_state = AppState::read_global();
-    let fzf_opts = &app_state.settings.fzf_opts;
+    // Use provided settings
+    let fzf_opts = &settings.fzf_opts;
 
     // Build skim options
     let mut options_builder = SkimOptionsBuilder::default();
@@ -524,7 +482,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
 
     // Send bookmarks to skim based on style
     if style == "enhanced" {
-        let skim_items = create_enhanced_skim_items(&sorted_bookmarks, max_id_width);
+        let skim_items = create_enhanced_skim_items(&sorted_bookmarks, max_id_width, services, fzf_opts.show_file_info, fzf_opts.show_action);
         for item in skim_items {
             tx_item.send(item).map_err(|_| {
                 crate::cli::error::CliError::CommandFailed(
@@ -536,9 +494,15 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
         // Original style - use AlignedBookmark instead
         for bookmark in &sorted_bookmarks {
             debug!("Sending bookmark to skim: {}", bookmark.title);
+            
+            // Get action description
+            let action_description = services.action_service.get_default_action_description(bookmark);
+            
             let item = Arc::new(AlignedBookmark {
                 bookmark: bookmark.clone(),
                 max_id_width,
+                action_description: action_description.to_string(),
+                settings: settings.clone(),
             });
             tx_item.send(item).map_err(|_| {
                 crate::cli::error::CliError::CommandFailed(
@@ -586,7 +550,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                 // Execute default action for each selected bookmark
                 for bookmark in &selected_bookmarks {
                     // Use the action service to execute the default action
-                    execute_bookmark_default_action(bookmark)?;
+                    execute_bookmark_default_action(bookmark, services)?;
                 }
             }
             Key::Ctrl('y') | Key::Ctrl('o') => {
@@ -602,29 +566,29 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                         // For shell scripts, copy the bkmr open command instead of URL content
                         let command =
                             format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
-                        copy_url_to_clipboard(&command)?;
+                        copy_url_to_clipboard(&command, services)?;
                     } else {
                         // For all other types, copy URL to clipboard with interpolation
-                        copy_bookmark_url_to_clipboard(bookmark)?;
+                        copy_bookmark_url_to_clipboard(bookmark, services)?;
                     }
                 }
             }
             Key::Ctrl('e') => {
                 clear_fzf_artifacts();
                 // Edit selected bookmarks
-                edit_bookmarks(ids, false)?;
+                edit_bookmarks(ids, false, services, settings)?;
             }
             Key::Ctrl('d') => {
                 // clear_fzf_artifacts();
                 // Delete selected bookmarks
-                delete_bookmarks(ids)?;
+                delete_bookmarks(ids, services, settings)?;
             }
             Key::Ctrl('a') => {
                 // clear_fzf_artifacts();
                 // Clone selected bookmark
                 if let Some(bookmark) = selected_bookmarks.first() {
                     if let Some(id) = bookmark.id {
-                        clone_bookmark(id)?;
+                        clone_bookmark(id, services)?;
                     }
                 }
             }
@@ -635,7 +599,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str) -> CliResult<()> {
                     clear_terminal();
 
                     // Use the shared function to show bookmark details
-                    let details = bookmark_commands::show_bookmark_details(bookmark);
+                    let details = bookmark_commands::show_bookmark_details(bookmark, services);
                     print!("{}", details);
 
                     // Wait for user to press Enter before returning to FZF
@@ -743,3 +707,4 @@ fn clear_terminal_completely() {
     // 3. If all else fails, at least print newlines to push fzf UI off the visible area
     // println!("\n\n\n\n\n\n\n\n");  // results in cursor jumping
 }
+

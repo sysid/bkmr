@@ -1,7 +1,7 @@
 // src/application/actions/markdown_action.rs
-use crate::app_state::AppState;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
+use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::infrastructure::embeddings::DummyEmbedding;
@@ -26,18 +26,20 @@ struct TocEntry {
 #[derive(Debug)]
 pub struct MarkdownAction {
     repository: Option<Arc<dyn BookmarkRepository>>,
+    embedder: Arc<dyn Embedder>,
 }
 
 impl MarkdownAction {
     #[allow(dead_code)]
-    pub fn new() -> Self {
-        Self { repository: None }
+    pub fn new(embedder: Arc<dyn Embedder>) -> Self {
+        Self { repository: None, embedder }
     }
 
     // Constructor with repository for embedding support
-    pub fn new_with_repository(repository: Arc<dyn BookmarkRepository>) -> Self {
+    pub fn new_with_repository(repository: Arc<dyn BookmarkRepository>, embedder: Arc<dyn Embedder>) -> Self {
         Self {
             repository: Some(repository),
+            embedder,
         }
     }
 
@@ -77,6 +79,7 @@ impl MarkdownAction {
         })
     }
 
+    // TODO: why do we need embeddings here (SRP violation?)
     /// Check if embedding is allowed and possible
     fn can_update_embedding(&self, bookmark: &Bookmark) -> bool {
         // Check if we have a repository
@@ -90,8 +93,7 @@ impl MarkdownAction {
         }
 
         // Check if OpenAI embeddings are enabled (not using DummyEmbedding)
-        let app_state = AppState::read_global();
-        app_state.context.embedder.as_any().type_id() != std::any::TypeId::of::<DummyEmbedding>()
+        self.embedder.as_any().type_id() != std::any::TypeId::of::<DummyEmbedding>()
     }
 
     /// Update bookmark with embedding if repository is available and conditions are met
@@ -117,9 +119,8 @@ impl MarkdownAction {
             if updated_bookmark.content_hash.as_ref() != Some(&content_hash) {
                 debug!("Content changed, updating embedding for bookmark ID {}", id);
 
-                // Get the app state for embedder
-                let app_state = AppState::read_global();
-                let embedder = &*app_state.context.embedder;
+                // Use the instance embedder instead of global state
+                let embedder = &*self.embedder;
 
                 // Generate embedding
                 if let Some(embedding) = embedder.embed(content)? {
@@ -885,12 +886,13 @@ mod tests {
 
     // Test reading markdown from a file
     #[test]
-    fn test_read_markdown_from_file() {
+    fn given_markdown_file_when_read_then_returns_content() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
 
         // Create a temporary markdown file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -908,18 +910,21 @@ mod tests {
     }
 
     // Test embedding eligibility check
+    // TODO: check the purpose of this test
     #[test]
-    fn test_can_update_embedding() {
+    fn given_action_when_check_embedding_update_then_returns_eligibility() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
         // Action without repository
-        let action_no_repo = MarkdownAction::new();
+        let embedder_no_repo = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action_no_repo = MarkdownAction::new(embedder_no_repo);
 
         // Action with repository
         let repository = Arc::new(crate::util::testing::setup_test_db());
-        let action_with_repo = MarkdownAction::new_with_repository(repository);
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action_with_repo = MarkdownAction::new_with_repository(repository, embedder);
 
         // Create test bookmarks
         let mut tags = HashSet::new();
@@ -979,12 +984,13 @@ mod tests {
 
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
-    fn test_execute_with_direct_markdown() {
+    fn given_markdown_content_when_execute_then_renders_html() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
 
         // Create a test bookmark with direct markdown content
         let markdown = "# Test Markdown\n\nThis is a **test** with math: $$E = mc^2$$";
@@ -1025,12 +1031,13 @@ mod tests {
 
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
-    fn test_execute_with_markdown_table() {
+    fn given_markdown_with_table_when_execute_then_renders_with_table_styles() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
 
         // Create a test bookmark with markdown table content
         let markdown = "# Test Table\n\n| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |";
@@ -1071,12 +1078,13 @@ mod tests {
 
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
-    fn test_execute_with_code_highlighting() {
+    fn given_markdown_with_code_when_execute_then_renders_with_highlighting() {
         // Setup
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
 
         // Create a test bookmark with code blocks
         let markdown = "# Code Highlighting\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n\n```python\ndef hello():\n    print(\"Hello, world!\")\n```";
@@ -1117,11 +1125,12 @@ mod tests {
 
     // Tests for TOC functionality
     #[test]
-    fn test_extract_and_process_headers_basic() {
+    fn given_markdown_headers_when_extract_and_process_then_generates_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let html_content = r#"<h1>Main Title</h1>
 <p>Some content</p>
 <h2>Section 1</h2>
@@ -1156,11 +1165,12 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_with_existing_ids() {
+    fn given_headers_with_existing_ids_when_extract_then_preserves_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let html_content = r#"<h1 id="existing-id">Title with ID</h1>
 <h2>Title without ID</h2>"#;
 
@@ -1178,11 +1188,12 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_duplicate_titles() {
+    fn given_duplicate_header_titles_when_extract_then_creates_unique_ids() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let html_content = r#"<h1>Introduction</h1>
 <h2>Introduction</h2>
 <h3>Introduction</h3>"#;
@@ -1203,11 +1214,12 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_with_html_content() {
+    fn given_headers_with_html_content_when_extract_then_cleans_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let html_content = r#"<h1>Title with <strong>bold</strong> and <em>italic</em></h1>
 <h2>Code: <code>function()</code></h2>"#;
 
@@ -1225,11 +1237,12 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_empty_content() {
+    fn given_empty_content_when_extract_headers_then_returns_empty() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let html_content = "<p>No headers here</p>";
 
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
@@ -1239,11 +1252,12 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_and_process_headers_ignores_h4_and_higher() {
+    fn given_h4_and_higher_headers_when_extract_then_ignores_them() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let html_content = r#"<h1>H1 Title</h1>
 <h2>H2 Title</h2>
 <h3>H3 Title</h3>
@@ -1266,11 +1280,12 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_header_id() {
+    fn given_header_text_when_generate_id_then_creates_valid_id() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
 
         // Test normal text
         assert_eq!(action.generate_header_id("Simple Title"), "simple-title");
@@ -1298,11 +1313,12 @@ mod tests {
     }
 
     #[test]
-    fn test_clean_html_content() {
+    fn given_html_content_when_clean_then_removes_tags() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
 
         // Test removing HTML tags
         assert_eq!(
@@ -1335,11 +1351,12 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_toc_html_empty() {
+    fn given_empty_headers_when_generate_toc_then_returns_empty_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let toc_entries = vec![];
 
         let toc_html = action.generate_toc_html(&toc_entries);
@@ -1348,11 +1365,12 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_toc_html_with_entries() {
+    fn given_header_entries_when_generate_toc_then_creates_html_list() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let toc_entries = vec![
             TocEntry {
                 level: 1,
@@ -1389,11 +1407,12 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_toc_html_special_characters_in_titles() {
+    fn given_special_characters_in_titles_when_generate_toc_then_escapes_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let action = MarkdownAction::new();
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
         let toc_entries = vec![TocEntry {
             level: 1,
             title: "Title with & < > \" characters".to_string(),

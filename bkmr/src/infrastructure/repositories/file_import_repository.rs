@@ -367,7 +367,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_parse_yaml_frontmatter() {
+    fn given_yaml_frontmatter_when_parse_then_extracts_metadata() {
         let repo = FileImportRepository::new();
         let content = r#"---
 name: test-script
@@ -388,7 +388,7 @@ echo "Hello World"
     }
 
     #[test]
-    fn test_parse_hash_frontmatter() {
+    fn given_hash_frontmatter_when_parse_then_extracts_metadata() {
         let repo = FileImportRepository::new();
         let content = r#"#!/bin/bash
 # name: backup-db
@@ -408,7 +408,7 @@ echo "Backing up database"
     }
 
     #[test]
-    fn test_is_supported_file() {
+    fn given_file_extensions_when_check_support_then_validates_correctly() {
         assert!(FileImportRepository::is_supported_file(Path::new(
             "script.sh"
         )));
@@ -425,7 +425,7 @@ echo "Backing up database"
     }
 
     #[test]
-    fn test_process_file() {
+    fn given_file_with_frontmatter_when_process_then_creates_import_data() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.sh");
 
@@ -450,7 +450,7 @@ echo "test"
     }
 
     #[test]
-    fn test_validate_frontmatter_format_valid_yaml() {
+    fn given_valid_yaml_frontmatter_when_validate_then_returns_ok() {
         let repo = FileImportRepository::new();
         let content = r#"---
 name: test
@@ -461,7 +461,7 @@ content"#;
     }
 
     #[test]
-    fn test_validate_frontmatter_format_invalid_yaml() {
+    fn given_invalid_yaml_frontmatter_when_validate_then_returns_error() {
         let repo = FileImportRepository::new();
         let content = r#"---
 name: [invalid yaml
@@ -474,7 +474,7 @@ content"#;
     }
 
     #[test]
-    fn test_validate_frontmatter_format_incomplete_yaml() {
+    fn given_incomplete_yaml_frontmatter_when_validate_then_returns_error() {
         let repo = FileImportRepository::new();
         let content = r#"---
 name: test
@@ -486,7 +486,7 @@ content without closing"#;
     }
 
     #[test]
-    fn test_validate_frontmatter_format_hash_style() {
+    fn given_hash_style_frontmatter_when_validate_then_returns_ok() {
         let repo = FileImportRepository::new();
         let content = r#"#!/bin/bash
 # name: test
@@ -496,7 +496,7 @@ echo hello"#;
     }
 
     #[test]
-    fn test_validate_frontmatter_format_no_frontmatter() {
+    fn given_no_frontmatter_when_validate_then_returns_error() {
         let repo = FileImportRepository::new();
         let content = r#"#!/bin/bash
 echo hello"#;
@@ -505,7 +505,7 @@ echo hello"#;
     }
 
     #[test]
-    fn test_process_file_no_frontmatter() {
+    fn given_file_without_frontmatter_when_process_then_returns_error() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.sh");
 
@@ -525,7 +525,7 @@ echo "test"
     }
 
     #[test]
-    fn test_process_file_missing_required_name() {
+    fn given_file_missing_required_name_when_process_then_returns_error() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.sh");
 
@@ -548,7 +548,7 @@ echo "test"
     }
 
     #[test]
-    fn test_process_file_empty_name() {
+    fn given_file_with_empty_name_when_process_then_returns_error() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("test.sh");
 
@@ -572,7 +572,7 @@ echo "test"
     }
 
     #[test]
-    fn test_import_files_with_verbose_option() {
+    fn given_import_with_verbose_option_when_process_then_outputs_details() {
         use crate::domain::repositories::import_repository::ImportOptions;
 
         let temp_dir = TempDir::new().unwrap();
@@ -621,7 +621,7 @@ echo "invalid"
     }
 
     #[test]
-    fn test_parse_frontmatter_catches_invalid_yaml() {
+    fn given_invalid_yaml_syntax_when_parse_frontmatter_then_returns_error() {
         let repo = FileImportRepository::new();
         let content = r#"---
 name: [invalid yaml

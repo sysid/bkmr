@@ -1,4 +1,4 @@
-use bkmr::application::services::factory::{create_action_service, create_bookmark_service};
+use bkmr::util::test_service_container::TestServiceContainer;
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::domain::repositories::repository::BookmarkRepository;
 use bkmr::domain::tag::Tag;
@@ -9,9 +9,8 @@ use std::io::Write;
 use tempfile::NamedTempFile;
 
 fn create_test_repository() -> SqliteBookmarkRepository {
-    let app_state = bkmr::app_state::AppState::read_global();
-    let repository = SqliteBookmarkRepository::from_url(&app_state.settings.db_url)
-        .expect("Could not create test repository");
+    // Use test infrastructure instead of global state
+    let repository = bkmr::util::testing::setup_test_db();
 
     // Clean the database for test isolation
     repository
@@ -28,7 +27,8 @@ fn given_stdin_content_when_add_command_with_stdin_flag_then_stores_content_in_u
     let _guard = EnvGuard::new();
 
     let repository = create_test_repository();
-    let bookmark_service = create_bookmark_service();
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
 
     // Create a temporary file to simulate stdin
     let mut temp_file = NamedTempFile::new().unwrap();
@@ -114,8 +114,9 @@ fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_withou
     let _guard = EnvGuard::new();
 
     let repository = create_test_repository();
-    let bookmark_service = create_bookmark_service();
-    let action_service = create_action_service();
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
+    let action_service = test_container.action_service;
 
     // Create a shell bookmark
     let mut tag_set = HashSet::new();
@@ -176,8 +177,9 @@ fn given_non_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_no
     let _guard = EnvGuard::new();
 
     let repository = create_test_repository();
-    let bookmark_service = create_bookmark_service();
-    let action_service = create_action_service();
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
+    let action_service = test_container.action_service;
 
     // Create a non-shell bookmark (URI)
     let tag_set = HashSet::new(); // No shell tag
@@ -220,7 +222,8 @@ fn given_add_command_with_stdin_and_type_shell_when_executed_then_creates_shell_
     let _guard = EnvGuard::new();
 
     let repository = create_test_repository();
-    let bookmark_service = create_bookmark_service();
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
 
     let test_script = "#!/bin/bash\necho 'Complex shell script'\nls -la";
     let title = "complex_shell_script";
@@ -271,7 +274,8 @@ fn given_stdin_with_multiline_content_when_add_command_then_preserves_formatting
     let _guard = EnvGuard::new();
 
     let repository = create_test_repository();
-    let bookmark_service = create_bookmark_service();
+    let test_container = TestServiceContainer::new();
+    let bookmark_service = test_container.bookmark_service;
 
     let multiline_content = "#!/bin/bash\n\n# This is a comment\necho 'Line 1'\necho 'Line 2'\n\n# Another comment\necho 'Line 3'";
     let title = "multiline_script";
