@@ -268,7 +268,7 @@ fn create_enhanced_skim_items(
     let action_service = &services.action_service;
 
     // Get interpolation service to render URLs
-    let interpolation_service = &services.template_service;
+    let interpolation_service = &services.interpolation_service;
 
     bookmarks
         .iter()
@@ -550,7 +550,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
                 // Execute default action for each selected bookmark
                 for bookmark in &selected_bookmarks {
                     // Use the action service to execute the default action
-                    execute_bookmark_default_action(bookmark, services)?;
+                    execute_bookmark_default_action(bookmark, services.action_service.clone())?;
                 }
             }
             Key::Ctrl('y') | Key::Ctrl('o') => {
@@ -566,29 +566,29 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
                         // For shell scripts, copy the bkmr open command instead of URL content
                         let command =
                             format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
-                        copy_url_to_clipboard(&command, services)?;
+                        copy_url_to_clipboard(&command, services.clipboard_service.clone())?;
                     } else {
                         // For all other types, copy URL to clipboard with interpolation
-                        copy_bookmark_url_to_clipboard(bookmark, services)?;
+                        copy_bookmark_url_to_clipboard(bookmark, services.interpolation_service.clone(), services.clipboard_service.clone())?;
                     }
                 }
             }
             Key::Ctrl('e') => {
                 clear_fzf_artifacts();
                 // Edit selected bookmarks
-                edit_bookmarks(ids, false, services, settings)?;
+                edit_bookmarks(ids, false, services.bookmark_service.clone(), services.template_service.clone(), settings)?;
             }
             Key::Ctrl('d') => {
                 // clear_fzf_artifacts();
                 // Delete selected bookmarks
-                delete_bookmarks(ids, services, settings)?;
+                delete_bookmarks(ids, services.bookmark_service.clone(), settings)?;
             }
             Key::Ctrl('a') => {
                 // clear_fzf_artifacts();
                 // Clone selected bookmark
                 if let Some(bookmark) = selected_bookmarks.first() {
                     if let Some(id) = bookmark.id {
-                        clone_bookmark(id, services)?;
+                        clone_bookmark(id, services.bookmark_service.clone(), services.template_service.clone())?;
                     }
                 }
             }

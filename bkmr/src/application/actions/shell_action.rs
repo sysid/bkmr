@@ -1,5 +1,5 @@
 // src/application/actions/shell_action.rs
-use crate::application::services::template_service::TemplateService;
+use crate::application::services::interpolation_service::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
@@ -12,35 +12,35 @@ use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub struct ShellAction {
-    template_service: Arc<dyn TemplateService>,
+    interpolation_service: Arc<dyn InterpolationService>,
     interactive: bool,
     script_args: Vec<String>,
 }
 
 impl ShellAction {
-    pub fn new(template_service: Arc<dyn TemplateService>, interactive: bool) -> Self {
+    pub fn new(interpolation_service: Arc<dyn InterpolationService>, interactive: bool) -> Self {
         Self {
-            template_service,
+            interpolation_service,
             interactive,
             script_args: Vec::new(),
         }
     }
 
     #[allow(dead_code)]
-    pub fn new_direct(template_service: Arc<dyn TemplateService>) -> Self {
+    pub fn new_direct(interpolation_service: Arc<dyn InterpolationService>) -> Self {
         Self {
-            template_service,
+            interpolation_service,
             interactive: false, // Direct execution without interaction
             script_args: Vec::new(),
         }
     }
 
     pub fn new_direct_with_args(
-        template_service: Arc<dyn TemplateService>,
+        interpolation_service: Arc<dyn InterpolationService>,
         script_args: Vec<String>,
     ) -> Self {
         Self {
-            template_service,
+            interpolation_service,
             interactive: false, // Direct execution without interaction
             script_args,
         }
@@ -214,7 +214,7 @@ impl BookmarkAction for ShellAction {
         let rendered_script = InterpolationHelper::render_if_needed(
             script,
             bookmark,
-            &self.template_service,
+            &self.interpolation_service,
             "shell script",
         )?;
 
@@ -247,7 +247,7 @@ impl BookmarkAction for ShellAction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::application::services::TemplateServiceImpl;
+    use crate::application::InterpolationServiceImpl;
     use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
         MiniJinjaEngine, SafeShellExecutor,
@@ -259,8 +259,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new_direct(template_service);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new_direct(interpolation_service);
 
         // Create a simple shell script that outputs a message
         let script = "echo 'Hello from shell script'";
@@ -297,8 +297,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor.clone()));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new_direct(template_service);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new_direct(interpolation_service);
 
         // Create a shell script with interpolation
         let script = "echo 'Current date: {{ current_date | strftime(\"%Y-%m-%d\") }}'";
@@ -334,8 +334,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new_direct(template_service);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new_direct(interpolation_service);
 
         // Create a shell script that will fail
         let script = "exit 1";
@@ -379,11 +379,11 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
 
         // Act
-        let interactive_action = ShellAction::new(template_service.clone(), true);
-        let direct_action = ShellAction::new_direct(template_service);
+        let interactive_action = ShellAction::new(interpolation_service.clone(), true);
+        let direct_action = ShellAction::new_direct(interpolation_service);
 
         // Assert
         assert!(
@@ -401,8 +401,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new_direct(template_service);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new_direct(interpolation_service);
 
         // Act
         let result = action.execute_script("echo 'test execute_script method'");
@@ -416,8 +416,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new_direct(template_service);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new_direct(interpolation_service);
 
         // Act - This simulates what would happen after interactive editing
         let script_with_params = "echo 'Hello' && echo 'World' && echo 'Parameters work!'";
@@ -435,8 +435,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new(template_service, true);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new(interpolation_service, true);
 
         // Act
         let edit_mode = action.detect_edit_mode();
@@ -454,8 +454,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new(template_service, true);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new(interpolation_service, true);
 
         // Act
         let history_path = action.get_history_file_path();
@@ -472,8 +472,8 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
-        let action = ShellAction::new(template_service, true);
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new(interpolation_service, true);
 
         // Act
         let result = action.create_configured_editor();
@@ -490,7 +490,7 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let args = vec![
             "--option1".to_string(),
             "value1".to_string(),
@@ -498,7 +498,7 @@ mod tests {
         ];
 
         // Act
-        let action = ShellAction::new_direct_with_args(template_service, args.clone());
+        let action = ShellAction::new_direct_with_args(interpolation_service, args.clone());
 
         // Assert
         assert!(!action.interactive, "Should be non-interactive");
@@ -510,11 +510,11 @@ mod tests {
         // Arrange
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(interpolation_engine));
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
 
         // Create script arguments
         let args = vec!["arg1".to_string(), "arg2".to_string()];
-        let action = ShellAction::new_direct_with_args(template_service, args);
+        let action = ShellAction::new_direct_with_args(interpolation_service, args);
 
         // Create a shell script that uses arguments via $1, $2, etc.
         let script = "echo \"First arg: $1, Second arg: $2\"";

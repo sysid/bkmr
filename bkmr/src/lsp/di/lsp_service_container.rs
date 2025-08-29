@@ -15,7 +15,7 @@ impl LspServiceContainer {
         // Create LSP-specific services with explicit dependencies
         let snippet_service = Arc::new(LspSnippetService::with_services(
             service_container.bookmark_service.clone(),
-            service_container.template_service.clone(),
+            service_container.interpolation_service.clone(),
         ));
         
         Self {

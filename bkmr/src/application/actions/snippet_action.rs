@@ -1,5 +1,5 @@
 // src/application/actions/snippet_action.rs
-use crate::application::services::template_service::TemplateService;
+use crate::application::services::interpolation_service::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainResult;
@@ -11,18 +11,18 @@ use tracing::{debug, instrument};
 #[derive(Debug)]
 pub struct SnippetAction {
     clipboard_service: Arc<dyn ClipboardService>,
-    template_service: Arc<dyn TemplateService>,
+    interpolation_service: Arc<dyn InterpolationService>,
 }
 
 impl SnippetAction {
     pub fn new(
         clipboard_service: Arc<dyn ClipboardService>,
-        template_service: Arc<dyn TemplateService>,
+        interpolation_service: Arc<dyn InterpolationService>,
     ) -> Self {
         debug!("Creating new SnippetAction");
         Self {
             clipboard_service,
-            template_service,
+            interpolation_service,
         }
     }
 }
@@ -38,7 +38,7 @@ impl BookmarkAction for SnippetAction {
         let rendered_content = InterpolationHelper::render_if_needed(
             content,
             bookmark,
-            &self.template_service,
+            &self.interpolation_service,
             "snippet",
         )?;
 

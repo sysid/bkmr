@@ -4,8 +4,9 @@ use crate::application::actions::{
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::tag_service::TagService;
+use crate::application::services::interpolation_service::InterpolationService;
 use crate::application::services::template_service::TemplateService;
-use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
+use crate::application::{BookmarkServiceImpl, InterpolationServiceImpl, TagServiceImpl, TemplateServiceImpl};
 use crate::config::Settings;
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
@@ -32,6 +33,7 @@ pub struct ServiceContainer {
     
     // Utility services
     pub clipboard_service: Arc<dyn ClipboardService>,
+    pub interpolation_service: Arc<dyn InterpolationService>,
     pub template_service: Arc<dyn TemplateService>,
 }
 
@@ -42,6 +44,7 @@ impl ServiceContainer {
         let bookmark_repository = Self::create_repository(&config.db_url)?;
         let embedder = Self::create_embedder(config)?;
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
+        let interpolation_service = Self::create_interpolation_service();
         let template_service = Self::create_template_service();
         
         // Application services with explicit DI
@@ -57,7 +60,7 @@ impl ServiceContainer {
         
         let action_service = Self::create_action_service(
             &bookmark_repository,
-            &template_service,
+            &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
             &embedder,
             config
@@ -70,6 +73,7 @@ impl ServiceContainer {
             tag_service,
             action_service,
             clipboard_service,
+            interpolation_service,
             template_service,
         })
     }
@@ -102,48 +106,52 @@ impl ServiceContainer {
         Ok(Arc::new(DummyEmbedding))
     }
     
-    fn create_template_service() -> Arc<dyn TemplateService> {
+    fn create_interpolation_service() -> Arc<dyn InterpolationService> {
         let shell_executor = Arc::new(SafeShellExecutor::new());
-        let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        Arc::new(TemplateServiceImpl::new(template_engine))
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        Arc::new(InterpolationServiceImpl::new(interpolation_engine))
+    }
+    
+    fn create_template_service() -> Arc<dyn TemplateService> {
+        Arc::new(TemplateServiceImpl::new())
     }
     
     fn create_action_service(
         repository: &Arc<SqliteBookmarkRepository>,
-        template_service: &Arc<dyn TemplateService>,
+        interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
         embedder: &Arc<dyn Embedder>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionService>> {
         let resolver = Self::create_action_resolver(
-            repository, template_service, clipboard_service, embedder, config
+            repository, interpolation_service, clipboard_service, embedder, config
         )?;
         Ok(Arc::new(ActionServiceImpl::new(resolver, repository.clone())))
     }
     
     fn create_action_resolver(
         repository: &Arc<SqliteBookmarkRepository>,
-        template_service: &Arc<dyn TemplateService>,
+        interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
         embedder: &Arc<dyn Embedder>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionResolver>> {
         // Create all actions with explicit dependencies
         let uri_action: Box<dyn BookmarkAction> = 
-            Box::new(UriAction::new(template_service.clone()));
+            Box::new(UriAction::new(interpolation_service.clone()));
             
         let snippet_action: Box<dyn BookmarkAction> = Box::new(SnippetAction::new(
             clipboard_service.clone(),
-            template_service.clone(),
+            interpolation_service.clone(),
         ));
         
         let text_action: Box<dyn BookmarkAction> = Box::new(TextAction::new(
             clipboard_service.clone(),
-            template_service.clone(),
+            interpolation_service.clone(),
         ));
         
         let shell_action: Box<dyn BookmarkAction> = Box::new(ShellAction::new(
-            template_service.clone(),
+            interpolation_service.clone(),
             config.shell_opts.interactive,
         ));
         
@@ -151,10 +159,10 @@ impl ServiceContainer {
             Box::new(MarkdownAction::new_with_repository(repository.clone(), embedder.clone()));
             
         let env_action: Box<dyn BookmarkAction> = 
-            Box::new(EnvAction::new(template_service.clone()));
+            Box::new(EnvAction::new(interpolation_service.clone()));
             
         let default_action: Box<dyn BookmarkAction> = 
-            Box::new(DefaultAction::new(template_service.clone()));
+            Box::new(DefaultAction::new(interpolation_service.clone()));
         
         Ok(Arc::new(SystemTagActionResolver::new(
             uri_action,
@@ -177,6 +185,7 @@ impl std::fmt::Debug for ServiceContainer {
             .field("tag_service", &"Arc<dyn TagService>")
             .field("action_service", &"Arc<dyn ActionService>")
             .field("clipboard_service", &"Arc<dyn ClipboardService>")
+            .field("interpolation_service", &"Arc<dyn InterpolationService>")
             .field("template_service", &"Arc<dyn TemplateService>")
             .finish()
     }

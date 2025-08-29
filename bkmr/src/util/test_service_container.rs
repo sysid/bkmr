@@ -2,8 +2,9 @@
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::tag_service::TagService;
+use crate::application::services::interpolation_service::InterpolationService;
 use crate::application::services::template_service::TemplateService;
-use crate::application::{BookmarkServiceImpl, TagServiceImpl, TemplateServiceImpl};
+use crate::application::{BookmarkServiceImpl, InterpolationServiceImpl, TagServiceImpl, TemplateServiceImpl};
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::embedding::Embedder;
@@ -33,6 +34,7 @@ pub struct TestServiceContainer {
     
     // Utility services
     pub clipboard_service: Arc<dyn ClipboardService>,
+    pub interpolation_service: Arc<dyn InterpolationService>,
     pub template_service: Arc<dyn TemplateService>,
 }
 
@@ -47,6 +49,7 @@ impl TestServiceContainer {
         let bookmark_repository = Self::create_shared_test_db();
         let embedder = Self::create_test_embedder();
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
+        let interpolation_service = Self::create_interpolation_service();
         let template_service = Self::create_template_service();
         
         // Application services with explicit DI
@@ -62,7 +65,7 @@ impl TestServiceContainer {
         
         let action_service = Self::create_test_action_service(
             &bookmark_repository,
-            &template_service,
+            &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
             &embedder,
         );
@@ -75,6 +78,7 @@ impl TestServiceContainer {
             tag_service,
             action_service,
             clipboard_service,
+            interpolation_service,
             template_service,
         }
     }
@@ -90,22 +94,27 @@ impl TestServiceContainer {
         Arc::new(DummyEmbedding)
     }
     
-    /// Create template service (same logic as production ServiceContainer)
-    fn create_template_service() -> Arc<dyn TemplateService> {
+    /// Create interpolation service for test (same logic as production ServiceContainer)
+    fn create_interpolation_service() -> Arc<dyn InterpolationService> {
         let shell_executor = Arc::new(SafeShellExecutor::new());
-        let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        Arc::new(TemplateServiceImpl::new(template_engine))
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        Arc::new(InterpolationServiceImpl::new(interpolation_engine))
+    }
+    
+    /// Create template service (simplified for tests)
+    fn create_template_service() -> Arc<dyn TemplateService> {
+        Arc::new(TemplateServiceImpl::new())
     }
     
     /// Create action service for tests with test configuration
     fn create_test_action_service(
         repository: &Arc<SqliteBookmarkRepository>,
-        template_service: &Arc<dyn TemplateService>,
+        interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
         embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionService> {
         let resolver = Self::create_test_action_resolver(
-            repository, template_service, clipboard_service, embedder
+            repository, interpolation_service, clipboard_service, embedder
         );
         Arc::new(ActionServiceImpl::new(resolver, repository.clone()))
     }
@@ -113,27 +122,27 @@ impl TestServiceContainer {
     /// Create action resolver for tests with test-friendly settings
     fn create_test_action_resolver(
         repository: &Arc<SqliteBookmarkRepository>,
-        template_service: &Arc<dyn TemplateService>,
+        interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
         embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionResolver> {
         // Create all actions with explicit dependencies - using test-friendly settings
         let uri_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::UriAction::new(template_service.clone()));
+            Box::new(crate::application::actions::UriAction::new(interpolation_service.clone()));
             
         let snippet_action: Box<dyn BookmarkAction> = Box::new(crate::application::actions::SnippetAction::new(
             clipboard_service.clone(),
-            template_service.clone(),
+            interpolation_service.clone(),
         ));
         
         let text_action: Box<dyn BookmarkAction> = Box::new(crate::application::actions::TextAction::new(
             clipboard_service.clone(),
-            template_service.clone(),
+            interpolation_service.clone(),
         ));
         
         // Non-interactive shell action for tests
         let shell_action: Box<dyn BookmarkAction> = Box::new(crate::application::actions::ShellAction::new(
-            template_service.clone(),
+            interpolation_service.clone(),
             false, // non-interactive for tests
         ));
         
@@ -141,10 +150,10 @@ impl TestServiceContainer {
             Box::new(crate::application::actions::MarkdownAction::new_with_repository(repository.clone(), embedder.clone()));
             
         let env_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::EnvAction::new(template_service.clone()));
+            Box::new(crate::application::actions::EnvAction::new(interpolation_service.clone()));
             
         let default_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::DefaultAction::new(template_service.clone()));
+            Box::new(crate::application::actions::DefaultAction::new(interpolation_service.clone()));
         
         Arc::new(SystemTagActionResolver::new(
             uri_action,
@@ -162,7 +171,7 @@ impl TestServiceContainer {
     pub fn create_lsp_services(&self) -> LspServiceBundle {
         let snippet_service = Arc::new(LspSnippetService::with_services(
             self.bookmark_service.clone(),
-            self.template_service.clone(),
+            self.interpolation_service.clone(),
         ));
         
         let completion_service = crate::lsp::services::completion_service::CompletionService::with_config(
@@ -209,6 +218,7 @@ impl std::fmt::Debug for TestServiceContainer {
             .field("tag_service", &"Arc<dyn TagService>")
             .field("action_service", &"Arc<dyn ActionService>")
             .field("clipboard_service", &"Arc<dyn ClipboardService>")
+            .field("interpolation_service", &"Arc<dyn InterpolationService>")
             .field("template_service", &"Arc<dyn TemplateService>")
             .finish()
     }

@@ -3,6 +3,10 @@ use crate::config::Settings;
 use crate::application::actions::MarkdownAction;
 // Service container dependency injection implemented via SearchCommandHandler
 use crate::infrastructure::di::ServiceContainer;
+use crate::application::services::action_service::ActionService;
+use crate::application::services::bookmark_service::BookmarkService;
+use crate::application::services::tag_service::TagService;
+use crate::application::services::template_service::TemplateService;
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
@@ -42,15 +46,19 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
         .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
 }
 
-#[instrument(skip(stderr, cli))]
-pub fn semantic_search(mut stderr: StandardStream, cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(stderr, cli, bookmark_service, action_service))]
+pub fn semantic_search(
+    mut stderr: StandardStream, 
+    cli: Cli, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    action_service: Arc<dyn ActionService>
+) -> CliResult<()> {
     if let Commands::SemSearch {
         query,
         limit,
         non_interactive,
     } = cli.command.unwrap()
     {
-        let bookmark_service = services.bookmark_service.clone();
 
         // Create the semantic search domain object
         let search = SemanticSearch::new(query, limit.map(|l| l as usize));
@@ -118,7 +126,7 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli, services: &ServiceC
                 .cli_context("parsing bookmark IDs from user input")?;
             for id in ids {
                 if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    execute_bookmark_default_action(&result.bookmark, services)
+                    execute_bookmark_default_action(&result.bookmark, action_service.clone())
                         .cli_context("executing default action for selected bookmark")?;
                 } else {
                     writeln!(stderr, "Bookmark with ID {} not found in results", id)?;
@@ -129,8 +137,12 @@ pub fn semantic_search(mut stderr: StandardStream, cli: Cli, services: &ServiceC
     Ok(())
 }
 
-#[instrument(skip(cli))]
-pub fn open(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(cli, bookmark_service, action_service))]
+pub fn open(
+    cli: Cli, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    action_service: Arc<dyn ActionService>
+) -> CliResult<()> {
     if let Commands::Open {
         ids,
         no_edit,
@@ -144,8 +156,6 @@ pub fn open(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                 .cli_context("handling direct file viewing")?;
         } else {
             // Handle bookmark opening (existing logic)
-            let bookmark_service = services.bookmark_service.clone();
-            let action_service = services.action_service.clone();
 
             for id in get_ids(ids)
                 .cli_context("parsing bookmark IDs for opening")? {
@@ -241,8 +251,12 @@ fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
     }
 }
 
-#[instrument(skip(cli))]
-pub fn add(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(cli, bookmark_service, template_service))]
+pub fn add(
+    cli: Cli, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>
+) -> CliResult<()> {
     if let Commands::Add {
         url,
         tags,
@@ -255,8 +269,6 @@ pub fn add(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         stdin,
     } = cli.command.unwrap()
     {
-        let bookmark_service = &services.bookmark_service;
-        let template_service = &services.template_service;
 
         // Convert bookmark_type string to SystemTag
         let system_tag = match bookmark_type.to_lowercase().as_str() {
@@ -394,10 +406,9 @@ pub fn add(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     Ok(())
 }
 
-#[instrument(skip(cli))]
-pub fn delete(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(cli, bookmark_service))]
+pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
     if let Commands::Delete { ids } = cli.command.unwrap() {
-        let bookmark_service = services.bookmark_service.clone();
 
         let id_list = get_ids(ids)?;
 
@@ -422,8 +433,12 @@ pub fn delete(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     Ok(())
 }
 
-#[instrument(skip(cli))]
-pub fn update(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(cli, bookmark_service, tag_service))]
+pub fn update(
+    cli: Cli, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    tag_service: Arc<dyn TagService>
+) -> CliResult<()> {
     if let Commands::Update {
         ids,
         tags,
@@ -431,8 +446,6 @@ pub fn update(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         force,
     } = cli.command.unwrap()
     {
-        let bookmark_service = services.bookmark_service.clone();
-        let tag_service = services.tag_service.clone();
 
         let id_list = get_ids(ids)?;
 
@@ -475,10 +488,14 @@ pub fn update(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     Ok(())
 }
 
-#[instrument(skip(cli))]
-pub fn edit(cli: Cli, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
+#[instrument(skip(cli, bookmark_service, template_service, settings))]
+pub fn edit(
+    cli: Cli, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
     if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
-        let bookmark_service = services.bookmark_service.clone();
 
         let id_list = get_ids(ids)?;
 
@@ -497,7 +514,7 @@ pub fn edit(cli: Cli, services: &ServiceContainer, settings: &crate::config::Set
             return Ok(());
         }
 
-        edit_bookmarks(id_list, force_db, services, settings)?;
+        edit_bookmarks(id_list, force_db, bookmark_service, template_service, settings)?;
     }
     Ok(())
 }
@@ -1272,13 +1289,14 @@ mod tests {
         // Act - Create minimal service container for the test
         use crate::util::test_service_container::TestServiceContainer;
         let test_container = TestServiceContainer::new();
-        let dummy_services = crate::infrastructure::di::service_container::ServiceContainer {
+        let dummy_services = ServiceContainer {
             bookmark_repository: test_container.bookmark_repository.clone(),
             embedder: test_container.embedder.clone(),
             bookmark_service: test_container.bookmark_service.clone(),
             tag_service: test_container.tag_service.clone(),
             action_service: test_container.action_service.clone(),
             clipboard_service: test_container.clipboard_service.clone(),
+            interpolation_service: test_container.interpolation_service.clone(),
             template_service: test_container.template_service.clone(),
         };
         pre_fill_database(&repository, &dummy_services).expect("Failed to pre-fill database");

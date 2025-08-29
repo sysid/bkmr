@@ -103,7 +103,7 @@ impl SearchCommandHandler {
     fn apply_interpolation(&self, bookmarks: &mut [Bookmark]) -> CliResult<()> {
         for bookmark in bookmarks {
             if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
-                match self.services.template_service.render_bookmark_url(bookmark) {
+                match self.services.interpolation_service.render_bookmark_url(bookmark) {
                     Ok(rendered_url) => {
                         bookmark.url = rendered_url;
                     }
@@ -167,7 +167,7 @@ impl SearchCommandHandler {
                 bookmark.id.unwrap_or(0)
             )?;
 
-            return execute_bookmark_default_action(bookmark, &self.services);
+            return execute_bookmark_default_action(bookmark, self.services.action_service.clone());
         }
 
         // Convert to display bookmarks
