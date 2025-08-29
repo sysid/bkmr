@@ -32,12 +32,12 @@ pub fn execute_command_with_services(
             let handler = command_handler::SearchCommandHandler::with_services(services, settings.clone());
             handler.execute(cli)
         }
-        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli, &services),
-        Some(Commands::Open { .. }) => bookmark_commands::open(cli, &services),
-        Some(Commands::Add { .. }) => bookmark_commands::add(cli, &services),
-        Some(Commands::Delete { .. }) => bookmark_commands::delete(cli, &services),
-        Some(Commands::Update { .. }) => bookmark_commands::update(cli, &services),
-        Some(Commands::Edit { .. }) => bookmark_commands::edit(cli, &services, settings),
+        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli, services.bookmark_service.clone(), services.action_service.clone()),
+        Some(Commands::Open { .. }) => bookmark_commands::open(cli, services.bookmark_service.clone(), services.action_service.clone()),
+        Some(Commands::Add { .. }) => bookmark_commands::add(cli, services.bookmark_service.clone(), services.template_service.clone()),
+        Some(Commands::Delete { .. }) => bookmark_commands::delete(cli, services.bookmark_service.clone()),
+        Some(Commands::Update { .. }) => bookmark_commands::update(cli, services.bookmark_service.clone(), services.tag_service.clone()),
+        Some(Commands::Edit { .. }) => bookmark_commands::edit(cli, services.bookmark_service.clone(), services.template_service.clone(), settings),
         Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services),
         Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),

@@ -9,6 +9,10 @@ use crate::infrastructure::di::ServiceContainer;
 use crate::cli::display::{show_bookmarks, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS};
 use crate::cli::error::{CliError, CliResult};
 use crate::domain::bookmark::Bookmark;
+use crate::domain::services::clipboard::ClipboardService;
+use crate::application::services::action_service::ActionService;
+use crate::application::services::bookmark_service::BookmarkService;
+use crate::application::services::template_service::TemplateService;
 use crate::util::helper::{confirm, ensure_int_vector};
 
 /// Process a list of bookmarks interactively
@@ -59,7 +63,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &c
             }
             "d" => {
                 if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    delete_bookmarks_by_indices(indices, bookmarks, services, settings)?;
+                    delete_bookmarks_by_indices(indices, bookmarks, services.bookmark_service.clone(), settings)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -69,9 +73,9 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &c
             "e" => {
                 if tokens.len() == 1 {
                     // Just "e" command with no indices - edit all bookmarks
-                    edit_all_bookmarks(bookmarks, services, settings)?;
+                    edit_all_bookmarks(bookmarks, services.bookmark_service.clone(), services.template_service.clone(), settings)?;
                 } else if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    edit_bookmarks_by_indices(indices, bookmarks, services, settings)?;
+                    edit_bookmarks_by_indices(indices, bookmarks, services.bookmark_service.clone(), services.template_service.clone(), settings)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -80,7 +84,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &c
             }
             "t" => {
                 if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    touch_bookmarks_by_indices(indices, bookmarks, services, settings)?;
+                    touch_bookmarks_by_indices(indices, bookmarks, services.bookmark_service.clone(), settings)?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -89,7 +93,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &c
             }
             "y" => {
                 if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    yank_bookmark_urls_by_indices(indices, bookmarks, services)?;
+                    yank_bookmark_urls_by_indices(indices, bookmarks, services.template_service.clone(), services.clipboard_service.clone())?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -101,7 +105,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &c
             s if regex.is_match(s) => {
                 if let Some(indices) = ensure_int_vector(&tokens) {
                     // Instead of just opening, perform the default action
-                    execute_default_actions_by_indices(indices, bookmarks, services)?;
+                    execute_default_actions_by_indices(indices, bookmarks, services.action_service.clone())?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -139,20 +143,23 @@ fn get_bookmark_by_index(index: i32, bookmarks: &[Bookmark]) -> Option<&Bookmark
     Some(&bookmarks[index as usize - 1])
 }
 
-#[instrument(skip(bookmarks, services), level = "debug")]
-fn yank_bookmark_urls_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(bookmarks, template_service, clipboard_service), level = "debug")]
+fn yank_bookmark_urls_by_indices(
+    indices: Vec<i32>, 
+    bookmarks: &[Bookmark], 
+    template_service: Arc<dyn TemplateService>,
+    clipboard_service: Arc<dyn ClipboardService>
+) -> CliResult<()> {
     debug!(
         "Yanking (copying) URLs for bookmarks at indices: {:?}",
         indices
     );
-    let interpolation_service = &services.template_service;
-    let clipboard_service = &services.clipboard_service;
 
     for index in indices {
         match get_bookmark_by_index(index, bookmarks) {
             Some(bookmark) => {
                 // Render the URL with template variables if needed
-                let rendered_url = match interpolation_service.render_bookmark_url(bookmark) {
+                let rendered_url = match template_service.render_bookmark_url(bookmark) {
                     Ok(url) => url,
                     Err(e) => {
                         eprintln!("Error rendering URL for bookmark {}: {}", index, e);
@@ -174,10 +181,8 @@ fn yank_bookmark_urls_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], serv
 }
 
 /// Executes the default action for a bookmark
-#[instrument(level = "debug")]
-pub fn execute_bookmark_default_action(bookmark: &Bookmark, services: &ServiceContainer) -> CliResult<()> {
-    let action_service = &services.action_service;
-
+#[instrument(skip(action_service), level = "debug")]
+pub fn execute_bookmark_default_action(bookmark: &Bookmark, action_service: Arc<dyn ActionService>) -> CliResult<()> {
     // Get action description for logging
     let action_description = action_service.get_default_action_description(bookmark);
     debug!(
@@ -193,8 +198,12 @@ pub fn execute_bookmark_default_action(bookmark: &Bookmark, services: &ServiceCo
 }
 
 /// Executes default actions for bookmarks by their indices
-#[instrument(skip(bookmarks, services), level = "debug")]
-fn execute_default_actions_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(bookmarks, action_service), level = "debug")]
+fn execute_default_actions_by_indices(
+    indices: Vec<i32>, 
+    bookmarks: &[Bookmark], 
+    action_service: Arc<dyn ActionService>
+) -> CliResult<()> {
     debug!(
         "Executing default actions for bookmarks at indices: {:?}",
         indices
@@ -203,8 +212,7 @@ fn execute_default_actions_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark],
     for index in indices {
         match get_bookmark_by_index(index, bookmarks) {
             Some(bookmark) => {
-                // Get the action service and determine the action type
-                let action_service = &services.action_service;
+                // Determine the action type
                 let action_type = action_service.get_default_action_description(bookmark);
 
                 // Show what we're doing
@@ -216,7 +224,7 @@ fn execute_default_actions_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark],
                 );
 
                 // Execute the action
-                execute_bookmark_default_action(bookmark, services)?
+                execute_bookmark_default_action(bookmark, action_service.clone())?
             }
             None => eprintln!("Index {} out of range", index),
         }
@@ -226,28 +234,32 @@ fn execute_default_actions_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark],
 }
 
 // For backward compatibility
-#[instrument(level = "debug")]
-pub fn open_bookmark(bookmark: &Bookmark, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(action_service), level = "debug")]
+pub fn open_bookmark(bookmark: &Bookmark, action_service: Arc<dyn ActionService>) -> CliResult<()> {
     // This now delegates to the default action system
-    execute_bookmark_default_action(bookmark, services)
+    execute_bookmark_default_action(bookmark, action_service)
 }
 
 /// Touch (update timestamp) of bookmarks by indices
-#[instrument(skip(bookmarks, services, settings), level = "debug")]
-fn touch_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
+#[instrument(skip(bookmarks, bookmark_service, settings), level = "debug")]
+fn touch_bookmarks_by_indices(
+    indices: Vec<i32>, 
+    bookmarks: &[Bookmark], 
+    bookmark_service: Arc<dyn BookmarkService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
     debug!("Touching bookmarks at indices: {:?}", indices);
-    let service = &services.bookmark_service;
 
     for index in indices {
         match get_bookmark_by_index(index, bookmarks) {
             Some(bookmark) => {
                 if let Some(id) = bookmark.id {
-                    service
+                    bookmark_service
                         .record_bookmark_access(id)
                         .map_err(CliError::Application)?;
 
                     // Display the updated bookmark
-                    if let Ok(Some(updated)) = service.get_bookmark(id) {
+                    if let Ok(Some(updated)) = bookmark_service.get_bookmark(id) {
                         show_bookmarks(&[DisplayBookmark::from_domain(&updated)], ALL_FIELDS, settings);
                     }
                 }
@@ -322,8 +334,13 @@ fn print_all_bookmark_ids(bookmarks: &[Bookmark]) -> CliResult<()> {
 }
 
 /// Edit all bookmarks in the list
-#[instrument(skip(bookmarks, services, settings), level = "debug")]
-fn edit_all_bookmarks(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
+#[instrument(skip(bookmarks, bookmark_service, template_service, settings), level = "debug")]
+fn edit_all_bookmarks(
+    bookmarks: &[Bookmark], 
+    bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
     // Get IDs from all bookmarks
     let mut bookmark_ids = Vec::new();
     for bookmark in bookmarks {
@@ -338,12 +355,18 @@ fn edit_all_bookmarks(bookmarks: &[Bookmark], services: &ServiceContainer, setti
     }
 
     // Call the edit function with all IDs
-    edit_bookmarks(bookmark_ids, false, services, settings)
+    edit_bookmarks(bookmark_ids, false, bookmark_service, template_service, settings)
 }
 
 /// Edit bookmarks by their indices
-#[instrument(skip(bookmarks, services, settings), level = "debug")]
-fn edit_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
+#[instrument(skip(bookmarks, bookmark_service, template_service, settings), level = "debug")]
+fn edit_bookmarks_by_indices(
+    indices: Vec<i32>, 
+    bookmarks: &[Bookmark], 
+    bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
     // Get IDs from indices
     let mut bookmark_ids = Vec::new();
     for index in indices {
@@ -357,14 +380,18 @@ fn edit_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services
     }
 
     // Call the edit function with actual IDs
-    edit_bookmarks(bookmark_ids, false, services, settings)
+    edit_bookmarks(bookmark_ids, false, bookmark_service, template_service, settings)
 }
 
 /// Edit bookmarks by IDs
-#[instrument(skip(settings), level = "debug")]
-pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
-    let bookmark_service = &services.bookmark_service;
-    let template_service = &services.template_service;
+#[instrument(skip(bookmark_service, template_service, settings), level = "debug")]
+pub fn edit_bookmarks(
+    ids: Vec<i32>, 
+    force_db: bool, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
     let mut bookmarks_to_edit = Vec::new();
     let mut updated_count = 0;
 
@@ -401,12 +428,12 @@ pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer
         // Smart edit strategy: decide whether to edit source file or database content
         if !force_db && bookmark.file_path.is_some() {
             // Edit source file directly for file-imported bookmarks
-            if let Err(e) = edit_source_file_and_sync(bookmark, bookmark_service) {
+            if let Err(e) = edit_source_file_and_sync(bookmark, &bookmark_service) {
                 eprintln!("  Failed to edit source file: {}", e);
                 eprintln!("  Falling back to database content editing...");
                 // Fall back to regular database editing
                 if let Err(e2) =
-                    edit_database_content(bookmark, template_service, bookmark_service)
+                    edit_database_content(bookmark, &template_service, &bookmark_service)
                 {
                     eprintln!("  Failed to edit database content: {}", e2);
                 } else {
@@ -417,7 +444,7 @@ pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer
             }
         } else {
             // Edit database content for regular bookmarks or when forced
-            if let Err(e) = edit_database_content(bookmark, template_service, bookmark_service) {
+            if let Err(e) = edit_database_content(bookmark, &template_service, &bookmark_service) {
                 eprintln!("  Failed to edit bookmark: {}", e);
             } else {
                 updated_count += 1;
@@ -430,8 +457,13 @@ pub fn edit_bookmarks(ids: Vec<i32>, force_db: bool, services: &ServiceContainer
 }
 
 /// Delete bookmarks by their indices in the displayed list
-#[instrument(skip(bookmarks, services, settings), level = "debug")]
-fn delete_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
+#[instrument(skip(bookmarks, bookmark_service, settings), level = "debug")]
+fn delete_bookmarks_by_indices(
+    indices: Vec<i32>, 
+    bookmarks: &[Bookmark], 
+    bookmark_service: Arc<dyn BookmarkService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
     // Get IDs from indices
     let mut bookmark_ids = Vec::new();
     for index in indices {
@@ -445,18 +477,21 @@ fn delete_bookmarks_by_indices(indices: Vec<i32>, bookmarks: &[Bookmark], servic
     }
 
     // Call the delete function with actual IDs
-    delete_bookmarks(bookmark_ids, services, settings)
+    delete_bookmarks(bookmark_ids, bookmark_service, settings)
 }
 
 /// Delete bookmarks by their IDs
-#[instrument(skip(settings), level = "debug")]
-pub fn delete_bookmarks(ids: Vec<i32>, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
-    let service = &services.bookmark_service;
+#[instrument(skip(bookmark_service, settings), level = "debug")]
+pub fn delete_bookmarks(
+    ids: Vec<i32>, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    settings: &crate::config::Settings
+) -> CliResult<()> {
 
     // Display bookmarks to be deleted
     let mut bookmarks_to_display = Vec::new();
     for id in &ids {
-        if let Ok(Some(bookmark)) = service.get_bookmark(*id) {
+        if let Ok(Some(bookmark)) = bookmark_service.get_bookmark(*id) {
             bookmarks_to_display.push(DisplayBookmark::from_domain(&bookmark));
         }
     }
@@ -480,7 +515,7 @@ pub fn delete_bookmarks(ids: Vec<i32>, services: &ServiceContainer, settings: &c
     // Delete bookmarks
     let mut deleted_count = 0;
     for id in sorted_ids {
-        match service.delete_bookmark(id) {
+        match bookmark_service.delete_bookmark(id) {
             Ok(true) => deleted_count += 1,
             Ok(false) => eprintln!("Bookmark with ID {} not found", id),
             Err(e) => eprintln!("Error deleting bookmark with ID {}: {}", id, e),
@@ -491,10 +526,8 @@ pub fn delete_bookmarks(ids: Vec<i32>, services: &ServiceContainer, settings: &c
     Ok(())
 }
 
-#[instrument(level = "debug")]
-pub fn copy_url_to_clipboard(url: &str, services: &ServiceContainer) -> CliResult<()> {
-    let clipboard_service = &services.clipboard_service;
-
+#[instrument(skip(clipboard_service), level = "debug")]
+pub fn copy_url_to_clipboard(url: &str, clipboard_service: Arc<dyn ClipboardService>) -> CliResult<()> {
     match clipboard_service.copy_to_clipboard(url) {
         Ok(_) => {
             eprintln!("Copied to clipboard: {}", url);
@@ -507,26 +540,28 @@ pub fn copy_url_to_clipboard(url: &str, services: &ServiceContainer) -> CliResul
     }
 }
 
-#[instrument(level = "debug")]
-pub fn copy_bookmark_url_to_clipboard(bookmark: &Bookmark, services: &ServiceContainer) -> CliResult<()> {
-    // Get the interpolation service to render the URL with template variables
-    let interpolation_service = &services.template_service;
-
+#[instrument(skip(template_service, clipboard_service), level = "debug")]
+pub fn copy_bookmark_url_to_clipboard(
+    bookmark: &Bookmark, 
+    template_service: Arc<dyn TemplateService>,
+    clipboard_service: Arc<dyn ClipboardService>
+) -> CliResult<()> {
     // Render the URL (apply interpolation)
-    let rendered_url = interpolation_service
+    let rendered_url = template_service
         .render_bookmark_url(bookmark)
         .map_err(|e| CliError::CommandFailed(format!("Failed to render URL: {}", e)))?;
 
     // Copy the rendered URL to clipboard
-    copy_url_to_clipboard(&rendered_url, services)
+    copy_url_to_clipboard(&rendered_url, clipboard_service)
 }
 
 /// Clone a bookmark by ID, opening the editor to modify it before saving
-#[instrument(level = "debug")]
-pub fn clone_bookmark(id: i32, services: &ServiceContainer) -> CliResult<()> {
-    // Get services needed for cloning
-    let bookmark_service = &services.bookmark_service;
-    let template_service = &services.template_service;
+#[instrument(skip(bookmark_service, template_service), level = "debug")]
+pub fn clone_bookmark(
+    id: i32, 
+    bookmark_service: Arc<dyn BookmarkService>,
+    template_service: Arc<dyn TemplateService>
+) -> CliResult<()> {
 
     // Get the bookmark to clone
     let bookmark = bookmark_service
@@ -903,7 +938,7 @@ mod tests {
         let settings = Settings::default();
         let services = ServiceContainer::new(&settings).expect("Failed to create service container");
         
-        let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks, &services);
+        let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks, services.template_service.clone(), services.clipboard_service.clone());
 
         // Assert
         assert!(result.is_ok(), "Yank operation should succeed");

@@ -167,7 +167,7 @@ impl SearchCommandHandler {
                 bookmark.id.unwrap_or(0)
             )?;
 
-            return execute_bookmark_default_action(bookmark, &self.services);
+            return execute_bookmark_default_action(bookmark, self.services.action_service.clone());
         }
 
         // Convert to display bookmarks
