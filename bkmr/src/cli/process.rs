@@ -12,6 +12,7 @@ use crate::domain::bookmark::Bookmark;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::application::services::action_service::ActionService;
 use crate::application::services::bookmark_service::BookmarkService;
+use crate::application::services::interpolation_service::InterpolationService;
 use crate::application::services::template_service::TemplateService;
 use crate::util::helper::{confirm, ensure_int_vector};
 
@@ -93,7 +94,7 @@ pub fn process(bookmarks: &[Bookmark], services: &ServiceContainer, settings: &c
             }
             "y" => {
                 if let Some(indices) = ensure_int_vector(&tokens[1..]) {
-                    yank_bookmark_urls_by_indices(indices, bookmarks, services.template_service.clone(), services.clipboard_service.clone())?;
+                    yank_bookmark_urls_by_indices(indices, bookmarks, services.interpolation_service.clone(), services.clipboard_service.clone())?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
                     continue;
@@ -143,11 +144,11 @@ fn get_bookmark_by_index(index: i32, bookmarks: &[Bookmark]) -> Option<&Bookmark
     Some(&bookmarks[index as usize - 1])
 }
 
-#[instrument(skip(bookmarks, template_service, clipboard_service), level = "debug")]
+#[instrument(skip(bookmarks, interpolation_service, clipboard_service), level = "debug")]
 fn yank_bookmark_urls_by_indices(
     indices: Vec<i32>, 
     bookmarks: &[Bookmark], 
-    template_service: Arc<dyn TemplateService>,
+    interpolation_service: Arc<dyn InterpolationService>,
     clipboard_service: Arc<dyn ClipboardService>
 ) -> CliResult<()> {
     debug!(
@@ -158,8 +159,8 @@ fn yank_bookmark_urls_by_indices(
     for index in indices {
         match get_bookmark_by_index(index, bookmarks) {
             Some(bookmark) => {
-                // Render the URL with template variables if needed
-                let rendered_url = match template_service.render_bookmark_url(bookmark) {
+                // Render the URL with interpolation variables if needed
+                let rendered_url = match interpolation_service.render_bookmark_url(bookmark) {
                     Ok(url) => url,
                     Err(e) => {
                         eprintln!("Error rendering URL for bookmark {}: {}", index, e);
@@ -540,14 +541,14 @@ pub fn copy_url_to_clipboard(url: &str, clipboard_service: Arc<dyn ClipboardServ
     }
 }
 
-#[instrument(skip(template_service, clipboard_service), level = "debug")]
+#[instrument(skip(interpolation_service, clipboard_service), level = "debug")]
 pub fn copy_bookmark_url_to_clipboard(
     bookmark: &Bookmark, 
-    template_service: Arc<dyn TemplateService>,
+    interpolation_service: Arc<dyn InterpolationService>,
     clipboard_service: Arc<dyn ClipboardService>
 ) -> CliResult<()> {
     // Render the URL (apply interpolation)
-    let rendered_url = template_service
+    let rendered_url = interpolation_service
         .render_bookmark_url(bookmark)
         .map_err(|e| CliError::CommandFailed(format!("Failed to render URL: {}", e)))?;
 
@@ -938,7 +939,7 @@ mod tests {
         let settings = Settings::default();
         let services = ServiceContainer::new(&settings).expect("Failed to create service container");
         
-        let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks, services.template_service.clone(), services.clipboard_service.clone());
+        let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks, services.interpolation_service.clone(), services.clipboard_service.clone());
 
         // Assert
         assert!(result.is_ok(), "Yank operation should succeed");

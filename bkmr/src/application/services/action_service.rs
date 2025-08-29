@@ -93,7 +93,7 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
             // Create a direct (non-interactive) shell action with script arguments
             let shell_executor = Arc::new(SafeShellExecutor::new());
             let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-            let interpolation_service = Arc::new(crate::application::TemplateServiceImpl::new(template_engine));
+            let interpolation_service = Arc::new(crate::application::InterpolationServiceImpl::new(template_engine));
             let shell_action =
                 ShellAction::new_direct_with_args(interpolation_service, script_args.to_vec());
             return shell_action.execute(bookmark);

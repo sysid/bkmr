@@ -268,7 +268,7 @@ fn create_enhanced_skim_items(
     let action_service = &services.action_service;
 
     // Get interpolation service to render URLs
-    let interpolation_service = &services.template_service;
+    let interpolation_service = &services.interpolation_service;
 
     bookmarks
         .iter()
@@ -569,7 +569,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
                         copy_url_to_clipboard(&command, services.clipboard_service.clone())?;
                     } else {
                         // For all other types, copy URL to clipboard with interpolation
-                        copy_bookmark_url_to_clipboard(bookmark, services.template_service.clone(), services.clipboard_service.clone())?;
+                        copy_bookmark_url_to_clipboard(bookmark, services.interpolation_service.clone(), services.clipboard_service.clone())?;
                     }
                 }
             }

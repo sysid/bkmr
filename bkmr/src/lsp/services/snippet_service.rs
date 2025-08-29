@@ -3,7 +3,7 @@
 //! Provides async wrapper around bkmr bookmark service for snippet operations
 
 use crate::application::services::bookmark_service::BookmarkService;
-use crate::application::services::TemplateService;
+use crate::application::services::InterpolationService;
 use crate::domain::repositories::query::BookmarkQuery;
 use crate::lsp::domain::{Snippet, SnippetFilter};
 use crate::util::interpolation::InterpolationHelper;
@@ -27,7 +27,7 @@ pub enum SnippetError {
 #[derive(Debug)]
 pub struct LspSnippetService {
     bookmark_service: Arc<dyn BookmarkService>,
-    template_service: Arc<dyn TemplateService>,
+    interpolation_service: Arc<dyn InterpolationService>,
 }
 
 impl LspSnippetService {
@@ -36,27 +36,27 @@ impl LspSnippetService {
     /// Create with specific services (for testing)
     pub fn with_services(
         bookmark_service: Arc<dyn BookmarkService>,
-        template_service: Arc<dyn TemplateService>,
+        interpolation_service: Arc<dyn InterpolationService>,
     ) -> Self {
         Self {
             bookmark_service,
-            template_service,
+            interpolation_service,
         }
     }
 
     /// Create with a specific bookmark service (for testing) - backward compatibility
     pub fn with_service(bookmark_service: Arc<dyn BookmarkService>) -> Self {
         use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
-        use crate::application::services::TemplateServiceImpl;
+        use crate::application::InterpolationServiceImpl;
         use std::sync::Arc;
         
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let template_service = Arc::new(TemplateServiceImpl::new(template_engine));
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(template_engine));
         
         Self {
             bookmark_service,
-            template_service,
+            interpolation_service,
         }
     }
 }
@@ -125,7 +125,7 @@ impl AsyncSnippetService for LspSnippetService {
         debug!("Found {} bookmarks", bookmarks.len());
 
         // Apply interpolation and convert bookmarks to snippets
-        let template_service = Arc::clone(&self.template_service);
+        let interpolation_service = Arc::clone(&self.interpolation_service);
         let enable_interpolation = filter.enable_interpolation;
         
         let snippets: Vec<Snippet> = bookmarks
@@ -137,7 +137,7 @@ impl AsyncSnippetService for LspSnippetService {
                     match InterpolationHelper::render_if_needed(
                         &bookmark.url, // URL field contains snippet content
                         &bookmark,
-                        &template_service,
+                        &interpolation_service,
                         "lsp snippet",
                     ) {
                         Ok(interpolated) => {

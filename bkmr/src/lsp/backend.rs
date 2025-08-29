@@ -593,7 +593,7 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
             // Create LSP services inside the closure
             let snippet_service = Arc::new(LspSnippetService::with_services(
                 service_container.bookmark_service.clone(),
-                service_container.template_service.clone(),
+                service_container.interpolation_service.clone(),
             ));
             
             let completion_service = CompletionService::new(snippet_service);

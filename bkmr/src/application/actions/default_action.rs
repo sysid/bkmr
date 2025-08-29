@@ -1,5 +1,5 @@
 // src/application/actions/default_action.rs
-use crate::application::services::TemplateService;
+use crate::application::services::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
@@ -8,12 +8,12 @@ use tracing::{debug, instrument};
 
 #[derive(Debug)]
 pub struct DefaultAction {
-    template_service: Arc<dyn TemplateService>,
+    interpolation_service: Arc<dyn InterpolationService>,
 }
 
 impl DefaultAction {
-    pub fn new(template_service: Arc<dyn TemplateService>) -> Self {
-        Self { template_service }
+    pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
+        Self { interpolation_service }
     }
 }
 
@@ -24,7 +24,7 @@ impl BookmarkAction for DefaultAction {
 
         // Render the URL with interpolation if needed
         let rendered_url = self
-            .template_service
+            .interpolation_service
             .render_bookmark_url(bookmark)
             .map_err(|e| DomainError::Other(format!("Failed to render URL: {}", e)))?;
 

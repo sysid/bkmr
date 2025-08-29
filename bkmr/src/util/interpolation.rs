@@ -1,4 +1,4 @@
-use crate::application::services::TemplateService;
+use crate::application::services::InterpolationService;
 use crate::domain::{bookmark::Bookmark, error::DomainError, error::DomainResult};
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ impl InterpolationHelper {
     pub fn render_if_needed(
         content: &str,
         bookmark: &Bookmark,
-        service: &Arc<dyn TemplateService>,
+        service: &Arc<dyn InterpolationService>,
         context_name: &str,
     ) -> DomainResult<String> {
         if content.contains("{{") || content.contains("{%") {
@@ -37,7 +37,7 @@ impl InterpolationHelper {
 mod tests {
     use super::*;
     use crate::application::error::{ApplicationError, ApplicationResult};
-    use crate::application::services::TemplateService;
+    use crate::application::services::InterpolationService;
     use crate::domain::bookmark::Bookmark;
     use std::sync::Arc;
 
@@ -46,14 +46,7 @@ mod tests {
         should_fail: bool,
     }
 
-    impl TemplateService for MockInterpolationService {
-        fn edit_bookmark_with_template(
-            &self,
-            _bookmark: Option<Bookmark>,
-        ) -> ApplicationResult<(Bookmark, bool)> {
-            unimplemented!("Not needed for interpolation helper tests")
-        }
-
+    impl InterpolationService for MockInterpolationService {
         fn render_bookmark_url(&self, _bookmark: &Bookmark) -> ApplicationResult<String> {
             if self.should_fail {
                 Err(ApplicationError::Other(
@@ -89,7 +82,7 @@ mod tests {
     #[test]
     fn given_simple_content_when_render_if_needed_then_returns_unchanged() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> =
+        let service: Arc<dyn InterpolationService> =
             Arc::new(MockInterpolationService { should_fail: false });
         let content = "simple content without templates";
 
@@ -102,7 +95,7 @@ mod tests {
     #[test]
     fn given_template_content_when_render_if_needed_then_returns_interpolated() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> =
+        let service: Arc<dyn InterpolationService> =
             Arc::new(MockInterpolationService { should_fail: false });
         let content = "content with {{ template }}";
 
@@ -115,7 +108,7 @@ mod tests {
     #[test]
     fn given_template_content_when_render_fails_then_returns_original() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> =
+        let service: Arc<dyn InterpolationService> =
             Arc::new(MockInterpolationService { should_fail: true });
         let content = "content with {{ template }}";
 
@@ -132,7 +125,7 @@ mod tests {
     #[test]
     fn given_jinja_syntax_when_render_if_needed_then_handles_correctly() {
         let bookmark = create_test_bookmark();
-        let service: Arc<dyn TemplateService> =
+        let service: Arc<dyn InterpolationService> =
             Arc::new(MockInterpolationService { should_fail: false });
         let content = "content with {% if condition %}";
 

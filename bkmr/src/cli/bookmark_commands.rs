@@ -1289,13 +1289,14 @@ mod tests {
         // Act - Create minimal service container for the test
         use crate::util::test_service_container::TestServiceContainer;
         let test_container = TestServiceContainer::new();
-        let dummy_services = crate::infrastructure::di::service_container::ServiceContainer {
+        let dummy_services = ServiceContainer {
             bookmark_repository: test_container.bookmark_repository.clone(),
             embedder: test_container.embedder.clone(),
             bookmark_service: test_container.bookmark_service.clone(),
             tag_service: test_container.tag_service.clone(),
             action_service: test_container.action_service.clone(),
             clipboard_service: test_container.clipboard_service.clone(),
+            interpolation_service: test_container.interpolation_service.clone(),
             template_service: test_container.template_service.clone(),
         };
         pre_fill_database(&repository, &dummy_services).expect("Failed to pre-fill database");
