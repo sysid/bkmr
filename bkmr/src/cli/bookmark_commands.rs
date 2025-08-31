@@ -46,12 +46,11 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
         .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
 }
 
-#[instrument(skip(stderr, cli, bookmark_service, action_service))]
+#[instrument(skip(stderr, cli, services))]
 pub fn semantic_search(
     mut stderr: StandardStream, 
     cli: Cli, 
-    bookmark_service: Arc<dyn BookmarkService>,
-    action_service: Arc<dyn ActionService>
+    services: &ServiceContainer
 ) -> CliResult<()> {
     if let Commands::SemSearch {
         query,
@@ -59,12 +58,18 @@ pub fn semantic_search(
         non_interactive,
     } = cli.command.unwrap()
     {
+        // Check if embedder is DummyEmbedding and provide helpful error message
+        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
+            writeln!(stderr, "{}", "Error: Semantic search requires embeddings. Use --openai flag.".red())
+                .cli_context("writing DummyEmbedding error message to stderr")?;
+            return Err(CliError::CommandFailed("No embeddings available - use --openai flag".to_string()));
+        }
 
         // Create the semantic search domain object
         let search = SemanticSearch::new(query, limit.map(|l| l as usize));
 
         // Perform semantic search
-        let results = bookmark_service.semantic_search(&search)
+        let results = services.bookmark_service.semantic_search(&search)
             .cli_context("performing semantic search on bookmarks")?;
 
         if results.is_empty() {
@@ -126,7 +131,7 @@ pub fn semantic_search(
                 .cli_context("parsing bookmark IDs from user input")?;
             for id in ids {
                 if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    execute_bookmark_default_action(&result.bookmark, action_service.clone())
+                    execute_bookmark_default_action(&result.bookmark, services.action_service.clone())
                         .cli_context("executing default action for selected bookmark")?;
                 } else {
                     writeln!(stderr, "Bookmark with ID {} not found in results", id)?;

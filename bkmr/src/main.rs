@@ -50,7 +50,7 @@ fn main() {
         },
         _ => {
             // Create service container (single composition root)
-            let service_container = match ServiceContainer::new(&settings) {
+            let service_container = match ServiceContainer::new(&settings, cli.openai) {
                 Ok(container) => container,
                 Err(e) => {
                     eprintln!("{}: {}", "Failed to create service container".red(), e);
@@ -73,8 +73,8 @@ fn handle_lsp_command(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use tokio::runtime::Runtime;
 
-    // Create service containers for LSP
-    let service_container = ServiceContainer::new(&settings)
+    // Create service containers for LSP (LSP doesn't need embeddings, so use false)
+    let service_container = ServiceContainer::new(&settings, false)
         .map_err(|e| format!("Failed to create service container: {}", e))?;
     let _lsp_container = LspServiceContainer::new(&service_container, &settings);
     
