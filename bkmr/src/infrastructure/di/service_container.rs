@@ -13,7 +13,7 @@ use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::embedding::Embedder;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
-use crate::infrastructure::embeddings::DummyEmbedding;
+use crate::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
 use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
@@ -39,10 +39,10 @@ pub struct ServiceContainer {
 
 impl ServiceContainer {
     /// Create all services with explicit dependency injection
-    pub fn new(config: &Settings) -> ApplicationResult<Self> {
+    pub fn new(config: &Settings, openai: bool) -> ApplicationResult<Self> {
         // Base infrastructure
         let bookmark_repository = Self::create_repository(&config.db_url)?;
-        let embedder = Self::create_embedder(config)?;
+        let embedder = Self::create_embedder(openai)?;
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
         let interpolation_service = Self::create_interpolation_service();
         let template_service = Self::create_template_service();
@@ -101,9 +101,12 @@ impl ServiceContainer {
         Ok(Arc::new(repository))
     }
     
-    fn create_embedder(_config: &Settings) -> ApplicationResult<Arc<dyn Embedder>> {
-        // For now, use DummyEmbedding - OpenAI will be handled later
-        Ok(Arc::new(DummyEmbedding))
+    fn create_embedder(openai: bool) -> ApplicationResult<Arc<dyn Embedder>> {
+        if openai {
+            Ok(Arc::new(OpenAiEmbedding::default()))
+        } else {
+            Ok(Arc::new(DummyEmbedding))
+        }
     }
     
     fn create_interpolation_service() -> Arc<dyn InterpolationService> {

@@ -579,7 +579,7 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
     // Create service containers with proper dependency injection
     use crate::infrastructure::di::ServiceContainer;
     
-    let service_container = ServiceContainer::new(settings)
+    let service_container = ServiceContainer::new(settings, false)
         .expect("Failed to create service container");
 
     // Set up the LSP service with proper dependency injection

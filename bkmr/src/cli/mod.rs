@@ -32,7 +32,7 @@ pub fn execute_command_with_services(
             let handler = command_handler::SearchCommandHandler::with_services(services, settings.clone());
             handler.execute(cli)
         }
-        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli, services.bookmark_service.clone(), services.action_service.clone()),
+        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli, &services),
         Some(Commands::Open { .. }) => bookmark_commands::open(cli, services.bookmark_service.clone(), services.action_service.clone()),
         Some(Commands::Add { .. }) => bookmark_commands::add(cli, services.bookmark_service.clone(), services.template_service.clone()),
         Some(Commands::Delete { .. }) => bookmark_commands::delete(cli, services.bookmark_service.clone()),

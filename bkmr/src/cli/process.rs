@@ -937,7 +937,7 @@ mod tests {
         use crate::infrastructure::di::ServiceContainer;
         use crate::config::Settings;
         let settings = Settings::default();
-        let services = ServiceContainer::new(&settings).expect("Failed to create service container");
+        let services = ServiceContainer::new(&settings, false).expect("Failed to create service container");
         
         let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks, services.interpolation_service.clone(), services.clipboard_service.clone());
 
