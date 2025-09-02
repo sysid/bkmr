@@ -81,14 +81,13 @@ impl ServiceContainer {
     fn create_repository(db_url: &str) -> ApplicationResult<Arc<SqliteBookmarkRepository>> {
         // Check if the database file exists before trying to create the repository
         if !Path::new(db_url).exists() {
-            eprintln!("{}", "Error: Database not found.".red());
-            eprintln!("No database configured or the configured database does not exist.");
-            eprintln!("Either:");
-            eprintln!(
-                "  1. Set BKMR_DB_URL environment variable to point to an existing database"
-            );
-            eprintln!("  2. Create a database using 'bkmr create-db <path>'");
-            eprintln!("  3. Ensure the default database at '~/.config/bkmr/bkmr.db' exists");
+            eprintln!("{}", format!("Error: Database not found at '{}'", db_url).red());
+            eprintln!("The configured database does not exist.");
+            eprintln!("");
+            eprintln!("You can either:");
+            eprintln!("  1. Create the database using 'bkmr create-db {}'", db_url);
+            eprintln!("  2. Set BKMR_DB_URL environment variable to point to an existing database");
+            eprintln!("  3. Update the db_url in your config file (~/.config/bkmr/config.toml)");
             std::process::exit(1);
         }
 

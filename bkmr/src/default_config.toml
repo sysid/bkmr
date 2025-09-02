@@ -1,5 +1,5 @@
 # src/default_config.toml
-db_url = "../db/bkmr.db"
+# db_url = "$HOME/.config/bkmr/bkmr.db"
 
 # Available FZF options:
 #   --height 50%     Set the height of the finder
