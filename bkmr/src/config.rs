@@ -1,4 +1,5 @@
 use crate::domain::error::DomainResult;
+use crate::util::path::expand_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -201,6 +202,9 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
                     file_settings.config_source = ConfigSource::ConfigFile;
                     settings = file_settings;
 
+                    // Expand db_url path after loading from file
+                    expand_db_url(&mut settings);
+
                     trace!("Successfully loaded settings from specified file");
                 } else {
                     warn!("Failed to parse config file: {:?}", path);
@@ -237,6 +241,10 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
                     // Update settings with values from file and mark as loaded
                     file_settings.config_source = ConfigSource::ConfigFile;
                     settings = file_settings;
+                    
+                    // Expand db_url path after loading from file
+                    expand_db_url(&mut settings);
+                    
                     // found_config = true;
                     break; // Use the first found configuration file
                 }
@@ -253,6 +261,11 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
 
     trace!("Settings loaded: {:?}", settings);
     Ok(settings)
+}
+
+// Helper function to expand the database URL path
+fn expand_db_url(settings: &mut Settings) {
+    settings.db_url = expand_path(&settings.db_url);
 }
 
 // Extract environment variable application to a separate function

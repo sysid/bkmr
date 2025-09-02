@@ -94,6 +94,15 @@ pub fn is_file_path(content: &str) -> bool {
     false
 }
 
+/// Expand environment variables and tilde in path without requiring the path to exist
+/// This is useful for database URLs and other paths that may not exist yet
+pub fn expand_path(path: &str) -> String {
+    match shellexpand::full(path) {
+        Ok(expanded) => expanded.to_string(),
+        Err(_) => path.to_string(),
+    }
+}
+
 /// Extract filename from: $HOME/bla/file.md:0
 pub fn extract_filename(input: &str) -> String {
     // Attempt to split the input string by ':' to handle potential line indicators
@@ -160,5 +169,66 @@ mod tests {
         assert!(!is_file_path("https://example.com"));
         assert!(!is_file_path(" "));
         assert!(!is_file_path(""));
+    }
+
+    #[test]
+    fn given_path_with_home_var_when_expand_path_then_expands_correctly() {
+        // Test $HOME expansion
+        let home_path = "$HOME/.config/bkmr/bkmr.db";
+        let expanded = expand_path(home_path);
+        
+        // Should not contain literal $HOME anymore
+        assert!(!expanded.contains("$HOME"));
+        
+        // Should contain the actual home directory path
+        if let Ok(home) = env::var("HOME") {
+            assert!(expanded.starts_with(&home));
+            assert!(expanded.ends_with("/.config/bkmr/bkmr.db"));
+        }
+    }
+
+    #[test]
+    fn given_path_with_tilde_when_expand_path_then_expands_correctly() {
+        // Test tilde expansion
+        let tilde_path = "~/.config/bkmr/bkmr.db";
+        let expanded = expand_path(tilde_path);
+        
+        // Should not contain literal tilde anymore
+        assert!(!expanded.starts_with("~"));
+        
+        // Should be an absolute path
+        assert!(expanded.starts_with("/"));
+        assert!(expanded.ends_with("/.config/bkmr/bkmr.db"));
+    }
+
+    #[test]
+    fn given_absolute_path_when_expand_path_then_returns_unchanged() {
+        let absolute_path = "/absolute/path/to/database.db";
+        let expanded = expand_path(absolute_path);
+        
+        assert_eq!(expanded, absolute_path);
+    }
+
+    #[test]
+    fn given_relative_path_when_expand_path_then_returns_unchanged() {
+        let relative_path = "./relative/database.db";
+        let expanded = expand_path(relative_path);
+        
+        assert_eq!(expanded, relative_path);
+    }
+
+    #[test]
+    fn given_custom_env_var_when_expand_path_then_expands_correctly() {
+        // Set a custom environment variable for testing
+        env::set_var("TEST_DB_PATH", "/tmp/test");
+        
+        let env_path = "$TEST_DB_PATH/database.db";
+        let expanded = expand_path(env_path);
+        
+        assert_eq!(expanded, "/tmp/test/database.db");
+        assert!(!expanded.contains("$TEST_DB_PATH"));
+        
+        // Cleanup
+        env::remove_var("TEST_DB_PATH");
     }
 }
