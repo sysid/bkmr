@@ -40,6 +40,9 @@ fn test_search_command_with_tags() {
 
     let mut cmd = Command::cargo_bin("bkmr").expect("Failed to create command");
 
+    // Set environment variable to use the same test database
+    cmd.env("BKMR_DB_URL", "../db/bkmr.db");
+
     // Execute the search command with tag filtering
     let result = cmd
         .arg("search")
