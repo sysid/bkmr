@@ -933,11 +933,9 @@ mod tests {
 
         // Act - test that the function executes without errors
         // We can't easily test clipboard content in unit tests
-        // Create a temporary service container for testing
-        use crate::infrastructure::di::ServiceContainer;
-        use crate::config::Settings;
-        let settings = Settings::default();
-        let services = ServiceContainer::new(&settings, false).expect("Failed to create service container");
+        // Create a temporary test service container for testing
+        use crate::util::test_service_container::TestServiceContainer;
+        let services = TestServiceContainer::new();
         
         let result = yank_bookmark_urls_by_indices(vec![1], &bookmarks, services.interpolation_service.clone(), services.clipboard_service.clone());
 

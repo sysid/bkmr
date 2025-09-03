@@ -1,13 +1,19 @@
 // src/main.rs
 use bkmr::infrastructure::di::ServiceContainer;
 use bkmr::lsp::di::LspServiceContainer;
-use bkmr::config::{load_settings, Settings};
+use bkmr::config::{load_settings, Settings, ConfigSource};
 use bkmr::cli::args::{Cli, Commands};
+use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
+use bkmr::infrastructure::embeddings::DummyEmbedding;
+use bkmr::cli::bookmark_commands::pre_fill_database;
+use bkmr::util::helper::confirm;
 use bkmr::exitcode;
 use clap::Parser;
 use crossterm::style::Stylize;
 use termcolor::{ColorChoice, StandardStream};
 use tracing::{debug, info, instrument};
+use std::path::Path;
+use std::fs;
 use tracing_subscriber::{
     filter::{filter_fn, LevelFilter},
     fmt::{self, format::FmtSpan},
@@ -45,6 +51,13 @@ fn main() {
         Some(Commands::Lsp { no_interpolation }) => {
             if let Err(e) = handle_lsp_command(settings, *no_interpolation) {
                 eprintln!("{}", format!("LSP error: {}", e).red());
+                std::process::exit(exitcode::USAGE);
+            }
+        },
+        Some(Commands::CreateDb { .. }) => {
+            // Handle create-db specially to avoid requiring existing database
+            if let Err(e) = handle_create_db_command(cli, &settings) {
+                eprintln!("{}", format!("Create-db error: {}", e).red());
                 std::process::exit(exitcode::USAGE);
             }
         },
@@ -88,6 +101,87 @@ fn handle_lsp_command(
         bkmr::lsp::run_lsp_server(&settings, no_interpolation).await;
     });
 
+    Ok(())
+}
+
+fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn std::error::Error>> {
+    if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
+        // Get the database path using existing precedence: CLI argument -> config -> default
+        let db_path = match path {
+            Some(p) => p,
+            None => {
+                // Get from config system via settings parameter
+                let configured_path = &settings.db_url;
+
+                // Check if we're using default configuration
+                if settings.config_source == ConfigSource::Default {
+                    eprintln!(
+                        "{}",
+                        "Warning: Using default database path. No configuration found.".yellow()
+                    );
+                    eprintln!("Default path: {}", configured_path);
+                    eprintln!(
+                        "Consider creating a configuration file at ~/.config/bkmr/config.toml"
+                    );
+                    eprintln!("or setting the BKMR_DB_URL environment variable.");
+
+                    // Ask for confirmation when using default configuration
+                    if !confirm("Continue with default database location?") {
+                        eprintln!("Database creation cancelled.");
+                        return Ok(());
+                    }
+                }
+
+                configured_path.clone()
+            }
+        };
+
+        // Check if the database file already exists
+        if Path::new(&db_path).exists() {
+            return Err(format!(
+                "Database already exists at: {}. Please choose a different path or delete the existing file.",
+                db_path
+            ).into());
+        }
+
+        // Create parent directories if they don't exist
+        if let Some(parent) = Path::new(&db_path).parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent).map_err(|e| {
+                    format!("Failed to create parent directories: {}", e)
+                })?;
+            }
+        }
+
+        eprintln!("Creating new database at: {}", db_path);
+
+        // Create the repository with the new path
+        let repository = SqliteBookmarkRepository::from_url(&db_path)
+            .map_err(|e| format!("Failed to create repository: {}", e))?;
+
+        // Get a connection
+        let mut conn = repository.get_connection()
+            .map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+        // Run migrations to set up the schema
+        migration::init_db(&mut conn)
+            .map_err(|e| format!("Failed to initialize database: {}", e))?;
+
+        // Clean the bookmark table to ensure we start with an empty database
+        repository.empty_bookmark_table()
+            .map_err(|e| format!("Failed to empty bookmark table: {}", e))?;
+
+        eprintln!("Database created successfully at: {}", db_path);
+
+        // Handle pre-fill if requested
+        if pre_fill {
+            eprintln!("Pre-filling database with demo entries...");
+            let embedder = DummyEmbedding;
+            pre_fill_database(&repository, &embedder)
+                .map_err(|e| format!("Failed to pre-fill database: {}", e))?;
+            eprintln!("Database pre-filled with demo entries.");
+        }
+    }
     Ok(())
 }
 

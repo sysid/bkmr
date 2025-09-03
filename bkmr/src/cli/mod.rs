@@ -41,7 +41,6 @@ pub fn execute_command_with_services(
         Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services),
         Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
-        Some(Commands::CreateDb { .. }) => bookmark_commands::create_db(cli, &services, settings),
         Some(Commands::SetEmbeddable { .. }) => bookmark_commands::set_embeddable(cli, &services),
         Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli, &services),
         Some(Commands::LoadTexts { .. }) => bookmark_commands::load_texts(cli, &services),
@@ -50,6 +49,10 @@ pub fn execute_command_with_services(
         Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),
         Some(Commands::Completion { shell }) => handle_completion(shell),
         Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
+        Some(Commands::CreateDb { .. }) => {
+            // This should never be reached as CreateDb is handled specially in main.rs
+            Err(error::CliError::CommandFailed("CreateDb command should be handled in main.rs".to_string()))
+        }
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
             Ok(())
