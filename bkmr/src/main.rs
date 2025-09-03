@@ -4,6 +4,8 @@ use bkmr::lsp::di::LspServiceContainer;
 use bkmr::config::{load_settings, Settings, ConfigSource};
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
+use bkmr::infrastructure::embeddings::DummyEmbedding;
+use bkmr::cli::bookmark_commands::pre_fill_database;
 use bkmr::util::helper::confirm;
 use bkmr::exitcode;
 use clap::Parser;
@@ -174,10 +176,10 @@ fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn
         // Handle pre-fill if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            // For now, we'll skip pre-fill to avoid circular dependency with ServiceContainer
-            // This can be enhanced later to create minimal services just for pre-fill
-            eprintln!("Warning: Pre-fill functionality is not yet available in this context.");
-            eprintln!("You can add demo entries manually after database creation.");
+            let embedder = DummyEmbedding;
+            pre_fill_database(&repository, &embedder)
+                .map_err(|e| format!("Failed to pre-fill database: {}", e))?;
+            eprintln!("Database pre-filled with demo entries.");
         }
     }
     Ok(())

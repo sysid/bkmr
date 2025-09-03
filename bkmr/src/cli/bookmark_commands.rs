@@ -703,7 +703,8 @@ pub fn create_db(cli: Cli, services: &ServiceContainer, settings: &Settings) -> 
         // Pre-fill the database with demo entries if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            pre_fill_database(&repository, services)?;
+            let embedder = DummyEmbedding;
+            pre_fill_database(&repository, &embedder)?;
             eprintln!("Demo entries added successfully!");
         }
     }
@@ -969,8 +970,7 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 }
 
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
-fn pre_fill_database(repository: &SqliteBookmarkRepository, services: &ServiceContainer) -> CliResult<()> {
-    let embedder = &*services.embedder;
+pub fn pre_fill_database(repository: &SqliteBookmarkRepository, embedder: &dyn crate::domain::embedding::Embedder) -> CliResult<()> {
 
     // Create demo entries
     let demo_entries = vec![
@@ -1291,20 +1291,9 @@ mod tests {
             "Database should be empty initially"
         );
 
-        // Act - Create minimal service container for the test
-        use crate::util::test_service_container::TestServiceContainer;
-        let test_container = TestServiceContainer::new();
-        let dummy_services = ServiceContainer {
-            bookmark_repository: test_container.bookmark_repository.clone(),
-            embedder: test_container.embedder.clone(),
-            bookmark_service: test_container.bookmark_service.clone(),
-            tag_service: test_container.tag_service.clone(),
-            action_service: test_container.action_service.clone(),
-            clipboard_service: test_container.clipboard_service.clone(),
-            interpolation_service: test_container.interpolation_service.clone(),
-            template_service: test_container.template_service.clone(),
-        };
-        pre_fill_database(&repository, &dummy_services).expect("Failed to pre-fill database");
+        // Act - Use DummyEmbedding directly
+        let embedder = DummyEmbedding;
+        pre_fill_database(&repository, &embedder).expect("Failed to pre-fill database");
 
         // Assert
         let bookmarks = repository.get_all().expect("Failed to get bookmarks");
