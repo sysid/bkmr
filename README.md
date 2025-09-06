@@ -152,6 +152,13 @@ See bkmr in action:
    export BKMR_DB_URL=~/path/to/db
    ```
 
+### Platform Compatibility
+
+**Wayland Support**: `bkmr` includes native Wayland clipboard support for modern Linux desktops.
+- **Supported compositors**: Hyprland, Sway, and other compositors supporting `wlr-data-control-unstable-v1` protocol
+- **Automatic detection**: Falls back to X11/XWayland if Wayland protocols are unavailable
+- **Compatibility**: Check your compositor support at [wayland.app](https://wayland.app)
+
 3. **Start using:**
    ```bash
    # Add your first bookmark
