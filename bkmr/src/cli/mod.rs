@@ -23,10 +23,6 @@ pub fn execute_command_with_services(
     services: ServiceContainer,
     settings: &Settings,
 ) -> CliResult<()> {
-    if cli.generate_config {
-        println!("{}", crate::config::generate_default_config());
-        return Ok(());
-    }
     match cli.command {
         Some(Commands::Search { .. }) => {
             let handler = command_handler::SearchCommandHandler::with_services(services, settings.clone());
@@ -47,11 +43,14 @@ pub fn execute_command_with_services(
         Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli, &services),
         Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli, &services),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),
-        Some(Commands::Completion { shell }) => handle_completion(shell),
         Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
         Some(Commands::CreateDb { .. }) => {
             // This should never be reached as CreateDb is handled specially in main.rs
             Err(error::CliError::CommandFailed("CreateDb command should be handled in main.rs".to_string()))
+        }
+        Some(Commands::Completion { .. }) => {
+            // This should never be reached as Completion is handled specially in main.rs
+            Err(error::CliError::CommandFailed("Completion command should be handled in main.rs".to_string()))
         }
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
@@ -61,49 +60,6 @@ pub fn execute_command_with_services(
     }
 }
 
-fn handle_completion(shell: String) -> CliResult<()> {
-    // Write a brief comment to stderr about what's being output
-    match shell.to_lowercase().as_str() {
-        "bash" => {
-            eprintln!("# Outputting bash completion script for bkmr");
-            eprintln!("# To use, run one of:");
-            eprintln!("# - eval \"$(bkmr completion bash)\"                   # one-time use");
-            eprintln!("# - bkmr completion bash >> ~/.bashrc                  # add to bashrc");
-            eprintln!(
-                "# - bkmr completion bash > /etc/bash_completion.d/bkmr # system-wide install"
-            );
-            eprintln!("#");
-        }
-        "zsh" => {
-            eprintln!("# Outputting zsh completion script for bkmr");
-            eprintln!("# To use, run one of:");
-            eprintln!("# - eval \"$(bkmr completion zsh)\"                    # one-time use");
-            eprintln!(
-                "# - bkmr completion zsh > ~/.zfunc/_bkmr               # save to fpath directory"
-            );
-            eprintln!("# - echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc         # add dir to fpath if needed");
-            eprintln!("# - echo 'autoload -U compinit && compinit' >> ~/.zshrc # load completions");
-            eprintln!("#");
-        }
-        "fish" => {
-            eprintln!("# Outputting fish completion script for bkmr");
-            eprintln!("# To use, run one of:");
-            eprintln!("# - bkmr completion fish | source                      # one-time use");
-            eprintln!("# - bkmr completion fish > ~/.config/fish/completions/bkmr.fish # permanent install");
-            eprintln!("#");
-        }
-        _ => {}
-    }
-
-    // Generate completion script to stdout
-    match completion::generate_completion(&shell) {
-        Ok(_) => Ok(()),
-        Err(e) => Err(error::CliError::CommandFailed(format!(
-            "Failed to generate completion script: {}",
-            e
-        ))),
-    }
-}
 
 fn handle_lsp(settings: &Settings, no_interpolation: bool) -> CliResult<()> {
     use tokio::runtime::Runtime;

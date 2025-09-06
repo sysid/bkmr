@@ -2,7 +2,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(author, version, about, long_about = None)]
 #[command(arg_required_else_help = true, disable_help_subcommand = true)]
 /// A bookmark manager for the terminal
@@ -34,7 +34,7 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Clone)]
 pub enum Commands {
     /// Searches Bookmarks
     Search {

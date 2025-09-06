@@ -1,6 +1,5 @@
 // src/main.rs
 use bkmr::infrastructure::di::ServiceContainer;
-use bkmr::lsp::di::LspServiceContainer;
 use bkmr::config::{load_settings, Settings, ConfigSource};
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
@@ -46,63 +45,31 @@ fn main() {
         debug!("OpenAI embeddings requested via CLI flag");
     }
 
-    // Route to appropriate handler based on command
-    match cli.command.as_ref() {
-        Some(Commands::Lsp { no_interpolation }) => {
-            if let Err(e) = handle_lsp_command(settings, *no_interpolation) {
-                eprintln!("{}", format!("LSP error: {}", e).red());
-                std::process::exit(exitcode::USAGE);
-            }
-        },
-        Some(Commands::CreateDb { .. }) => {
-            // Handle create-db specially to avoid requiring existing database
-            if let Err(e) = handle_create_db_command(cli, &settings) {
-                eprintln!("{}", format!("Create-db error: {}", e).red());
-                std::process::exit(exitcode::USAGE);
-            }
-        },
-        _ => {
-            // Create service container (single composition root)
-            let service_container = match ServiceContainer::new(&settings, cli.openai) {
-                Ok(container) => container,
-                Err(e) => {
-                    eprintln!("{}: {}", "Failed to create service container".red(), e);
-                    std::process::exit(exitcode::USAGE);
-                }
-            };
-            
-            // Execute CLI command with services
-            if let Err(e) = execute_command_with_services(stderr, cli, service_container, settings) {
-                eprintln!("{}", format!("Error: {}", e).red());
-                std::process::exit(exitcode::USAGE);
-            }
+    // Handle all database-independent operations first
+    if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
+        if let Err(e) = result {
+            eprintln!("{}", format!("Error: {}", e).red());
+            std::process::exit(exitcode::USAGE);
         }
+        return;
+    }
+
+    // Only create ServiceContainer for database-dependent operations
+    let service_container = match ServiceContainer::new(&settings, cli.openai) {
+        Ok(container) => container,
+        Err(e) => {
+            eprintln!("{}: {}", "Failed to create service container".red(), e);
+            std::process::exit(exitcode::USAGE);
+        }
+    };
+    
+    // Execute CLI command with services
+    if let Err(e) = execute_command_with_services(stderr, cli, service_container, settings) {
+        eprintln!("{}", format!("Error: {}", e).red());
+        std::process::exit(exitcode::USAGE);
     }
 }
 
-fn handle_lsp_command(
-    settings: Settings, 
-    no_interpolation: bool
-) -> Result<(), Box<dyn std::error::Error>> {
-    use tokio::runtime::Runtime;
-
-    // Create service containers for LSP (LSP doesn't need embeddings, so use false)
-    let service_container = ServiceContainer::new(&settings, false)
-        .map_err(|e| format!("Failed to create service container: {}", e))?;
-    let _lsp_container = LspServiceContainer::new(&service_container, &settings);
-    
-    // Create a tokio runtime for the LSP server
-    let rt = Runtime::new().map_err(|e| {
-        format!("Failed to create async runtime: {}", e)
-    })?;
-
-    // Run the LSP server (for now, use existing implementation)
-    rt.block_on(async {
-        bkmr::lsp::run_lsp_server(&settings, no_interpolation).await;
-    });
-
-    Ok(())
-}
 
 fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn std::error::Error>> {
     if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
@@ -183,6 +150,74 @@ fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn
         }
     }
     Ok(())
+}
+
+/// Handle all database-independent operations (flags and commands that don't need ServiceContainer)
+fn handle_database_independent_operations(
+    cli: Cli, 
+    settings: &Settings
+) -> Option<Result<(), Box<dyn std::error::Error>>> {
+    // Handle flags first
+    if cli.generate_config {
+        return Some(handle_generate_config());
+    }
+    
+    // Handle commands that don't need database
+    match cli.command.as_ref() {
+        Some(Commands::CreateDb { .. }) => {
+            Some(handle_create_db_command(cli, settings))
+        },
+        Some(Commands::Completion { shell }) => {
+            Some(handle_completion_command(shell.clone()))
+        },
+        _ => None, // Requires database services
+    }
+}
+
+fn handle_generate_config() -> Result<(), Box<dyn std::error::Error>> {
+    println!("{}", bkmr::config::generate_default_config());
+    Ok(())
+}
+
+fn handle_completion_command(shell: String) -> Result<(), Box<dyn std::error::Error>> {
+    // Write a brief comment to stderr about what's being output
+    match shell.to_lowercase().as_str() {
+        "bash" => {
+            eprintln!("# Outputting bash completion script for bkmr");
+            eprintln!("# To use, run one of:");
+            eprintln!("# - eval \"$(bkmr completion bash)\"                   # one-time use");
+            eprintln!("# - bkmr completion bash >> ~/.bashrc                  # add to bashrc");
+            eprintln!(
+                "# - bkmr completion bash > /etc/bash_completion.d/bkmr # system-wide install"
+            );
+            eprintln!("#");
+        }
+        "zsh" => {
+            eprintln!("# Outputting zsh completion script for bkmr");
+            eprintln!("# To use, run one of:");
+            eprintln!("# - eval \"$(bkmr completion zsh)\"                    # one-time use");
+            eprintln!(
+                "# - bkmr completion zsh > ~/.zfunc/_bkmr               # save to fpath directory"
+            );
+            eprintln!("# - echo 'fpath=(~/.zfunc $fpath)' >> ~/.zshrc         # add dir to fpath if needed");
+            eprintln!("# - echo 'autoload -U compinit && compinit' >> ~/.zshrc # load completions");
+            eprintln!("#");
+        }
+        "fish" => {
+            eprintln!("# Outputting fish completion script for bkmr");
+            eprintln!("# To use, run one of:");
+            eprintln!("# - bkmr completion fish | source                      # one-time use");
+            eprintln!("# - bkmr completion fish > ~/.config/fish/completions/bkmr.fish # permanent install");
+            eprintln!("#");
+        }
+        _ => {}
+    }
+
+    // Generate completion script to stdout
+    match bkmr::cli::completion::generate_completion(&shell) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("Failed to generate completion script: {}", e).into()),
+    }
 }
 
 fn execute_command_with_services(
