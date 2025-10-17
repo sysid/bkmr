@@ -246,6 +246,160 @@ impl MarkdownAction {
         tag_regex.replace_all(content, "").trim().to_string()
     }
 
+    /// Get the source file path from a bookmark if it contains a file path
+    fn get_source_file_path(&self, bookmark: &Bookmark) -> Option<std::path::PathBuf> {
+        let content_or_path = &bookmark.url;
+
+        if is_file_path(content_or_path) {
+            // Try to resolve the path
+            if let Some(resolved) = abspath(content_or_path) {
+                return Some(std::path::PathBuf::from(resolved));
+            }
+
+            // Fallback to relative path if abspath fails
+            let path = std::path::Path::new(content_or_path);
+            if path.exists() {
+                if let Ok(canonical) = path.canonicalize() {
+                    return Some(canonical);
+                }
+            }
+        }
+
+        None
+    }
+
+    /// Extract local resource paths from HTML (images, stylesheets, scripts)
+    /// Returns a vector of (full_tag_match, path) tuples for replacement
+    fn extract_resource_paths(&self, html: &str) -> Vec<(String, String)> {
+        let mut resources = Vec::new();
+
+        // Regex patterns for different resource types
+        // Match img src, link href, and script src
+        let img_regex = Regex::new(r#"<img\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
+        let link_regex = Regex::new(r#"<link\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
+        let script_regex = Regex::new(r#"<script\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
+
+        // Extract image paths
+        for cap in img_regex.captures_iter(html) {
+            let full_match = cap[0].to_string();
+            let path = cap[1].to_string();
+
+            // Only include local paths (not http://, https://, data:, etc.)
+            if !path.starts_with("http://") && !path.starts_with("https://")
+                && !path.starts_with("data:") && !path.starts_with("//") {
+                resources.push((full_match, path));
+            }
+        }
+
+        // Extract link href paths (stylesheets, etc.)
+        for cap in link_regex.captures_iter(html) {
+            let full_match = cap[0].to_string();
+            let path = cap[1].to_string();
+
+            if !path.starts_with("http://") && !path.starts_with("https://")
+                && !path.starts_with("data:") && !path.starts_with("//") {
+                resources.push((full_match, path));
+            }
+        }
+
+        // Extract script src paths
+        for cap in script_regex.captures_iter(html) {
+            let full_match = cap[0].to_string();
+            let path = cap[1].to_string();
+
+            if !path.starts_with("http://") && !path.starts_with("https://")
+                && !path.starts_with("data:") && !path.starts_with("//") {
+                resources.push((full_match, path));
+            }
+        }
+
+        resources
+    }
+
+    /// Resolve a resource path to its absolute location on disk
+    /// relative_path: The path from the HTML (e.g., "./images/foo.png")
+    /// source_md_path: The absolute path to the source markdown file
+    /// Returns: Some(absolute PathBuf) if the file exists, None otherwise
+    fn resolve_resource_path(&self, relative_path: &str, source_md_path: &Path) -> Option<std::path::PathBuf> {
+        // Get the directory containing the source markdown file
+        let source_dir = source_md_path.parent()?;
+
+        // Resolve the relative path from the source directory
+        let resource_path = if relative_path.starts_with('/') {
+            // Absolute path - use as is
+            std::path::PathBuf::from(relative_path)
+        } else {
+            // Relative path - resolve from source directory
+            source_dir.join(relative_path)
+        };
+
+        // Canonicalize the path to resolve .. and . components
+        if let Ok(canonical_path) = resource_path.canonicalize() {
+            // Check if the file exists
+            if canonical_path.exists() {
+                debug!("Resolved resource path '{}' to '{:?}'", relative_path, canonical_path);
+                return Some(canonical_path);
+            } else {
+                debug!("Resource path '{}' resolved but file does not exist: {:?}", relative_path, canonical_path);
+            }
+        } else {
+            debug!("Failed to canonicalize resource path: {}", relative_path);
+        }
+
+        None
+    }
+
+    /// Copy local resources to the temporary directory
+    /// html: The HTML content with potentially relative resource paths
+    /// source_md_path: The absolute path to the source markdown file
+    /// temp_dir: The temporary directory where resources should be copied
+    /// Returns: Ok(()) if successful, error otherwise
+    fn copy_resources_to_temp(&self, html: &str, source_md_path: &Path, temp_dir: &Path) -> DomainResult<()> {
+        // Extract all local resource paths from the HTML
+        let resources = self.extract_resource_paths(html);
+
+        if resources.is_empty() {
+            debug!("No local resources found in HTML");
+            return Ok(());
+        }
+
+        debug!("Found {} local resources to copy", resources.len());
+
+        // For each resource, copy it to the temp directory
+        for (_full_match, relative_path) in resources {
+            if let Some(source_file) = self.resolve_resource_path(&relative_path, source_md_path) {
+                // Determine destination path in temp directory
+                // Maintain the relative path structure to keep HTML paths valid
+                let dest_path = temp_dir.join(&relative_path);
+
+                // Create parent directories if needed
+                if let Some(parent) = dest_path.parent() {
+                    fs::create_dir_all(parent).map_err(|e| {
+                        DomainError::Other(format!(
+                            "Failed to create directory {:?}: {}",
+                            parent, e
+                        ))
+                    })?;
+                }
+
+                // Copy the file
+                fs::copy(&source_file, &dest_path).map_err(|e| {
+                    DomainError::Other(format!(
+                        "Failed to copy resource from {:?} to {:?}: {}",
+                        source_file, dest_path, e
+                    ))
+                })?;
+
+                info!("Copied resource: {} from {:?} to {:?}", relative_path, source_file, dest_path);
+            } else {
+                // Log warning but don't fail - resource might be optional
+                debug!("Could not resolve resource path, skipping: {}", relative_path);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Generate TOC HTML sidebar
     fn generate_toc_html(&self, toc_entries: &[TocEntry]) -> String {
         if toc_entries.is_empty() {
@@ -843,6 +997,14 @@ impl BookmarkAction for MarkdownAction {
                 DomainError::Other(format!("Failed to create temporary directory: {}", e))
             })?;
 
+        // Copy local resources to temp directory if content came from a file
+        if let Some(source_path) = self.get_source_file_path(bookmark) {
+            debug!("Copying resources for file: {:?}", source_path);
+            self.copy_resources_to_temp(&full_html, &source_path, temp_dir.path())?;
+        } else {
+            debug!("Content is not from a file, skipping resource copying");
+        }
+
         // Create a file path with .html extension
         let safe_title = bookmark
             .title
@@ -850,7 +1012,7 @@ impl BookmarkAction for MarkdownAction {
         let file_name = format!("{}.html", safe_title);
         let file_path = temp_dir.path().join(file_name);
 
-        // Create and write to the file
+        // Create and write to the file (HTML paths stay relative)
         let mut file = File::create(&file_path)
             .map_err(|e| DomainError::Other(format!("Failed to create HTML file: {}", e)))?;
 
@@ -1424,5 +1586,502 @@ mod tests {
         // Check that special characters are preserved in the title
         assert!(toc_html.contains("Title with & < > \" characters"));
         assert!(toc_html.contains("href=\"#title-with-characters\""));
+    }
+
+    // Tests for get_source_file_path()
+    #[test]
+    fn given_file_path_bookmark_when_get_source_then_returns_path() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create a temporary markdown file
+        let mut temp_file = NamedTempFile::new().unwrap();
+        write!(temp_file, "# Test").unwrap();
+        let temp_path = temp_file.path().to_str().unwrap().to_string();
+
+        // Create bookmark with file path
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+        let bookmark = Bookmark {
+            id: Some(1),
+            url: temp_path,
+            title: "Test".to_string(),
+            description: "Test".to_string(),
+            tags,
+            access_count: 0,
+            created_at: Some(chrono::Utc::now()),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
+        };
+
+        let result = action.get_source_file_path(&bookmark);
+        assert!(result.is_some());
+        assert!(result.unwrap().exists());
+    }
+
+    #[test]
+    fn given_markdown_content_bookmark_when_get_source_then_returns_none() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create bookmark with direct markdown content
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+        let bookmark = Bookmark {
+            id: Some(1),
+            url: "# Direct Markdown Content".to_string(),
+            title: "Test".to_string(),
+            description: "Test".to_string(),
+            tags,
+            access_count: 0,
+            created_at: Some(chrono::Utc::now()),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
+        };
+
+        let result = action.get_source_file_path(&bookmark);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn given_nonexistent_file_path_bookmark_when_get_source_then_returns_none() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create bookmark with non-existent file path
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+        let bookmark = Bookmark {
+            id: Some(1),
+            url: "/nonexistent/file.md".to_string(),
+            title: "Test".to_string(),
+            description: "Test".to_string(),
+            tags,
+            access_count: 0,
+            created_at: Some(chrono::Utc::now()),
+            updated_at: chrono::Utc::now(),
+            embedding: None,
+            content_hash: None,
+            embeddable: true,
+            file_path: None,
+            file_mtime: None,
+            file_hash: None,
+        };
+
+        let result = action.get_source_file_path(&bookmark);
+        assert!(result.is_none());
+    }
+
+    // Tests for extract_resource_paths()
+    #[test]
+    fn given_html_with_images_when_extract_resources_then_returns_paths() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let html = r#"
+            <p>Some content</p>
+            <img src="./images/photo.png" alt="Photo">
+            <img src="./assets/logo.jpg" alt="Logo">
+        "#;
+
+        let resources = action.extract_resource_paths(html);
+        assert_eq!(resources.len(), 2);
+        assert_eq!(resources[0].1, "./images/photo.png");
+        assert_eq!(resources[1].1, "./assets/logo.jpg");
+    }
+
+    #[test]
+    fn given_html_with_mixed_urls_when_extract_resources_then_filters_correctly() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let html = r#"
+            <img src="./local.png" alt="Local">
+            <img src="https://example.com/remote.png" alt="Remote">
+            <img src="http://example.com/http.png" alt="HTTP">
+            <img src="data:image/png;base64,abc123" alt="Data URI">
+            <img src="//cdn.example.com/cdn.png" alt="Protocol Relative">
+        "#;
+
+        let resources = action.extract_resource_paths(html);
+        // Should only extract ./local.png
+        assert_eq!(resources.len(), 1);
+        assert_eq!(resources[0].1, "./local.png");
+    }
+
+    #[test]
+    fn given_html_with_link_and_script_tags_when_extract_resources_then_includes_all() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let html = r#"
+            <link rel="stylesheet" href="./styles.css">
+            <script src="./scripts/app.js"></script>
+            <img src="./images/icon.png">
+        "#;
+
+        let resources = action.extract_resource_paths(html);
+        assert_eq!(resources.len(), 3);
+
+        // Extract paths for verification (order may vary based on regex matching)
+        let paths: Vec<&str> = resources.iter().map(|(_, path)| path.as_str()).collect();
+        assert!(paths.contains(&"./images/icon.png"));
+        assert!(paths.contains(&"./styles.css"));
+        assert!(paths.contains(&"./scripts/app.js"));
+    }
+
+    #[test]
+    fn given_empty_html_when_extract_resources_then_returns_empty_vec() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let html = "<p>No resources here</p>";
+        let resources = action.extract_resource_paths(html);
+        assert_eq!(resources.len(), 0);
+    }
+
+    #[test]
+    fn given_html_with_quoted_paths_when_extract_resources_then_handles_both_quotes() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let html = r#"
+            <img src="./single.png" alt="Single">
+            <img src='./double.png' alt="Double">
+        "#;
+
+        let resources = action.extract_resource_paths(html);
+        assert_eq!(resources.len(), 2);
+        assert_eq!(resources[0].1, "./single.png");
+        assert_eq!(resources[1].1, "./double.png");
+    }
+
+    // Tests for resolve_resource_path()
+    #[test]
+    fn given_relative_path_when_resolve_resource_then_returns_absolute() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create temp directory with markdown file and image subdirectory
+        let temp_dir = tempfile::tempdir().unwrap();
+        let md_path = temp_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let images_dir = temp_dir.path().join("images");
+        fs::create_dir(&images_dir).unwrap();
+        let image_path = images_dir.join("photo.png");
+        fs::write(&image_path, "fake image data").unwrap();
+
+        // Resolve relative path
+        let result = action.resolve_resource_path("./images/photo.png", &md_path);
+        assert!(result.is_some());
+        assert!(result.unwrap().exists());
+    }
+
+    #[test]
+    fn given_parent_relative_path_when_resolve_resource_then_returns_absolute() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create temp directory structure: temp/docs/test.md and temp/assets/logo.png
+        let temp_dir = tempfile::tempdir().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+        fs::create_dir(&docs_dir).unwrap();
+        let md_path = docs_dir.join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let assets_dir = temp_dir.path().join("assets");
+        fs::create_dir(&assets_dir).unwrap();
+        let logo_path = assets_dir.join("logo.png");
+        fs::write(&logo_path, "fake logo data").unwrap();
+
+        // Resolve parent relative path
+        let result = action.resolve_resource_path("../assets/logo.png", &md_path);
+        assert!(result.is_some());
+        assert!(result.unwrap().exists());
+    }
+
+    #[test]
+    fn given_absolute_path_when_resolve_resource_then_returns_path() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create temp file
+        let mut temp_file = NamedTempFile::new().unwrap();
+        write!(temp_file, "image data").unwrap();
+        let absolute_path = temp_file.path().to_str().unwrap();
+
+        // Create dummy markdown file path
+        let md_path = std::path::PathBuf::from("/tmp/test.md");
+
+        // Resolve absolute path
+        let result = action.resolve_resource_path(absolute_path, &md_path);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn given_nonexistent_path_when_resolve_resource_then_returns_none() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let md_path = temp_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        // Try to resolve non-existent file
+        let result = action.resolve_resource_path("./nonexistent.png", &md_path);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn given_path_with_dots_when_resolve_resource_then_canonicalizes() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create structure: temp/docs/notes/test.md and temp/docs/images/photo.png
+        let temp_dir = tempfile::tempdir().unwrap();
+        let docs_dir = temp_dir.path().join("docs");
+        fs::create_dir(&docs_dir).unwrap();
+        let notes_dir = docs_dir.join("notes");
+        fs::create_dir(&notes_dir).unwrap();
+        let md_path = notes_dir.join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let images_dir = docs_dir.join("images");
+        fs::create_dir(&images_dir).unwrap();
+        let photo_path = images_dir.join("photo.png");
+        fs::write(&photo_path, "fake photo data").unwrap();
+
+        // Resolve path with .. and . components
+        let result = action.resolve_resource_path("./../images/./photo.png", &md_path);
+        assert!(result.is_some());
+
+        let resolved = result.unwrap();
+        assert!(resolved.exists());
+        // Should not contain . or .. after canonicalization
+        assert!(!resolved.to_string_lossy().contains("/./"));
+        assert!(!resolved.to_string_lossy().contains("/../"));
+    }
+
+    // Tests for copy_resources_to_temp()
+    #[test]
+    fn given_single_image_when_copy_resources_then_copies_correctly() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create source structure
+        let source_dir = tempfile::tempdir().unwrap();
+        let md_path = source_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let images_dir = source_dir.path().join("images");
+        fs::create_dir(&images_dir).unwrap();
+        let image_path = images_dir.join("photo.png");
+        fs::write(&image_path, "test image data").unwrap();
+
+        // Create temp directory
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // HTML with image reference
+        let html = r#"<img src="./images/photo.png" alt="Photo">"#;
+
+        // Copy resources
+        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
+        assert!(result.is_ok());
+
+        // Verify file was copied
+        let copied_file = temp_dir.path().join("images/photo.png");
+        assert!(copied_file.exists());
+        let content = fs::read_to_string(copied_file).unwrap();
+        assert_eq!(content, "test image data");
+    }
+
+    #[test]
+    fn given_multiple_resources_when_copy_resources_then_copies_all() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create source structure
+        let source_dir = tempfile::tempdir().unwrap();
+        let md_path = source_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        // Create images directory with file
+        let images_dir = source_dir.path().join("images");
+        fs::create_dir(&images_dir).unwrap();
+        fs::write(images_dir.join("photo.png"), "photo data").unwrap();
+
+        // Create styles directory with file
+        let styles_dir = source_dir.path().join("styles");
+        fs::create_dir(&styles_dir).unwrap();
+        fs::write(styles_dir.join("main.css"), "css data").unwrap();
+
+        // Create temp directory
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // HTML with multiple resources
+        let html = r#"
+            <link rel="stylesheet" href="./styles/main.css">
+            <img src="./images/photo.png" alt="Photo">
+        "#;
+
+        // Copy resources
+        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
+        assert!(result.is_ok());
+
+        // Verify files were copied
+        assert!(temp_dir.path().join("styles/main.css").exists());
+        assert!(temp_dir.path().join("images/photo.png").exists());
+    }
+
+    #[test]
+    fn given_nested_directories_when_copy_resources_then_maintains_structure() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create source structure with nested directories
+        let source_dir = tempfile::tempdir().unwrap();
+        let md_path = source_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let assets_dir = source_dir.path().join("assets");
+        fs::create_dir(&assets_dir).unwrap();
+        let images_dir = assets_dir.join("images");
+        fs::create_dir(&images_dir).unwrap();
+        let icons_dir = images_dir.join("icons");
+        fs::create_dir(&icons_dir).unwrap();
+        fs::write(icons_dir.join("logo.svg"), "svg data").unwrap();
+
+        // Create temp directory
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // HTML with nested resource path
+        let html = r#"<img src="./assets/images/icons/logo.svg" alt="Logo">"#;
+
+        // Copy resources
+        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
+        assert!(result.is_ok());
+
+        // Verify directory structure was maintained
+        let copied_file = temp_dir.path().join("assets/images/icons/logo.svg");
+        assert!(copied_file.exists());
+        let content = fs::read_to_string(copied_file).unwrap();
+        assert_eq!(content, "svg data");
+    }
+
+    #[test]
+    fn given_nonexistent_resource_when_copy_resources_then_continues() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        // Create source structure with only one file
+        let source_dir = tempfile::tempdir().unwrap();
+        let md_path = source_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let images_dir = source_dir.path().join("images");
+        fs::create_dir(&images_dir).unwrap();
+        fs::write(images_dir.join("existing.png"), "exists").unwrap();
+
+        // Create temp directory
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // HTML references both existing and non-existing files
+        let html = r#"
+            <img src="./images/existing.png" alt="Exists">
+            <img src="./images/nonexistent.png" alt="Missing">
+        "#;
+
+        // Copy resources - should not fail
+        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
+        assert!(result.is_ok());
+
+        // Verify existing file was copied
+        assert!(temp_dir.path().join("images/existing.png").exists());
+        // Non-existent file should not exist in temp
+        assert!(!temp_dir.path().join("images/nonexistent.png").exists());
+    }
+
+    #[test]
+    fn given_empty_html_when_copy_resources_then_returns_ok() {
+        let _ = init_test_env();
+        let _guard = EnvGuard::new();
+
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+
+        let source_dir = tempfile::tempdir().unwrap();
+        let md_path = source_dir.path().join("test.md");
+        fs::write(&md_path, "# Test").unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        // Empty HTML
+        let html = "<p>No resources</p>";
+
+        // Should succeed with no operations
+        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
+        assert!(result.is_ok());
     }
 }
