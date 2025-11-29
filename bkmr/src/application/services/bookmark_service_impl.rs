@@ -611,9 +611,12 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
         // Convert content type to system tag
         let system_tag = match file_data.content_type.as_str() {
+            "_snip_" => SystemTag::Snippet,
+            "_imported_" => SystemTag::Text,
             "_shell_" => SystemTag::Shell,
             "_md_" => SystemTag::Markdown,
-            _ => SystemTag::Shell, // Default
+            "_env_" => SystemTag::Env,
+            _ => SystemTag::Shell, // Default for unknown types
         };
 
         // Prepare tags (including system tag)

@@ -219,3 +219,52 @@ echo "missing name field"
     let (added, _, _) = result.unwrap();
     assert_eq!(added, 0, "Should not add files without name field");
 }
+
+#[test]
+fn given_file_with_snip_type_when_import_then_bookmark_has_snip_tag() {
+    use bkmr::domain::tag::Tag;
+
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
+
+    // Create a temporary file with type: _snip_ in frontmatter
+    let temp_dir = TempDir::new().unwrap();
+    let file_path = temp_dir.path().join("snippet.md");
+
+    fs::write(
+        &file_path,
+        r#"---
+name: my-snippet
+tags: test
+type: _snip_
+---
+This is snippet content that should be tagged as _snip_, not _shell_.
+"#,
+    )
+    .unwrap();
+
+    let paths = vec![temp_dir.path().to_string_lossy().to_string()];
+
+    // Import the file
+    let result = service.import_files(&paths, false, false, false, false, None);
+    assert!(result.is_ok(), "Import should succeed");
+
+    let (added, _, _) = result.unwrap();
+    assert_eq!(added, 1, "Should add one file");
+
+    // Verify the bookmark has _snip_ tag, not _shell_
+    let all_bookmarks = service.get_all_bookmarks(None, None).unwrap();
+    let bookmark = all_bookmarks
+        .iter()
+        .find(|b| b.title == "my-snippet")
+        .expect("Should find the imported bookmark");
+
+    assert!(
+        bookmark.tags.contains(&Tag::new("_snip_").unwrap()),
+        "Bookmark should have _snip_ tag from frontmatter type"
+    );
+    assert!(
+        !bookmark.tags.contains(&Tag::new("_shell_").unwrap()),
+        "Bookmark should NOT have _shell_ tag"
+    );
+}
