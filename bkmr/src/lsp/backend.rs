@@ -636,7 +636,8 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
 /// Validate that the environment is suitable for running the LSP server
 async fn validate_environment() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Check if we're in a proper LSP context (stdin/stdout should be available)
-    if atty::is(atty::Stream::Stdin) || atty::is(atty::Stream::Stdout) {
+    use std::io::IsTerminal;
+    if std::io::stdin().is_terminal() || std::io::stdout().is_terminal() {
         eprintln!("Warning: bkmr lsp is designed to run as an LSP server");
         eprintln!("It should be launched by an LSP client, not directly from a terminal");
         eprintln!("If you're testing, pipe some LSP messages to stdin");

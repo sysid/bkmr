@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use bkmr::util::testing::EnvGuard;
 use predicates::prelude::*;
 use std::fs;
@@ -7,7 +7,7 @@ use std::fs;
 fn given_debug_flag_when_running_then_enables_debug_mode() {
     // let config = init_test_env();
     // let _guard = EnvGuard::new();
-    let mut cmd = Command::cargo_bin("bkmr").unwrap();
+    let mut cmd = cargo_bin_cmd!("bkmr");
     cmd.args(["-d", "-d"]).assert().success();
     // cmd.args(&["-d", "-d"])
     //     .assert()
@@ -21,7 +21,7 @@ fn given_path_when_creating_database_then_creates_successfully() {
     // let _guard = EnvGuard::new();
     fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
 
-    let mut cmd = Command::cargo_bin("bkmr").unwrap();
+    let mut cmd = cargo_bin_cmd!("bkmr");
     cmd.args(["-d", "-d", "create-db", "/tmp/bkmr_test.db"])
         .assert()
         .stdout(predicate::str::contains("Database created"));
@@ -33,6 +33,6 @@ fn given_bookmark_ids_when_showing_then_displays_correct_entries() {
     let _guard = EnvGuard::new();
     fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
 
-    let mut cmd = Command::cargo_bin("bkmr").unwrap();
+    let mut cmd = cargo_bin_cmd!("bkmr");
     cmd.args(["-d", "-d", "show", "1,2"]).assert().success();
 }
