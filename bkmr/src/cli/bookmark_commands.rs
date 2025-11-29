@@ -11,7 +11,7 @@ use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
-use crate::config::ConfigSource;
+use crate::config::{get_config_file_path, ConfigSource};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error_context::CliErrorContext;
 use crate::domain::repositories::repository::BookmarkRepository;
@@ -881,13 +881,42 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         // Program version
         println!("Program Version: {}", env!("CARGO_PKG_VERSION"));
 
-        // App configuration
+        // Configuration section
         println!("\nConfiguration:");
-        println!("  Database URL: {}", settings.db_url);
+
+        // Config file status
+        if let Some(config_path) = get_config_file_path() {
+            let exists = config_path.exists();
+            println!(
+                "  Config file: {} ({})",
+                config_path.display(),
+                if exists { "exists" } else { "not found" }
+            );
+        } else {
+            println!("  Config file: (unable to determine path)");
+        }
+
+        // Config source
+        println!("  Source: {:?}", settings.config_source);
+
+        // Database URL with file size
+        let db_info = if let Ok(metadata) = fs::metadata(&settings.db_url) {
+            format!("{} ({})", settings.db_url, format_file_size(metadata.len()))
+        } else {
+            format!("{} (file not found)", settings.db_url)
+        };
+        println!("  Database: {}", db_info);
+
+        // FZF options - all of them
         println!("  FZF Height: {}", settings.fzf_opts.height);
         println!("  FZF Reverse: {}", settings.fzf_opts.reverse);
         println!("  FZF Show Tags: {}", settings.fzf_opts.show_tags);
         println!("  FZF Hide URL: {}", settings.fzf_opts.no_url);
+        println!("  FZF Show Action: {}", settings.fzf_opts.show_action);
+        println!("  FZF Show File Info: {}", settings.fzf_opts.show_file_info);
+
+        // Shell options
+        println!("  Shell Interactive: {}", settings.shell_opts.interactive);
 
         // Embedder type using services
         let embedder_type = if services.embedder.as_any().type_id()
@@ -899,10 +928,38 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         };
         println!("  Embedder: {}", embedder_type);
 
-        // Number of entries
-        let bookmark_count = repository.get_all()?.len();
+        // Base paths section
+        println!("\n  Base Paths:");
+        if settings.base_paths.is_empty() {
+            println!("    (none configured)");
+        } else {
+            for (name, value) in &settings.base_paths {
+                let expanded = shellexpand::full(value)
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|_| value.clone());
+                if expanded != *value {
+                    println!("    {}: {} -> {}", name, value, expanded);
+                } else {
+                    println!("    {}: {}", name, value);
+                }
+            }
+        }
+
+        // Environment overrides section
+        println!("\n  Environment Overrides:");
+        display_env_var("BKMR_DB_URL", false);
+        display_env_var("BKMR_FZF_OPTS", false);
+        display_env_var("BKMR_SHELL_INTERACTIVE", false);
+        display_env_var("OPENAI_API_KEY", true); // Mask the actual value
+
+        // Database statistics
+        let bookmarks = repository.get_all()?;
+        let bookmark_count = bookmarks.len();
+        let file_imported_count = bookmarks.iter().filter(|b| b.file_path.is_some()).count();
+
         println!("\nDatabase Statistics:");
         println!("  Total Bookmarks: {}", bookmark_count);
+        println!("  File-imported: {}", file_imported_count);
 
         // Get tag statistics
         let tags = repository.get_all_tags()?;
@@ -923,6 +980,39 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         }
     }
     Ok(())
+}
+
+/// Format file size in human-readable form
+fn format_file_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+/// Display environment variable status
+fn display_env_var(name: &str, mask_value: bool) {
+    match std::env::var(name) {
+        Ok(value) => {
+            if mask_value {
+                println!("    {}: configured", name);
+            } else {
+                println!("    {}: {}", name, value);
+            }
+        }
+        Err(_) => {
+            println!("    {}: not set", name);
+        }
+    }
 }
 
 fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<()> {
