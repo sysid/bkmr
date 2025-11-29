@@ -261,7 +261,7 @@ checksum = "2261d10cca569e4643e526d8dc2e62e433cc8aba21ab764233731f8d369bf394"
 
 [[package]]
 name = "bkmr"
-version = "6.2.6"
+version = "6.3.0"
 dependencies = [
  "arboard",
  "assert_cmd",
