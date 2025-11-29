@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::cargo::cargo_bin_cmd;
 use bkmr::util::test_service_container::TestServiceContainer;
 use bkmr::domain::tag::Tag;
 use bkmr::util::testing::{init_test_env, EnvGuard};
@@ -38,7 +38,7 @@ fn test_search_command_with_tags() {
         )
         .unwrap();
 
-    let mut cmd = Command::cargo_bin("bkmr").expect("Failed to create command");
+    let mut cmd = cargo_bin_cmd!("bkmr");
 
     // Set environment variable to use the same test database
     cmd.env("BKMR_DB_URL", "../db/bkmr.db");
