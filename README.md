@@ -17,11 +17,20 @@
 
 - Web URLs with automatic metadata extraction
 - Code snippets for quick access and reuse
-- Shell commands with execution capabilities
-- Markdown documents with live rendering
-- Plain text with template interpolation
-- Local files and directories
+- Shell commands with immediate execution capabilities
+- Markdown documents with live rendering, incl. TOC
+- Plain text with Jinja template interpolation
+- Local files and directories integration
 - Semantic embeddings for AI-powered search
+
+**Centralize** your data in bkmr's database (`add`) or **keep it in your filesystem**
+(`import-files`) ([see](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)).
+
+Example:
+- bookmarks, links short snippets go into the database
+- large markdown documents or scripts stay where they are and only references go into DB
+
+**Both options provide the full benefits of `bkmr`.**
 
 ## Why bkmr?
 

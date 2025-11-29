@@ -235,7 +235,7 @@ check-github-token:  ## Check if GITHUB_TOKEN is set
 
 
 .PHONY: fix-version
-fix-version:  ## fix-version of Cargo.toml, re-connect with HEAD
+fix-version: check-github-token  ## fix-version of Cargo.toml, re-connect with HEAD
 	git add bkmr/Cargo.lock
 	git commit --amend --no-edit
 	git tag -f "v$(VERSION)"
