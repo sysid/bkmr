@@ -172,11 +172,20 @@ build:  ## build release version
 build-fast:  ## build debug version
 	pushd $(pkg_src) && cargo build
 
+# macOS Code Signing Fix:
+# When Rust's linker builds a binary, it creates an adhoc linker-signed signature.
+# When copied with `cp`, macOS preserves this signature but it becomes invalid
+# because the hash was computed for the original path/inode. macOS AMFI (Apple
+# Mobile File Integrity) detects the mismatch and kills the process with SIGKILL
+# (signal 9, exit code 137). Re-signing with `codesign --force --sign -` creates
+# a fresh adhoc signature valid for the new location.
+
 .PHONY: install-debug
 install-debug: uninstall  ## install-debug (no release version)
 	@VERSION=$(shell cat VERSION) && \
 		echo "-M- Installing $$VERSION" && \
 		cp -vf bkmr/target/debug/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
+		codesign --force --sign - ~/bin/$(BINARY)$$VERSION && \
 		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
 		~/bin/$(BINARY) completion bash > ~/.bash_completions/bkmr
 
@@ -185,6 +194,7 @@ install: uninstall  ## install
 	@VERSION=$(shell cat VERSION) && \
 		echo "-M- Installing $$VERSION" && \
 		cp -vf bkmr/target/release/$(BINARY) ~/bin/$(BINARY)$$VERSION && \
+		codesign --force --sign - ~/bin/$(BINARY)$$VERSION && \
 		ln -vsf ~/bin/$(BINARY)$$VERSION ~/bin/$(BINARY)
 		~/bin/$(BINARY) completion bash > ~/.bash_completions/bkmr
 

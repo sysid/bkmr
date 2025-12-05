@@ -21,7 +21,6 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use skim::tuikit::attr::{Attr, Color};
-use skim::tuikit::raw::IntoRawMode;
 use skim::{
     prelude::*, AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem,
     SkimItemReceiver, SkimItemSender,
@@ -521,8 +520,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
         // Check if the user pressed ESC - if so, don't process selected items
         if key == Key::ESC {
             debug!("Selection aborted with ESC key");
-            // clear_terminal();
-            clear_terminal_completely();
+            reset_terminal_state();
             return Ok(());
         }
 
@@ -538,9 +536,9 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
         let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
         debug!("Selected bookmark IDs: {:?}", ids);
 
-        // IMPORTANT: Clear the terminal completely BEFORE processing any action
-        // clear_terminal_completely();
-        clear_terminal();
+        // Ensure clean output positioning before processing action
+        // Skim handles terminal restoration - we just need a newline for output
+        println!();
 
         // Process the selected action based on the key
         match key {
@@ -574,8 +572,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
                 }
             }
             Key::Ctrl('e') => {
-                clear_fzf_artifacts();
-                // Edit selected bookmarks
+                // Edit selected bookmarks - editor handles its own terminal
                 edit_bookmarks(ids, false, services.bookmark_service.clone(), services.template_service.clone(), settings)?;
             }
             Key::Ctrl('d') => {
@@ -595,17 +592,15 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
             Key::Ctrl('p') => {
                 // Show detailed information for the selected bookmark
                 if let Some(bookmark) = selected_bookmarks.first() {
-                    // Clear screen
-                    clear_terminal();
+                    // Clear from cursor for clean detail view
+                    let _ = execute!(
+                        std::io::stdout(),
+                        Clear(ClearType::FromCursorDown)
+                    );
 
                     // Use the shared function to show bookmark details
                     let details = bookmark_commands::show_bookmark_details(bookmark, services);
                     print!("{}", details);
-
-                    // Wait for user to press Enter before returning to FZF
-                    // eprintln!("\nPress Enter to continue...");
-                    // let mut input = String::new();
-                    // std::io::stdin().read_line(&mut input)?;
                 }
             }
             _ => {
@@ -613,98 +608,23 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
             }
         }
 
-        // Clear terminal after action
-        clear_terminal();
+        // Reset terminal state after action (cursor visible, colors reset)
+        reset_terminal_state();
     }
 
     Ok(())
 }
 
-/// Clears the fzf interface from the terminal screen
-fn clear_terminal() {
-    // Try to reset terminal state without completely clearing the screen
-    if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
-        // Execute a sequence of terminal operations:
-        // 1. Reset colors to default
-        // 2. Show cursor (in case it was hidden)
-        // 3. Clear from current position to end of screen (preserves any output at the top)
-        if let Err(e) = execute!(
-            stdout,
-            crossterm::style::ResetColor,
-            crossterm::cursor::Show,
-            Clear(ClearType::FromCursorDown) // this is important !!!
-        ) {
-            debug!("Failed to reset terminal with crossterm: {}", e);
-        }
-
-        // Ensure output is flushed
-        if let Err(e) = stdout.flush() {
-            debug!("Failed to flush terminal: {}", e);
-        }
-    }
-
-    // Print a single newline to ensure we have a clean prompt
-    println!();
-}
-
-/// Clears fzf-specific artifacts from the terminal
-/// This is less aggressive than a full clear to preserve command output
-fn clear_fzf_artifacts() {
-    // Gather terminal size information
-    let terminal_size = crossterm::terminal::size().unwrap_or((80, 24));
-    let width = terminal_size.0;
-
-    // Print a sequence of spaces to overwrite the fzf line
-    let spaces = " ".repeat(width as usize);
-
-    // If we can get raw mode, use crossterm to position cursor and clear
-    if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
-        // Move to beginning of line and clear
-        if let Err(e) = execute!(
-            stdout,
-            crossterm::cursor::MoveToColumn(0),
-            crossterm::style::Print(&spaces),
-            crossterm::cursor::MoveToColumn(0)
-        ) {
-            debug!("Failed to clear fzf line: {}", e);
-        }
-
-        // Ensure flush
-        if let Err(e) = stdout.flush() {
-            debug!("Failed to flush terminal: {}", e);
-        }
-    } else {
-        // Fallback: just print a newline
-        println!();
-    }
-}
-
-/// Clear fzf selection UI from the terminal completely
-/// This approach completely resets the terminal state to get rid of all artifacts
-fn clear_terminal_completely() {
-    // Try multiple approaches to ensure terminal is fully reset
-
-    // 1. Use crossterm to attempt a full terminal reset
-    if let Ok(mut stdout) = std::io::stdout().into_raw_mode() {
-        // First try to clear everything and reset all attributes
-        let _ = execute!(
-            stdout,
-            Clear(ClearType::All),
-            crossterm::style::ResetColor,
-            crossterm::cursor::MoveTo(0, 0),
-            crossterm::cursor::Show
-        );
-
-        // Make sure changes are flushed
-        let _ = stdout.flush();
-    }
-
-    // 2. As a backup, send ANSI escape codes directly
-    // This sequence: clears screen, moves cursor to home position, and resets attributes
-    // print!("\x1B[2J\x1B[H\x1B[0m");
-    // std::io::stdout().flush().ok();  // does not work with interactive terminal (source env)
-
-    // 3. If all else fails, at least print newlines to push fzf UI off the visible area
-    // println!("\n\n\n\n\n\n\n\n");  // results in cursor jumping
+/// Minimal terminal state reset after skim exit
+/// Skim handles screen restoration via alternate screen or cursor positioning
+/// We only need to ensure cursor is visible and colors are reset
+fn reset_terminal_state() {
+    let mut stdout = std::io::stdout();
+    let _ = execute!(
+        stdout,
+        crossterm::style::ResetColor,
+        crossterm::cursor::Show
+    );
+    let _ = stdout.flush();
 }
 
