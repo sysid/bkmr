@@ -149,6 +149,7 @@ fn given_shell_bookmark_when_open_command_with_no_edit_flag_then_executes_withou
             no_edit: true,
             file: false,
             script_args: vec![],
+            stdout: false,
         }),
     };
 

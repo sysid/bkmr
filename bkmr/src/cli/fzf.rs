@@ -424,7 +424,7 @@ impl SkimItem for SemanticSearchResult {
 
 /// Processes bookmarks using the fzf-like selector interface
 #[instrument(skip(bookmarks), level = "debug")]
-pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContainer, settings: &crate::config::Settings) -> CliResult<()> {
+pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContainer, settings: &crate::config::Settings, stdout: bool) -> CliResult<()> {
     if bookmarks.is_empty() {
         eprintln!("No bookmarks to display");
         return Ok(());
@@ -560,11 +560,22 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
         match key {
             // Execute default action for Enter - Use the action service
             Key::Enter => {
-                // clear_fzf_artifacts();
-                // Execute default action for each selected bookmark
-                for bookmark in &selected_bookmarks {
-                    // Use the action service to execute the default action
-                    execute_bookmark_default_action(bookmark, services.action_service.clone())?;
+                if stdout {
+                    // Output interpolated content to stdout instead of executing
+                    for bookmark in &selected_bookmarks {
+                        let content = services.interpolation_service
+                            .render_bookmark_url(bookmark)
+                            .map_err(|e| crate::cli::error::CliError::CommandFailed(
+                                format!("Failed to render content: {}", e)
+                            ))?;
+                        println!("{}", content);
+                    }
+                } else {
+                    // Execute default action for each selected bookmark
+                    for bookmark in &selected_bookmarks {
+                        // Use the action service to execute the default action
+                        execute_bookmark_default_action(bookmark, services.action_service.clone())?;
+                    }
                 }
             }
             Key::Ctrl('y') | Key::Ctrl('o') => {

@@ -284,6 +284,113 @@ bkmr search --tags _shell_ --json | jq length
 declare -F | grep -E "(backup|deploy|monitoring)"
 ```
 
+## Shell History Integration
+
+The `--stdout` flag enables shell history integration by outputting bookmark content to stdout instead of executing it. This allows shell wrappers to capture the content, add it to shell history, and then execute it.
+
+### The Problem
+
+When bkmr executes a shell script directly, the executed command doesn't appear in your shell history. This is due to Unix process isolation - child processes cannot modify the parent shell's history.
+
+### The Solution
+
+Use the `--stdout` flag with a shell wrapper function that:
+1. Captures the interpolated content
+2. Adds it to shell history
+3. Executes it
+
+### Shell Wrapper Functions
+
+#### Bash
+
+Add to `~/.bashrc`:
+
+```bash
+# Execute bookmark with shell history integration
+_bkmr_exec() {
+    local cmd
+    cmd=$(bkmr open "$1" --stdout 2>/dev/null)
+    if [[ -n "$cmd" ]]; then
+        history -s "$cmd"
+        eval "$cmd"
+    fi
+}
+
+# Interactive search with shell history integration
+_bkmr_search_exec() {
+    local cmd
+    cmd=$(bkmr search --fzf --stdout "$@" 2>/dev/null)
+    if [[ -n "$cmd" ]]; then
+        history -s "$cmd"
+        eval "$cmd"
+    fi
+}
+```
+
+#### Zsh
+
+Add to `~/.zshrc`:
+
+```zsh
+# Execute bookmark with shell history integration
+_bkmr_exec() {
+    local cmd
+    cmd=$(bkmr open "$1" --stdout 2>/dev/null)
+    if [[ -n "$cmd" ]]; then
+        print -s "$cmd"
+        eval "$cmd"
+    fi
+}
+
+# Interactive search with shell history integration
+_bkmr_search_exec() {
+    local cmd
+    cmd=$(bkmr search --fzf --stdout "$@" 2>/dev/null)
+    if [[ -n "$cmd" ]]; then
+        print -s "$cmd"
+        eval "$cmd"
+    fi
+}
+```
+
+### Usage Examples
+
+```bash
+# Execute bookmark by ID with history integration
+_bkmr_exec 42
+
+# Interactive search, select, and execute with history
+_bkmr_search_exec --tags=_shell_
+
+# After execution, the actual script content appears in your history
+# Press Up arrow to see and re-run the exact command
+```
+
+### Combining with Key Bindings
+
+For even faster access, bind to a key:
+
+#### Bash
+```bash
+# Bind Ctrl+B to interactive search with history
+bind -x '"\C-b": _bkmr_search_exec'
+```
+
+#### Zsh
+```zsh
+# Create ZLE widget
+_bkmr_widget() {
+    local cmd
+    cmd=$(bkmr search --fzf --stdout 2>/dev/null)
+    if [[ -n "$cmd" ]]; then
+        LBUFFER="$cmd"
+        zle redisplay
+    fi
+}
+zle -N _bkmr_widget
+bindkey '^b' _bkmr_widget
+```
+
 ### File Quickview with metadata Enrichment
 1. Add file as interpolation snippet like:
 ```bash
