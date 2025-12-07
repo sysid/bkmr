@@ -130,12 +130,13 @@ impl SearchCommandHandler {
         fzf_style: Option<String>,
         fields: &[DisplayField],
         non_interactive: bool,
+        stdout: bool,
         stderr: &mut StandardStream,
     ) -> CliResult<()> {
         match (is_fuzzy, is_json) {
             (true, _) => {
                 let style = fzf_style.as_deref().unwrap_or("classic");
-                fzf_process(bookmarks, style, &self.services, &self.settings)?;
+                fzf_process(bookmarks, style, &self.services, &self.settings, stdout)?;
             }
             (_, true) => {
                 let json_views = JsonBookmarkView::from_domain_collection(bookmarks);
@@ -226,6 +227,7 @@ impl SearchCommandHandler {
             limit,
             interpolate,
             shell_stubs,
+            stdout,
         } = cli.command.unwrap()
         {
             let mut fields = crate::cli::display::DEFAULT_FIELDS.to_vec();
@@ -275,6 +277,7 @@ impl SearchCommandHandler {
                 fzf_style,
                 &fields,
                 non_interactive,
+                stdout,
                 &mut stderr,
             )?;
         }

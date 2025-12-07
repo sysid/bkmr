@@ -1,3 +1,4 @@
+thoughts/
 db/schema_v1_migration_test.db
 db/schema_v2_no_embeddings.db
 db/schema_v2_with_embeddings.db

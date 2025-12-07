@@ -122,6 +122,12 @@ pub enum Commands {
             help = "output shell function stubs for shell script bookmarks (automatically filters for _shell_ type)"
         )]
         shell_stubs: bool,
+
+        #[arg(
+            long = "stdout",
+            help = "output selected bookmark content to stdout instead of executing (for shell wrapper integration)"
+        )]
+        stdout: bool,
     },
     /// Semantic Search with OpenAI
     SemSearch {
@@ -150,6 +156,12 @@ pub enum Commands {
             help = "Arguments to pass to shell scripts (use -- to separate: bkmr open ID -- arg1 arg2)"
         )]
         script_args: Vec<String>,
+
+        #[arg(
+            long = "stdout",
+            help = "output bookmark content to stdout instead of executing"
+        )]
+        stdout: bool,
     },
     /// Add a bookmark
     Add {

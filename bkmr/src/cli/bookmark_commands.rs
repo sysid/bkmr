@@ -142,17 +142,19 @@ pub fn semantic_search(
     Ok(())
 }
 
-#[instrument(skip(cli, bookmark_service, action_service))]
+#[instrument(skip(cli, bookmark_service, action_service, interpolation_service))]
 pub fn open(
-    cli: Cli, 
+    cli: Cli,
     bookmark_service: Arc<dyn BookmarkService>,
-    action_service: Arc<dyn ActionService>
+    action_service: Arc<dyn ActionService>,
+    interpolation_service: Arc<dyn crate::application::services::interpolation_service::InterpolationService>,
 ) -> CliResult<()> {
     if let Commands::Open {
         ids,
         no_edit,
         file,
         script_args,
+        stdout,
     } = cli.command.unwrap()
     {
         if file {
@@ -166,16 +168,25 @@ pub fn open(
                 .cli_context("parsing bookmark IDs for opening")? {
                 if let Some(bookmark) = bookmark_service.get_bookmark(id)
                     .cli_context("retrieving bookmark for opening")? {
-                    // Use action service to execute default action
-                    let action_type = action_service.get_default_action_description(&bookmark);
-                    eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
-                    // Execute default action with access recording handled by action service
-                    action_service.execute_default_action_with_options(
-                        &bookmark,
-                        no_edit,
-                        &script_args,
-                    )?;
+                    if stdout {
+                        // Output interpolated content to stdout instead of executing
+                        let content = interpolation_service
+                            .render_bookmark_url(&bookmark)
+                            .map_err(|e| CliError::CommandFailed(format!("Failed to render content: {}", e)))?;
+                        println!("{}", content);
+                    } else {
+                        // Use action service to execute default action
+                        let action_type = action_service.get_default_action_description(&bookmark);
+                        eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
+
+                        // Execute default action with access recording handled by action service
+                        action_service.execute_default_action_with_options(
+                            &bookmark,
+                            no_edit,
+                            &script_args,
+                        )?;
+                    }
                 } else {
                     eprintln!("Bookmark with ID {} not found", id);
                 }

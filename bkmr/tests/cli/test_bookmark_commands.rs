@@ -51,6 +51,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
             limit: None,
             interpolate: false,
             shell_stubs: false,
+            stdout: false,
         }),
     };
 
@@ -116,6 +117,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
             limit: None,
             interpolate: false,
             shell_stubs: false,
+            stdout: false,
         }),
     };
 
@@ -206,6 +208,7 @@ fn test_search_command_structure_with_interpolate() {
             limit: Some(50),
             interpolate: true, // Test with interpolation enabled
             shell_stubs: false,
+            stdout: false,
         }),
     };
 
