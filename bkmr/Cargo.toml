@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "6.4.0"
+version = "6.4.1"
 edition = "2021"
 description = "A Unified CLI Tool for Bookmark, Snippet, and Knowledge Management"
 repository = "https://github.com/sysid/bkmr"
