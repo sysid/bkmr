@@ -18,7 +18,7 @@ use crate::util::helper::{format_file_path, format_mtime};
 use crossterm::style::Stylize;
 use crossterm::{
     execute,
-    terminal::{Clear, ClearType},
+    terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use skim::tuikit::attr::{Attr, Color};
 use skim::{
@@ -512,8 +512,24 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
     }
     drop(tx_item); // Close channel to signal end of items
 
+    // Determine if we need to manually handle alternate screen
+    // Skim uses alternate screen automatically for height=100%, but not for smaller heights
+    // For height < 100%, we wrap with alternate screen to ensure proper terminal restoration
+    let use_alternate_screen = fzf_opts.height != "100%" && fzf_opts.height != "100";
+
+    if use_alternate_screen {
+        execute!(std::io::stdout(), EnterAlternateScreen)?;
+    }
+
     // Execute the skim selector
-    if let Some(output) = Skim::run_with(&options, Some(rx_item)) {
+    let skim_output = Skim::run_with(&options, Some(rx_item));
+
+    // Restore terminal if we entered alternate screen
+    if use_alternate_screen {
+        execute!(std::io::stdout(), LeaveAlternateScreen)?;
+    }
+
+    if let Some(output) = skim_output {
         let key = output.final_key;
         debug!("Final key: {:?}", key);
 
