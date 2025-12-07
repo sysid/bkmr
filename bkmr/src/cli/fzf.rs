@@ -515,7 +515,12 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
     // Determine if we need to manually handle alternate screen
     // Skim uses alternate screen automatically for height=100%, but not for smaller heights
     // For height < 100%, we wrap with alternate screen to ensure proper terminal restoration
-    let use_alternate_screen = fzf_opts.height != "100%" && fzf_opts.height != "100";
+    //
+    // IMPORTANT: Skip alternate screen handling in --stdout mode because these escape sequences
+    // (\E[?1049h, \E[?1049l) would pollute the output that shell widgets capture.
+    // In stdout mode, skim still works fine - we just accept potential terminal artifacts.
+    let use_alternate_screen =
+        !stdout && fzf_opts.height != "100%" && fzf_opts.height != "100";
 
     if use_alternate_screen {
         execute!(std::io::stdout(), EnterAlternateScreen)?;
@@ -536,7 +541,7 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
         // Check if the user pressed ESC - if so, don't process selected items
         if key == Key::ESC {
             debug!("Selection aborted with ESC key");
-            reset_terminal_state();
+            reset_terminal_state(stdout);
             return Ok(());
         }
 
@@ -636,16 +641,28 @@ pub fn fzf_process(bookmarks: &[Bookmark], style: &str, services: &ServiceContai
         }
 
         // Reset terminal state after action (cursor visible, colors reset)
-        reset_terminal_state();
+        // Skip for --stdout mode to keep output clean for shell widgets
+        reset_terminal_state(stdout);
     }
 
     Ok(())
 }
 
-/// Minimal terminal state reset after skim exit
-/// Skim handles screen restoration via alternate screen or cursor positioning
-/// We only need to ensure cursor is visible and colors are reset
-fn reset_terminal_state() {
+/// Minimal terminal state reset after skim exit.
+///
+/// This reset is useful for interactive mode as a safety measure after:
+/// - `execute_bookmark_default_action()` which runs external commands/browsers
+/// - `edit_bookmarks()` which opens editors that might alter terminal state
+/// - `Ctrl+P` detail printing which uses colors
+///
+/// However, for `--stdout` mode (shell widget integration), this function
+/// must be skipped because it writes ANSI escape sequences (\E[0m, \E[?25h)
+/// to stdout, polluting the output that the shell widget captures.
+/// In stdout mode, we're just printing content - no terminal state changes occur.
+fn reset_terminal_state(skip: bool) {
+    if skip {
+        return;
+    }
     let mut stdout = std::io::stdout();
     let _ = execute!(
         stdout,
