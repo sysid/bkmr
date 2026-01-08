@@ -1,4 +1,4 @@
-# bkmr
+<img src="docs/bkmr-logo.png" alt="rsenv logo" width="240">
 
 ![Crates.io](https://img.shields.io/crates/v/bkmr)
 ![Crates.io](https://img.shields.io/crates/d/bkmr)
