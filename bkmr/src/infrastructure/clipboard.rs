@@ -2,6 +2,8 @@
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::services::clipboard::ClipboardService;
 use arboard::Clipboard;
+#[cfg(target_os = "linux")]
+use arboard::SetExtLinux;
 use tracing::instrument;
 // #[instrument(level = "debug")]
 // pub fn copy_to_clipboard(text: &str) -> DomainResult<()> {
@@ -34,12 +36,31 @@ impl ClipboardService for ClipboardServiceImpl {
         match Clipboard::new() {
             Ok(mut clipboard) => {
                 let clean_text = text.trim_end_matches('\n');
-                match clipboard.set_text(clean_text) {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(DomainError::Other(format!(
-                        "Failed to set clipboard text: {}",
-                        e
-                    ))),
+
+                // On Linux, clipboard content is "owned" by the process that sets it.
+                // When the process exits, the content is lost before clipboard managers
+                // can claim it. Use wait_until to give clipboard managers time to claim
+                // the content. See: https://github.com/sysid/bkmr/issues/62
+                #[cfg(target_os = "linux")]
+                {
+                    use std::time::{Duration, Instant};
+                    let deadline = Instant::now() + Duration::from_millis(200);
+                    clipboard
+                        .set()
+                        .wait_until(deadline)
+                        .text(clean_text)
+                        .map_err(|e| {
+                            DomainError::Other(format!("Failed to set clipboard text: {}", e))
+                        })?;
+                    return Ok(());
+                }
+
+                #[cfg(not(target_os = "linux"))]
+                {
+                    clipboard.set_text(clean_text).map_err(|e| {
+                        DomainError::Other(format!("Failed to set clipboard text: {}", e))
+                    })?;
+                    Ok(())
                 }
             }
             Err(e) => Err(DomainError::Other(format!(
