@@ -143,8 +143,8 @@ BUILDING:  ## ##################################################################
 all: clean build install  ## all
 	:
 
-.PHONY: all-fast
-all-fast: clean build-fast install-debug  ## all-fast: debug build
+.PHONY: all-debug
+all-fast: clean build-fast install-debug  ## all-debug: debug build
 	:
 
 .PHONY: generate-ci
@@ -152,13 +152,11 @@ generate-ci:  ## generate-ci
 	maturin generate-ci github --platform macos --platform linux -m bkmr/Cargo.toml
 
 .PHONY: upload
-upload:  ## upload
-	@if [ -z "$$CARGO_REGISTRY_TOKEN" ]; then \
-		echo "Error: CARGO_REGISTRY_TOKEN is not set"; \
-		exit 1; \
-	fi
-	@echo "CARGO_REGISTRY_TOKEN is set"
-	pushd $(pkg_src) && cargo release publish --execute
+upload:  ## Publish to crates.io
+	@test -n "$$CARGO_REGISTRY_TOKEN" || { echo "Error: CARGO_REGISTRY_TOKEN not set"; exit 1; }
+	cd $(pkg_src) && cargo publish
+	# pushd $(pkg_src) && cargo release publish --execute
+
 
 .PHONY: build-wheel
 build-wheel:  ## build-wheel
