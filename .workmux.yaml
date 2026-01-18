@@ -1,0 +1,9 @@
+post_create:
+  - ln -s $RSENV_VAULT/dot.envrc .envrc
+  - direnv allow
+
+files:
+  symlink:
+    - .claude
+    - CLAUDE.md
+    - thoughts/
