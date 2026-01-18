@@ -233,10 +233,10 @@ bkmr lsp --no-interpolation
 
 ## Platform Compatibility
 
-**Wayland Support**: Native Wayland clipboard support for modern Linux desktops.
-- **Supported compositors**: Hyprland, Sway, and other compositors supporting `wlr-data-control-unstable-v1`
-- **Automatic detection**: Falls back to X11/XWayland if unavailable
-- **Compatibility**: Check your compositor at [wayland.app](https://wayland.app)
+**Linux Clipboard**: Uses external tools for reliable clipboard persistence.
+- **Wayland**: Uses `wl-copy` from `wl-clipboard` package
+- **X11**: Uses `xclip` (preferred) or `xsel` as fallback
+- **Auto-detection**: Detects display server via `WAYLAND_DISPLAY` environment variable
 
 ## Development
 
