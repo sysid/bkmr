@@ -32,15 +32,11 @@ impl Default for TemplateServiceImpl {
 impl TemplateServiceImpl {
     pub fn new() -> Self {
         let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-        Self {
-            editor,
-        }
+        Self { editor }
     }
 
     pub fn with_editor(editor: String) -> Self {
-        Self {
-            editor,
-        }
+        Self { editor }
     }
 }
 
@@ -108,7 +104,6 @@ impl TemplateService for TemplateServiceImpl {
 
         Ok((bookmark, was_modified))
     }
-
 }
 
 #[cfg(test)]

@@ -26,12 +26,10 @@ fn get_rust_indent() -> &'static Regex {
     RUST_INDENT.get_or_init(|| Regex::new(r"^( {4})+").expect("compile rust indentation regex"))
 }
 
-
 /// Service for translating Rust syntax patterns to target languages
 pub struct LanguageTranslator;
 
 impl LanguageTranslator {
-
     /// Translate Rust syntax patterns in universal snippets to target language
     #[instrument(skip(snippet))]
     pub fn translate_snippet(
@@ -44,7 +42,7 @@ impl LanguageTranslator {
         let content = if snippet.is_universal() {
             debug!("Processing universal snippet: {}", snippet.title);
             debug!("Content: {:?}", snippet.get_content());
-            
+
             Self::translate_rust_patterns(snippet.get_content(), language_id, uri)?
         } else {
             // Regular snippet - return content as-is
@@ -54,7 +52,6 @@ impl LanguageTranslator {
         debug!("Final translated content: {:?}", content);
         Ok(content)
     }
-
 
     /// Translate Rust syntax patterns in content to target language
     #[instrument(skip(content))]
@@ -280,5 +277,4 @@ block comment
         let translated = result.expect("valid translation result");
         assert!(translated.contains("// File: example.rs"));
     }
-
 }

@@ -31,6 +31,8 @@ pub struct Bookmark {
     pub file_mtime: Option<i32>,
     #[builder(default)]
     pub file_hash: Option<String>,
+    #[builder(default)]
+    pub opener: Option<String>,
 }
 
 /// Methods for the Bookmark entity
@@ -65,6 +67,7 @@ impl Bookmark {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Get content for embedding using the structured method
@@ -100,6 +103,7 @@ impl Bookmark {
         file_path: Option<String>,
         file_mtime: Option<i32>,
         file_hash: Option<String>,
+        opener: Option<String>,
     ) -> DomainResult<Self> {
         let tags = Tag::parse_tags(tag_string)?;
 
@@ -118,6 +122,7 @@ impl Bookmark {
             file_path,
             file_mtime,
             file_hash,
+            opener,
         })
     }
 

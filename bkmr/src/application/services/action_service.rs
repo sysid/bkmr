@@ -75,10 +75,12 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         script_args: &[String],
     ) -> DomainResult<()> {
         use crate::application::actions::shell_action::ShellAction;
-        use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
-        use std::sync::Arc;
         use crate::domain::action::BookmarkAction;
         use crate::domain::system_tag::SystemTag;
+        use crate::infrastructure::interpolation::minijinja_engine::{
+            MiniJinjaEngine, SafeShellExecutor,
+        };
+        use std::sync::Arc;
 
         // First, record the access (increase access count)
         if let Some(id) = bookmark.id {
@@ -93,7 +95,9 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
             // Create a direct (non-interactive) shell action with script arguments
             let shell_executor = Arc::new(SafeShellExecutor::new());
             let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-            let interpolation_service = Arc::new(crate::application::InterpolationServiceImpl::new(template_engine));
+            let interpolation_service = Arc::new(
+                crate::application::InterpolationServiceImpl::new(template_engine),
+            );
             let shell_action =
                 ShellAction::new_direct_with_args(interpolation_service, script_args.to_vec());
             return shell_action.execute(bookmark);
@@ -212,6 +216,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         }
     }
 
@@ -233,6 +238,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         }
     }
 

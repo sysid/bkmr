@@ -3,10 +3,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
-use crate::domain::error_context::ApplicationErrorContext;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::{serialize_embedding, Embedder};
+use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::repositories::import_repository::{
     BookmarkImportData, FileImportData, ImportRepository,
 };
@@ -53,7 +53,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         fetch_metadata: bool,
     ) -> ApplicationResult<Bookmark> {
         // Check if bookmark with URL already exists
-        let existing_id = self.repository.exists_by_url(url)
+        let existing_id = self
+            .repository
+            .exists_by_url(url)
             .app_context("checking if bookmark with URL already exists")?;
         if existing_id != -1 {
             return Err(ApplicationError::BookmarkExists(
@@ -101,7 +103,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())
                 .app_context("creating new bookmark from provided data")?;
 
-        self.repository.add(&mut bookmark)
+        self.repository
+            .add(&mut bookmark)
             .app_context("saving new bookmark to repository")?;
 
         Ok(bookmark)
@@ -112,7 +115,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         ValidationHelper::validate_bookmark_id(id)
             .app_context("validating bookmark ID for deletion")?;
 
-        let result = self.repository.delete(id)
+        let result = self
+            .repository
+            .delete(id)
             .with_app_context(|| format!("deleting bookmark with ID {}", id))?;
         Ok(result)
     }
@@ -122,7 +127,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         ValidationHelper::validate_bookmark_id(id)
             .app_context("validating bookmark ID for retrieval")?;
 
-        let bookmark = self.repository.get_by_id(id)
+        let bookmark = self
+            .repository
+            .get_by_id(id)
             .with_app_context(|| format!("retrieving bookmark with ID {}", id))?;
         Ok(bookmark)
     }
@@ -130,7 +137,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     #[instrument(skip(self), level = "debug")]
     fn set_bookmark_embeddable(&self, id: i32, embeddable: bool) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)
-            .with_app_context(|| format!("validating and retrieving bookmark with ID {} for embeddable setting", id))?;
+            .with_app_context(|| {
+                format!(
+                    "validating and retrieving bookmark with ID {} for embeddable setting",
+                    id
+                )
+            })?;
 
         bookmark.set_embeddable(embeddable);
 
@@ -191,7 +203,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         }
 
         bookmark.record_access();
-        self.repository.update(&bookmark)
+        self.repository
+            .update(&bookmark)
             .with_app_context(|| format!("updating bookmark with ID {:?}", bookmark.id))?;
         Ok(bookmark)
     }
@@ -199,10 +212,16 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     #[instrument(skip(self, tags), level = "debug")]
     fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)
-            .with_app_context(|| format!("validating and retrieving bookmark with ID {} for adding tags", id))?;
+            .with_app_context(|| {
+                format!(
+                    "validating and retrieving bookmark with ID {} for adding tags",
+                    id
+                )
+            })?;
 
         for tag in tags {
-            bookmark.add_tag(tag.clone())
+            bookmark
+                .add_tag(tag.clone())
                 .with_app_context(|| format!("adding tag '{}' to bookmark", tag.value()))?;
         }
         self.update_bookmark(bookmark, false)

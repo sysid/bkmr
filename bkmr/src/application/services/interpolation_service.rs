@@ -41,9 +41,12 @@ impl InterpolationService for InterpolationServiceImpl {
     fn render_bookmark_url(&self, bookmark: &Bookmark) -> ApplicationResult<String> {
         self.interpolation_engine
             .render_bookmark_url(bookmark)
-            .map_err(|e| crate::application::error::ApplicationError::Other(
-                format!("Failed to render bookmark URL with interpolation: {}", e)
-            ))
+            .map_err(|e| {
+                crate::application::error::ApplicationError::Other(format!(
+                    "Failed to render bookmark URL with interpolation: {}",
+                    e
+                ))
+            })
     }
 }
 
@@ -51,7 +54,9 @@ impl InterpolationService for InterpolationServiceImpl {
 mod tests {
     use super::*;
     use crate::domain::bookmark::BookmarkBuilder;
-    use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+    use crate::infrastructure::interpolation::minijinja_engine::{
+        MiniJinjaEngine, SafeShellExecutor,
+    };
 
     fn create_test_service() -> InterpolationServiceImpl {
         let shell_executor = Arc::new(SafeShellExecutor::new());
@@ -73,7 +78,8 @@ mod tests {
             .updated_at(chrono::Utc::now())
             .embedding(None)
             .content_hash(None)
-            .build().unwrap();
+            .build()
+            .unwrap();
 
         let result = service.render_bookmark_url(&bookmark);
 
@@ -94,7 +100,8 @@ mod tests {
             .updated_at(chrono::Utc::now())
             .embedding(None)
             .content_hash(None)
-            .build().unwrap();
+            .build()
+            .unwrap();
 
         let result = service.render_bookmark_url(&bookmark);
 

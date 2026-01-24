@@ -2,8 +2,8 @@
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::CliResult;
 use crate::domain::tag::Tag;
-use crate::util::helper::is_stdout_piped;
 use crate::infrastructure::di::ServiceContainer;
+use crate::util::helper::is_stdout_piped;
 use crossterm::style::Stylize;
 
 pub fn show_tags(cli: Cli, services: &ServiceContainer) -> CliResult<()> {

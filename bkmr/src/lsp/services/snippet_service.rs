@@ -46,14 +46,16 @@ impl LspSnippetService {
 
     /// Create with a specific bookmark service (for testing) - backward compatibility
     pub fn with_service(bookmark_service: Arc<dyn BookmarkService>) -> Self {
-        use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
         use crate::application::InterpolationServiceImpl;
+        use crate::infrastructure::interpolation::minijinja_engine::{
+            MiniJinjaEngine, SafeShellExecutor,
+        };
         use std::sync::Arc;
-        
+
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(template_engine));
-        
+
         Self {
             bookmark_service,
             interpolation_service,
@@ -127,7 +129,7 @@ impl AsyncSnippetService for LspSnippetService {
         // Apply interpolation and convert bookmarks to snippets
         let interpolation_service = Arc::clone(&self.interpolation_service);
         let enable_interpolation = filter.enable_interpolation;
-        
+
         let snippets: Vec<Snippet> = bookmarks
             .into_iter()
             .map(|bookmark| {

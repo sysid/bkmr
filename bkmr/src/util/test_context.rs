@@ -30,7 +30,7 @@ pub struct LspServiceBundle {
 ///
 /// This abstraction ensures consistent test setup across the entire codebase,
 /// eliminates boilerplate, and provides proper isolation for database-accessing tests.
-/// 
+///
 /// Now delegates to TestServiceContainer for centralized service management.
 #[derive(Debug)]
 pub struct TestContext {
@@ -86,7 +86,7 @@ impl TestContext {
     /// Create complete LSP service bundle for integration testing
     pub fn create_lsp_services(&self) -> LspServiceBundle {
         let bundle = self.container.create_lsp_services();
-        
+
         // Convert from TestServiceContainer's LspServiceBundle to TestContext's LspServiceBundle
         LspServiceBundle {
             snippet_service: bundle.snippet_service,
@@ -106,7 +106,13 @@ impl TestContext {
         description: &str,
         tags: HashSet<Tag>,
     ) -> Result<Bookmark, crate::domain::error::DomainError> {
-        Bookmark::new(url, title, description, tags, self.container.embedder.as_ref())
+        Bookmark::new(
+            url,
+            title,
+            description,
+            tags,
+            self.container.embedder.as_ref(),
+        )
     }
 
     /// Create a simple bookmark with default values for testing

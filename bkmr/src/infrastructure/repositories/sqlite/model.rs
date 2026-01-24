@@ -42,6 +42,8 @@ pub struct DbBookmark {
     pub file_mtime: Option<i32>,
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
     pub file_hash: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    pub opener: Option<String>,
 }
 
 impl fmt::Display for DbBookmark {
@@ -94,6 +96,8 @@ pub struct DbBookmarkChanges {
     pub file_mtime: Option<i32>,
     #[diesel(treat_none_as_null = true)]
     pub file_hash: Option<String>,
+    #[diesel(treat_none_as_null = true)]
+    pub opener: Option<String>,
 }
 
 impl fmt::Display for DbBookmarkChanges {
@@ -140,6 +144,7 @@ pub struct NewBookmark {
     pub file_path: Option<String>,
     pub file_mtime: Option<i32>,
     pub file_hash: Option<String>,
+    pub opener: Option<String>,
 }
 
 impl fmt::Display for NewBookmark {

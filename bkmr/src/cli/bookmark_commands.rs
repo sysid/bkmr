@@ -1,8 +1,7 @@
 // src/cli/bookmark_commands.rs
-use crate::config::Settings;
 use crate::application::actions::MarkdownAction;
+use crate::config::Settings;
 // Service container dependency injection implemented via SearchCommandHandler
-use crate::infrastructure::di::ServiceContainer;
 use crate::application::services::action_service::ActionService;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::tag_service::TagService;
@@ -18,6 +17,7 @@ use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
+use crate::infrastructure::di::ServiceContainer;
 use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::infrastructure::repositories::sqlite::migration;
@@ -46,11 +46,19 @@ fn get_ids(ids: String) -> CliResult<Vec<i32>> {
         .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
 }
 
+/// Format action description, incorporating custom opener if present
+pub fn format_action_description(base_description: &str, opener: Option<&String>) -> String {
+    match opener {
+        Some(o) => format!("Open with {}", o),
+        None => base_description.to_string(),
+    }
+}
+
 #[instrument(skip(stderr, cli, services))]
 pub fn semantic_search(
-    mut stderr: StandardStream, 
-    cli: Cli, 
-    services: &ServiceContainer
+    mut stderr: StandardStream,
+    cli: Cli,
+    services: &ServiceContainer,
 ) -> CliResult<()> {
     if let Commands::SemSearch {
         query,
@@ -60,16 +68,24 @@ pub fn semantic_search(
     {
         // Check if embedder is DummyEmbedding and provide helpful error message
         if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
-            writeln!(stderr, "{}", "Error: Semantic search requires embeddings. Use --openai flag.".red())
-                .cli_context("writing DummyEmbedding error message to stderr")?;
-            return Err(CliError::CommandFailed("No embeddings available - use --openai flag".to_string()));
+            writeln!(
+                stderr,
+                "{}",
+                "Error: Semantic search requires embeddings. Use --openai flag.".red()
+            )
+            .cli_context("writing DummyEmbedding error message to stderr")?;
+            return Err(CliError::CommandFailed(
+                "No embeddings available - use --openai flag".to_string(),
+            ));
         }
 
         // Create the semantic search domain object
         let search = SemanticSearch::new(query, limit.map(|l| l as usize));
 
         // Perform semantic search
-        let results = services.bookmark_service.semantic_search(&search)
+        let results = services
+            .bookmark_service
+            .semantic_search(&search)
             .cli_context("performing semantic search on bookmarks")?;
 
         if results.is_empty() {
@@ -120,19 +136,24 @@ pub fn semantic_search(
         if !non_interactive && !is_piped && !results.is_empty() && confirm("Open bookmark(s)?") {
             // Prompt for which bookmark to open
             print!("Enter ID(s) to open (comma-separated): ");
-            io::stdout().flush()
+            io::stdout()
+                .flush()
                 .cli_context("flushing stdout after prompt")?;
 
             let mut input = String::new();
-            io::stdin().read_line(&mut input)
+            io::stdin()
+                .read_line(&mut input)
                 .cli_context("reading user input for bookmark IDs")?;
 
             let ids = get_ids(input.trim().to_string())
                 .cli_context("parsing bookmark IDs from user input")?;
             for id in ids {
                 if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    execute_bookmark_default_action(&result.bookmark, services.action_service.clone())
-                        .cli_context("executing default action for selected bookmark")?;
+                    execute_bookmark_default_action(
+                        &result.bookmark,
+                        services.action_service.clone(),
+                    )
+                    .cli_context("executing default action for selected bookmark")?;
                 } else {
                     writeln!(stderr, "Bookmark with ID {} not found in results", id)?;
                 }
@@ -147,7 +168,9 @@ pub fn open(
     cli: Cli,
     bookmark_service: Arc<dyn BookmarkService>,
     action_service: Arc<dyn ActionService>,
-    interpolation_service: Arc<dyn crate::application::services::interpolation_service::InterpolationService>,
+    interpolation_service: Arc<
+        dyn crate::application::services::interpolation_service::InterpolationService,
+    >,
 ) -> CliResult<()> {
     if let Commands::Open {
         ids,
@@ -159,25 +182,27 @@ pub fn open(
     {
         if file {
             // Handle direct file viewing
-            handle_file_viewing(&ids)
-                .cli_context("handling direct file viewing")?;
+            handle_file_viewing(&ids).cli_context("handling direct file viewing")?;
         } else {
             // Handle bookmark opening (existing logic)
 
-            for id in get_ids(ids)
-                .cli_context("parsing bookmark IDs for opening")? {
-                if let Some(bookmark) = bookmark_service.get_bookmark(id)
-                    .cli_context("retrieving bookmark for opening")? {
-
+            for id in get_ids(ids).cli_context("parsing bookmark IDs for opening")? {
+                if let Some(bookmark) = bookmark_service
+                    .get_bookmark(id)
+                    .cli_context("retrieving bookmark for opening")?
+                {
                     if stdout {
                         // Output interpolated content to stdout instead of executing
                         let content = interpolation_service
                             .render_bookmark_url(&bookmark)
-                            .map_err(|e| CliError::CommandFailed(format!("Failed to render content: {}", e)))?;
+                            .map_err(|e| {
+                                CliError::CommandFailed(format!("Failed to render content: {}", e))
+                            })?;
                         println!("{}", content);
                     } else {
                         // Use action service to execute default action
-                        let action_type = action_service.get_default_action_description(&bookmark);
+                        let base_description = action_service.get_default_action_description(&bookmark);
+                        let action_type = format_action_description(base_description, bookmark.opener.as_ref());
                         eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                         // Execute default action with access recording handled by action service
@@ -241,6 +266,7 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
         file_path: None,
         file_mtime: None,
         file_hash: None,
+        opener: None,
     };
 
     // Execute the markdown action - it will handle file reading and rendering
@@ -269,9 +295,9 @@ fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
 
 #[instrument(skip(cli, bookmark_service, template_service))]
 pub fn add(
-    cli: Cli, 
+    cli: Cli,
     bookmark_service: Arc<dyn BookmarkService>,
-    template_service: Arc<dyn TemplateService>
+    template_service: Arc<dyn TemplateService>,
 ) -> CliResult<()> {
     if let Commands::Add {
         url,
@@ -283,9 +309,9 @@ pub fn add(
         bookmark_type,
         clone_id,
         stdin,
+        open_with,
     } = cli.command.unwrap()
     {
-
         // Convert bookmark_type string to SystemTag
         let system_tag = match bookmark_type.to_lowercase().as_str() {
             "snip" => SystemTag::Snippet,
@@ -358,13 +384,23 @@ pub fn add(
             let url_value = final_url.unwrap();
             let processed_content = process_content_for_type(&url_value, system_tag);
 
-            let bookmark = bookmark_service.add_bookmark(
+            let mut bookmark = bookmark_service.add_bookmark(
                 &processed_content,
                 title.as_deref(),
                 desc.as_deref(),
                 Some(&tag_set),
                 !no_web,
             )?;
+
+            // Set custom opener if provided
+            if let Some(opener) = open_with {
+                bookmark.opener = if opener.is_empty() {
+                    None
+                } else {
+                    Some(opener)
+                };
+                bookmark_service.update_bookmark(bookmark.clone(), false)?;
+            }
 
             eprintln!(
                 "Added bookmark: {} (ID: {})",
@@ -396,7 +432,18 @@ pub fn add(
                     Some(&edited_bookmark.tags),
                     false, // Don't fetch metadata since we've already edited it
                 ) {
-                    Ok(bookmark) => {
+                    Ok(mut bookmark) => {
+                        // Set custom opener if provided via CLI flag
+                        // Note: opener can also be set via the edit template
+                        if let Some(opener) = &open_with {
+                            bookmark.opener = if opener.is_empty() {
+                                None
+                            } else {
+                                Some(opener.clone())
+                            };
+                            bookmark_service.update_bookmark(bookmark.clone(), false)?;
+                        }
+
                         eprintln!(
                             "Added bookmark: {} (ID: {})",
                             bookmark.title,
@@ -425,7 +472,6 @@ pub fn add(
 #[instrument(skip(cli, bookmark_service))]
 pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
     if let Commands::Delete { ids } = cli.command.unwrap() {
-
         let id_list = get_ids(ids)?;
 
         for id in id_list {
@@ -451,18 +497,18 @@ pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult
 
 #[instrument(skip(cli, bookmark_service, tag_service))]
 pub fn update(
-    cli: Cli, 
+    cli: Cli,
     bookmark_service: Arc<dyn BookmarkService>,
-    tag_service: Arc<dyn TagService>
+    tag_service: Arc<dyn TagService>,
 ) -> CliResult<()> {
     if let Commands::Update {
         ids,
         tags,
         tags_not,
         force,
+        open_with,
     } = cli.command.unwrap()
     {
-
         let id_list = get_ids(ids)?;
 
         for id in id_list {
@@ -496,6 +542,24 @@ pub fn update(
                         eprintln!("Tags removed: {}", updated.formatted_tags());
                     }
                 }
+
+                // Update custom opener if provided
+                if let Some(opener) = &open_with {
+                    // Fetch latest version to avoid stale data
+                    if let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? {
+                        latest_bookmark.opener = if opener.is_empty() {
+                            None
+                        } else {
+                            Some(opener.clone())
+                        };
+                        bookmark_service.update_bookmark(latest_bookmark, false)?;
+                        if opener.is_empty() {
+                            eprintln!("Custom opener cleared");
+                        } else {
+                            eprintln!("Custom opener set to: {}", opener);
+                        }
+                    }
+                }
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
@@ -506,13 +570,12 @@ pub fn update(
 
 #[instrument(skip(cli, bookmark_service, template_service, settings))]
 pub fn edit(
-    cli: Cli, 
+    cli: Cli,
     bookmark_service: Arc<dyn BookmarkService>,
     template_service: Arc<dyn TemplateService>,
-    settings: &crate::config::Settings
+    settings: &crate::config::Settings,
 ) -> CliResult<()> {
     if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
-
         let id_list = get_ids(ids)?;
 
         // Get all bookmarks to edit first
@@ -530,7 +593,13 @@ pub fn edit(
             return Ok(());
         }
 
-        edit_bookmarks(id_list, force_db, bookmark_service, template_service, settings)?;
+        edit_bookmarks(
+            id_list,
+            force_db,
+            bookmark_service,
+            template_service,
+            settings,
+        )?;
     }
     Ok(())
 }
@@ -572,8 +641,9 @@ pub fn show_bookmark_details(bookmark: &Bookmark, services: &ServiceContainer) -
     // Get the action service
     let action_service = services.action_service.clone();
 
-    // Get the action description
-    let action_description = action_service.get_default_action_description(bookmark);
+    // Get the action description, incorporating custom opener if present
+    let base_description = action_service.get_default_action_description(bookmark);
+    let action_description = format_action_description(base_description, bookmark.opener.as_ref());
 
     // Format all the bookmark details
     let mut details = format!(
@@ -584,7 +654,7 @@ pub fn show_bookmark_details(bookmark: &Bookmark, services: &ServiceContainer) -
             .blue(),
         bookmark.title.clone().green(),
         bookmark.formatted_tags().yellow(),
-        action_description.cyan(),
+        action_description.as_str().cyan(),
         bookmark.url,
         bookmark.description,
         bookmark.access_count,
@@ -626,8 +696,9 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         eprintln!("Processing {} random bookmarks:", bookmarks.len());
 
         for bookmark in &bookmarks {
-            // Get the action description
-            let action_description = action_service.get_default_action_description(bookmark);
+            // Get the action description, incorporating custom opener if present
+            let base_description = action_service.get_default_action_description(bookmark);
+            let action_description = format_action_description(base_description, bookmark.opener.as_ref());
 
             // Show what we're doing
             eprintln!(
@@ -762,8 +833,7 @@ pub fn set_embeddable(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         // Check embedder type using services instead of global state
-        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
-        {
+        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
             eprintln!("{}", "Error: Cannot backfill embeddings with DummyEmbedding active. Please use --openai flag.".red());
             return Err(CliError::CommandFailed(
                 "DummyEmbedding active - embeddings not available".to_string(),
@@ -853,8 +923,7 @@ pub fn load_texts(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     } = cli.command.unwrap()
     {
         // Check embedder type using services instead of global state
-        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>()
-        {
+        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
             eprintln!(
                 "{}",
                 "Error: Cannot load texts with DummyEmbedding active. Please use --openai flag."
@@ -930,13 +999,12 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         println!("  Shell Interactive: {}", settings.shell_opts.interactive);
 
         // Embedder type using services
-        let embedder_type = if services.embedder.as_any().type_id()
-            == std::any::TypeId::of::<DummyEmbedding>()
-        {
-            "DummyEmbedding (embeddings disabled)"
-        } else {
-            "OpenAiEmbedding (embeddings enabled)"
-        };
+        let embedder_type =
+            if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
+                "DummyEmbedding (embeddings disabled)"
+            } else {
+                "OpenAiEmbedding (embeddings enabled)"
+            };
         println!("  Embedder: {}", embedder_type);
 
         // Base paths section
@@ -1071,8 +1139,10 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 }
 
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
-pub fn pre_fill_database(repository: &SqliteBookmarkRepository, embedder: &dyn crate::domain::embedding::Embedder) -> CliResult<()> {
-
+pub fn pre_fill_database(
+    repository: &SqliteBookmarkRepository,
+    embedder: &dyn crate::domain::embedding::Embedder,
+) -> CliResult<()> {
     // Create demo entries
     let demo_entries = vec![
         // Regular URLs

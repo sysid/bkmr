@@ -24,9 +24,7 @@ pub struct CommandService {
 impl CommandService {
     /// Create CommandService with dependency injection
     pub fn with_service(bookmark_service: Arc<dyn BookmarkService>) -> Self {
-        Self {
-            bookmark_service,
-        }
+        Self { bookmark_service }
     }
 
     /// Create a new snippet
@@ -42,13 +40,17 @@ impl CommandService {
 
         // Prepare tags with _snip_ system tag
         let mut tag_set = HashSet::new();
-        tag_set.insert(Tag::new("_snip_")
-            .map_err(LspError::from)
-            .map_err(|e| e.context("creating _snip_ system tag for snippet creation"))?);
-        for tag in tags {
-            tag_set.insert(Tag::new(&tag)
+        tag_set.insert(
+            Tag::new("_snip_")
                 .map_err(LspError::from)
-                .map_err(|e| e.context(format!("creating user tag: {}", tag)))?);
+                .map_err(|e| e.context("creating _snip_ system tag for snippet creation"))?,
+        );
+        for tag in tags {
+            tag_set.insert(
+                Tag::new(&tag)
+                    .map_err(LspError::from)
+                    .map_err(|e| e.context(format!("creating user tag: {}", tag)))?,
+            );
         }
 
         // Create bookmark

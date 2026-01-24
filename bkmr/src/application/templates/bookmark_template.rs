@@ -27,6 +27,9 @@ pub struct BookmarkTemplate {
 
     #[builder(default = "false")]
     pub embeddable: bool,
+
+    #[builder(default)]
+    pub opener: Option<String>,
 }
 
 impl BookmarkTemplate {
@@ -38,6 +41,7 @@ impl BookmarkTemplate {
             .tags(bookmark.tags.clone())
             .comments(bookmark.description.clone())
             .embeddable(bookmark.embeddable)
+            .opener(bookmark.opener.clone())
             .build()
             .unwrap()
     }
@@ -169,13 +173,16 @@ impl BookmarkTemplate {
             {}\n\
             === EMBEDDABLE ===\n\
             {}\n\
+            === OPENER ===\n\
+            {}\n\
             === END ===\n",
             self.id.map_or("".to_string(), |id| id.to_string()),
             self.url,
             self.title,
             tags_str,
             self.comments,
-            if self.embeddable { "true" } else { "false" }
+            if self.embeddable { "true" } else { "false" },
+            self.opener.as_deref().unwrap_or("")
         )
     }
 
@@ -240,6 +247,15 @@ impl BookmarkTemplate {
             }
         };
 
+        // Extract opener (custom open command)
+        let binding = String::new();
+        let opener_str = sections.get("OPENER").unwrap_or(&binding).trim();
+        let opener = if opener_str.is_empty() {
+            None
+        } else {
+            Some(opener_str.to_string())
+        };
+
         Ok(Self {
             id,
             url: url.to_string(),
@@ -247,6 +263,7 @@ impl BookmarkTemplate {
             tags,
             comments,
             embeddable,
+            opener,
         })
     }
 
@@ -263,7 +280,8 @@ impl BookmarkTemplate {
             .created_at(original.and_then(|b| b.created_at))
             .updated_at(chrono::Utc::now())
             .access_count(original.map_or(0, |b| b.access_count))
-            .embeddable(self.embeddable);
+            .embeddable(self.embeddable)
+            .opener(self.opener.clone());
 
         // Preserve embedding and content hash if available from original
         if let Some(bookmark) = original {
@@ -288,9 +306,10 @@ fn parse_sections(content: &str) -> ApplicationResult<std::collections::HashMap<
     // Use regex to match section markers: === SECTION_NAME ===
     // The markers must be at the start of a line (^) and must be main section names (ID, URL, etc.)
     // We restrict it to known section names to avoid matching content that looks like section markers
-    let section_marker_regex =
-        regex::Regex::new(r"(?m)^===\s+(ID|URL|TITLE|TAGS|COMMENTS|EMBEDDABLE|END)\s+===\s*$")
-            .unwrap();
+    let section_marker_regex = regex::Regex::new(
+        r"(?m)^===\s+(ID|URL|TITLE|TAGS|COMMENTS|EMBEDDABLE|OPENER|END)\s+===\s*$",
+    )
+    .unwrap();
 
     // Find all section markers with their positions
     let mut markers: Vec<(usize, &str, &str)> = section_marker_regex
@@ -359,6 +378,7 @@ mod tests {
             tags,
             comments: "This is a\nmultiline\ncomment".to_string(),
             embeddable: true,
+            opener: None,
         };
 
         // Convert to string

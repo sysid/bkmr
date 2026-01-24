@@ -241,10 +241,10 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
                     // Update settings with values from file and mark as loaded
                     file_settings.config_source = ConfigSource::ConfigFile;
                     settings = file_settings;
-                    
+
                     // Expand db_url path after loading from file
                     expand_db_url(&mut settings);
-                    
+
                     // found_config = true;
                     break; // Use the first found configuration file
                 }

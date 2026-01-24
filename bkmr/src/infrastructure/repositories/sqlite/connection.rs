@@ -41,25 +41,27 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
 fn is_database_empty_for_backup(conn: &mut SqliteConnection) -> SqliteResult<bool> {
     use diesel::prelude::*;
     use diesel::sql_types::Integer;
-    
+
     #[derive(QueryableByName, Debug)]
     struct BookmarkCount {
         #[diesel(sql_type = Integer)]
         count: i32,
     }
-    
+
     // Check if the bookmarks table exists and has data
     // If it doesn't exist or has no records, consider it empty for backup purposes
-    let result: Result<BookmarkCount, diesel::result::Error> = diesel::sql_query(
-        "SELECT COUNT(*) as count FROM bookmarks"
-    )
-    .get_result::<BookmarkCount>(conn);
-    
+    let result: Result<BookmarkCount, diesel::result::Error> =
+        diesel::sql_query("SELECT COUNT(*) as count FROM bookmarks")
+            .get_result::<BookmarkCount>(conn);
+
     match result {
         Ok(bookmark_count) => {
-            debug!("Database contains {} bookmark records", bookmark_count.count);
+            debug!(
+                "Database contains {} bookmark records",
+                bookmark_count.count
+            );
             Ok(bookmark_count.count == 0)
-        },
+        }
         Err(e) => {
             // If bookmarks table doesn't exist, definitely empty for backup purposes
             debug!("Bookmarks table doesn't exist or query failed: {}", e);
@@ -97,20 +99,18 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
     // Only create a backup if the database file exists and has meaningful size
     if db_path.exists() {
         // Check file size first - a newly created empty SQLite database is typically < 4KB
-        let file_metadata = fs::metadata(db_path).map_err(|e| {
-            SqliteRepositoryError::IoError(e)
-        })?;
-        
+        let file_metadata = fs::metadata(db_path).map_err(|e| SqliteRepositoryError::IoError(e))?;
+
         let file_size = file_metadata.len();
-        
+
         // A meaningful database with user data is typically much larger
         // Fresh databases with just migration metadata are relatively small
         let is_likely_empty = file_size < 16384; // 16KB threshold
-        
+
         if !is_likely_empty {
             // Additional check: verify the database actually has user data
             let is_empty = is_database_empty_for_backup(&mut conn)?;
-            
+
             if !is_empty {
                 // Create backup with date suffix for non-empty databases
                 let date_suffix = Local::now().format("%Y%m%d").to_string();

@@ -52,8 +52,8 @@ pub fn init_test_env() -> &'static TestEnv {
     let env_data = TEST_ENV.get_or_init(|| {
         let data = TestEnv::new();
         setup_test_logging(); // set up logger only once
-        // Global AppState removed - tests should use dependency injection instead
-        // AppState::update_global(AppState::default()).expect("Failed to update global AppState");
+                              // Global AppState removed - tests should use dependency injection instead
+                              // AppState::update_global(AppState::default()).expect("Failed to update global AppState");
         info!("Test environment initialized with DummyEmbedding");
         data
     });

@@ -157,7 +157,6 @@ impl CompletionService {
             .await
             .map_err(|e| DomainError::Other(e.to_string()))
     }
-
 }
 
 #[cfg(test)]

@@ -1,8 +1,8 @@
 // bkmr/src/cli/mod.rs
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::CliResult;
-use crate::infrastructure::di::ServiceContainer;
 use crate::config::Settings;
+use crate::infrastructure::di::ServiceContainer;
 use termcolor::StandardStream;
 
 pub mod args;
@@ -18,22 +18,45 @@ pub mod tag_commands;
 // Old execute_command removed - use execute_command_with_services with dependency injection
 
 pub fn execute_command_with_services(
-    stderr: StandardStream, 
-    cli: Cli, 
+    stderr: StandardStream,
+    cli: Cli,
     services: ServiceContainer,
     settings: &Settings,
 ) -> CliResult<()> {
     match cli.command {
         Some(Commands::Search { .. }) => {
-            let handler = command_handler::SearchCommandHandler::with_services(services, settings.clone());
+            let handler =
+                command_handler::SearchCommandHandler::with_services(services, settings.clone());
             handler.execute(cli)
         }
-        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(stderr, cli, &services),
-        Some(Commands::Open { .. }) => bookmark_commands::open(cli, services.bookmark_service.clone(), services.action_service.clone(), services.interpolation_service.clone()),
-        Some(Commands::Add { .. }) => bookmark_commands::add(cli, services.bookmark_service.clone(), services.template_service.clone()),
-        Some(Commands::Delete { .. }) => bookmark_commands::delete(cli, services.bookmark_service.clone()),
-        Some(Commands::Update { .. }) => bookmark_commands::update(cli, services.bookmark_service.clone(), services.tag_service.clone()),
-        Some(Commands::Edit { .. }) => bookmark_commands::edit(cli, services.bookmark_service.clone(), services.template_service.clone(), settings),
+        Some(Commands::SemSearch { .. }) => {
+            bookmark_commands::semantic_search(stderr, cli, &services)
+        }
+        Some(Commands::Open { .. }) => bookmark_commands::open(
+            cli,
+            services.bookmark_service.clone(),
+            services.action_service.clone(),
+            services.interpolation_service.clone(),
+        ),
+        Some(Commands::Add { .. }) => bookmark_commands::add(
+            cli,
+            services.bookmark_service.clone(),
+            services.template_service.clone(),
+        ),
+        Some(Commands::Delete { .. }) => {
+            bookmark_commands::delete(cli, services.bookmark_service.clone())
+        }
+        Some(Commands::Update { .. }) => bookmark_commands::update(
+            cli,
+            services.bookmark_service.clone(),
+            services.tag_service.clone(),
+        ),
+        Some(Commands::Edit { .. }) => bookmark_commands::edit(
+            cli,
+            services.bookmark_service.clone(),
+            services.template_service.clone(),
+            settings,
+        ),
         Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services),
         Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
@@ -46,11 +69,15 @@ pub fn execute_command_with_services(
         Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
         Some(Commands::CreateDb { .. }) => {
             // This should never be reached as CreateDb is handled specially in main.rs
-            Err(error::CliError::CommandFailed("CreateDb command should be handled in main.rs".to_string()))
+            Err(error::CliError::CommandFailed(
+                "CreateDb command should be handled in main.rs".to_string(),
+            ))
         }
         Some(Commands::Completion { .. }) => {
             // This should never be reached as Completion is handled specially in main.rs
-            Err(error::CliError::CommandFailed("Completion command should be handled in main.rs".to_string()))
+            Err(error::CliError::CommandFailed(
+                "Completion command should be handled in main.rs".to_string(),
+            ))
         }
         Some(Commands::Xxx { ids, tags }) => {
             eprintln!("ids: {:?}, tags: {:?}", ids, tags);
@@ -59,7 +86,6 @@ pub fn execute_command_with_services(
         None => Ok(()),
     }
 }
-
 
 fn handle_lsp(settings: &Settings, no_interpolation: bool) -> CliResult<()> {
     use tokio::runtime::Runtime;
