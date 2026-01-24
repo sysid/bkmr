@@ -57,9 +57,9 @@ impl ClipboardServiceImpl {
     #[cfg(not(target_os = "linux"))]
     fn copy_to_clipboard_arboard(&self, text: &str) -> DomainResult<()> {
         match Clipboard::new() {
-            Ok(mut clipboard) => clipboard.set_text(text).map_err(|e| {
-                DomainError::Other(format!("Failed to set clipboard text: {}", e))
-            }),
+            Ok(mut clipboard) => clipboard
+                .set_text(text)
+                .map_err(|e| DomainError::Other(format!("Failed to set clipboard text: {}", e))),
             Err(e) => Err(DomainError::Other(format!(
                 "Failed to initialize clipboard: {}",
                 e
@@ -105,9 +105,9 @@ impl ClipboardServiceImpl {
         let mut stdin = child.stdin.take().ok_or_else(|| {
             DomainError::Other("Failed to open stdin pipe for wl-copy".to_string())
         })?;
-        stdin.write_all(text.as_bytes()).map_err(|e| {
-            DomainError::Other(format!("Failed to write to wl-copy: {}", e))
-        })?;
+        stdin
+            .write_all(text.as_bytes())
+            .map_err(|e| DomainError::Other(format!("Failed to write to wl-copy: {}", e)))?;
         drop(stdin); // Explicitly close to signal EOF
 
         let status = child
@@ -167,7 +167,10 @@ impl ClipboardServiceImpl {
             .spawn()?;
 
         let mut stdin = child.stdin.take().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::Other, "Failed to open stdin pipe for xclip")
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to open stdin pipe for xclip",
+            )
         })?;
         stdin.write_all(text.as_bytes())?;
         drop(stdin); // Explicitly close to signal EOF
@@ -200,7 +203,10 @@ impl ClipboardServiceImpl {
             .spawn()?;
 
         let mut stdin = child.stdin.take().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::Other, "Failed to open stdin pipe for xsel")
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Failed to open stdin pipe for xsel",
+            )
         })?;
         stdin.write_all(text.as_bytes())?;
         drop(stdin); // Explicitly close to signal EOF

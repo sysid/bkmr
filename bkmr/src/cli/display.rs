@@ -193,7 +193,11 @@ impl Default for DisplayBookmark {
 }
 
 /// Display bookmarks with color formatting
-pub fn show_bookmarks(bookmarks: &[DisplayBookmark], fields: &[DisplayField], settings: &crate::config::Settings) {
+pub fn show_bookmarks(
+    bookmarks: &[DisplayBookmark],
+    fields: &[DisplayField],
+    settings: &crate::config::Settings,
+) {
     if bookmarks.is_empty() {
         eprintln!("No bookmarks to display");
         return;

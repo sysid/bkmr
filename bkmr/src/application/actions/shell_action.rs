@@ -282,6 +282,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Act
@@ -320,6 +321,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Act
@@ -357,6 +359,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Act
@@ -536,6 +539,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Act

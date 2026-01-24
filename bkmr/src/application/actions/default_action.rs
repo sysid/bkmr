@@ -13,7 +13,9 @@ pub struct DefaultAction {
 
 impl DefaultAction {
     pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
-        Self { interpolation_service }
+        Self {
+            interpolation_service,
+        }
     }
 }
 

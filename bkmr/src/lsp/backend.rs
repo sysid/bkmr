@@ -43,7 +43,6 @@ pub struct BkmrLspBackend {
 }
 
 impl BkmrLspBackend {
-
     /// Create backend with dependency injection (recommended)
     pub fn with_services(
         client: Client,
@@ -60,8 +59,6 @@ impl BkmrLspBackend {
             command_service,
         }
     }
-
-
 
     /// Extract word backwards from cursor position and return both query and range
     /// Delegates to DocumentService
@@ -578,9 +575,9 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
 
     // Create service containers with proper dependency injection
     use crate::infrastructure::di::ServiceContainer;
-    
-    let service_container = ServiceContainer::new(settings, false)
-        .expect("Failed to create service container");
+
+    let service_container =
+        ServiceContainer::new(settings, false).expect("Failed to create service container");
 
     // Set up the LSP service with proper dependency injection
     // Note: We need to recreate services inside the closure since they're not Clone
@@ -588,20 +585,21 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
         let config = config.clone();
         let service_container = service_container;
         move |client| {
-            use crate::lsp::services::{CompletionService, DocumentService, CommandService, LspSnippetService};
-            
+            use crate::lsp::services::{
+                CommandService, CompletionService, DocumentService, LspSnippetService,
+            };
+
             // Create LSP services inside the closure
             let snippet_service = Arc::new(LspSnippetService::with_services(
                 service_container.bookmark_service.clone(),
                 service_container.interpolation_service.clone(),
             ));
-            
+
             let completion_service = CompletionService::new(snippet_service);
             let document_service = DocumentService::new();
-            let command_service = CommandService::with_service(
-                service_container.bookmark_service.clone()
-            );
-            
+            let command_service =
+                CommandService::with_service(service_container.bookmark_service.clone());
+
             BkmrLspBackend::with_services(
                 client,
                 config,

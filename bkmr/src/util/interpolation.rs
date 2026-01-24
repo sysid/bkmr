@@ -75,6 +75,7 @@ mod tests {
             None,  // file_path
             None,  // file_mtime
             None,  // file_hash
+            None,  // opener
         )
         .unwrap()
     }

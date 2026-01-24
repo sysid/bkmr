@@ -1,10 +1,12 @@
 // src/util/test_service_container.rs
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
-use crate::application::services::tag_service::TagService;
 use crate::application::services::interpolation_service::InterpolationService;
+use crate::application::services::tag_service::TagService;
 use crate::application::services::template_service::TemplateService;
-use crate::application::{BookmarkServiceImpl, InterpolationServiceImpl, TagServiceImpl, TemplateServiceImpl};
+use crate::application::{
+    BookmarkServiceImpl, InterpolationServiceImpl, TagServiceImpl, TemplateServiceImpl,
+};
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::embedding::Embedder;
@@ -16,7 +18,7 @@ use crate::infrastructure::repositories::file_import_repository::FileImportRepos
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crate::lsp::backend::BkmrConfig;
 use crate::lsp::services::snippet_service::LspSnippetService;
-use crate::util::testing::{EnvGuard};
+use crate::util::testing::EnvGuard;
 use std::sync::Arc;
 
 /// Test service container - single source of truth for test service creation
@@ -24,14 +26,14 @@ use std::sync::Arc;
 pub struct TestServiceContainer {
     // Environment isolation
     pub _env_guard: EnvGuard,
-    
+
     // Core services
     pub bookmark_repository: Arc<SqliteBookmarkRepository>,
     pub embedder: Arc<dyn Embedder>,
     pub bookmark_service: Arc<dyn BookmarkService>,
     pub tag_service: Arc<dyn TagService>,
     pub action_service: Arc<dyn ActionService>,
-    
+
     // Utility services
     pub clipboard_service: Arc<dyn ClipboardService>,
     pub interpolation_service: Arc<dyn InterpolationService>,
@@ -44,32 +46,30 @@ impl TestServiceContainer {
     pub fn new() -> Self {
         // Initialize test environment (includes logging setup)
         let env_guard = EnvGuard::new();
-        
+
         // Create test database with proper migrations (shared test database)
         let bookmark_repository = Self::create_shared_test_db();
         let embedder = Self::create_test_embedder();
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
         let interpolation_service = Self::create_interpolation_service();
         let template_service = Self::create_template_service();
-        
+
         // Application services with explicit DI
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             bookmark_repository.clone(),
             embedder.clone(),
             Arc::new(FileImportRepository::new()),
         ));
-        
-        let tag_service = Arc::new(TagServiceImpl::new(
-            bookmark_repository.clone()
-        ));
-        
+
+        let tag_service = Arc::new(TagServiceImpl::new(bookmark_repository.clone()));
+
         let action_service = Self::create_test_action_service(
             &bookmark_repository,
             &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
             &embedder,
         );
-        
+
         Self {
             _env_guard: env_guard,
             bookmark_repository,
@@ -82,30 +82,30 @@ impl TestServiceContainer {
             template_service,
         }
     }
-    
+
     /// Create shared test database (same as original setup_test_db approach)
     fn create_shared_test_db() -> Arc<SqliteBookmarkRepository> {
         // Use the same approach as the original setup_test_db function
         Arc::new(crate::util::testing::setup_test_db())
     }
-    
+
     /// Create test embedder (always dummy for consistent test behavior)
     fn create_test_embedder() -> Arc<dyn Embedder> {
         Arc::new(DummyEmbedding)
     }
-    
+
     /// Create interpolation service for test (same logic as production ServiceContainer)
     fn create_interpolation_service() -> Arc<dyn InterpolationService> {
         let shell_executor = Arc::new(SafeShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         Arc::new(InterpolationServiceImpl::new(interpolation_engine))
     }
-    
+
     /// Create template service (simplified for tests)
     fn create_template_service() -> Arc<dyn TemplateService> {
         Arc::new(TemplateServiceImpl::new())
     }
-    
+
     /// Create action service for tests with test configuration
     fn create_test_action_service(
         repository: &Arc<SqliteBookmarkRepository>,
@@ -114,11 +114,14 @@ impl TestServiceContainer {
         embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionService> {
         let resolver = Self::create_test_action_resolver(
-            repository, interpolation_service, clipboard_service, embedder
+            repository,
+            interpolation_service,
+            clipboard_service,
+            embedder,
         );
         Arc::new(ActionServiceImpl::new(resolver, repository.clone()))
     }
-    
+
     /// Create action resolver for tests with test-friendly settings
     fn create_test_action_resolver(
         repository: &Arc<SqliteBookmarkRepository>,
@@ -127,37 +130,47 @@ impl TestServiceContainer {
         embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionResolver> {
         // Create all actions with explicit dependencies - using test-friendly settings
-        let uri_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::UriAction::new(interpolation_service.clone()));
-            
-        let snippet_action: Box<dyn BookmarkAction> = Box::new(crate::application::actions::SnippetAction::new(
-            clipboard_service.clone(),
-            interpolation_service.clone(),
-        ));
-        
-        let text_action: Box<dyn BookmarkAction> = Box::new(crate::application::actions::TextAction::new(
-            clipboard_service.clone(),
-            interpolation_service.clone(),
-        ));
-        
+        let uri_action: Box<dyn BookmarkAction> = Box::new(
+            crate::application::actions::UriAction::new(interpolation_service.clone()),
+        );
+
+        let snippet_action: Box<dyn BookmarkAction> =
+            Box::new(crate::application::actions::SnippetAction::new(
+                clipboard_service.clone(),
+                interpolation_service.clone(),
+            ));
+
+        let text_action: Box<dyn BookmarkAction> =
+            Box::new(crate::application::actions::TextAction::new(
+                clipboard_service.clone(),
+                interpolation_service.clone(),
+            ));
+
         // Non-interactive shell action for tests
-        let shell_action: Box<dyn BookmarkAction> = Box::new(crate::application::actions::ShellAction::new(
-            interpolation_service.clone(),
-            false, // non-interactive for tests
-        ));
-        
-        let markdown_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::MarkdownAction::new_with_repository(repository.clone(), embedder.clone()));
-            
-        let env_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::EnvAction::new(interpolation_service.clone()));
-            
-        let default_action: Box<dyn BookmarkAction> = 
-            Box::new(crate::application::actions::DefaultAction::new(interpolation_service.clone()));
-        
+        let shell_action: Box<dyn BookmarkAction> =
+            Box::new(crate::application::actions::ShellAction::new(
+                interpolation_service.clone(),
+                false, // non-interactive for tests
+            ));
+
+        let markdown_action: Box<dyn BookmarkAction> = Box::new(
+            crate::application::actions::MarkdownAction::new_with_repository(
+                repository.clone(),
+                embedder.clone(),
+            ),
+        );
+
+        let env_action: Box<dyn BookmarkAction> = Box::new(
+            crate::application::actions::EnvAction::new(interpolation_service.clone()),
+        );
+
+        let default_action: Box<dyn BookmarkAction> = Box::new(
+            crate::application::actions::DefaultAction::new(interpolation_service.clone()),
+        );
+
         Arc::new(SystemTagActionResolver::new(
             uri_action,
-            snippet_action, 
+            snippet_action,
             text_action,
             shell_action,
             markdown_action,
@@ -165,7 +178,7 @@ impl TestServiceContainer {
             default_action,
         ))
     }
-    
+
     /// Create LSP services bundle for integration testing
     /// Returns pre-configured services ready for LSP backend testing
     pub fn create_lsp_services(&self) -> LspServiceBundle {
@@ -173,18 +186,19 @@ impl TestServiceContainer {
             self.bookmark_service.clone(),
             self.interpolation_service.clone(),
         ));
-        
-        let completion_service = crate::lsp::services::completion_service::CompletionService::with_config(
-            snippet_service.clone(),
-            BkmrConfig::default(),
-        );
-        
+
+        let completion_service =
+            crate::lsp::services::completion_service::CompletionService::with_config(
+                snippet_service.clone(),
+                BkmrConfig::default(),
+            );
+
         let document_service = crate::lsp::services::document_service::DocumentService::new();
-        
+
         let command_service = crate::lsp::services::command_service::CommandService::with_service(
-            self.bookmark_service.clone()
+            self.bookmark_service.clone(),
         );
-        
+
         LspServiceBundle {
             snippet_service,
             completion_service,

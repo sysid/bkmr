@@ -135,7 +135,7 @@ where
             &filename,       // Title
             &record.content, // Description
             tags,            // Tags
-            &dummy_embedder,  // TODO: check whether the real embedder is required (looks like it from before refactor)
+            &dummy_embedder, // TODO: check whether the real embedder is required (looks like it from before refactor)
         )?;
 
         bookmarks.push(bookmark);

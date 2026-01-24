@@ -1,18 +1,18 @@
 // src/main.rs
-use bkmr::infrastructure::di::ServiceContainer;
-use bkmr::config::{load_settings, Settings, ConfigSource};
 use bkmr::cli::args::{Cli, Commands};
-use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
-use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::cli::bookmark_commands::pre_fill_database;
-use bkmr::util::helper::confirm;
+use bkmr::config::{load_settings, ConfigSource, Settings};
 use bkmr::exitcode;
+use bkmr::infrastructure::di::ServiceContainer;
+use bkmr::infrastructure::embeddings::DummyEmbedding;
+use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
+use bkmr::util::helper::confirm;
 use clap::Parser;
 use crossterm::style::Stylize;
+use std::fs;
+use std::path::Path;
 use termcolor::{ColorChoice, StandardStream};
 use tracing::{debug, info, instrument};
-use std::path::Path;
-use std::fs;
 use tracing_subscriber::{
     filter::{filter_fn, LevelFilter},
     fmt::{self, format::FmtSpan},
@@ -33,12 +33,11 @@ fn main() {
 
     // Load configuration with CLI overrides
     let config_path_ref = cli.config.as_deref();
-    let settings = load_settings(config_path_ref)
-        .unwrap_or_else(|e| {
-            debug!("Failed to load settings: {}. Using defaults.", e);
-            Settings::default()
-        });
-    
+    let settings = load_settings(config_path_ref).unwrap_or_else(|e| {
+        debug!("Failed to load settings: {}. Using defaults.", e);
+        Settings::default()
+    });
+
     // Note: OpenAI override from CLI flag will be handled in service container
     // when the embedder selection is properly implemented
     if cli.openai {
@@ -62,7 +61,7 @@ fn main() {
             std::process::exit(exitcode::USAGE);
         }
     };
-    
+
     // Execute CLI command with services
     if let Err(e) = execute_command_with_services(stderr, cli, service_container, settings) {
         eprintln!("{}", format!("Error: {}", e).red());
@@ -70,8 +69,10 @@ fn main() {
     }
 }
 
-
-fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_create_db_command(
+    cli: Cli,
+    settings: &Settings,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
         // Get the database path using existing precedence: CLI argument -> config -> default
         let db_path = match path {
@@ -114,9 +115,8 @@ fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn
         // Create parent directories if they don't exist
         if let Some(parent) = Path::new(&db_path).parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| {
-                    format!("Failed to create parent directories: {}", e)
-                })?;
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directories: {}", e))?;
             }
         }
 
@@ -127,7 +127,8 @@ fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn
             .map_err(|e| format!("Failed to create repository: {}", e))?;
 
         // Get a connection
-        let mut conn = repository.get_connection()
+        let mut conn = repository
+            .get_connection()
             .map_err(|e| format!("Failed to get database connection: {}", e))?;
 
         // Run migrations to set up the schema
@@ -135,7 +136,8 @@ fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn
             .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
         // Clean the bookmark table to ensure we start with an empty database
-        repository.empty_bookmark_table()
+        repository
+            .empty_bookmark_table()
             .map_err(|e| format!("Failed to empty bookmark table: {}", e))?;
 
         eprintln!("Database created successfully at: {}", db_path);
@@ -154,22 +156,18 @@ fn handle_create_db_command(cli: Cli, settings: &Settings) -> Result<(), Box<dyn
 
 /// Handle all database-independent operations (flags and commands that don't need ServiceContainer)
 fn handle_database_independent_operations(
-    cli: Cli, 
-    settings: &Settings
+    cli: Cli,
+    settings: &Settings,
 ) -> Option<Result<(), Box<dyn std::error::Error>>> {
     // Handle flags first
     if cli.generate_config {
         return Some(handle_generate_config());
     }
-    
+
     // Handle commands that don't need database
     match cli.command.as_ref() {
-        Some(Commands::CreateDb { .. }) => {
-            Some(handle_create_db_command(cli, settings))
-        },
-        Some(Commands::Completion { shell }) => {
-            Some(handle_completion_command(shell.clone()))
-        },
+        Some(Commands::CreateDb { .. }) => Some(handle_create_db_command(cli, settings)),
+        Some(Commands::Completion { shell }) => Some(handle_completion_command(shell.clone())),
         _ => None, // Requires database services
     }
 }

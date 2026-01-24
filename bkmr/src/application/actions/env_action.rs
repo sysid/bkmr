@@ -14,7 +14,9 @@ pub struct EnvAction {
 
 impl EnvAction {
     pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
-        Self { interpolation_service }
+        Self {
+            interpolation_service,
+        }
     }
 }
 
@@ -95,6 +97,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Act
@@ -133,6 +136,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Act

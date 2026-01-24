@@ -59,9 +59,7 @@ impl CliError {
             CliError::PermissionDenied(msg) => {
                 CliError::PermissionDenied(format!("{}: {}", context.into(), msg))
             }
-            CliError::Network(msg) => {
-                CliError::Network(format!("{}: {}", context.into(), msg))
-            }
+            CliError::Network(msg) => CliError::Network(format!("{}: {}", context.into(), msg)),
             CliError::Application(err) => CliError::Application(err.context(context)),
             CliError::Other(msg) => CliError::Other(format!("{}: {}", context.into(), msg)),
             err => CliError::Other(format!("{}: {}", context.into(), err)),

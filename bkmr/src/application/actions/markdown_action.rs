@@ -32,11 +32,17 @@ pub struct MarkdownAction {
 impl MarkdownAction {
     #[allow(dead_code)]
     pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self { repository: None, embedder }
+        Self {
+            repository: None,
+            embedder,
+        }
     }
 
     // Constructor with repository for embedding support
-    pub fn new_with_repository(repository: Arc<dyn BookmarkRepository>, embedder: Arc<dyn Embedder>) -> Self {
+    pub fn new_with_repository(
+        repository: Arc<dyn BookmarkRepository>,
+        embedder: Arc<dyn Embedder>,
+    ) -> Self {
         Self {
             repository: Some(repository),
             embedder,
@@ -277,7 +283,8 @@ impl MarkdownAction {
         // Match img src, link href, and script src
         let img_regex = Regex::new(r#"<img\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
         let link_regex = Regex::new(r#"<link\s+[^>]*href\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
-        let script_regex = Regex::new(r#"<script\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
+        let script_regex =
+            Regex::new(r#"<script\s+[^>]*src\s*=\s*["']([^"']+)["'][^>]*>"#).unwrap();
 
         // Extract image paths
         for cap in img_regex.captures_iter(html) {
@@ -285,8 +292,11 @@ impl MarkdownAction {
             let path = cap[1].to_string();
 
             // Only include local paths (not http://, https://, data:, etc.)
-            if !path.starts_with("http://") && !path.starts_with("https://")
-                && !path.starts_with("data:") && !path.starts_with("//") {
+            if !path.starts_with("http://")
+                && !path.starts_with("https://")
+                && !path.starts_with("data:")
+                && !path.starts_with("//")
+            {
                 resources.push((full_match, path));
             }
         }
@@ -296,8 +306,11 @@ impl MarkdownAction {
             let full_match = cap[0].to_string();
             let path = cap[1].to_string();
 
-            if !path.starts_with("http://") && !path.starts_with("https://")
-                && !path.starts_with("data:") && !path.starts_with("//") {
+            if !path.starts_with("http://")
+                && !path.starts_with("https://")
+                && !path.starts_with("data:")
+                && !path.starts_with("//")
+            {
                 resources.push((full_match, path));
             }
         }
@@ -307,8 +320,11 @@ impl MarkdownAction {
             let full_match = cap[0].to_string();
             let path = cap[1].to_string();
 
-            if !path.starts_with("http://") && !path.starts_with("https://")
-                && !path.starts_with("data:") && !path.starts_with("//") {
+            if !path.starts_with("http://")
+                && !path.starts_with("https://")
+                && !path.starts_with("data:")
+                && !path.starts_with("//")
+            {
                 resources.push((full_match, path));
             }
         }
@@ -320,7 +336,11 @@ impl MarkdownAction {
     /// relative_path: The path from the HTML (e.g., "./images/foo.png")
     /// source_md_path: The absolute path to the source markdown file
     /// Returns: Some(absolute PathBuf) if the file exists, None otherwise
-    fn resolve_resource_path(&self, relative_path: &str, source_md_path: &Path) -> Option<std::path::PathBuf> {
+    fn resolve_resource_path(
+        &self,
+        relative_path: &str,
+        source_md_path: &Path,
+    ) -> Option<std::path::PathBuf> {
         // Get the directory containing the source markdown file
         let source_dir = source_md_path.parent()?;
 
@@ -337,10 +357,16 @@ impl MarkdownAction {
         if let Ok(canonical_path) = resource_path.canonicalize() {
             // Check if the file exists
             if canonical_path.exists() {
-                debug!("Resolved resource path '{}' to '{:?}'", relative_path, canonical_path);
+                debug!(
+                    "Resolved resource path '{}' to '{:?}'",
+                    relative_path, canonical_path
+                );
                 return Some(canonical_path);
             } else {
-                debug!("Resource path '{}' resolved but file does not exist: {:?}", relative_path, canonical_path);
+                debug!(
+                    "Resource path '{}' resolved but file does not exist: {:?}",
+                    relative_path, canonical_path
+                );
             }
         } else {
             debug!("Failed to canonicalize resource path: {}", relative_path);
@@ -354,7 +380,12 @@ impl MarkdownAction {
     /// source_md_path: The absolute path to the source markdown file
     /// temp_dir: The temporary directory where resources should be copied
     /// Returns: Ok(()) if successful, error otherwise
-    fn copy_resources_to_temp(&self, html: &str, source_md_path: &Path, temp_dir: &Path) -> DomainResult<()> {
+    fn copy_resources_to_temp(
+        &self,
+        html: &str,
+        source_md_path: &Path,
+        temp_dir: &Path,
+    ) -> DomainResult<()> {
         // Extract all local resource paths from the HTML
         let resources = self.extract_resource_paths(html);
 
@@ -390,10 +421,16 @@ impl MarkdownAction {
                     ))
                 })?;
 
-                info!("Copied resource: {} from {:?} to {:?}", relative_path, source_file, dest_path);
+                info!(
+                    "Copied resource: {} from {:?} to {:?}",
+                    relative_path, source_file, dest_path
+                );
             } else {
                 // Log warning but don't fail - resource might be optional
-                debug!("Could not resolve resource path, skipping: {}", relative_path);
+                debug!(
+                    "Could not resolve resource path, skipping: {}",
+                    relative_path
+                );
             }
         }
 
@@ -1108,6 +1145,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Bookmark with embeddable=false
@@ -1126,6 +1164,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Test cases
@@ -1174,6 +1213,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Execute the action
@@ -1221,6 +1261,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Execute the action
@@ -1268,6 +1309,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         // Execute the action
@@ -1620,6 +1662,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         let result = action.get_source_file_path(&bookmark);
@@ -1653,6 +1696,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         let result = action.get_source_file_path(&bookmark);
@@ -1685,6 +1729,7 @@ mod tests {
             file_path: None,
             file_mtime: None,
             file_hash: None,
+            opener: None,
         };
 
         let result = action.get_source_file_path(&bookmark);

@@ -178,7 +178,8 @@ mod tests {
     use tempfile::NamedTempFile;
 
     #[test]
-    fn given_json_array_file_when_import_bookmarks_then_creates_bookmark_data() -> DomainResult<()> {
+    fn given_json_array_file_when_import_bookmarks_then_creates_bookmark_data() -> DomainResult<()>
+    {
         // Create a temporary test file with a JSON array
         let mut temp_file = NamedTempFile::new()?;
         write!(
@@ -234,7 +235,8 @@ mod tests {
     }
 
     #[test]
-    fn given_ndjson_file_when_import_text_documents_then_creates_document_data() -> DomainResult<()> {
+    fn given_ndjson_file_when_import_text_documents_then_creates_document_data() -> DomainResult<()>
+    {
         // Create temporary test file with NDJSON format
         let mut temp_file = NamedTempFile::new()?;
         writeln!(

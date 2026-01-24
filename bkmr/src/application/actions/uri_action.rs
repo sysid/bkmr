@@ -14,7 +14,53 @@ pub struct UriAction {
 
 impl UriAction {
     pub fn new(interpolation_service: Arc<dyn InterpolationService>) -> Self {
-        Self { interpolation_service }
+        Self {
+            interpolation_service,
+        }
+    }
+
+    /// Execute a custom opener command with the URL as argument
+    /// The opener command is expanded for ~ and environment variables,
+    /// then executed via shell with the URL passed as $1
+    #[instrument(skip(self), level = "debug")]
+    fn execute_custom_opener(&self, opener: &str, url: &str) -> DomainResult<()> {
+        // Expand ~ and environment variables in the opener path
+        let expanded_opener = crate::util::path::expand_path(opener);
+        debug!("Custom opener: {} -> {}", opener, expanded_opener);
+        debug!("URL argument: {}", url);
+
+        // Execute via shell: sh -c "$opener \"$1\"" -- <url>
+        // This ensures proper quoting of the URL
+        let mut child = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!("{} \"$1\"", expanded_opener))
+            .arg("--")
+            .arg(url)
+            .stdin(std::process::Stdio::inherit())
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()
+            .map_err(|e| {
+                DomainError::Other(format!(
+                    "Failed to execute custom opener '{}': {}",
+                    expanded_opener, e
+                ))
+            })?;
+
+        let status = child
+            .wait()
+            .map_err(|e| DomainError::Other(format!("Failed to wait on custom opener: {}", e)))?;
+
+        if !status.success() {
+            return Err(DomainError::Other(format!(
+                "Custom opener '{}' exited with status: {}",
+                expanded_opener,
+                status.code().unwrap_or(-1)
+            )));
+        }
+
+        debug!("Custom opener completed successfully");
+        Ok(())
     }
 
     // Helper method to open a URL with proper rendering
@@ -96,7 +142,12 @@ impl BookmarkAction for UriAction {
             .render_bookmark_url(bookmark)
             .map_err(|e| DomainError::Other(format!("Failed to render URL: {}", e)))?;
 
-        // Open the URL
+        // Check for custom opener
+        if let Some(opener) = &bookmark.opener {
+            return self.execute_custom_opener(opener, &rendered_url);
+        }
+
+        // Open the URL with default behavior
         self.open_url(&rendered_url)
     }
 

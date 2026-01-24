@@ -16,6 +16,7 @@ diesel::table! {
         file_path -> Nullable<Text>,
         file_mtime -> Nullable<Integer>,
         file_hash -> Nullable<Text>,
+        opener -> Nullable<Text>,
     }
 }
 

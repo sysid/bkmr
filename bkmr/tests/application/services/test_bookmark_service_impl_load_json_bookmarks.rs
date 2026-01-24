@@ -9,7 +9,7 @@ fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_datab
     // Arrange
     let test_container = TestServiceContainer::new();
     let bookmark_service = test_container.bookmark_service;
-    
+
     // Get initial bookmark count (shared database has baseline data)
     let initial_bookmarks = test_container.bookmark_repository.get_all()?;
     let initial_count = initial_bookmarks.len();
@@ -32,7 +32,13 @@ fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_datab
 
     // Get all bookmarks from the database
     let bookmarks = test_container.bookmark_repository.get_all()?;
-    assert_eq!(bookmarks.len(), initial_count + 2, "Database should contain {} bookmarks (initial {} + 2 added)", initial_count + 2, initial_count);
+    assert_eq!(
+        bookmarks.len(),
+        initial_count + 2,
+        "Database should contain {} bookmarks (initial {} + 2 added)",
+        initial_count + 2,
+        initial_count
+    );
 
     // Verify the first bookmark was added correctly
     let first_bookmark = bookmarks

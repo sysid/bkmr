@@ -1,4 +1,3 @@
-use crate::infrastructure::di::ServiceContainer;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField};
 use crate::cli::error::{CliError, CliResult};
@@ -7,6 +6,7 @@ use crate::cli::process::execute_bookmark_default_action;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::system_tag::SystemTag;
+use crate::infrastructure::di::ServiceContainer;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::create_shell_function_name;
@@ -25,7 +25,6 @@ fn determine_sort_direction(order_desc: bool, order_asc: bool) -> SortDirection 
     }
 }
 
-
 /// Handler for search command and its sub-operations
 pub struct SearchCommandHandler {
     services: ServiceContainer,
@@ -34,8 +33,11 @@ pub struct SearchCommandHandler {
 
 impl SearchCommandHandler {
     /// Create handler with dependency injection (single composition root)
-    pub fn with_services(service_container: ServiceContainer, settings: crate::config::Settings) -> Self {
-        Self { 
+    pub fn with_services(
+        service_container: ServiceContainer,
+        settings: crate::config::Settings,
+    ) -> Self {
+        Self {
             services: service_container,
             settings,
         }
@@ -103,7 +105,11 @@ impl SearchCommandHandler {
     fn apply_interpolation(&self, bookmarks: &mut [Bookmark]) -> CliResult<()> {
         for bookmark in bookmarks {
             if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
-                match self.services.interpolation_service.render_bookmark_url(bookmark) {
+                match self
+                    .services
+                    .interpolation_service
+                    .render_bookmark_url(bookmark)
+                {
                     Ok(rendered_url) => {
                         bookmark.url = rendered_url;
                     }
@@ -201,7 +207,6 @@ impl SearchCommandHandler {
         Ok(())
     }
 }
-
 
 impl SearchCommandHandler {
     #[instrument(skip(self, cli))]

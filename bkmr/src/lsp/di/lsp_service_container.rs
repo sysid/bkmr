@@ -1,6 +1,6 @@
+use crate::config::Settings;
 use crate::infrastructure::di::ServiceContainer;
 use crate::lsp::services::{CommandService, CompletionService, DocumentService, LspSnippetService};
-use crate::config::Settings;
 use std::sync::Arc;
 
 /// LSP-specific service container for editor integration
@@ -17,11 +17,11 @@ impl LspServiceContainer {
             service_container.bookmark_service.clone(),
             service_container.interpolation_service.clone(),
         ));
-        
+
         Self {
             completion_service: CompletionService::new(snippet_service.clone()),
             command_service: CommandService::with_service(
-                service_container.bookmark_service.clone()
+                service_container.bookmark_service.clone(),
             ),
             document_service: DocumentService::new(),
         }

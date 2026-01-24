@@ -187,6 +187,11 @@ pub enum Commands {
         clone_id: Option<i32>,
         #[arg(long = "stdin", help = "read content from stdin into url field")]
         stdin: bool,
+        #[arg(
+            long = "open-with",
+            help = "custom command to open this bookmark (replaces default open behavior)"
+        )]
+        open_with: Option<String>,
     },
     /// Delete bookmarks
     Delete {
@@ -203,6 +208,11 @@ pub enum Commands {
         tags_not: Option<String>,
         #[arg(short = 'f', long = "force", help = "overwrite taglist with tags")]
         force: bool,
+        #[arg(
+            long = "open-with",
+            help = "set custom command to open this bookmark (use empty string to clear)"
+        )]
+        open_with: Option<String>,
     },
     /// Edit bookmarks
     Edit {

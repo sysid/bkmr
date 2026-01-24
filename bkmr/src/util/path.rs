@@ -176,10 +176,10 @@ mod tests {
         // Test $HOME expansion
         let home_path = "$HOME/.config/bkmr/bkmr.db";
         let expanded = expand_path(home_path);
-        
+
         // Should not contain literal $HOME anymore
         assert!(!expanded.contains("$HOME"));
-        
+
         // Should contain the actual home directory path
         if let Ok(home) = env::var("HOME") {
             assert!(expanded.starts_with(&home));
@@ -192,10 +192,10 @@ mod tests {
         // Test tilde expansion
         let tilde_path = "~/.config/bkmr/bkmr.db";
         let expanded = expand_path(tilde_path);
-        
+
         // Should not contain literal tilde anymore
         assert!(!expanded.starts_with("~"));
-        
+
         // Should be an absolute path
         assert!(expanded.starts_with("/"));
         assert!(expanded.ends_with("/.config/bkmr/bkmr.db"));
@@ -205,7 +205,7 @@ mod tests {
     fn given_absolute_path_when_expand_path_then_returns_unchanged() {
         let absolute_path = "/absolute/path/to/database.db";
         let expanded = expand_path(absolute_path);
-        
+
         assert_eq!(expanded, absolute_path);
     }
 
@@ -213,7 +213,7 @@ mod tests {
     fn given_relative_path_when_expand_path_then_returns_unchanged() {
         let relative_path = "./relative/database.db";
         let expanded = expand_path(relative_path);
-        
+
         assert_eq!(expanded, relative_path);
     }
 
@@ -221,13 +221,13 @@ mod tests {
     fn given_custom_env_var_when_expand_path_then_expands_correctly() {
         // Set a custom environment variable for testing
         env::set_var("TEST_DB_PATH", "/tmp/test");
-        
+
         let env_path = "$TEST_DB_PATH/database.db";
         let expanded = expand_path(env_path);
-        
+
         assert_eq!(expanded, "/tmp/test/database.db");
         assert!(!expanded.contains("$TEST_DB_PATH"));
-        
+
         // Cleanup
         env::remove_var("TEST_DB_PATH");
     }
