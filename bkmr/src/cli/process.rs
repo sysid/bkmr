@@ -919,6 +919,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         let bookmark2 = Bookmark {
@@ -937,6 +938,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         let bookmarks = vec![bookmark1, bookmark2];
@@ -980,6 +982,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         let bookmark2 = Bookmark {
@@ -998,6 +1001,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         let bookmarks = vec![bookmark1, bookmark2];

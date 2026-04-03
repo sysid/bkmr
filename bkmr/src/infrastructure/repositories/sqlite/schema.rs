@@ -17,6 +17,7 @@ diesel::table! {
         file_mtime -> Nullable<Integer>,
         file_hash -> Nullable<Text>,
         opener -> Nullable<Text>,
+        accessed_at -> Nullable<Timestamp>,
     }
 }
 

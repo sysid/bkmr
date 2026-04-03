@@ -76,6 +76,7 @@ mod tests {
             None,  // file_mtime
             None,  // file_hash
             None,  // opener
+            None,  // accessed_at
         )
         .unwrap()
     }

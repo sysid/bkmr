@@ -33,6 +33,8 @@ pub struct Bookmark {
     pub file_hash: Option<String>,
     #[builder(default)]
     pub opener: Option<String>,
+    #[builder(default)]
+    pub accessed_at: Option<DateTime<Utc>>,
 }
 
 /// Methods for the Bookmark entity
@@ -68,6 +70,7 @@ impl Bookmark {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         // Get content for embedding using the structured method
@@ -104,6 +107,7 @@ impl Bookmark {
         file_mtime: Option<i32>,
         file_hash: Option<String>,
         opener: Option<String>,
+        accessed_at: Option<DateTime<Utc>>,
     ) -> DomainResult<Self> {
         let tags = Tag::parse_tags(tag_string)?;
 
@@ -123,6 +127,7 @@ impl Bookmark {
             file_mtime,
             file_hash,
             opener,
+            accessed_at,
         })
     }
 
@@ -158,10 +163,10 @@ impl Bookmark {
         Ok(())
     }
 
-    /// Record access to the bookmark
+    /// Record access to the bookmark (does not change updated_at)
     pub fn record_access(&mut self) {
         self.access_count += 1;
-        self.updated_at = Utc::now();
+        self.accessed_at = Some(Utc::now());
     }
 
     /// Update bookmark information
@@ -343,6 +348,7 @@ impl fmt::Debug for Bookmark {
             .field("embedding", &self.embedding.as_ref().map(|_| "[...]"))
             .field("content_hash", &self.content_hash)
             .field("embeddable", &self.embeddable)
+            .field("accessed_at", &self.accessed_at)
             .finish()
     }
 }
@@ -467,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn given_bookmark_when_record_access_then_increments_count() {
+    fn given_bookmark_when_record_access_then_increments_count_and_sets_accessed_at() {
         let _ = init_test_env();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
@@ -482,12 +488,17 @@ mod tests {
         .unwrap();
 
         assert_eq!(bookmark.access_count, 0);
+        assert!(bookmark.accessed_at.is_none());
+        let updated_at_before = bookmark.updated_at;
 
         bookmark.record_access();
         assert_eq!(bookmark.access_count, 1);
+        assert!(bookmark.accessed_at.is_some());
+        assert_eq!(bookmark.updated_at, updated_at_before, "record_access must not change updated_at");
 
         bookmark.record_access();
         assert_eq!(bookmark.access_count, 2);
+        assert_eq!(bookmark.updated_at, updated_at_before, "record_access must not change updated_at");
     }
 
     #[test]

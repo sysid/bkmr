@@ -125,7 +125,7 @@ impl<R: BookmarkRepository> ActionServiceImpl<R> {
 
         bookmark.record_access();
 
-        self.repository.update(&bookmark)?;
+        self.repository.update_access(&bookmark)?;
 
         Ok(())
     }
@@ -217,6 +217,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         }
     }
 
@@ -239,6 +240,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         }
     }
 

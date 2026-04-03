@@ -33,8 +33,11 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// Add a new bookmark
     fn add(&self, bookmark: &mut Bookmark) -> Result<(), DomainError>;
 
-    /// Update an existing bookmark
+    /// Update an existing bookmark (stamps updated_at automatically)
     fn update(&self, bookmark: &Bookmark) -> Result<(), DomainError>;
+
+    /// Update access metadata only (does NOT change updated_at)
+    fn update_access(&self, bookmark: &Bookmark) -> Result<(), DomainError>;
 
     /// Delete a bookmark by ID
     fn delete(&self, id: i32) -> Result<bool, DomainError>;

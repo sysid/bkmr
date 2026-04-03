@@ -449,7 +449,7 @@ impl BookmarkQuery {
             }
         }
 
-        // Apply sorting if specified
+        // Apply sorting: by modification date if requested, otherwise by id ascending
         if let Some(direction) = &self.sort_by_date {
             match direction {
                 SortDirection::Ascending => {
@@ -459,6 +459,8 @@ impl BookmarkQuery {
                     filtered.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
                 }
             }
+        } else {
+            filtered.sort_by(|a, b| a.id.unwrap_or(0).cmp(&b.id.unwrap_or(0)));
         }
 
         // Apply limit and offset

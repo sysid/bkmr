@@ -17,11 +17,11 @@ use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::{instrument, warn};
 
 // Helper function to determine sort direction based on order flags
-fn determine_sort_direction(order_desc: bool, order_asc: bool) -> SortDirection {
+fn determine_sort_direction(order_desc: bool, order_asc: bool) -> Option<SortDirection> {
     match (order_desc, order_asc) {
-        (true, false) => SortDirection::Descending,
-        (false, true) => SortDirection::Ascending,
-        _ => SortDirection::Descending, // Default to descending
+        (true, _) => Some(SortDirection::Descending),
+        (false, true) => Some(SortDirection::Ascending),
+        _ => None, // No explicit sort — default to id ordering
     }
 }
 
@@ -90,15 +90,20 @@ impl SearchCommandHandler {
         };
 
         // Create query object
-        Ok(BookmarkQuery::new()
+        let mut query = BookmarkQuery::new()
             .with_text_query(fts_query.as_deref())
             .with_tags_exact(search_tags.exact_tags.as_ref())
             .with_tags_all(search_tags.all_tags.as_ref())
             .with_tags_all_not(search_tags.all_not_tags.as_ref())
             .with_tags_any(search_tags.any_tags.as_ref())
             .with_tags_any_not(search_tags.any_not_tags.as_ref())
-            .with_sort_by_date(sort_direction)
-            .with_limit(limit_usize))
+            .with_limit(limit_usize);
+
+        if let Some(direction) = sort_direction {
+            query = query.with_sort_by_date(direction);
+        }
+
+        Ok(query)
     }
 
     /// Apply interpolation to bookmarks if requested
@@ -330,37 +335,25 @@ mod tests {
     // Simple unit tests for sort direction logic - no database access needed
     #[test]
     fn given_desc_flag_when_determine_sort_direction_then_returns_descending() {
-        // Act
         let result = determine_sort_direction(true, false);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
+        assert_eq!(result, Some(SortDirection::Descending));
     }
 
     #[test]
     fn given_asc_flag_when_determine_sort_direction_then_returns_ascending() {
-        // Act
         let result = determine_sort_direction(false, true);
-
-        // Assert
-        assert_eq!(result, SortDirection::Ascending);
+        assert_eq!(result, Some(SortDirection::Ascending));
     }
 
     #[test]
     fn given_both_flags_when_determine_sort_direction_then_returns_descending() {
-        // Act
         let result = determine_sort_direction(true, true);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
+        assert_eq!(result, Some(SortDirection::Descending));
     }
 
     #[test]
-    fn given_no_flags_when_determine_sort_direction_then_returns_descending() {
-        // Act
+    fn given_no_flags_when_determine_sort_direction_then_returns_none() {
         let result = determine_sort_direction(false, false);
-
-        // Assert
-        assert_eq!(result, SortDirection::Descending);
+        assert_eq!(result, None);
     }
 }

@@ -1,3 +1,4 @@
+.idea/
 .workmux.yaml
 thoughts/
 db/schema_v1_migration_test.db

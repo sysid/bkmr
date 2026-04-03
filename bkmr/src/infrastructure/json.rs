@@ -26,6 +26,7 @@ pub struct JsonBookmarkView {
     pub access_count: i32,
     pub created_at: Option<String>,
     pub updated_at: String,
+    pub accessed_at: Option<String>,
 }
 
 impl JsonBookmarkView {
@@ -44,6 +45,7 @@ impl JsonBookmarkView {
             access_count: bookmark.access_count,
             created_at: bookmark.created_at.map(|dt| dt.to_rfc3339()),
             updated_at: bookmark.updated_at.to_rfc3339(),
+            accessed_at: bookmark.accessed_at.map(|dt| dt.to_rfc3339()),
         }
     }
 
