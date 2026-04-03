@@ -98,6 +98,10 @@ impl SqliteBookmarkRepository {
             .created_ts
             .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
 
+        let accessed_at = db_bookmark
+            .accessed_at
+            .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
+
         // Create bookmark from storage data
         Bookmark::from_storage(
             db_bookmark.id,
@@ -115,6 +119,7 @@ impl SqliteBookmarkRepository {
             db_bookmark.file_mtime,
             db_bookmark.file_hash,
             db_bookmark.opener,
+            accessed_at,
         )
         .map_err(|e| {
             SqliteRepositoryError::ConversionError(format!(
@@ -134,6 +139,7 @@ impl SqliteBookmarkRepository {
             tags: bookmark.formatted_tags(),
             desc: bookmark.description.to_string(),
             flags: bookmark.access_count,
+            last_update_ts: bookmark.updated_at.naive_utc(),
             embedding: bookmark.embedding.clone(),
             content_hash: bookmark.content_hash.clone(),
             created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
@@ -142,6 +148,7 @@ impl SqliteBookmarkRepository {
             file_mtime: bookmark.file_mtime,
             file_hash: bookmark.file_hash.clone(),
             opener: bookmark.opener.clone(),
+            accessed_at: bookmark.accessed_at.map(|dt| dt.naive_utc()),
         };
 
         debug!(
@@ -366,6 +373,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 file_mtime: bookmark.file_mtime,
                 file_hash: bookmark.file_hash.clone(),
                 opener: bookmark.opener.clone(),
+                accessed_at: bookmark.accessed_at.map(|dt| dt.naive_utc()),
             };
             debug!("Inserting bookmark: {}", db_bookmark);
 
@@ -400,12 +408,36 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             SqliteRepositoryError::OperationFailed("Bookmark has no ID".to_string())
         })?;
 
-        let changes = self.to_db_model(bookmark);
-        // debug!("Updating bookmark with ID {}: {:?}", id, changes);  // logs entire embedding
+        let mut changes = self.to_db_model(bookmark);
+        // Auto-stamp updated_at (replaces the old UpdateLastTime trigger)
+        changes.last_update_ts = chrono::Utc::now().naive_utc();
 
         // Update the bookmark
         let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
             .set(&changes)
+            .execute(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        if result == 0 {
+            return Err(SqliteRepositoryError::BookmarkNotFound(id).into());
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn update_access(&self, bookmark: &Bookmark) -> Result<(), DomainError> {
+        let mut conn = self.get_connection()?;
+
+        let id = bookmark.id.ok_or_else(|| {
+            SqliteRepositoryError::OperationFailed("Bookmark has no ID".to_string())
+        })?;
+
+        let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
+            .set((
+                dsl::flags.eq(bookmark.access_count),
+                dsl::accessed_at.eq(bookmark.accessed_at.map(|dt| dt.naive_utc())),
+            ))
             .execute(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;
 

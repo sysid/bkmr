@@ -267,6 +267,7 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
         file_mtime: None,
         file_hash: None,
         opener: None,
+        accessed_at: None,
     };
 
     // Execute the markdown action - it will handle file reading and rendering

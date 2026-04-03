@@ -202,7 +202,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             bookmark.content_hash = None;
         }
 
-        bookmark.record_access();
         self.repository
             .update(&bookmark)
             .with_app_context(|| format!("updating bookmark with ID {:?}", bookmark.id))?;
@@ -339,7 +338,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         bookmark.record_access();
 
-        self.repository.update(&bookmark)?;
+        self.repository.update_access(&bookmark)?;
 
         Ok(bookmark)
     }

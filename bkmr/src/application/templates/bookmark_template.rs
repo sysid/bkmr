@@ -281,7 +281,8 @@ impl BookmarkTemplate {
             .updated_at(chrono::Utc::now())
             .access_count(original.map_or(0, |b| b.access_count))
             .embeddable(self.embeddable)
-            .opener(self.opener.clone());
+            .opener(self.opener.clone())
+            .accessed_at(original.and_then(|b| b.accessed_at));
 
         // Preserve embedding and content hash if available from original
         if let Some(bookmark) = original {

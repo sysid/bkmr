@@ -98,6 +98,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         // Act
@@ -137,6 +138,7 @@ mod tests {
             file_mtime: None,
             file_hash: None,
             opener: None,
+            accessed_at: None,
         };
 
         // Act
