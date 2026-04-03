@@ -12,7 +12,8 @@ use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, RepositoryError};
 use crate::domain::repositories::query::{
-    AllTagsSpecification, AnyTagSpecification, BookmarkQuery, SortDirection,
+    AllTagsSpecification, AnyTagSpecification, BookmarkQuery, SortCriteria, SortDirection,
+    SortField,
 };
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::tag::Tag;
@@ -635,7 +636,8 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         direction: SortDirection,
         limit: Option<usize>,
     ) -> Result<Vec<Bookmark>, DomainError> {
-        let mut query = BookmarkQuery::new().with_sort_by_date(direction);
+        let mut query =
+            BookmarkQuery::new().with_sort(SortCriteria::new(SortField::Modified, direction));
         if let Some(limit) = limit {
             query = query.with_limit(Option::from(limit));
         }
@@ -1600,7 +1602,7 @@ mod tests {
             .with_text_query(Some("TEST"))
             .with_tags_all(Some(&all_tags))
             .with_tags_any(Some(&any_tags))
-            .with_sort_by_date(SortDirection::Descending)
+            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending))
             .with_limit(Some(5));
 
         // Act

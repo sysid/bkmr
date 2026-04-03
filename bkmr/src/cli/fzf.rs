@@ -372,11 +372,8 @@ pub fn fzf_process(
         return Ok(());
     }
 
-    // Sort bookmarks by title (case-insensitive)
-    let mut sorted_bookmarks = bookmarks.to_vec();
-    sorted_bookmarks.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
-
-    let max_id_width = sorted_bookmarks
+    // Bookmarks arrive pre-sorted by the query layer
+    let max_id_width = bookmarks
         .iter()
         .map(|b| b.id.unwrap_or(0).to_string().len())
         .max()
@@ -412,7 +409,7 @@ pub fn fzf_process(
     let options = options.build();
 
     // Build items based on style
-    let items: Vec<FzfBookmarkItem> = sorted_bookmarks
+    let items: Vec<FzfBookmarkItem> = bookmarks
         .iter()
         .map(|bookmark| {
             let base_description = services
@@ -472,7 +469,7 @@ pub fn fzf_process(
         return Ok(());
     }
 
-    let selected_bookmarks = get_selected_bookmarks(&output, &sorted_bookmarks);
+    let selected_bookmarks = get_selected_bookmarks(&output, bookmarks);
 
     if selected_bookmarks.is_empty() {
         debug!("No bookmarks selected");
