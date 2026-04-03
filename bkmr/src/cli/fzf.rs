@@ -1,9 +1,8 @@
 // src/cli/fzf.rs
 
+use std::borrow::Cow;
 use std::io::Write;
-use std::sync::Arc;
 
-// Service container dependency injection implemented
 use crate::cli::bookmark_commands;
 use crate::cli::error::CliResult;
 use crate::cli::process::{
@@ -15,160 +14,169 @@ use crate::domain::search::SemanticSearchResult;
 use crate::domain::system_tag::SystemTag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::util::helper::{format_file_path, format_mtime};
+use crossterm::event::{KeyCode, KeyModifiers};
 use crossterm::style::Stylize;
 use crossterm::{
     execute,
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use skim::tuikit::attr::{Attr, Color};
-use skim::{
-    prelude::*, AnsiString, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem,
-    SkimItemReceiver, SkimItemSender,
-};
+use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Span};
+use skim::{prelude::*, DisplayContext, ItemPreview, PreviewContext, Skim, SkimItem};
 use tracing::{debug, instrument};
 
+/// Unified skim item for both classic and enhanced display styles.
+/// The difference between styles is in how `display_text` and `preview_text`
+/// are constructed at creation time.
 #[derive(Clone)]
-struct SnippetItem {
+struct FzfBookmarkItem {
     bookmark: Bookmark,
     display_text: String,
-    preview: String,
+    preview_text: String,
+    /// Pre-parsed segments for colored display (start, end, color)
+    color_segments: Vec<(usize, usize, Color)>,
 }
 
-impl SkimItem for SnippetItem {
+impl FzfBookmarkItem {
+    fn new_classic(
+        bookmark: &Bookmark,
+        max_id_width: usize,
+        action_description: &str,
+        settings: &crate::config::Settings,
+    ) -> Self {
+        let display_text =
+            create_bookmark_display_text(bookmark, max_id_width, action_description, settings);
+        let preview_text = create_bookmark_preview_text(bookmark, action_description);
+        let color_segments =
+            compute_color_segments(&display_text, bookmark, max_id_width, &settings.fzf_opts);
+
+        Self {
+            bookmark: bookmark.clone(),
+            display_text,
+            preview_text,
+            color_segments,
+        }
+    }
+
+    fn new_enhanced(
+        bookmark: &Bookmark,
+        max_id_width: usize,
+        action_description: &str,
+        services: &ServiceContainer,
+        show_action: bool,
+    ) -> Self {
+        let id = bookmark.id.unwrap_or(0);
+        let display_text = format!("{:>width$}: {}", id, bookmark.title, width = max_id_width);
+        let preview_text =
+            create_enhanced_preview(bookmark, action_description, services, show_action);
+
+        Self {
+            bookmark: bookmark.clone(),
+            display_text,
+            preview_text,
+            color_segments: Vec::new(), // Enhanced style uses plain text display
+        }
+    }
+}
+
+impl SkimItem for FzfBookmarkItem {
     fn text(&self) -> Cow<'_, str> {
         Cow::Borrowed(&self.display_text)
     }
 
+    fn display(&self, context: DisplayContext) -> Line<'_> {
+        if self.color_segments.is_empty() {
+            // Enhanced style: use default highlighting
+            return context.to_line(self.text());
+        }
+
+        // Classic style: apply color segments
+        let text = &self.display_text;
+        let mut spans = Vec::new();
+        let mut pos = 0;
+
+        for &(start, end, color) in &self.color_segments {
+            let start = start.min(text.len());
+            let end = end.min(text.len());
+            if start > pos {
+                spans.push(Span::raw(&text[pos..start]));
+            }
+            if start < end {
+                spans.push(Span::styled(&text[start..end], Style::default().fg(color)));
+            }
+            pos = end;
+        }
+        if pos < text.len() {
+            spans.push(Span::raw(&text[pos..]));
+        }
+
+        Line::from(spans)
+    }
+
     fn preview(&self, _context: PreviewContext) -> ItemPreview {
-        ItemPreview::AnsiText(self.preview.clone())
+        ItemPreview::AnsiText(self.preview_text.clone())
     }
 
     fn output(&self) -> Cow<'_, str> {
-        if let Some(id) = self.bookmark.id {
-            Cow::Owned(id.to_string())
-        } else {
-            Cow::Borrowed("0")
-        }
+        Cow::Owned(self.bookmark.id.unwrap_or(0).to_string())
     }
 }
 
-#[derive(Clone)]
-struct AlignedBookmark {
-    bookmark: Bookmark,
-    max_id_width: usize,
-    action_description: String,
-    settings: crate::config::Settings,
-}
-
-impl SkimItem for AlignedBookmark {
+impl SkimItem for SemanticSearchResult {
     fn text(&self) -> Cow<'_, str> {
-        let display_text = create_bookmark_display_text(
-            &self.bookmark,
-            self.max_id_width,
-            &self.action_description,
-            &self.settings,
-        );
-        Cow::Owned(display_text)
+        Cow::Owned(self.display())
+    }
+}
+
+/// Compute color segments sorted by position for the classic display style
+fn compute_color_segments(
+    text: &str,
+    bookmark: &Bookmark,
+    max_id_width: usize,
+    fzf_opts: &crate::config::FzfOpts,
+) -> Vec<(usize, usize, Color)> {
+    let mut segments = Vec::new();
+    let padding = max_id_width + 2; // "ID: "
+    let title_end = padding + bookmark.title.len();
+
+    // Title in green
+    segments.push((padding, title_end, Color::Green));
+
+    // URL in yellow (within angle brackets)
+    if !fzf_opts.no_url {
+        if let (Some(start), Some(end)) = (text.find('<'), text.find('>')) {
+            segments.push((start, end + 1, Color::Yellow));
+        }
     }
 
-    fn display<'a>(&'a self, context: DisplayContext<'a>) -> AnsiString<'a> {
-        // Get the text representation
-        let text = self.text();
-
-        // Calculate padding width
-        let padding = self.max_id_width + 2; // ID width + ": "
-        let title = &self.bookmark.title;
-
-        // Create attribute for title (green)
-        let attr_title = Attr {
-            fg: Color::GREEN,
-            ..Attr::default()
-        };
-
-        // Create attribute segments
-        let mut attr_segments =
-            vec![(attr_title, (padding as u32, (padding + title.len()) as u32))];
-
-        // Get app settings from struct
-        let fzf_opts = &self.settings.fzf_opts;
-
-        // If showing URL, add yellow attribute for it
-        if !fzf_opts.no_url {
-            let start_idx_url = text.find('<').unwrap_or(0) as u32;
-            if start_idx_url > 0 {
-                let end_idx_url = text.find('>').unwrap_or(text.len()) as u32 + 1; // +1 for >
-                attr_segments.push((
-                    Attr {
-                        fg: Color::YELLOW,
-                        ..Attr::default()
-                    },
-                    (start_idx_url, end_idx_url),
-                ));
-            }
-        }
-
-        // If showing tags, add magenta attribute for tags
-        if fzf_opts.show_tags && !self.bookmark.tags.is_empty() {
-            let start_idx_tags = text.find('[').unwrap_or(0) as u32;
-            if start_idx_tags > 0 && start_idx_tags < text.len() as u32 {
-                let end_idx_tags = text.find(']').unwrap_or(text.len()) as u32 + 1; // +1 for ]
-                attr_segments.push((
-                    Attr {
-                        fg: Color::MAGENTA,
-                        ..Attr::default()
-                    },
-                    (start_idx_tags, end_idx_tags),
-                ));
-            }
-        }
-
-        // Add cyan attribute for action description in parentheses
-        if fzf_opts.show_action {
-            if let (Some(start), Some(end)) = (text.rfind('('), text.rfind(')')) {
-                attr_segments.push((
-                    Attr {
-                        fg: Color::CYAN,
-                        ..Attr::default()
-                    },
-                    (start as u32, end as u32 + 1),
-                ));
-            }
-        }
-
-        // Add grey attribute for file info line (if present)
-        if fzf_opts.show_file_info {
-            if let Some(file_info_start) = text.find("📁") {
-                // Find the end of the file info line (next newline or end of string)
-                let file_info_end = text[file_info_start..]
-                    .find('\n')
-                    .map(|pos| file_info_start + pos)
-                    .unwrap_or(text.len());
-
-                attr_segments.push((
-                    Attr {
-                        fg: Color::LIGHT_BLACK, // Grey color
-                        ..Attr::default()
-                    },
-                    (file_info_start as u32, file_info_end as u32),
-                ));
-            }
-        }
-
-        AnsiString::new_str(context.text, attr_segments)
-    }
-
-    fn preview(&self, _context: PreviewContext) -> ItemPreview {
-        let preview_text = create_bookmark_preview_text(&self.bookmark, &self.action_description);
-        ItemPreview::AnsiText(preview_text)
-    }
-
-    fn output(&self) -> Cow<'_, str> {
-        if let Some(id) = self.bookmark.id {
-            Cow::Owned(id.to_string())
-        } else {
-            Cow::Borrowed("0")
+    // Tags in magenta (within square brackets)
+    if fzf_opts.show_tags && !bookmark.tags.is_empty() {
+        if let (Some(start), Some(end)) = (text.find('['), text.find(']')) {
+            segments.push((start, end + 1, Color::Magenta));
         }
     }
+
+    // Action in cyan (within parentheses)
+    if fzf_opts.show_action {
+        if let (Some(start), Some(end)) = (text.rfind('('), text.rfind(')')) {
+            segments.push((start, end + 1, Color::Cyan));
+        }
+    }
+
+    // File info in dark grey
+    if fzf_opts.show_file_info {
+        if let Some(start) = text.find("📁") {
+            let end = text[start..]
+                .find('\n')
+                .map(|p| start + p)
+                .unwrap_or(text.len());
+            segments.push((start, end, Color::DarkGray));
+        }
+    }
+
+    // Sort by start position for correct span construction
+    segments.sort_by_key(|s| s.0);
+    segments
 }
 
 /// Create display text for a bookmark with proper formatting
@@ -186,7 +194,6 @@ fn create_bookmark_display_text(
 
     let fzf_opts = &settings.fzf_opts;
 
-    // Format based on config options
     let tags_display = if fzf_opts.show_tags {
         format!(" [{}]", tags_str)
     } else {
@@ -220,7 +227,6 @@ fn create_bookmark_display_text(
         )
     };
 
-    // Add file info if present and enabled
     if fzf_opts.show_file_info {
         if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
             let padding = " ".repeat(max_id_width + 2);
@@ -249,7 +255,6 @@ fn create_bookmark_preview_text(bookmark: &Bookmark, action_description: &str) -
         action_description
     );
 
-    // Add file info if present
     if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
         let formatted_path = format_file_path(file_path, 120);
         let formatted_time = format_mtime(file_mtime);
@@ -262,173 +267,95 @@ fn create_bookmark_preview_text(bookmark: &Bookmark, action_description: &str) -
     format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text)
 }
 
-/// Format bookmarks for enhanced display and preview
-fn create_enhanced_skim_items(
-    bookmarks: &[Bookmark],
-    max_id_width: usize,
+/// Create enhanced preview text with ANSI colors
+fn create_enhanced_preview(
+    bookmark: &Bookmark,
+    action_description: &str,
     services: &ServiceContainer,
-    _show_file_info: bool,
     show_action: bool,
-) -> Vec<Arc<dyn SkimItem>> {
-    // Get action service to determine action descriptions
-    let action_service = &services.action_service;
+) -> String {
+    // Render template variables in URL if present
+    let rendered_url = if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
+        services
+            .interpolation_service
+            .render_bookmark_url(bookmark)
+            .unwrap_or_else(|_| bookmark.url.clone())
+    } else {
+        bookmark.url.clone()
+    };
 
-    // Get interpolation service to render URLs
-    let interpolation_service = &services.interpolation_service;
+    let tags_str = bookmark
+        .formatted_tags()
+        .replace(',', " ")
+        .trim()
+        .to_string();
 
-    bookmarks
-        .iter()
-        .map(|bookmark| {
-            let id = bookmark.id.unwrap_or(0);
-            let base_description = action_service.get_default_action_description(bookmark);
-            let action_description =
-                bookmark_commands::format_action_description(base_description, bookmark.opener.as_ref());
+    let mut preview = format!(
+        "{}: {}\n\n{}:\n{}\n\n{}:\n{}",
+        "Title".green().bold(),
+        bookmark.title,
+        "Description".yellow().bold(),
+        if bookmark.description.is_empty() {
+            "No description"
+        } else {
+            &bookmark.description
+        },
+        "URL/Content".cyan().bold(),
+        rendered_url,
+    );
 
-            // Format display text with action type and proper alignment
-            let display_text = format!("{:>width$}: {}", id, bookmark.title, width = max_id_width);
+    if show_action {
+        preview.push_str(&format!(
+            "\n\n{}: {}",
+            "Default Action".magenta().bold(),
+            action_description
+        ));
+    }
 
-            // Apply interpolation if the URL contains template variables
-            let rendered_url = if bookmark.url.contains("{{") || bookmark.url.contains("{%") {
-                match interpolation_service.render_bookmark_url(bookmark) {
-                    Ok(url) => url,
-                    Err(_) => bookmark.url.clone(), // Fallback if rendering fails
-                }
-            } else {
-                bookmark.url.clone()
-            };
+    if !tags_str.is_empty() {
+        preview.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
+    }
 
-            // Format tags for display
-            let tags_str = bookmark
-                .formatted_tags()
-                .replace(',', " ")
-                .trim()
-                .to_string();
-            let has_tags = !tags_str.is_empty();
+    if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, &bookmark.file_mtime) {
+        let formatted_path = format_file_path(file_path, 120);
+        let formatted_time = format_mtime(*file_mtime);
+        preview.push_str(&format!(
+            "\n\n{}: {} ({})",
+            "Source File".dark_grey().bold(),
+            formatted_path,
+            formatted_time
+        ));
+    }
 
-            // Format preview with proper spacing (simplified)
-            let preview = if show_action {
-                // Include the default action in preview and tags at the bottom
-                let mut preview_text = format!(
-                    "{}: {}\n\n{}:\n{}\n\n{}:\n{}\n\n{}: {}",
-                    "Title".green().bold(),
-                    bookmark.title,
-                    "Description".yellow().bold(),
-                    if bookmark.description.is_empty() {
-                        "No description"
-                    } else {
-                        &bookmark.description
-                    },
-                    "URL/Content".cyan().bold(),
-                    rendered_url, // Use the rendered URL instead of raw URL
-                    "Default Action".magenta().bold(),
-                    action_description
-                );
-
-                // Add tags section if there are any tags
-                if has_tags {
-                    preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
-                }
-
-                // Add file info if present
-                if let (Some(file_path), Some(file_mtime)) =
-                    (&bookmark.file_path, &bookmark.file_mtime)
-                {
-                    let formatted_path = format_file_path(file_path, 120);
-                    let formatted_time = format_mtime(*file_mtime);
-                    preview_text.push_str(&format!(
-                        "\n\n{}: {} ({})",
-                        "Source File".dark_grey().bold(),
-                        formatted_path,
-                        formatted_time
-                    ));
-                }
-
-                preview_text
-            } else {
-                // Omit the default action in preview but still include tags at the bottom
-                let mut preview_text = format!(
-                    "{}: {}\n\n{}:\n{}\n\n{}:\n{}",
-                    "Title".green().bold(),
-                    bookmark.title,
-                    "Description".yellow().bold(),
-                    if bookmark.description.is_empty() {
-                        "No description"
-                    } else {
-                        &bookmark.description
-                    },
-                    "URL/Content".cyan().bold(),
-                    rendered_url // Use the rendered URL instead of raw URL
-                );
-
-                // Add tags section if there are any tags
-                if has_tags {
-                    preview_text.push_str(&format!("\n\n{}: {}", "Tags".blue().bold(), tags_str));
-                }
-
-                // Add file info if present
-                if let (Some(file_path), Some(file_mtime)) =
-                    (&bookmark.file_path, &bookmark.file_mtime)
-                {
-                    let formatted_path = format_file_path(file_path, 120);
-                    let formatted_time = format_mtime(*file_mtime);
-                    preview_text.push_str(&format!(
-                        "\n\n{}: {} ({})",
-                        "Source File".dark_grey().bold(),
-                        formatted_path,
-                        formatted_time
-                    ));
-                }
-
-                preview_text
-            };
-
-            Arc::new(SnippetItem {
-                bookmark: bookmark.clone(),
-                display_text,
-                preview,
-            }) as Arc<dyn SkimItem>
-        })
-        .collect()
+    preview
 }
 
-// Helper function to get selected bookmarks from output
-fn get_selected_bookmarks_from_aligned(
-    output: &SkimOutput,
-    bookmarks: &[Bookmark],
-) -> Vec<Bookmark> {
+/// Extract selected bookmarks from skim output
+fn get_selected_bookmarks(output: &SkimOutput, bookmarks: &[Bookmark]) -> Vec<Bookmark> {
     let selected_ids: Vec<i32> = output
         .selected_items
         .iter()
-        .filter_map(|item| {
-            // Get the output which contains the bookmark ID as a string
-            let id_str = item.output();
+        .filter_map(|matched| {
+            let id_str = matched.item.output();
             id_str.parse::<i32>().ok()
         })
         .collect();
 
-    // Find the corresponding bookmarks
-    let selected_bookmarks: Vec<Bookmark> = bookmarks
+    let selected: Vec<Bookmark> = bookmarks
         .iter()
         .filter(|b| b.id.is_some() && selected_ids.contains(&b.id.unwrap()))
         .cloned()
         .collect();
 
-    if !selected_bookmarks.is_empty() {
+    if !selected.is_empty() {
         eprintln!("Selected bookmarks:");
-        for bookmark in &selected_bookmarks {
+        for bookmark in &selected {
             eprintln!(" - {}: {}", bookmark.id.unwrap_or(0), bookmark.title);
         }
     }
 
-    debug!("Selected {} bookmarks", selected_bookmarks.len());
-    selected_bookmarks
-}
-
-impl SkimItem for SemanticSearchResult {
-    fn text(&self) -> Cow<'_, str> {
-        let text = self.display();
-        Cow::Owned(text)
-    }
+    debug!("Selected {} bookmarks", selected.len());
+    selected
 }
 
 /// Processes bookmarks using the fzf-like selector interface
@@ -449,34 +376,28 @@ pub fn fzf_process(
     let mut sorted_bookmarks = bookmarks.to_vec();
     sorted_bookmarks.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
 
-    // Find the maximum ID width for proper alignment
     let max_id_width = sorted_bookmarks
         .iter()
         .map(|b| b.id.unwrap_or(0).to_string().len())
         .max()
         .unwrap_or(0);
 
-    // Use provided settings
     let fzf_opts = &settings.fzf_opts;
 
     // Build skim options
-    let mut options_builder = SkimOptionsBuilder::default();
+    let mut options = SkimOptions::default();
+    options.height = fzf_opts.height.clone();
+    options.reverse = fzf_opts.reverse;
+    options.multi = false;
+    options.ansi = true;
+    options.query = Some("".to_string());
 
-    // Set common options
-    options_builder.height(fzf_opts.height.clone());
-    options_builder.reverse(fzf_opts.reverse);
-    options_builder.multi(false);
-    options_builder.ansi(true);
-    options_builder.filter(Some("".to_string()));
-
-    // Add preview window only for enhanced style
     if style == "enhanced" {
-        options_builder.preview(Some("".to_string()));
-        options_builder.preview_window("right:70%:wrap".to_string());
+        options.preview = Some("".to_string());
+        options.preview_window = "right:70%:wrap".into();
     }
 
-    // Add key bindings
-    options_builder.bind(vec![
+    options.bind = vec![
         "ctrl-a:accept".to_string(),
         "ctrl-o:accept".to_string(),
         "ctrl-y:accept".to_string(),
@@ -485,219 +406,167 @@ pub fn fzf_process(
         "ctrl-p:accept".to_string(),
         "enter:accept".to_string(),
         "esc:abort".to_string(),
-    ]);
+    ];
 
-    let options = options_builder.build().map_err(|e| {
-        crate::cli::error::CliError::CommandFailed(format!("Failed to build skim options: {}", e))
-    })?;
+    // Finalize options (processes bind strings into keymap, applies defaults)
+    let options = options.build();
 
-    // Set up channel for bookmark items
-    let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = unbounded();
-
-    // Send bookmarks to skim based on style
-    if style == "enhanced" {
-        let skim_items = create_enhanced_skim_items(
-            &sorted_bookmarks,
-            max_id_width,
-            services,
-            fzf_opts.show_file_info,
-            fzf_opts.show_action,
-        );
-        for item in skim_items {
-            tx_item.send(item).map_err(|_| {
-                crate::cli::error::CliError::CommandFailed(
-                    "Failed to send bookmark to skim".to_string(),
-                )
-            })?;
-        }
-    } else {
-        // Original style - use AlignedBookmark instead
-        for bookmark in &sorted_bookmarks {
-            debug!("Sending bookmark to skim: {}", bookmark.title);
-
-            // Get action description, incorporating custom opener if present
+    // Build items based on style
+    let items: Vec<FzfBookmarkItem> = sorted_bookmarks
+        .iter()
+        .map(|bookmark| {
             let base_description = services
                 .action_service
                 .get_default_action_description(bookmark);
-            let action_description =
-                bookmark_commands::format_action_description(base_description, bookmark.opener.as_ref());
+            let action_description = bookmark_commands::format_action_description(
+                base_description,
+                bookmark.opener.as_ref(),
+            );
 
-            let item = Arc::new(AlignedBookmark {
-                bookmark: bookmark.clone(),
-                max_id_width,
-                action_description,
-                settings: settings.clone(),
-            });
-            tx_item.send(item).map_err(|_| {
-                crate::cli::error::CliError::CommandFailed(
-                    "Failed to send bookmark to skim".to_string(),
+            if style == "enhanced" {
+                FzfBookmarkItem::new_enhanced(
+                    bookmark,
+                    max_id_width,
+                    &action_description,
+                    services,
+                    fzf_opts.show_action,
                 )
-            })?;
-        }
-    }
-    drop(tx_item); // Close channel to signal end of items
+            } else {
+                FzfBookmarkItem::new_classic(
+                    bookmark,
+                    max_id_width,
+                    &action_description,
+                    settings,
+                )
+            }
+        })
+        .collect();
 
-    // Determine if we need to manually handle alternate screen
-    // Skim uses alternate screen automatically for height=100%, but not for smaller heights
-    // For height < 100%, we wrap with alternate screen to ensure proper terminal restoration
-    //
-    // IMPORTANT: Skip alternate screen handling in --stdout mode because these escape sequences
-    // (\E[?1049h, \E[?1049l) would pollute the output that shell widgets capture.
-    // In stdout mode, skim still works fine - we just accept potential terminal artifacts.
+    // Alternate screen for non-fullscreen, non-stdout mode
     let use_alternate_screen = !stdout && fzf_opts.height != "100%" && fzf_opts.height != "100";
-
     if use_alternate_screen {
         execute!(std::io::stdout(), EnterAlternateScreen)?;
     }
 
-    // Execute the skim selector
-    let skim_output = Skim::run_with(&options, Some(rx_item));
+    let skim_output = Skim::run_items(options, items).map_err(|e| {
+        crate::cli::error::CliError::CommandFailed(format!("Skim failed: {}", e))
+    });
 
-    // Restore terminal if we entered alternate screen
     if use_alternate_screen {
         execute!(std::io::stdout(), LeaveAlternateScreen)?;
     }
 
-    if let Some(output) = skim_output {
-        let key = output.final_key;
-        debug!("Final key: {:?}", key);
-
-        // Check if the user pressed ESC - if so, don't process selected items
-        if key == Key::ESC {
-            debug!("Selection aborted with ESC key");
+    let output = match skim_output {
+        Ok(output) => output,
+        Err(e) => {
             reset_terminal_state(stdout);
-            return Ok(());
+            return Err(e);
         }
+    };
 
-        // Get selected bookmarks
-        let selected_bookmarks = get_selected_bookmarks_from_aligned(&output, &sorted_bookmarks);
+    debug!("Final key: {:?}", output.final_key);
 
-        if selected_bookmarks.is_empty() {
-            debug!("No bookmarks selected");
-            return Ok(());
-        }
-
-        // Get IDs of selected bookmarks
-        let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
-        debug!("Selected bookmark IDs: {:?}", ids);
-
-        // Ensure clean output positioning before processing action
-        // Skim handles terminal restoration - we just need a newline for output
-        println!();
-
-        // Process the selected action based on the key
-        match key {
-            // Execute default action for Enter - Use the action service
-            Key::Enter => {
-                if stdout {
-                    // Output interpolated content to stdout instead of executing
-                    for bookmark in &selected_bookmarks {
-                        let content = services
-                            .interpolation_service
-                            .render_bookmark_url(bookmark)
-                            .map_err(|e| {
-                                crate::cli::error::CliError::CommandFailed(format!(
-                                    "Failed to render content: {}",
-                                    e
-                                ))
-                            })?;
-                        println!("{}", content);
-                    }
-                } else {
-                    // Execute default action for each selected bookmark
-                    for bookmark in &selected_bookmarks {
-                        // Use the action service to execute the default action
-                        execute_bookmark_default_action(bookmark, services.action_service.clone())?;
-                    }
-                }
-            }
-            Key::Ctrl('y') | Key::Ctrl('o') => {
-                // clear_fzf_artifacts();
-                if let Some(bookmark) = selected_bookmarks.first() {
-                    // Check if this is a shell script
-                    let is_shell_script = bookmark
-                        .tags
-                        .iter()
-                        .any(|tag| tag.is_system_tag_of(SystemTag::Shell));
-
-                    if is_shell_script {
-                        // For shell scripts, copy the bkmr open command instead of URL content
-                        let command =
-                            format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
-                        copy_url_to_clipboard(&command, services.clipboard_service.clone())?;
-                    } else {
-                        // For all other types, copy URL to clipboard with interpolation
-                        copy_bookmark_url_to_clipboard(
-                            bookmark,
-                            services.interpolation_service.clone(),
-                            services.clipboard_service.clone(),
-                        )?;
-                    }
-                }
-            }
-            Key::Ctrl('e') => {
-                // Edit selected bookmarks - editor handles its own terminal
-                edit_bookmarks(
-                    ids,
-                    false,
-                    services.bookmark_service.clone(),
-                    services.template_service.clone(),
-                    settings,
-                )?;
-            }
-            Key::Ctrl('d') => {
-                // clear_fzf_artifacts();
-                // Delete selected bookmarks
-                delete_bookmarks(ids, services.bookmark_service.clone(), settings)?;
-            }
-            Key::Ctrl('a') => {
-                // clear_fzf_artifacts();
-                // Clone selected bookmark
-                if let Some(bookmark) = selected_bookmarks.first() {
-                    if let Some(id) = bookmark.id {
-                        clone_bookmark(
-                            id,
-                            services.bookmark_service.clone(),
-                            services.template_service.clone(),
-                        )?;
-                    }
-                }
-            }
-            Key::Ctrl('p') => {
-                // Show detailed information for the selected bookmark
-                if let Some(bookmark) = selected_bookmarks.first() {
-                    // Clear from cursor for clean detail view
-                    let _ = execute!(std::io::stdout(), Clear(ClearType::FromCursorDown));
-
-                    // Use the shared function to show bookmark details
-                    let details = bookmark_commands::show_bookmark_details(bookmark, services);
-                    print!("{}", details);
-                }
-            }
-            _ => {
-                debug!("Unhandled key: {:?}", key);
-            }
-        }
-
-        // Reset terminal state after action (cursor visible, colors reset)
-        // Skip for --stdout mode to keep output clean for shell widgets
+    if output.is_abort {
+        debug!("Selection aborted");
         reset_terminal_state(stdout);
+        return Ok(());
     }
+
+    let selected_bookmarks = get_selected_bookmarks(&output, &sorted_bookmarks);
+
+    if selected_bookmarks.is_empty() {
+        debug!("No bookmarks selected");
+        return Ok(());
+    }
+
+    let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
+    debug!("Selected bookmark IDs: {:?}", ids);
+
+    println!();
+
+    let key = output.final_key;
+    match (key.code, key.modifiers) {
+        (KeyCode::Enter, _) => {
+            if stdout {
+                for bookmark in &selected_bookmarks {
+                    let content = services
+                        .interpolation_service
+                        .render_bookmark_url(bookmark)
+                        .map_err(|e| {
+                            crate::cli::error::CliError::CommandFailed(format!(
+                                "Failed to render content: {}",
+                                e
+                            ))
+                        })?;
+                    println!("{}", content);
+                }
+            } else {
+                for bookmark in &selected_bookmarks {
+                    execute_bookmark_default_action(bookmark, services.action_service.clone())?;
+                }
+            }
+        }
+        (KeyCode::Char('y'), m) | (KeyCode::Char('o'), m) if m.contains(KeyModifiers::CONTROL) => {
+            if let Some(bookmark) = selected_bookmarks.first() {
+                let is_shell_script = bookmark
+                    .tags
+                    .iter()
+                    .any(|tag| tag.is_system_tag_of(SystemTag::Shell));
+
+                if is_shell_script {
+                    let command = format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
+                    copy_url_to_clipboard(&command, services.clipboard_service.clone())?;
+                } else {
+                    copy_bookmark_url_to_clipboard(
+                        bookmark,
+                        services.interpolation_service.clone(),
+                        services.clipboard_service.clone(),
+                    )?;
+                }
+            }
+        }
+        (KeyCode::Char('e'), m) if m.contains(KeyModifiers::CONTROL) => {
+            edit_bookmarks(
+                ids,
+                false,
+                services.bookmark_service.clone(),
+                services.template_service.clone(),
+                settings,
+            )?;
+        }
+        (KeyCode::Char('d'), m) if m.contains(KeyModifiers::CONTROL) => {
+            delete_bookmarks(ids, services.bookmark_service.clone(), settings)?;
+        }
+        (KeyCode::Char('a'), m) if m.contains(KeyModifiers::CONTROL) => {
+            if let Some(bookmark) = selected_bookmarks.first() {
+                if let Some(id) = bookmark.id {
+                    clone_bookmark(
+                        id,
+                        services.bookmark_service.clone(),
+                        services.template_service.clone(),
+                    )?;
+                }
+            }
+        }
+        (KeyCode::Char('p'), m) if m.contains(KeyModifiers::CONTROL) => {
+            if let Some(bookmark) = selected_bookmarks.first() {
+                let _ = execute!(std::io::stdout(), Clear(ClearType::FromCursorDown));
+                let details = bookmark_commands::show_bookmark_details(bookmark, services);
+                print!("{}", details);
+            }
+        }
+        _ => {
+            debug!("Unhandled key: {:?}", key);
+        }
+    }
+
+    reset_terminal_state(stdout);
 
     Ok(())
 }
 
-/// Minimal terminal state reset after skim exit.
-///
-/// This reset is useful for interactive mode as a safety measure after:
-/// - `execute_bookmark_default_action()` which runs external commands/browsers
-/// - `edit_bookmarks()` which opens editors that might alter terminal state
-/// - `Ctrl+P` detail printing which uses colors
-///
-/// However, for `--stdout` mode (shell widget integration), this function
-/// must be skipped because it writes ANSI escape sequences (\E[0m, \E[?25h)
-/// to stdout, polluting the output that the shell widget captures.
-/// In stdout mode, we're just printing content - no terminal state changes occur.
+/// Reset terminal state after skim exit.
+/// Skipped in --stdout mode to avoid polluting captured output.
 fn reset_terminal_state(skip: bool) {
     if skip {
         return;
