@@ -21,6 +21,8 @@ chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.6.0", features = ["unstable-doc"] }
 clap_complete = "4.6.0"
 crossterm = "0.29.0"
+# ratatui version pinned to match skim's dependency
+ratatui = "0.30.0"
 derive_builder = "0.20.2"
 diesel = { version = "2.3.7", features = ["sqlite", "chrono", "returning_clauses_for_sqlite_3_35", "r2d2"] }
 diesel_migrations = "2.3.1"
@@ -49,7 +51,7 @@ serde_yaml = "0.9.34"
 serde_with = {version = "3.18.0", features =["chrono"] }
 sha2 = "0.10.9"
 shellexpand = "3.1.2"
-skim = "0.17.3"
+skim = "4.4.0"
 tempfile = "3.27.0"
 termcolor = "1.4.1"
 thiserror = "2.0.18"

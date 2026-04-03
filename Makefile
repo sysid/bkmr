@@ -143,7 +143,7 @@ BUILDING:  ## ##################################################################
 all: clean build install  ## all
 	:
 
-.PHONY: all-debug
+.PHONY: all-fast
 all-fast: clean build-fast install-debug  ## all-debug: debug build
 	:
 
