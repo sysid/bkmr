@@ -5,7 +5,7 @@
 use crate::application::services::BookmarkService;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
+use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::tag::Tag;
 use crate::lsp::domain::LanguageRegistry;
 use crate::lsp::error::{LspError, LspResult};
@@ -93,7 +93,7 @@ impl CommandService {
         }
 
         query.tags_all = Some(tags_all);
-        query.sort_by_date = Some(SortDirection::Descending);
+        query.sort = Some(SortCriteria::new(SortField::Modified, SortDirection::Descending));
 
         let bookmarks = self
             .bookmark_service

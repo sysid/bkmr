@@ -188,8 +188,9 @@ Many commands have specific options. Here are some common ones:
 | `-n, --ntags` | Filter by any tag | `--ntags api,frontend` |
 | `-T, --Tags` | Exclude all tags | `--Tags deprecated,old` |
 | `-N, --Ntags` | Exclude any tag | `--Ntags experimental,draft` |
-| `-o, --descending` | Order by age, descending | |
-| `-O, --ascending` | Order by age, ascending | |
+| `-o, --descending` | Sort descending (implies `--sort modified` if no `--sort`) | |
+| `-O, --ascending` | Sort ascending (implies `--sort modified` if no `--sort`) | |
+| `--sort` | Sort field: `id`, `title`, `modified` (default: `id`) | `--sort title` |
 | `-l, --limit` | Limit number of results | `--limit 10` |
 | `--fzf` | Use fuzzy finder interface | |
 | `--json` | Output results as JSON | |

@@ -83,11 +83,14 @@ pub enum Commands {
         #[arg(long = "Ntags-prefix", help = "tags to prefix the Ntags option")]
         tags_any_not_prefix: Option<String>,
 
-        #[arg(short = 'o', long = "descending", help = "order by modification date, newest first")]
+        #[arg(short = 'o', long = "descending", help = "sort descending (implies --sort modified if no --sort given)")]
         order_desc: bool,
 
-        #[arg(short = 'O', long = "ascending", help = "order by modification date, oldest first")]
+        #[arg(short = 'O', long = "ascending", help = "sort ascending (implies --sort modified if no --sort given)")]
         order_asc: bool,
+
+        #[arg(long = "sort", help = "sort field: id, title, modified (default: id). Without -o/-O, id/title default ascending, modified defaults descending")]
+        sort_field: Option<String>,
 
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,

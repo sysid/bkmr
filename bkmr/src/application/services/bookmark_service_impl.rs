@@ -10,7 +10,7 @@ use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::repositories::import_repository::{
     BookmarkImportData, FileImportData, ImportRepository,
 };
-use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
+use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::{SemanticSearch, SemanticSearchResult};
 use crate::domain::tag::Tag;
@@ -262,7 +262,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
         let query = BookmarkQuery::new()
             .with_text_query(Some(query))
-            .with_sort_by_date(SortDirection::Descending);
+            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending));
 
         self.search_bookmarks(&query)
     }

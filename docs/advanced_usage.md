@@ -557,17 +557,31 @@ Full-text search supports complex queries:
 bkmr search "tags:docker desc:compose desc:swarm"
 ```
 
-### Date-based Filtering with Sort Direction
+### Sorting
 
-Find recently added or the oldest entries:
+Control result ordering with `--sort` (field) and `-o`/`-O` (direction):
 
 ```bash
-# Most recently added entries
-bkmr search --descending --limit 10
+# Sort by modification date (newest first) — backward compatible
+bkmr search -o --limit 10
 
-# Oldest entries that need review
-bkmr search --ascending --tags needs-review
+# Sort by modification date (oldest first)
+bkmr search -O --limit 10
+
+# Sort alphabetically by title
+bkmr search --sort title
+
+# Sort by title, reverse alphabetical
+bkmr search --sort title -o
+
+# Sort by ID descending
+bkmr search --sort id -o
+
+# Combine with tag filters
+bkmr search --sort modified -O --tags needs-review
 ```
+
+The `--sort` flag accepts: `id`, `title`, `modified`. Without `-o`/`-O`, `id` and `title` default to ascending, `modified` defaults to descending. Using `-o`/`-O` without `--sort` implies `--sort modified` for backward compatibility.
 
 ## Building a Knowledge Management System
 

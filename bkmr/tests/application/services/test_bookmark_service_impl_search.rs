@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use bkmr::application::services::bookmark_service::BookmarkService;
 use bkmr::application::BookmarkServiceImpl;
-use bkmr::domain::repositories::query::{BookmarkQuery, SortDirection};
+use bkmr::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use bkmr::domain::tag::Tag;
 use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::infrastructure::repositories::json_import_repository::JsonImportRepository;
@@ -49,7 +49,7 @@ fn search_bookmarks(
         .with_tags_any(tags_any)
         .with_tags_any_not(tags_any_not)
         .with_tags_prefix(tags_prefix)
-        .with_sort_by_date(sort_direction);
+        .with_sort(SortCriteria::new(SortField::Modified, sort_direction));
 
     let query_with_limit = if let Some(lim) = limit {
         query.with_limit(Option::from(lim))
