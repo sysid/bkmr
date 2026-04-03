@@ -38,7 +38,7 @@ open = "5.3.3"
 predicates = "3.1.4"
 rand = "0.9.2"
 regex = "1.12.3"
-reqwest = {version = "0.12.28", features = ["blocking", "json"] }
+reqwest = {version = "0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 rusqlite = { version = "0.35.0", features = ["bundled"] }  # https://github.com/sysid/bkmr/issues/6#issuecomment-1435966997
 rustyline = "15.0.0"
 select = "0.6.1"
