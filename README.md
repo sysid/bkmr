@@ -135,6 +135,7 @@ bkmr search --fzf
 | Command | Description |
 |---------|-------------|
 | `search` | Search across all content with full-text and tag filtering |
+| `hsearch` | Hybrid search combining FTS + semantic search with RRF fusion |
 | `sem-search` | Local semantic search using fastembed (offline, no API keys) |
 | `add` | Add new content (URLs, snippets, files, shell commands, etc.) |
 | `open` | Launch or interact with stored items (supports script arguments) |

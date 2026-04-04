@@ -261,6 +261,30 @@ impl VectorRepository for SqliteVectorRepository {
             })?;
         Ok(ids)
     }
+
+    fn search_nearest_filtered(
+        &self,
+        query_embedding: &[f32],
+        limit: usize,
+        filter_ids: Option<&HashSet<i32>>,
+    ) -> DomainResult<Vec<(i32, f64)>> {
+        match filter_ids {
+            None => self.search_nearest(query_embedding, limit),
+            Some(ids) => {
+                // Over-fetch and post-filter: fetch more results than needed,
+                // then filter to only include IDs in the allowed set.
+                // For bkmr's scale (hundreds to low thousands), this is efficient.
+                let overfetch_limit = std::cmp::max(limit * 10, 200);
+                let all_results = self.search_nearest(query_embedding, overfetch_limit)?;
+                let filtered: Vec<(i32, f64)> = all_results
+                    .into_iter()
+                    .filter(|(id, _)| ids.contains(id))
+                    .take(limit)
+                    .collect();
+                Ok(filtered)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

@@ -13,7 +13,9 @@ use crate::domain::repositories::import_repository::{
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
-use crate::domain::search::{SemanticSearch, SemanticSearchResult};
+use crate::domain::search::{
+    HybridSearch, HybridSearchResult, RrfFusion, SemanticSearch, SemanticSearchResult,
+};
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
@@ -370,6 +372,82 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                         bookmark_id
                     );
                 }
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn hybrid_search(
+        &self,
+        search: &HybridSearch,
+    ) -> ApplicationResult<Vec<HybridSearchResult>> {
+        use crate::domain::search::{RankedResult, SearchMode};
+
+        let limit = search.effective_limit();
+        let internal_limit = std::cmp::max(limit * 4, 20);
+        let k = 60.0;
+
+        // Step 0: Tag pre-filtering — get allowed ID set if tags are specified
+        let filter_ids = if search.has_tag_filters() {
+            let all_bookmarks = self.repository.get_all()?;
+            let filtered = search.apply_tag_filters(&all_bookmarks);
+            let ids: std::collections::HashSet<i32> = filtered
+                .into_iter()
+                .filter_map(|b| b.id)
+                .collect();
+            if ids.is_empty() {
+                return Ok(vec![]);
+            }
+            Some(ids)
+        } else {
+            None
+        };
+
+        // Step 1: FTS ranked search (always runs)
+        let fts_ranked = self
+            .repository
+            .get_bookmarks_fts_ranked(&search.query, filter_ids.as_ref())?;
+
+        // Step 2: Semantic search (skip if exact mode or no embeddings)
+        let sem_ranked = if search.mode == SearchMode::Exact
+            || self.embedder.dimensions() == 0
+            || !self.vector_repository.has_embeddings().unwrap_or(false)
+        {
+            vec![]
+        } else {
+            let query_embedding = self.embedder.embed_query(&search.query)?;
+            match query_embedding {
+                Some(embedding) => {
+                    let vec_results = self
+                        .vector_repository
+                        .search_nearest_filtered(
+                            &embedding,
+                            internal_limit,
+                            filter_ids.as_ref(),
+                        )?;
+                    vec_results
+                        .into_iter()
+                        .enumerate()
+                        .map(|(rank, (id, _distance))| RankedResult {
+                            bookmark_id: id,
+                            rank,
+                        })
+                        .collect()
+                }
+                None => vec![],
+            }
+        };
+
+        // Step 3: RRF fusion
+        let fts_for_fusion: Vec<_> = fts_ranked.into_iter().take(internal_limit).collect();
+        let fused = RrfFusion::fuse(&fts_for_fusion, &sem_ranked, k, limit);
+
+        // Step 4: Hydrate bookmarks
+        let mut results = Vec::with_capacity(fused.len());
+        for (bookmark_id, rrf_score) in fused {
+            if let Some(bookmark) = self.repository.get_by_id(bookmark_id)? {
+                results.push(HybridSearchResult::new(bookmark, rrf_score));
             }
         }
 

@@ -46,4 +46,13 @@ impl VectorRepository for NullVectorRepository {
     fn get_embedded_ids(&self) -> DomainResult<HashSet<i32>> {
         Ok(HashSet::new())
     }
+
+    fn search_nearest_filtered(
+        &self,
+        _query_embedding: &[f32],
+        _limit: usize,
+        _filter_ids: Option<&HashSet<i32>>,
+    ) -> DomainResult<Vec<(i32, f64)>> {
+        Ok(Vec::new())
+    }
 }
