@@ -22,7 +22,7 @@ All documentation has been consolidated and moved to the **[bkmr Wiki](https://g
 - **[Configuration](https://github.com/sysid/bkmr/wiki/Configuration)** - Complete configuration reference
 - **[Template Interpolation](https://github.com/sysid/bkmr/wiki/Template-Interpolation)** - Jinja2 dynamic content
 - **[File Import and Editing](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)** - Frontmatter, base paths, smart editing
-- **[Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)** - OpenAI-powered AI search
+- **[Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)** - Local offline semantic search with fastembed
 - **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)** - LSP server and editor plugins
 - **[Advanced Workflows](https://github.com/sysid/bkmr/wiki/Advanced-Workflows)** - Power user techniques
 

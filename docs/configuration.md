@@ -36,6 +36,10 @@ no_url = false
 # Shell script execution options
 [shell_opts]
 interactive = true
+
+# Embedding model for semantic search (fully local, no API keys)
+[embeddings]
+model = "NomicEmbedTextV15"  # 768 dims, good default
 ```
 
 ### Generating a Default Config
@@ -62,7 +66,7 @@ bkmr --config /path/to/your/custom-config.toml search
 |----------|-------------|---------|
 | `BKMR_DB_URL` | Path to SQLite database file | `~/.config/bkmr/bkmr.db` |
 | `BKMR_SHELL_INTERACTIVE` | Enable/disable interactive shell editing | `true` |
-| `OPENAI_API_KEY` | API key for OpenAI (needed for semantic search) | None |
+| `FASTEMBED_CACHE_DIR` | Embedding model cache directory | `~/.cache/bkmr/models/` |
 | `EDITOR` | Text editor for editing bookmarks | `vim` |
 
 ### FZF Interface Settings
@@ -88,7 +92,7 @@ Add these to your shell profile (`.bashrc`, `.zshrc`, etc.):
 # Core bkmr configuration
 export BKMR_DB_URL="$HOME/.local/share/bkmr/bookmarks.db"
 export BKMR_SHELL_INTERACTIVE="true"  # Enable interactive shell editing (default)
-export OPENAI_API_KEY="your-openai-key"  # Only if using semantic search
+export FASTEMBED_CACHE_DIR="$HOME/.cache/bkmr/models/"  # Optional: override model cache location
 export EDITOR="code -w"  # Use VS Code for editing
 
 # FZF display options
@@ -172,7 +176,6 @@ These options apply to all commands:
 | Option | Description |
 |--------|-------------|
 | `--debug`, `-d` | Enable debug output (use multiple times for more verbosity) |
-| `--openai` | Enable OpenAI integration for semantic features |
 | `--config FILE`, `-c FILE` | Use a custom config file |
 | `--generate-config` | Output a default configuration to stdout |
 
