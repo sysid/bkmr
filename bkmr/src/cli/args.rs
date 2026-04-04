@@ -18,9 +18,6 @@ pub struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 
-    #[arg(long = "openai", help = "use OpenAI API to embed bookmarks")]
-    pub openai: bool,
-
     #[arg(long = "no-color", help = "Disable colored output")]
     pub no_color: bool,
 
@@ -131,8 +128,11 @@ pub enum Commands {
             help = "output selected bookmark content to stdout instead of executing (for shell wrapper integration)"
         )]
         stdout: bool,
+
+        #[arg(long = "embeddable", help = "filter to show only embeddable bookmarks")]
+        embeddable: bool,
     },
-    /// Semantic Search with OpenAI
+    /// Semantic Search using local embeddings
     SemSearch {
         /// Input for similarity search (search terms)
         query: String,
@@ -263,8 +263,7 @@ pub enum Commands {
         #[arg(long = "disable", help = "Disable embedding for this bookmark")]
         disable: bool,
     },
-    /// Backfill embeddings for bookmarks, which have been added without embeddings.
-    /// E.g. when OpenAI API was not available.
+    /// Backfill embeddings for bookmarks that are marked embeddable but lack embeddings.
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,

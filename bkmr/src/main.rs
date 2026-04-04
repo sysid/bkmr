@@ -19,8 +19,21 @@ use tracing_subscriber::{
     prelude::*,
 };
 
+/// Register the sqlite-vec extension globally before any SQLite connection opens.
+/// This makes vec0 virtual tables available to both Diesel and rusqlite connections.
+fn register_sqlite_vec_extension() {
+    unsafe {
+        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+            sqlite_vec::sqlite3_vec_init as *const (),
+        )));
+    }
+}
+
 #[instrument]
 fn main() {
+    // Register sqlite-vec before any database connections
+    register_sqlite_vec_extension();
+
     // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
     let cli = Cli::parse();
@@ -38,12 +51,6 @@ fn main() {
         Settings::default()
     });
 
-    // Note: OpenAI override from CLI flag will be handled in service container
-    // when the embedder selection is properly implemented
-    if cli.openai {
-        debug!("OpenAI embeddings requested via CLI flag");
-    }
-
     // Handle all database-independent operations first
     if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
         if let Err(e) = result {
@@ -54,7 +61,7 @@ fn main() {
     }
 
     // Only create ServiceContainer for database-dependent operations
-    let service_container = match ServiceContainer::new(&settings, cli.openai) {
+    let service_container = match ServiceContainer::new(&settings) {
         Ok(container) => container,
         Err(e) => {
             eprintln!("{}: {}", "Failed to create service container".red(), e);

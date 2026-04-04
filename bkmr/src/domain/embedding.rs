@@ -1,133 +1,48 @@
 // bkmr/src/domain/embedding.rs
-use crate::domain::error::{DomainError, DomainResult};
-use ndarray::Array1;
-use std::any::Any;
+use crate::domain::error::DomainResult;
 use std::fmt::Debug;
-use std::io::Cursor;
-use tracing::instrument;
 
-/// Core trait for text embedding functionality
-/// TypeId check fails because trait objects don’t inherently carry their concrete type’s TypeId
-/// unless the trait extends Any, and you manually downcast.
-/// calling .type_id() on a dyn Embedder trait object only sees the “Embedder trait object” layer,
-/// not the concrete DummyEmbedding underneath
+/// Core trait for text embedding functionality.
 ///
-/// embedder.as_ref() returns &dyn Embedder.
-/// dyn Embedder by default doesn’t extend Any. So .type_id() sees the trait object’s ID, not DummyEmbedding’s.
-/// To fix this, you need to extend Any on the trait and implement as_any() to return a reference to self.
-/// This way, you can downcast to the concrete type and check its TypeId.
+/// Implementations must distinguish between document and query embeddings
+/// because prefix-aware models (e.g., Nomic) use different prefixes for
+/// each direction to improve retrieval quality.
 pub trait Embedder: Send + Sync + Debug {
-    /// Embeds text into a vector of floats
-    fn embed(&self, text: &str) -> DomainResult<Option<Vec<f32>>>;
-    fn as_any(&self) -> &dyn Any; // for downcasting
-}
+    /// Embed text intended for storage (document side).
+    /// Implementations prepend the appropriate document prefix (e.g., "search_document: ").
+    fn embed_document(&self, text: &str) -> DomainResult<Option<Vec<f32>>>;
 
-/// Calculate cosine similarity between two vectors
-#[instrument(skip_all)]
-pub fn cosine_similarity(vec1: &Array1<f32>, vec2: &Array1<f32>) -> f32 {
-    let dot_product = vec1.dot(vec2);
-    let magnitude_vec1 = vec1.dot(vec1).sqrt();
-    let magnitude_vec2 = vec2.dot(vec2).sqrt();
+    /// Embed text intended for search (query side).
+    /// Implementations prepend the appropriate query prefix (e.g., "search_query: ").
+    fn embed_query(&self, text: &str) -> DomainResult<Option<Vec<f32>>>;
 
-    if magnitude_vec1 == 0.0 || magnitude_vec2 == 0.0 {
-        return 0.0;
-    }
-
-    dot_product / (magnitude_vec1 * magnitude_vec2)
-}
-
-/// Deserialize bytes into float vector
-#[instrument(skip_all)]
-pub fn deserialize_embedding(bytes: Vec<u8>) -> Result<Vec<f32>, DomainError> {
-    // In bincode 2.0, we use the decode method from bincode directly
-    bincode::decode_from_slice::<Vec<f32>, _>(&bytes, bincode::config::legacy())
-        .map(|(result, _)| result)
-        .map_err(|e| DomainError::DeserializationError(e.to_string()))
-}
-
-/// Serialize float vector into bytes
-#[instrument(skip_all)]
-pub fn serialize_embedding(embedding: Vec<f32>) -> Result<Vec<u8>, DomainError> {
-    // In bincode 2.0, we use the encode method from bincode directly
-    bincode::encode_to_vec(&embedding, bincode::config::legacy())
-        .map_err(|e| DomainError::SerializationError(e.to_string()))
-}
-
-/// Convert byte array to ndarray
-#[instrument(skip_all, level = "debug")]
-pub fn bytes_to_array(bytes: &[u8]) -> Result<Array1<f32>, DomainError> {
-    let mut cursor = Cursor::new(bytes);
-    let num_floats = bytes.len() / 4;
-    let mut values = Vec::with_capacity(num_floats);
-
-    for _ in 0..num_floats {
-        match byteorder::ReadBytesExt::read_f32::<byteorder::LittleEndian>(&mut cursor) {
-            Ok(value) => values.push(value),
-            Err(e) => return Err(DomainError::Io(e)),
-        }
-    }
-
-    Ok(Array1::from(values))
-}
-
-/// Convert ndarray to byte array
-#[instrument(skip_all, level = "debug")]
-pub fn array_to_bytes(array: &Array1<f32>) -> Result<Vec<u8>, DomainError> {
-    let mut buffer = Vec::with_capacity(array.len() * 4);
-
-    for &value in array.iter() {
-        match byteorder::WriteBytesExt::write_f32::<byteorder::LittleEndian>(&mut buffer, value) {
-            Ok(_) => {}
-            Err(e) => return Err(DomainError::Io(e)),
-        }
-    }
-
-    Ok(buffer)
+    /// The number of dimensions this embedder produces.
+    /// Used for dimension mismatch detection (FR-012).
+    fn dimensions(&self) -> usize;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::array;
-
-    const EPSILON: f32 = 1e-6;
+    use crate::infrastructure::embeddings::DummyEmbedding;
 
     #[test]
-    fn given_two_vectors_when_calculate_cosine_similarity_then_returns_similarity_score() {
-        let vec1 = array![1.0, 0.0];
-        let vec2 = array![0.0, 1.0];
-
-        // Orthogonal vectors should have similarity 0
-        let similarity = cosine_similarity(&vec1, &vec2);
-        assert!((similarity - 0.0).abs() < EPSILON);
-
-        // Parallel vectors should have similarity 1
-        let vec3 = array![1.0, 1.0];
-        let vec4 = array![1.0, 1.0];
-        let similarity = cosine_similarity(&vec3, &vec4);
-        assert!((similarity - 1.0).abs() < EPSILON);
+    fn given_dummy_embedder_when_embed_document_then_returns_none() {
+        let embedder = DummyEmbedding;
+        let result = embedder.embed_document("test text").unwrap();
+        assert!(result.is_none());
     }
 
     #[test]
-    fn given_embedding_vector_when_serialize_deserialize_then_preserves_data() {
-        let original = vec![1.0f32, 2.0, 3.0];
-
-        let bytes = serialize_embedding(original.clone()).unwrap();
-        let deserialized = deserialize_embedding(bytes).unwrap();
-
-        assert_eq!(original, deserialized);
+    fn given_dummy_embedder_when_embed_query_then_returns_none() {
+        let embedder = DummyEmbedding;
+        let result = embedder.embed_query("test query").unwrap();
+        assert!(result.is_none());
     }
 
     #[test]
-    fn given_array_when_convert_to_from_bytes_then_preserves_data() {
-        let original = array![1.0f32, 2.0, 3.0, 4.0];
-
-        let bytes = array_to_bytes(&original).unwrap();
-        let reconstructed = bytes_to_array(&bytes).unwrap();
-
-        // Compare each element with epsilon for floating point comparison
-        for (a, b) in original.iter().zip(reconstructed.iter()) {
-            assert!((a - b).abs() < EPSILON);
-        }
+    fn given_dummy_embedder_when_dimensions_then_returns_zero() {
+        let embedder = DummyEmbedding;
+        assert_eq!(embedder.dimensions(), 0);
     }
 }

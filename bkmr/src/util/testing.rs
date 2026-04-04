@@ -52,8 +52,15 @@ pub fn init_test_env() -> &'static TestEnv {
     let env_data = TEST_ENV.get_or_init(|| {
         let data = TestEnv::new();
         setup_test_logging(); // set up logger only once
-                              // Global AppState removed - tests should use dependency injection instead
-                              // AppState::update_global(AppState::default()).expect("Failed to update global AppState");
+
+        // Register sqlite-vec extension before any SQLite connections open.
+        // Required for the vec_bookmarks migration to succeed.
+        unsafe {
+            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
+                sqlite_vec::sqlite3_vec_init as *const (),
+            )));
+        }
+
         info!("Test environment initialized with DummyEmbedding");
         data
     });

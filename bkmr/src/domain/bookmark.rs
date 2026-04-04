@@ -1,9 +1,8 @@
 // bkmr/src/domain/bookmark.rs
-use crate::domain::embedding::{serialize_embedding, Embedder};
+use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
-use crate::util::helper::calc_content_hash;
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
 use std::collections::HashSet;
@@ -54,7 +53,7 @@ impl Bookmark {
         let now = Utc::now();
 
         // Create bookmark instance first to use get_content_for_embedding
-        let mut bookmark = Self {
+        let bookmark = Self {
             id: None,
             url: url_str.to_string(),
             title: title.as_ref().to_string(),
@@ -73,19 +72,9 @@ impl Bookmark {
             accessed_at: None,
         };
 
-        // Get content for embedding using the structured method
-        let content = bookmark.get_content_for_embedding();
-
-        let embedding_result = embedder
-            .embed(&content)?
-            .map(serialize_embedding)
-            .transpose()?;
-
-        // Only set content_hash if an embedding is created
-        if embedding_result.is_some() {
-            bookmark.embedding = embedding_result;
-            bookmark.content_hash = Some(calc_content_hash(&content));
-        }
+        // Embedding generation is handled by the service layer (VectorRepository).
+        // Bookmark::new() no longer stores embeddings directly.
+        let _ = embedder; // suppress unused warning
 
         Ok(bookmark)
     }
