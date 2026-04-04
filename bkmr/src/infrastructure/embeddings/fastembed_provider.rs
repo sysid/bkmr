@@ -78,7 +78,8 @@ impl FastEmbedEmbedding {
         }
     }
 
-    fn cache_dir() -> String {
+    /// Returns the model cache directory path.
+    pub fn cache_dir() -> String {
         std::env::var("FASTEMBED_CACHE_DIR").unwrap_or_else(|_| {
             dirs::cache_dir()
                 .map(|d| d.join("bkmr").join("models").to_string_lossy().to_string())

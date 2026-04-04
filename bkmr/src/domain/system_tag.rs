@@ -119,7 +119,6 @@ mod tests {
             "JavaScript Hello World",
             "A simple JavaScript snippet",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -148,7 +147,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 

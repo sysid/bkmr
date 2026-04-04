@@ -1,7 +1,10 @@
--- Create sqlite-vec virtual table for embedding storage
--- Requires sqlite-vec extension to be registered via sqlite3_auto_extension
--- Embeddings are 768-dimensional float vectors (NomicEmbedTextV15 default)
--- rowid corresponds to bookmarks.id
-CREATE VIRTUAL TABLE IF NOT EXISTS vec_bookmarks USING vec0(
-    embedding float[768]
-);
+-- vec_bookmarks virtual table is created at runtime by SqliteVectorRepository::init_vec_table()
+-- with the correct dimensions for the configured embedding model.
+-- The table is NOT created here because:
+-- 1. The dimension depends on the configured model (768 for Nomic, 384 for MiniLM, etc.)
+-- 2. sqlite-vec virtual tables don't participate in Diesel's schema management
+-- 3. init_vec_table handles CREATE, dimension mismatch detection, and DROP+recreate
+
+-- Clear legacy embedding blobs from bookmarks table.
+-- Embeddings are now stored in the vec_bookmarks virtual table (sqlite-vec).
+UPDATE bookmarks SET embedding = NULL WHERE embedding IS NOT NULL;

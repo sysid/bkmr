@@ -4,7 +4,6 @@ use bkmr::cli::bookmark_commands::pre_fill_database;
 use bkmr::config::{load_settings, ConfigSource, Settings};
 use bkmr::exitcode;
 use bkmr::infrastructure::di::ServiceContainer;
-use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
 use bkmr::util::helper::confirm;
 use clap::Parser;
@@ -19,20 +18,10 @@ use tracing_subscriber::{
     prelude::*,
 };
 
-/// Register the sqlite-vec extension globally before any SQLite connection opens.
-/// This makes vec0 virtual tables available to both Diesel and rusqlite connections.
-fn register_sqlite_vec_extension() {
-    unsafe {
-        rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
-            sqlite_vec::sqlite3_vec_init as *const (),
-        )));
-    }
-}
-
 #[instrument]
 fn main() {
     // Register sqlite-vec before any database connections
-    register_sqlite_vec_extension();
+    bkmr::infrastructure::repositories::sqlite::register_sqlite_vec();
 
     // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
@@ -152,8 +141,7 @@ fn handle_create_db_command(
         // Handle pre-fill if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            let embedder = DummyEmbedding;
-            pre_fill_database(&repository, &embedder)
+            pre_fill_database(&repository)
                 .map_err(|e| format!("Failed to pre-fill database: {}", e))?;
             eprintln!("Database pre-filled with demo entries.");
         }

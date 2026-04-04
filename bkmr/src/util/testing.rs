@@ -54,12 +54,7 @@ pub fn init_test_env() -> &'static TestEnv {
         setup_test_logging(); // set up logger only once
 
         // Register sqlite-vec extension before any SQLite connections open.
-        // Required for the vec_bookmarks migration to succeed.
-        unsafe {
-            rusqlite::ffi::sqlite3_auto_extension(Some(std::mem::transmute(
-                sqlite_vec::sqlite3_vec_init as *const (),
-            )));
-        }
+        crate::infrastructure::repositories::sqlite::register_sqlite_vec();
 
         info!("Test environment initialized with DummyEmbedding");
         data

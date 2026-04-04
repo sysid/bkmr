@@ -46,6 +46,11 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
     /// Generate and store embedding for a bookmark if content produces one.
     /// Silently succeeds if the embedder returns None (e.g., DummyEmbedding).
+    ///
+    /// Note: bookmark persistence and embedding storage use separate database
+    /// connections (Diesel vs rusqlite). If embedding fails after the bookmark
+    /// was committed, the bookmark survives without an embedding. This is an
+    /// accepted trade-off — `bkmr backfill` will repair missing embeddings.
     fn upsert_embedding_for_bookmark(
         &self,
         bookmark_id: i32,
@@ -128,7 +133,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             all_tags.len()
         );
         let mut bookmark =
-            Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())
+            Bookmark::new(url, &title_str, &desc_str, all_tags)
                 .app_context("creating new bookmark from provided data")?;
 
         self.repository
@@ -356,7 +361,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             match self.repository.get_by_id(bookmark_id)? {
                 Some(bookmark) => {
                     // Convert distance to similarity: 1 / (1 + distance)
-                    let similarity = 1.0 / (1.0 + distance as f32);
+                    let similarity = 1.0 / (1.0 + distance);
                     results.push(SemanticSearchResult::new(bookmark, similarity));
                 }
                 None => {
@@ -406,34 +411,22 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     #[instrument(skip(self), level = "debug")]
     fn get_bookmarks_for_forced_backfill(&self) -> ApplicationResult<Vec<Bookmark>> {
         let all_bookmarks = self.repository.get_all()?;
-
-        // Filter to only embeddable bookmarks that don't have the _imported_ tag
         let filtered_bookmarks = all_bookmarks
             .into_iter()
-            .filter(|bookmark| {
-                bookmark.embeddable && !bookmark.tags.iter().any(|tag| tag.value() == "_imported_")
-            })
+            .filter(|bookmark| bookmark.embeddable)
             .collect();
-
         Ok(filtered_bookmarks)
     }
 
     #[instrument(skip(self), level = "debug")]
     fn get_bookmarks_without_embeddings(&self) -> ApplicationResult<Vec<Bookmark>> {
-        // Get IDs that already have embeddings in vec_bookmarks
         let embedded_ids = self.vector_repository.get_embedded_ids()?;
-
-        // Get all embeddable bookmarks and filter out those already embedded
-        let all_bookmarks = self.repository.get_all()?;
-        let bookmarks = all_bookmarks
+        // Use SQL-level filter for embeddable bookmarks, then exclude already-embedded
+        let bookmarks = self.repository.get_embeddable_without_embeddings()?;
+        Ok(bookmarks
             .into_iter()
-            .filter(|b| {
-                b.embeddable
-                    && !b.tags.iter().any(|tag| tag.value() == "_imported_")
-                    && b.id.map_or(true, |id| !embedded_ids.contains(&id))
-            })
-            .collect();
-        Ok(bookmarks)
+            .filter(|b| b.id.map_or(true, |id| !embedded_ids.contains(&id)))
+            .collect())
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -479,7 +472,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 &import.title,
                 &import.content,
                 import.tags,
-                self.embedder.as_ref(),
             )?;
 
             self.repository.add(&mut bookmark)?;

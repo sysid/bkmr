@@ -786,8 +786,7 @@ pub fn create_db(cli: Cli, services: &ServiceContainer, settings: &Settings) -> 
         // Pre-fill the database with demo entries if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            let embedder = DummyEmbedding;
-            pre_fill_database(&repository, &embedder)?;
+            pre_fill_database(&repository)?;
             eprintln!("Demo entries added successfully!");
         }
     }
@@ -1069,6 +1068,15 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
 
         println!("\nEmbeddings:");
         println!("  Model: {} ({} dims)", settings.embeddings.model, services.embedder.dimensions());
+        let cache_dir = crate::infrastructure::embeddings::FastEmbedEmbedding::cache_dir();
+        let cache_path = std::path::Path::new(&cache_dir);
+        let model_downloaded = cache_path.exists()
+            && cache_path.read_dir().map_or(false, |mut d| d.next().is_some());
+        println!(
+            "  Model cache: {} ({})",
+            cache_dir,
+            if model_downloaded { "downloaded" } else { "not downloaded" }
+        );
         println!(
             "  Embedded: {} of {} embeddable bookmarks",
             vec_embedded_count, embeddable_count
@@ -1172,7 +1180,6 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
 pub fn pre_fill_database(
     repository: &SqliteBookmarkRepository,
-    embedder: &dyn crate::domain::embedding::Embedder,
 ) -> CliResult<()> {
     // Create demo entries
     let demo_entries = vec![
@@ -1336,7 +1343,7 @@ pub fn pre_fill_database(
             }
         }
 
-        match Bookmark::new(url, title, description, tag_set, embedder) {
+        match Bookmark::new(url, title, description, tag_set) {
             Ok(mut bookmark) => {
                 // Set embeddable flag for regular URLs
                 if url.starts_with("http") && !url.contains("{{") {
@@ -1494,8 +1501,7 @@ mod tests {
         );
 
         // Act - Use DummyEmbedding directly
-        let embedder = DummyEmbedding;
-        pre_fill_database(&repository, &embedder).expect("Failed to pre-fill database");
+        pre_fill_database(&repository).expect("Failed to pre-fill database");
 
         // Assert
         let bookmarks = repository.get_all().expect("Failed to get bookmarks");

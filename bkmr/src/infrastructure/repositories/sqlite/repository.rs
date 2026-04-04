@@ -763,12 +763,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // Query for bookmarks that are embeddable but don't have embeddings
         // Only check if embedding is NULL, ignore content_hash
         let db_bookmarks = dsl::bookmarks
-            .filter(
-                dsl::embeddable
-                    .eq(true)
-                    .and(dsl::embedding.is_null())
-                    .and(dsl::tags.not_like("%,_imported_,%")),
-            )
+            .filter(dsl::embeddable.eq(true).and(dsl::embedding.is_null()))
             .load::<DbBookmark>(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;
 
@@ -801,8 +796,7 @@ mod tests {
             .map(Tag::new)
             .collect::<Result<HashSet<_>, _>>()?;
 
-        let embedder = crate::infrastructure::embeddings::DummyEmbedding;
-        Bookmark::new(url, title, "Test description", tag_set, &embedder)
+        Bookmark::new(url, title, "Test description", tag_set)
     }
 
     #[test]

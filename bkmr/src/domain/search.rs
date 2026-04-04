@@ -19,7 +19,7 @@ pub struct SemanticSearchResult {
     pub bookmark: Bookmark,
 
     /// Similarity score (0.0 to 1.0, higher is better)
-    pub similarity: f32,
+    pub similarity: f64,
 }
 
 impl SemanticSearch {
@@ -39,7 +39,7 @@ impl SemanticSearchResult {
     }
 
     /// Create a new semantic search result with additional display metadata
-    pub fn new(bookmark: Bookmark, similarity: f32) -> Self {
+    pub fn new(bookmark: Bookmark, similarity: f64) -> Self {
         Self {
             bookmark,
             similarity,
@@ -91,10 +91,8 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
 
-        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
-
         let mut bookmark =
-            Bookmark::new("https://example.com", title, content, tags, embedder).unwrap();
+            Bookmark::new("https://example.com", title, content, tags).unwrap();
 
         bookmark.set_embeddable(has_embedding);
         bookmark
