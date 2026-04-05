@@ -5,13 +5,13 @@
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 [![Build Status][build-image]][build-url]
 
-> Combine any snippet (code, urls, markdown, text) with powerful search, interpolation and execution.
+> A local-first knowledge base for humans and AI agents. Store anything, find it by meaning, act on it instantly.
 
-# Beyond Bookmarks and Snippets: A CLI Knowledge Management System
+# Beyond Bookmarks and Snippets: Knowledge Management for Humans and Agents
 
 [bkmr reborn](https://sysid.github.io/bkmr-reborn/)
 
-`bkmr` - selected [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - is a fast, feature-rich command-line tool that extends bookmark management, snippet handling, markdown rendering, script execution and more.
+`bkmr` - [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - is a fast, feature-rich command-line tool that handles bookmarks, snippets, markdown files, scripts and more and adds powerful search.
 
 **Organize**, **find**, and **apply** your various content types:
 
@@ -26,9 +26,8 @@
 **Centralize** your data in bkmr's database (`add`) or **keep it in your filesystem**
 (`import-files`) ([see](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)).
 
-Example:
 - bookmarks, links short snippets go into the database
-- large markdown documents or scripts stay where they are and only references go into DB
+- large markdown documents or scripts stay where they are and references go into database
 
 **Both options provide the full benefits of `bkmr`.**
 
@@ -39,14 +38,33 @@ Example:
 - **Intelligent**: Full-text and semantic search capabilities
 - **Privacy-focused**: Fully local — database, embeddings, and search all run offline
 - **Fast**: 20x faster than similar Python tools
+- **Agent-friendly**: JSON output, non-interactive mode, and `_mem_` system tag for AI agent memory
+- **Automation-ready**: Programmatic CLI with `--json`, `--np`, `--stdout` for pipelines and integrations
 
-### NEW: Editor Integrations!
-
+**[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)**:
 - **Built-in LSP server**: Use `bkmr lsp` for VS Code, Vim, Emacs - automatic snippet completion with language-aware filtering
 - **[Neovim Plugin](https://github.com/sysid/bkmr-nvim)**: Visual interface with Telescope integration and zero configuration
 - **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin for all IDEs
 
-See **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)** for complete documentation.
+
+## NEW: Agent Memory
+
+Persistent long-term memory for AI agents. The `_mem_` system tag and `hsearch` (hybrid FTS + semantic search) create a complete read/write memory interface:
+
+```bash
+# Agent stores memory:
+bkmr add "Prod DB is PostgreSQL 15 on port 5433" fact,database \
+  --title "Production database config" -t mem --no-web
+
+# Agent queries memories with natural language (hybrid search)
+bkmr hsearch "database configuration" -t _mem_ --json --np
+
+# All output is structured JSON — designed for programmatic consumption
+```
+
+Use ready-made [`skill/bkmr-memory`](skill/bkmr-memory/SKILL.md). It defines a complete memory protocol with taxonomy, deduplication, and session workflows.
+
+See **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)** for complete documentation.
 
 ## Quick Examples
 
@@ -71,6 +89,10 @@ bkmr import-files ~/scripts/ --base-path SCRIPTS_HOME
 
 # Local semantic search (no API keys needed)
 bkmr sem-search "containerized application security"
+
+# Agent memory: store and retrieve knowledge
+bkmr add "Prod DB on port 5433" fact,database --title "Prod DB config" -t mem --no-web
+bkmr hsearch "database config" -t _mem_ --json --np
 ```
 
 ### Screenshots
@@ -191,6 +213,7 @@ Comprehensive documentation is available in the **[bkmr Wiki](https://github.com
 ### Advanced Topics
 - **[Configuration](https://github.com/sysid/bkmr/wiki/Configuration)** - Complete configuration reference
 - **[Template Interpolation](https://github.com/sysid/bkmr/wiki/Template-Interpolation)** - Jinja2 dynamic content
+- **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)** - AI agent memory, JSON API, bulk import
 - **[File Import and Editing](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)** - Frontmatter, base paths, smart editing
 - **[Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)** - Local offline semantic search with fastembed
 - **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)** - LSP server and editor plugins

@@ -1,0 +1,92 @@
+{
+  "skill_name": "bkmr-memory",
+  "evals": [
+    {
+      "id": 0,
+      "name": "session-start-query",
+      "prompt": "I'm about to work on the authentication module in our Django project. Before I start, check if there's any relevant context from previous sessions.",
+      "expected_output": "Agent queries bkmr with hsearch for auth/Django memories filtered by _mem_ tag, checks for gotchas, and presents findings. Does NOT attempt to store anything.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Uses bkmr hsearch or bkmr search with -t _mem_ flag",
+          "type": "required"
+        },
+        {
+          "text": "Includes --json and --np flags for machine-readable non-interactive output",
+          "type": "required"
+        },
+        {
+          "text": "Queries for gotchas or preferences in addition to general topic search",
+          "type": "desired"
+        },
+        {
+          "text": "Does NOT attempt to store/add any new memory",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "name": "post-task-memory-write",
+      "prompt": "We just discovered that the CI pipeline fails silently when the Docker registry is unreachable — it reports success but the image never pushes. The fix was adding --push-verify to the docker build step in the Makefile.",
+      "expected_output": "Agent recognizes this as a gotcha worth storing. Runs dedup check via hsearch first. Then stores with 'bkmr add' using -t mem, gotcha classification tag, descriptive title, and --no-web. Content is a concise summary, not full Makefile contents.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Performs dedup check before storing (hsearch or search with _mem_ tag)",
+          "type": "required"
+        },
+        {
+          "text": "Uses 'bkmr add' with -t mem flag",
+          "type": "required"
+        },
+        {
+          "text": "Includes --no-web flag on the add command",
+          "type": "required"
+        },
+        {
+          "text": "Uses 'gotcha' as the classification tag",
+          "type": "required"
+        },
+        {
+          "text": "Provides a descriptive --title (not generic like 'note')",
+          "type": "required"
+        },
+        {
+          "text": "Content is a concise summary under 1000 tokens, not a full file dump",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "dedup-scenario",
+      "prompt": "Remember that our staging database is PostgreSQL 15 on port 5433.",
+      "expected_output": "Agent searches for existing memories about staging database. If a match exists, updates/edits the existing entry rather than creating a duplicate. If no match, creates a new fact memory with appropriate tags.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Searches existing memories before attempting to write (dedup check)",
+          "type": "required"
+        },
+        {
+          "text": "Uses _mem_ tag filter in the dedup search",
+          "type": "required"
+        },
+        {
+          "text": "If match found: uses bkmr edit or bkmr update instead of bkmr add",
+          "type": "desired"
+        },
+        {
+          "text": "If no match: creates new memory with 'fact' classification tag",
+          "type": "desired"
+        },
+        {
+          "text": "Does NOT blindly create a new memory without checking first",
+          "type": "required"
+        }
+      ]
+    }
+  ]
+}
