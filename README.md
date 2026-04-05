@@ -134,15 +134,23 @@ bkmr search --fzf
 
 | Command | Description |
 |---------|-------------|
-| `search` | Search across all content with full-text and tag filtering |
-| `hsearch` | Hybrid search combining FTS + semantic search with RRF fusion |
-| `sem-search` | Local semantic search using fastembed (offline, no API keys) |
-| `add` | Add new content (URLs, snippets, files, shell commands, etc.) |
-| `open` | Launch or interact with stored items (supports script arguments) |
-| `edit` | Smart editing: auto-detects file-imported bookmarks |
+| `search` | Full-text search with tag filtering, FZF, JSON output |
+| `hsearch` | Hybrid search: FTS + semantic with RRF fusion |
+| `sem-search` | Semantic search using local embeddings (offline, no API keys) |
+| `add` | Add bookmarks (URLs, snippets, scripts, markdown, env vars) |
+| `open` | Smart action dispatch based on content type |
+| `edit` | Edit bookmarks (smart: opens source file for imports) |
+| `update` | Modify tags and custom openers |
+| `delete` | Delete bookmarks by ID |
+| `show` | Display bookmark details |
 | `import-files` | Import files/directories with frontmatter parsing |
-| `tags` | View and manage your tag taxonomy |
-| `set-embeddable` | Configure items for semantic search |
+| `tags` | View tag taxonomy with usage counts |
+| `info` | Show configuration, database path, embedding status |
+| `set-embeddable` | Mark bookmarks for semantic search embedding |
+| `backfill` | Generate missing embeddings |
+| `lsp` | Start LSP server for editor snippet completion |
+| `completion` | Generate shell completions (bash, zsh, fish) |
+| `surprise` | Open random URL bookmarks |
 
 **Complete command documentation**: See **[Basic Usage](https://github.com/sysid/bkmr/wiki/Basic-Usage)** for detailed examples.
 
@@ -150,16 +158,17 @@ bkmr search --fzf
 
 bkmr intelligently handles different content types with appropriate actions:
 
-| Content Type          | Default Action                        | System Tag   |
-|-----------------------|---------------------------------------|--------------|
-| URLs                  | Open in browser                       | (none)       |
-| Snippets              | Copy to clipboard                     | `_snip_`     |
-| Shell Scripts         | Interactive edit then execute         | `_shell_`    |
-| Environment Variables | Print for sourcing in shell           | `_env_`      |
-| Markdown              | Render in browser with TOC            | `_md_`       |
-| Text Documents        | Copy to clipboard                     | `_imported_` |
-| Agent Memory          | Display content (stdout)               | `_mem_`      |
-| Local Files           | Open with default application         | (none)       |
+| Content Type          | Default Action                | System Tag   |
+|-----------------------|-------------------------------|--------------|
+| URLs                  | Open in browser               | (none)       |
+| Snippets              | Copy to clipboard             | `_snip_`     |
+| Shell Scripts         | Interactive edit + execute    | `_shell_`    |
+| Markdown              | Render in browser with TOC    | `_md_`       |
+| Environment Variables | Print for `eval`/`source`     | `_env_`      |
+| Text Documents        | Copy to clipboard             | `_imported_` |
+| Agent Memory          | Display to stdout             | `_mem_`      |
+
+> **Rule:** A bookmark can have at most **one** system tag. Local files without a system tag open with the default application.
 
 Learn more: **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)** | **[Core Concepts](https://github.com/sysid/bkmr/wiki/Core-Concepts)**
 
@@ -262,7 +271,7 @@ cargo test -- --test-threads=1
 make test
 ```
 
-**Why single-threaded?** Tests share SQLite database and environment variables. Parallel execution causes race conditions.
+**Why single-threaded?** Tests share a SQLite database and environment variables. Parallel execution causes race conditions.
 
 See **[Development](https://github.com/sysid/bkmr/wiki/Development)** for complete contributor guide.
 
@@ -275,8 +284,6 @@ We welcome contributions! Please check our [Contributing Guidelines](./CONTRIBUT
 - Issues: https://github.com/sysid/bkmr/issues
 - Wiki: https://github.com/sysid/bkmr/wiki
 - Discussions: https://github.com/sysid/bkmr/discussions
-
-**For developers**: Remember to always run tests with `--test-threads=1` to avoid database conflicts.
 
 <!-- Badges -->
 [build-image]: https://github.com/sysid/bkmr/actions/workflows/release_wheels.yml/badge.svg
