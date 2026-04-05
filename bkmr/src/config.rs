@@ -77,6 +77,25 @@ impl Default for ShellOpts {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EmbeddingOpts {
+    /// fastembed model name (e.g., "NomicEmbedTextV15", "AllMiniLML6V2")
+    #[serde(default = "default_embedding_model")]
+    pub model: String,
+}
+
+fn default_embedding_model() -> String {
+    "NomicEmbedTextV15".to_string()
+}
+
+impl Default for EmbeddingOpts {
+    fn default() -> Self {
+        Self {
+            model: default_embedding_model(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
     /// Path to the SQLite database file
     #[serde(default = "default_db_path")]
@@ -93,6 +112,10 @@ pub struct Settings {
     /// Base paths for file imports (e.g., SCRIPTS_HOME="$HOME/scripts")
     #[serde(default)]
     pub base_paths: HashMap<String, String>,
+
+    /// Embedding model configuration
+    #[serde(default)]
+    pub embeddings: EmbeddingOpts,
 
     /// Tracks configuration source (not serialized)
     #[serde(skip)]
@@ -143,6 +166,7 @@ impl Default for Settings {
             fzf_opts: FzfOpts::default(),
             shell_opts: ShellOpts::default(),
             base_paths: HashMap::new(),
+            embeddings: EmbeddingOpts::default(),
             config_source: ConfigSource::Default,
         }
     }
@@ -561,6 +585,7 @@ mod tests {
             },
             shell_opts: ShellOpts { interactive: true },
             base_paths: HashMap::new(),
+            embeddings: EmbeddingOpts::default(),
             config_source: ConfigSource::ConfigFile,
         };
 

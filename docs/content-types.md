@@ -211,7 +211,7 @@ bkmr add "~/notes/meeting-notes.txt" meetings --type text
 - Automatic file content loading
 - Path resolution with environment variables
 - Template interpolation in file content (except for markdown files)
-- Embedding updates when files change (for `--openai` enabled bookmarks)
+- Embedding updates when files change (for embeddable bookmarks)
 
 ## Template Interpolation
 

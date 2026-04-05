@@ -276,6 +276,7 @@ impl SearchCommandHandler {
             interpolate,
             shell_stubs,
             stdout,
+            embeddable,
         } = cli.command.unwrap()
         {
             let mut fields = crate::cli::display::DEFAULT_FIELDS.to_vec();
@@ -308,6 +309,11 @@ impl SearchCommandHandler {
 
             // Execute search
             let mut bookmarks = self.services.bookmark_service.search_bookmarks(&query)?;
+
+            // Filter to embeddable only if requested
+            if embeddable {
+                bookmarks.retain(|b| b.embeddable);
+            }
 
             // Apply interpolation if requested
             if interpolate {

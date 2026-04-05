@@ -8,6 +8,7 @@ use bkmr::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirecti
 use bkmr::domain::tag::Tag;
 use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::infrastructure::repositories::json_import_repository::JsonImportRepository;
+use bkmr::infrastructure::repositories::null_vector_repository::NullVectorRepository;
 use bkmr::util::testing::{init_test_env, setup_test_db, EnvGuard};
 
 // Helper function to create a test service
@@ -15,9 +16,11 @@ fn create_test_service() -> impl BookmarkService {
     let repository = setup_test_db();
     let arc_repository = Arc::new(repository);
     let embedder = Arc::new(DummyEmbedding);
+    let vector_repository = Arc::new(NullVectorRepository);
     BookmarkServiceImpl::new(
         arc_repository,
         embedder,
+        vector_repository,
         Arc::new(JsonImportRepository::new()),
     )
 }

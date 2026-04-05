@@ -111,7 +111,6 @@ impl TestContext {
             title,
             description,
             tags,
-            self.container.embedder.as_ref(),
         )
     }
 

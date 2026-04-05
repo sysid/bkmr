@@ -66,16 +66,16 @@ pub fn semantic_search(
         non_interactive,
     } = cli.command.unwrap()
     {
-        // Check if embedder is DummyEmbedding and provide helpful error message
-        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
+        // Check if real embeddings are available (DummyEmbedding has dimensions == 0)
+        if services.embedder.dimensions() == 0 {
             writeln!(
                 stderr,
                 "{}",
-                "Error: Semantic search requires embeddings. Use --openai flag.".red()
+                "Error: Semantic search requires embeddings. Configure an embedding provider.".red()
             )
-            .cli_context("writing DummyEmbedding error message to stderr")?;
+            .cli_context("writing no-embedder error message to stderr")?;
             return Err(CliError::CommandFailed(
-                "No embeddings available - use --openai flag".to_string(),
+                "No embeddings available - configure an embedding provider".to_string(),
             ));
         }
 
@@ -786,8 +786,7 @@ pub fn create_db(cli: Cli, services: &ServiceContainer, settings: &Settings) -> 
         // Pre-fill the database with demo entries if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            let embedder = DummyEmbedding;
-            pre_fill_database(&repository, &embedder)?;
+            pre_fill_database(&repository)?;
             eprintln!("Demo entries added successfully!");
         }
     }
@@ -833,14 +832,20 @@ pub fn set_embeddable(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 #[instrument(skip(cli), level = "debug")]
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
-        // Check embedder type using services instead of global state
-        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
-            eprintln!("{}", "Error: Cannot backfill embeddings with DummyEmbedding active. Please use --openai flag.".red());
+        // Check if real embeddings are available
+        if services.embedder.dimensions() == 0 {
+            eprintln!("{}", "Error: Cannot backfill embeddings without an embedding provider configured.".red());
             return Err(CliError::CommandFailed(
-                "DummyEmbedding active - embeddings not available".to_string(),
+                "No embedding provider configured - embeddings not available".to_string(),
             ));
         }
         let bookmark_service = services.bookmark_service.clone();
+
+        // For force mode, clear all existing embeddings first
+        if force {
+            eprintln!("Force mode: clearing all existing embeddings...");
+            services.vector_repository.clear_all()?;
+        }
 
         // Get bookmarks to process based on force flag
         let bookmarks = if force {
@@ -923,15 +928,15 @@ pub fn load_texts(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         path,
     } = cli.command.unwrap()
     {
-        // Check embedder type using services instead of global state
-        if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
+        // Check if real embeddings are available
+        if services.embedder.dimensions() == 0 {
             eprintln!(
                 "{}",
-                "Error: Cannot load texts with DummyEmbedding active. Please use --openai flag."
+                "Error: Cannot load texts without an embedding provider configured."
                     .red()
             );
             return Err(CliError::CommandFailed(
-                "DummyEmbedding active - embeddings not available".to_string(),
+                "No embedding provider configured - embeddings not available".to_string(),
             ));
         }
 
@@ -999,13 +1004,15 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         // Shell options
         println!("  Shell Interactive: {}", settings.shell_opts.interactive);
 
-        // Embedder type using services
-        let embedder_type =
-            if services.embedder.as_any().type_id() == std::any::TypeId::of::<DummyEmbedding>() {
-                "DummyEmbedding (embeddings disabled)"
-            } else {
-                "OpenAiEmbedding (embeddings enabled)"
-            };
+        // Embedder type using dimensions check
+        let embedder_type = if services.embedder.dimensions() == 0 {
+            "DummyEmbedding (embeddings disabled)".to_string()
+        } else {
+            format!(
+                "Embeddings enabled (dimensions: {})",
+                services.embedder.dimensions()
+            )
+        };
         println!("  Embedder: {}", embedder_type);
 
         // Base paths section
@@ -1030,7 +1037,7 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         display_env_var("BKMR_DB_URL", false);
         display_env_var("BKMR_FZF_OPTS", false);
         display_env_var("BKMR_SHELL_INTERACTIVE", false);
-        display_env_var("OPENAI_API_KEY", true); // Mask the actual value
+        display_env_var("FASTEMBED_CACHE_DIR", false);
 
         // Database statistics
         let bookmarks = repository.get_all()?;
@@ -1047,6 +1054,37 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         println!("  Top 5 Tags:");
         for (tag, count) in tags.iter().take(5) {
             println!("    {} ({})", tag.value(), count);
+        }
+
+        // Embedding statistics
+        let embeddable_count = bookmarks.iter().filter(|b| b.embeddable).count();
+        let vec_has_embeddings = services.vector_repository.has_embeddings().unwrap_or(false);
+        let vec_dims = services.vector_repository.get_dimensions().unwrap_or(None);
+        let vec_embedded_count = services
+            .vector_repository
+            .get_embedded_ids()
+            .map(|ids| ids.len())
+            .unwrap_or(0);
+
+        println!("\nEmbeddings:");
+        println!("  Model: {} ({} dims)", settings.embeddings.model, services.embedder.dimensions());
+        let cache_dir = crate::infrastructure::embeddings::FastEmbedEmbedding::cache_dir();
+        let cache_path = std::path::Path::new(&cache_dir);
+        let model_downloaded = cache_path.exists()
+            && cache_path.read_dir().map_or(false, |mut d| d.next().is_some());
+        println!(
+            "  Model cache: {} ({})",
+            cache_dir,
+            if model_downloaded { "downloaded" } else { "not downloaded" }
+        );
+        println!(
+            "  Embedded: {} of {} embeddable bookmarks",
+            vec_embedded_count, embeddable_count
+        );
+        if let Some(dims) = vec_dims {
+            println!("  Vector table: vec_bookmarks ({} dims, {} rows)", dims, vec_embedded_count);
+        } else if !vec_has_embeddings {
+            println!("  Vector table: vec_bookmarks (empty)");
         }
 
         // Add system tag statistics
@@ -1142,7 +1180,6 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
 pub fn pre_fill_database(
     repository: &SqliteBookmarkRepository,
-    embedder: &dyn crate::domain::embedding::Embedder,
 ) -> CliResult<()> {
     // Create demo entries
     let demo_entries = vec![
@@ -1306,7 +1343,7 @@ pub fn pre_fill_database(
             }
         }
 
-        match Bookmark::new(url, title, description, tag_set, embedder) {
+        match Bookmark::new(url, title, description, tag_set) {
             Ok(mut bookmark) => {
                 // Set embeddable flag for regular URLs
                 if url.starts_with("http") && !url.contains("{{") {
@@ -1464,8 +1501,7 @@ mod tests {
         );
 
         // Act - Use DummyEmbedding directly
-        let embedder = DummyEmbedding;
-        pre_fill_database(&repository, &embedder).expect("Failed to pre-fill database");
+        pre_fill_database(&repository).expect("Failed to pre-fill database");
 
         // Assert
         let bookmarks = repository.get_all().expect("Failed to get bookmarks");

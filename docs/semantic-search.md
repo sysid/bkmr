@@ -1,27 +1,28 @@
 # Semantic Search with bkmr
 
-`bkmr` offers powerful semantic search capabilities, allowing you to find relevant content based on meaning rather than just keywords. This AI-powered feature helps developers locate information even when they don't remember the exact terms or tags.
+`bkmr` offers powerful semantic search capabilities, allowing you to find relevant content based on meaning rather than just keywords. Semantic search runs **fully offline** using local embeddings — no API keys, no network calls, complete privacy.
 
 ## How It Works
 
-Semantic search uses AI embeddings (vector representations of text) to capture the meaning of your bookmarks and queries. This allows `bkmr` to find content that's conceptually related, even when it doesn't contain the exact search terms.
+Semantic search uses local embeddings (vector representations of text) via [fastembed](https://github.com/Anush008/fastembed-rs) (ONNX Runtime) to capture the meaning of your bookmarks and queries. Embeddings are stored in a `vec_bookmarks` virtual table powered by [sqlite-vec](https://github.com/asg017/sqlite-vec), enabling fast nearest-neighbor search directly in SQLite.
 
 ## Requirements
 
-- OpenAI API key set as environment variable: `OPENAI_API_KEY`
-- The `--openai` flag when running commands that use embeddings
+- No external API keys needed — everything runs locally
+- First use downloads the embedding model (~130MB, one-time)
+- Model cache location: `~/.cache/bkmr/models/` (override with `FASTEMBED_CACHE_DIR`)
 
 ## Basic Usage
 
 ```bash
-# Enable OpenAI embeddings and search for conceptually similar content
-bkmr --openai sem-search "containerized application security"
+# Semantic search for conceptually similar content
+bkmr sem-search "containerized application security"
 
 # Limit results to top 5 matches
-bkmr --openai sem-search "event-driven architecture" --limit 5
+bkmr sem-search "event-driven architecture" --limit 5
 
 # Non-interactive mode
-bkmr --openai sem-search "microservice patterns" --np
+bkmr sem-search "microservice patterns" --np
 ```
 
 ## Integration with Smart Actions
@@ -30,31 +31,34 @@ Semantic search results work seamlessly with the action system. Each result will
 
 ```bash
 # Find and render documentation about Kubernetes
-bkmr --openai sem-search "kubernetes pod configuration"
+bkmr sem-search "kubernetes pod configuration"
 
 # Find and execute shell scripts related to deployment
-bkmr --openai sem-search "deployment automation script"
+bkmr sem-search "deployment automation script"
 
 # Find and copy code snippets for error handling
-bkmr --openai sem-search "error handling patterns"
+bkmr sem-search "error handling patterns"
 ```
 
 ## Managing Embeddable Content
 
-Not all content benefits from semantic embeddings. By default, new bookmarks are not marked as embeddable to save API costs.
+Not all content benefits from semantic embeddings. By default, new bookmarks are not marked as embeddable.
 
 ```bash
 # Mark a bookmark as embeddable (will generate embeddings)
 bkmr set-embeddable 123 --enable
 
-# Mark a bookmark as non-embeddable 
+# Mark a bookmark as non-embeddable
 bkmr set-embeddable 123 --disable
 
-# Backfill embeddings for all embeddable bookmarks
-bkmr --openai backfill
+# Backfill embeddings for all embeddable bookmarks that lack them
+bkmr backfill
+
+# Force regenerate all embeddings (e.g., after model change)
+bkmr backfill --force
 
 # Preview what would be backfilled without making changes
-bkmr --openai backfill --dry-run
+bkmr backfill --dry-run
 ```
 
 ## Interactive Search Mode
@@ -71,10 +75,10 @@ You can import text documents to make them searchable via semantic search:
 
 ```bash
 # Import text documents from a JSON file
-bkmr --openai load-texts path/to/documents.jsonl
+bkmr load-texts path/to/documents.jsonl
 
 # Preview importing without making changes
-bkmr --openai load-texts path/to/documents.jsonl --dry-run
+bkmr load-texts path/to/documents.jsonl --dry-run
 ```
 
 The file should be in NDJSON format (one JSON object per line):
@@ -90,7 +94,7 @@ When working with markdown file references, `bkmr` can automatically embed the f
 
 ```bash
 # Add a markdown file reference with embedding enabled
-bkmr --openai add "~/documents/research.md" research,notes --type md
+bkmr add "~/documents/research.md" research,notes --type md
 
 # The content is automatically read, embedded, and a content hash is stored
 ```
@@ -108,17 +112,38 @@ Semantic search transforms how developers access information:
 
 1. **Concept-based retrieval** - Find information based on concepts, not just keywords
 2. **Natural language queries** - Search the way you think, not how you tagged content
-3. **Comprehensive knowledge base** - Build a personal AI-powered documentation system
+3. **Fully private** - All processing happens locally, nothing leaves your machine
 4. **Action-ready results** - Results are immediately actionable based on content type
 5. **Up-to-date content** - File content is automatically re-embedded when it changes
 
 ## Technical Details
 
-- `bkmr` uses OpenAI's text-embedding-ada-002 model by default
-- Only portions of bookmarks marked as embeddable are sent to OpenAI for embedding generation
-- Embeddings and content hashes are stored locally in your database
-- Similarity is calculated using cosine similarity between vector representations
-- File content is tracked using content hashes to minimize unnecessary API calls
+- Default model: **NomicEmbedTextV15** (768 dimensions) — configurable via `config.toml`
+- Uses asymmetric embeddings: `search_document:` prefix for storage, `search_query:` prefix for queries
+- Embeddings stored in sqlite-vec `vec0` virtual table (`vec_bookmarks`)
+- Nearest-neighbor search using Euclidean distance, converted to similarity score
+- File content tracked using content hashes to minimize unnecessary re-embedding
+- Model loaded lazily on first embed call — startup is fast
+
+### Supported Models
+
+Configure in `~/.config/bkmr/config.toml`:
+
+```toml
+[embeddings]
+model = "NomicEmbedTextV15"  # default
+```
+
+| Model | Dimensions | Notes |
+|-------|-----------|-------|
+| `NomicEmbedTextV15` | 768 | Default, good general-purpose |
+| `AllMiniLML6V2` | 384 | Smaller, faster |
+| `BGESmallENV15` | 384 | Good for English |
+| `BGEM3` | 1024 | Largest, most accurate |
+
+Quantized variants (`*Q`) are also available for faster inference.
+
+**After changing models**: Run `bkmr backfill --force` to regenerate all embeddings.
 
 ## Optimal Content for Embeddings
 
@@ -135,13 +160,15 @@ Content that may not benefit as much:
 - URLs without descriptive content
 - Binary files or executables
 
-## Privacy Considerations
+## Privacy
 
-When using the OpenAI integration:
+Semantic search is **fully offline and private**:
 
-- Content from your bookmarks is sent to OpenAI's API for embedding generation
-- No content is stored by OpenAI, but it may be used to improve their services
-- If you have privacy concerns, consider carefully which bookmarks you mark as embeddable
+- No API keys needed
+- No network calls during embedding or search
+- All processing happens locally via ONNX Runtime
+- Model downloaded once and cached locally
+- Your content never leaves your machine
 
 ## Combining with Template Interpolation
 

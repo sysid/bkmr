@@ -549,7 +549,6 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags.clone(),
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -559,7 +558,6 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -585,7 +583,6 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags.clone(),
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -594,7 +591,6 @@ mod tests {
             "Python",
             "Learn Python",
             tags.clone(),
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -603,7 +599,6 @@ mod tests {
             "JavaScript",
             "Learn JavaScript",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -625,7 +620,6 @@ mod tests {
             "Rust",
             "Learn Rust",
             tags.clone(),
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -634,7 +628,6 @@ mod tests {
             "Python",
             "Learn Python",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -673,7 +666,6 @@ mod tests {
             "Rust Web",
             "Web development with Rust",
             rust_web_tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -685,7 +677,6 @@ mod tests {
             "Web Programming",
             "Web development programming",
             programming_web_tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -697,7 +688,6 @@ mod tests {
             "Rust",
             "Learn Rust",
             rust_tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -716,7 +706,6 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -736,8 +725,6 @@ mod tests {
         let _ = init_test_env();
 
         // Create test bookmarks with various properties
-        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
-
         // Create some test bookmarks
         let now = chrono::Utc::now();
         let one_day_ago = now - chrono::Duration::days(1);
@@ -752,7 +739,6 @@ mod tests {
             "Rust Programming",
             "Learn Rust programming",
             tags1,
-            embedder,
         )
         .unwrap();
         bookmark1.id = Some(1);
@@ -768,7 +754,6 @@ mod tests {
             "Python Web Development",
             "Learn Python web development",
             tags2,
-            embedder,
         )
         .unwrap();
         bookmark2.id = Some(2);
@@ -783,7 +768,6 @@ mod tests {
             "Java Enterprise",
             "Enterprise Java development",
             tags3,
-            embedder,
         )
         .unwrap();
         bookmark3.id = Some(3);
@@ -956,14 +940,12 @@ mod tests {
 
         // Create test bookmarks
         let tags = HashSet::new();
-        let embedder = &crate::infrastructure::embeddings::DummyEmbedding;
 
         let bookmark = Bookmark::new(
             "https://example.com",
             "Test Bookmark",
             "This is a test",
             tags,
-            embedder,
         )
         .unwrap();
 

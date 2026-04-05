@@ -2,3 +2,4 @@
 pub mod import_repository;
 pub mod query;
 pub mod repository;
+pub mod vector_repository;

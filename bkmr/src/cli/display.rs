@@ -91,7 +91,7 @@ pub struct DisplayBookmark {
     pub last_update_ts: DateTime<Utc>,
 
     #[builder(default)]
-    pub similarity: Option<f32>,
+    pub similarity: Option<f64>,
 
     #[builder(default)]
     pub embedding: String,

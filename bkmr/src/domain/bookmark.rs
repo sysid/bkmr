@@ -1,9 +1,7 @@
 // bkmr/src/domain/bookmark.rs
-use crate::domain::embedding::{serialize_embedding, Embedder};
 use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
-use crate::util::helper::calc_content_hash;
 use chrono::{DateTime, Utc};
 use derive_builder::Builder;
 use std::collections::HashSet;
@@ -48,13 +46,12 @@ impl Bookmark {
         title: S,
         description: S,
         tags: HashSet<Tag>,
-        embedder: &dyn Embedder,
     ) -> DomainResult<Self> {
         let url_str = url.as_ref();
         let now = Utc::now();
 
         // Create bookmark instance first to use get_content_for_embedding
-        let mut bookmark = Self {
+        let bookmark = Self {
             id: None,
             url: url_str.to_string(),
             title: title.as_ref().to_string(),
@@ -72,20 +69,6 @@ impl Bookmark {
             opener: None,
             accessed_at: None,
         };
-
-        // Get content for embedding using the structured method
-        let content = bookmark.get_content_for_embedding();
-
-        let embedding_result = embedder
-            .embed(&content)?
-            .map(serialize_embedding)
-            .transpose()?;
-
-        // Only set content_hash if an embedding is created
-        if embedding_result.is_some() {
-            bookmark.embedding = embedding_result;
-            bookmark.content_hash = Some(calc_content_hash(&content));
-        }
 
         Ok(bookmark)
     }
@@ -369,7 +352,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -392,7 +374,6 @@ mod tests {
             "Shell Command",
             "A shell command",
             tags.clone(),
-            &crate::infrastructure::embeddings::DummyEmbedding,
         );
         assert!(shell_url.is_ok());
 
@@ -402,7 +383,6 @@ mod tests {
             "File Path",
             "A file path",
             tags.clone(),
-            &crate::infrastructure::embeddings::DummyEmbedding,
         );
         assert!(file_url.is_ok());
 
@@ -412,7 +392,6 @@ mod tests {
             "Home Path",
             "A path in home directory",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         );
         assert!(home_url.is_ok());
     }
@@ -428,7 +407,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -458,7 +436,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -483,7 +460,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -513,7 +489,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -533,7 +508,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -557,7 +531,6 @@ mod tests {
             "Example Site",
             "An example website",
             bookmark_tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -619,7 +592,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -651,7 +623,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -679,7 +650,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -703,7 +673,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -731,7 +700,6 @@ mod tests {
             "Example Site",
             "An example website",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -751,7 +719,6 @@ mod tests {
             "Example Site",
             "A website with no system tags",
             tags_uri,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -763,7 +730,6 @@ mod tests {
             "Python Snippet",
             "A Python code snippet",
             tags_snippet,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -783,7 +749,6 @@ mod tests {
             "Example Site",
             "A website",
             tags_uri,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 
@@ -796,7 +761,6 @@ mod tests {
             "Python Snippet",
             "A Python code snippet",
             tags_snippet,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 

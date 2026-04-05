@@ -4,7 +4,6 @@ use bkmr::cli::bookmark_commands::pre_fill_database;
 use bkmr::config::{load_settings, ConfigSource, Settings};
 use bkmr::exitcode;
 use bkmr::infrastructure::di::ServiceContainer;
-use bkmr::infrastructure::embeddings::DummyEmbedding;
 use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
 use bkmr::util::helper::confirm;
 use clap::Parser;
@@ -21,6 +20,9 @@ use tracing_subscriber::{
 
 #[instrument]
 fn main() {
+    // Register sqlite-vec before any database connections
+    bkmr::infrastructure::repositories::sqlite::register_sqlite_vec();
+
     // use stderr as human output in order to make stdout output passable to downstream processes
     let stderr = StandardStream::stderr(ColorChoice::Always);
     let cli = Cli::parse();
@@ -38,12 +40,6 @@ fn main() {
         Settings::default()
     });
 
-    // Note: OpenAI override from CLI flag will be handled in service container
-    // when the embedder selection is properly implemented
-    if cli.openai {
-        debug!("OpenAI embeddings requested via CLI flag");
-    }
-
     // Handle all database-independent operations first
     if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
         if let Err(e) = result {
@@ -54,7 +50,7 @@ fn main() {
     }
 
     // Only create ServiceContainer for database-dependent operations
-    let service_container = match ServiceContainer::new(&settings, cli.openai) {
+    let service_container = match ServiceContainer::new(&settings) {
         Ok(container) => container,
         Err(e) => {
             eprintln!("{}: {}", "Failed to create service container".red(), e);
@@ -145,8 +141,7 @@ fn handle_create_db_command(
         // Handle pre-fill if requested
         if pre_fill {
             eprintln!("Pre-filling database with demo entries...");
-            let embedder = DummyEmbedding;
-            pre_fill_database(&repository, &embedder)
+            pre_fill_database(&repository)
                 .map_err(|e| format!("Failed to pre-fill database: {}", e))?;
             eprintln!("Database pre-filled with demo entries.");
         }

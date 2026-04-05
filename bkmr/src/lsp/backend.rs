@@ -577,7 +577,7 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
     use crate::infrastructure::di::ServiceContainer;
 
     let service_container =
-        ServiceContainer::new(settings, false).expect("Failed to create service container");
+        ServiceContainer::new(settings).expect("Failed to create service container");
 
     // Set up the LSP service with proper dependency injection
     // Note: We need to recreate services inside the closure since they're not Clone

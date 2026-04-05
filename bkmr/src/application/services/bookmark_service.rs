@@ -2,7 +2,7 @@
 use crate::application::error::ApplicationResult;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
-use crate::domain::search::{SemanticSearch, SemanticSearchResult};
+use crate::domain::search::{HybridSearch, HybridSearchResult, SemanticSearch, SemanticSearchResult};
 use crate::domain::tag::Tag;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -58,6 +58,12 @@ pub trait BookmarkService: Send + Sync + Debug {
         &self,
         search: &SemanticSearch,
     ) -> ApplicationResult<Vec<SemanticSearchResult>>;
+
+    /// Perform hybrid search combining FTS and semantic search with RRF fusion
+    fn hybrid_search(
+        &self,
+        search: &HybridSearch,
+    ) -> ApplicationResult<Vec<HybridSearchResult>>;
 
     /// Get bookmark by URL
     fn get_bookmark_by_url(&self, url: &str) -> ApplicationResult<Option<Bookmark>>;

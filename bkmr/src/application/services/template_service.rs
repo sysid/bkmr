@@ -130,7 +130,6 @@ mod tests {
             "Example Site",
             "This is a description",
             tags,
-            &crate::infrastructure::embeddings::DummyEmbedding,
         )
         .unwrap();
 

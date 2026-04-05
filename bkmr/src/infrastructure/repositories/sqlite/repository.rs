@@ -16,6 +16,7 @@ use crate::domain::repositories::query::{
     SortField,
 };
 use crate::domain::repositories::repository::BookmarkRepository;
+use crate::domain::search::RankedResult;
 use crate::domain::tag::Tag;
 use crate::infrastructure::repositories::sqlite::model::{
     DbBookmark, DbBookmarkChanges, IdResult, NewBookmark, TagsFrequency,
@@ -744,6 +745,46 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         Ok(ids)
     }
 
+    fn get_bookmarks_fts_ranked(
+        &self,
+        fts_query: &str,
+        filter_ids: Option<&HashSet<i32>>,
+    ) -> Result<Vec<RankedResult>, DomainError> {
+        let mut conn = self.get_connection().map_err(|e| {
+            DomainError::RepositoryError(RepositoryError::Connection(e.to_string()))
+        })?;
+
+        let query = sql_query(
+            "SELECT id FROM bookmarks_fts \
+             WHERE bookmarks_fts MATCH ? \
+             ORDER BY rank",
+        )
+        .bind::<Text, _>(fts_query);
+
+        let ids: Vec<i32> = query
+            .load::<IdResult>(&mut conn)
+            .map_err(|e| DomainError::RepositoryError(RepositoryError::Query(e.to_string())))?
+            .into_iter()
+            .map(|record| record.id)
+            .collect();
+
+        // Enumerate to produce rank positions, optionally filtering by ID set
+        let ranked: Vec<RankedResult> = ids
+            .into_iter()
+            .enumerate()
+            .filter(|(_, id)| {
+                filter_ids.map_or(true, |ids| ids.contains(id))
+            })
+            .enumerate()
+            .map(|(filtered_rank, (_, id))| RankedResult {
+                bookmark_id: id,
+                rank: filtered_rank,
+            })
+            .collect();
+
+        Ok(ranked)
+    }
+
     #[instrument(skip(self))]
     fn exists_by_url(&self, url: &str) -> Result<i32, DomainError> {
         let bookmark = self.get_by_url(url)?;
@@ -763,12 +804,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // Query for bookmarks that are embeddable but don't have embeddings
         // Only check if embedding is NULL, ignore content_hash
         let db_bookmarks = dsl::bookmarks
-            .filter(
-                dsl::embeddable
-                    .eq(true)
-                    .and(dsl::embedding.is_null())
-                    .and(dsl::tags.not_like("%,_imported_,%")),
-            )
+            .filter(dsl::embeddable.eq(true).and(dsl::embedding.is_null()))
             .load::<DbBookmark>(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;
 
@@ -801,8 +837,7 @@ mod tests {
             .map(Tag::new)
             .collect::<Result<HashSet<_>, _>>()?;
 
-        let embedder = crate::infrastructure::embeddings::DummyEmbedding;
-        Bookmark::new(url, title, "Test description", tag_set, &embedder)
+        Bookmark::new(url, title, "Test description", tag_set)
     }
 
     #[test]

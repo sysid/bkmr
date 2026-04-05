@@ -346,6 +346,7 @@ mod tests {
     use super::*;
     use crate::application::services::bookmark_service_impl::BookmarkServiceImpl;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
+    use crate::infrastructure::repositories::null_vector_repository::NullVectorRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
     use std::sync::Arc;
 
@@ -360,6 +361,7 @@ mod tests {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             repository_arc,
             embedder,
+            Arc::new(NullVectorRepository),
             Arc::new(JsonImportRepository::new()),
         ));
         let service = CommandService::with_service(bookmark_service);
@@ -401,6 +403,7 @@ mod tests {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             repository_arc,
             embedder,
+            Arc::new(NullVectorRepository),
             Arc::new(JsonImportRepository::new()),
         ));
         let service = CommandService::with_service(bookmark_service);
@@ -449,6 +452,7 @@ mod tests {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             repository_arc,
             embedder,
+            Arc::new(NullVectorRepository),
             Arc::new(JsonImportRepository::new()),
         ));
         let service = CommandService::with_service(bookmark_service);
@@ -504,6 +508,7 @@ mod tests {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             repository_arc,
             embedder,
+            Arc::new(NullVectorRepository),
             Arc::new(JsonImportRepository::new()),
         ));
         let service = CommandService::with_service(bookmark_service.clone());
@@ -545,6 +550,7 @@ mod tests {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             repository_arc,
             embedder,
+            Arc::new(NullVectorRepository),
             Arc::new(JsonImportRepository::new()),
         ));
         let service = CommandService::with_service(bookmark_service);

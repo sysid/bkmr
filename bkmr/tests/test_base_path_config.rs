@@ -13,6 +13,7 @@ fn test_base_path_configuration() {
         fzf_opts: Default::default(),
         shell_opts: Default::default(),
         base_paths,
+        embeddings: Default::default(),
         config_source: Default::default(),
     };
 
@@ -45,6 +46,7 @@ fn test_base_path_usage_examples() {
         fzf_opts: Default::default(),
         shell_opts: Default::default(),
         base_paths,
+        embeddings: Default::default(),
         config_source: Default::default(),
     };
 
@@ -70,6 +72,7 @@ fn test_environment_variable_expansion() {
         fzf_opts: Default::default(),
         shell_opts: Default::default(),
         base_paths,
+        embeddings: Default::default(),
         config_source: Default::default(),
     };
 

@@ -5,14 +5,17 @@ use std::sync::Arc;
 use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
-use crate::domain::embedding::{serialize_embedding, Embedder};
+use crate::domain::embedding::Embedder;
 use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::repositories::import_repository::{
     BookmarkImportData, FileImportData, ImportRepository,
 };
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
-use crate::domain::search::{SemanticSearch, SemanticSearchResult};
+use crate::domain::repositories::vector_repository::VectorRepository;
+use crate::domain::search::{
+    HybridSearch, HybridSearchResult, RrfFusion, SemanticSearch, SemanticSearchResult,
+};
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
@@ -24,6 +27,7 @@ use tracing::{debug, instrument, warn};
 pub struct BookmarkServiceImpl<R: BookmarkRepository> {
     repository: Arc<R>,
     embedder: Arc<dyn Embedder>,
+    vector_repository: Arc<dyn VectorRepository>,
     import_repository: Arc<dyn ImportRepository>,
 }
 
@@ -31,13 +35,44 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     pub fn new(
         repository: Arc<R>,
         embedder: Arc<dyn Embedder>,
+        vector_repository: Arc<dyn VectorRepository>,
         import_repository: Arc<dyn ImportRepository>,
     ) -> Self {
         Self {
             repository,
             embedder,
+            vector_repository,
             import_repository,
         }
+    }
+
+    /// Generate and store embedding for a bookmark if content produces one.
+    /// Silently succeeds if the embedder returns None (e.g., DummyEmbedding).
+    ///
+    /// Note: bookmark persistence and embedding storage use separate database
+    /// connections (Diesel vs rusqlite). If embedding fails after the bookmark
+    /// was committed, the bookmark survives without an embedding. This is an
+    /// accepted trade-off — `bkmr backfill` will repair missing embeddings.
+    fn upsert_embedding_for_bookmark(
+        &self,
+        bookmark_id: i32,
+        content: &str,
+    ) -> ApplicationResult<()> {
+        match self.embedder.embed_document(content)? {
+            Some(embedding) => {
+                self.vector_repository
+                    .upsert_embedding(bookmark_id, &embedding)
+                    .app_context("upserting embedding into vector repository")?;
+                debug!("Stored embedding for bookmark {}", bookmark_id);
+            }
+            None => {
+                debug!(
+                    "Embedder returned None for bookmark {} — skipping vector upsert",
+                    bookmark_id
+                );
+            }
+        }
+        Ok(())
     }
 }
 
@@ -100,12 +135,20 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             all_tags.len()
         );
         let mut bookmark =
-            Bookmark::new(url, &title_str, &desc_str, all_tags, self.embedder.as_ref())
+            Bookmark::new(url, &title_str, &desc_str, all_tags)
                 .app_context("creating new bookmark from provided data")?;
 
         self.repository
             .add(&mut bookmark)
             .app_context("saving new bookmark to repository")?;
+
+        // Generate and store embedding if bookmark is embeddable and has an ID
+        if bookmark.embeddable {
+            if let Some(id) = bookmark.id {
+                let content = bookmark.get_content_for_embedding();
+                self.upsert_embedding_for_bookmark(id, &content)?;
+            }
+        }
 
         Ok(bookmark)
     }
@@ -119,6 +162,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .repository
             .delete(id)
             .with_app_context(|| format!("deleting bookmark with ID {}", id))?;
+
+        // Best-effort: remove embedding from vector store (may not exist)
+        if let Err(e) = self.vector_repository.delete_embedding(id) {
+            debug!("Could not delete embedding for bookmark {}: {} (may not exist)", id, e);
+        }
+
         Ok(result)
     }
 
@@ -151,6 +200,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             debug!("Setting bookmark {} to non-embeddable", id);
             bookmark.embedding = None;
             bookmark.content_hash = None;
+
+            // Remove from vector store
+            if let Err(e) = self.vector_repository.delete_embedding(id) {
+                debug!("Could not delete embedding for bookmark {}: {} (may not exist)", id, e);
+            }
 
             // No need to force embedding creation since we're turning it off
             self.update_bookmark(bookmark, false)
@@ -186,13 +240,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     bookmark.content_hash.as_ref() != Some(&new_hash)
                 );
 
-                // Generate new embedding
-                if let Ok(Some(embedding_vector)) = self.embedder.embed(&content) {
-                    if let Ok(serialized) = serialize_embedding(embedding_vector) {
-                        bookmark.embedding = Some(serialized);
-                        bookmark.content_hash = Some(new_hash);
-                    }
+                // Generate embedding and store in vector repository
+                if let Some(id) = bookmark.id {
+                    self.upsert_embedding_for_bookmark(id, &content)?;
                 }
+                bookmark.content_hash = Some(new_hash);
+                bookmark.embedding = None;
             } else {
                 debug!("Skipping embedding generation - content unchanged and not forced");
             }
@@ -272,10 +325,133 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         &self,
         search: &SemanticSearch,
     ) -> ApplicationResult<Vec<SemanticSearchResult>> {
-        let bookmarks = self.repository.get_all()?;
-        search
-            .execute(&bookmarks, self.embedder.as_ref())
-            .map_err(ApplicationError::from)
+        // 1. Embed the query
+        let query_embedding = match self.embedder.embed_query(&search.query)? {
+            Some(emb) => emb,
+            None => {
+                debug!("Embedder returned None for query — returning empty results");
+                return Ok(Vec::new());
+            }
+        };
+
+        // 2. Dimension mismatch detection
+        let embedder_dims = self.embedder.dimensions();
+        if let Ok(Some(stored_dims)) = self.vector_repository.get_dimensions() {
+            if stored_dims != embedder_dims {
+                warn!(
+                    "Dimension mismatch: embedder produces {} dims but vector store has {} dims. \
+                     Run `bkmr backfill --force` to regenerate embeddings.",
+                    embedder_dims, stored_dims
+                );
+                return Err(ApplicationError::Other(format!(
+                    "Embedding dimension mismatch: model={}, stored={}. Run `bkmr backfill --force` to regenerate.",
+                    embedder_dims, stored_dims
+                )));
+            }
+        }
+
+        // 3. Search nearest neighbors
+        let limit = search.limit.unwrap_or(10);
+        let nearest = self
+            .vector_repository
+            .search_nearest(&query_embedding, limit)
+            .app_context("searching nearest embeddings in vector repository")?;
+
+        // 4. Fetch bookmarks and build results
+        let mut results = Vec::with_capacity(nearest.len());
+        for (bookmark_id, distance) in nearest {
+            match self.repository.get_by_id(bookmark_id)? {
+                Some(bookmark) => {
+                    // Convert distance to similarity: 1 / (1 + distance)
+                    let similarity = 1.0 / (1.0 + distance);
+                    results.push(SemanticSearchResult::new(bookmark, similarity));
+                }
+                None => {
+                    debug!(
+                        "Bookmark {} found in vector store but not in bookmarks table — skipping",
+                        bookmark_id
+                    );
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    fn hybrid_search(
+        &self,
+        search: &HybridSearch,
+    ) -> ApplicationResult<Vec<HybridSearchResult>> {
+        use crate::domain::search::{RankedResult, SearchMode};
+
+        let limit = search.effective_limit();
+        let internal_limit = std::cmp::max(limit * 4, 20);
+        let k = 60.0;
+
+        // Step 0: Tag pre-filtering — get allowed ID set if tags are specified
+        let filter_ids = if search.has_tag_filters() {
+            let all_bookmarks = self.repository.get_all()?;
+            let filtered = search.apply_tag_filters(&all_bookmarks);
+            let ids: std::collections::HashSet<i32> = filtered
+                .into_iter()
+                .filter_map(|b| b.id)
+                .collect();
+            if ids.is_empty() {
+                return Ok(vec![]);
+            }
+            Some(ids)
+        } else {
+            None
+        };
+
+        // Step 1: FTS ranked search (always runs)
+        let fts_ranked = self
+            .repository
+            .get_bookmarks_fts_ranked(&search.query, filter_ids.as_ref())?;
+
+        // Step 2: Semantic search (skip if exact mode or no embeddings)
+        let sem_ranked = if search.mode == SearchMode::Exact
+            || self.embedder.dimensions() == 0
+            || !self.vector_repository.has_embeddings().unwrap_or(false)
+        {
+            vec![]
+        } else {
+            let query_embedding = self.embedder.embed_query(&search.query)?;
+            match query_embedding {
+                Some(embedding) => {
+                    let vec_results = self
+                        .vector_repository
+                        .search_nearest_filtered(
+                            &embedding,
+                            internal_limit,
+                            filter_ids.as_ref(),
+                        )?;
+                    vec_results
+                        .into_iter()
+                        .enumerate()
+                        .map(|(rank, (id, _distance))| RankedResult {
+                            bookmark_id: id,
+                            rank,
+                        })
+                        .collect()
+                }
+                None => vec![],
+            }
+        };
+
+        // Step 3: RRF fusion
+        let fts_for_fusion: Vec<_> = fts_ranked.into_iter().take(internal_limit).collect();
+        let fused = RrfFusion::fuse(&fts_for_fusion, &sem_ranked, k, limit);
+
+        // Step 4: Hydrate bookmarks
+        let mut results = Vec::with_capacity(fused.len());
+        for (bookmark_id, rrf_score) in fused {
+            if let Some(bookmark) = self.repository.get_by_id(bookmark_id)? {
+                results.push(HybridSearchResult::new(bookmark, rrf_score));
+            }
+        }
+
+        Ok(results)
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -313,23 +489,22 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     #[instrument(skip(self), level = "debug")]
     fn get_bookmarks_for_forced_backfill(&self) -> ApplicationResult<Vec<Bookmark>> {
         let all_bookmarks = self.repository.get_all()?;
-
-        // Filter to only embeddable bookmarks that don't have the _imported_ tag
         let filtered_bookmarks = all_bookmarks
             .into_iter()
-            .filter(|bookmark| {
-                bookmark.embeddable && !bookmark.tags.iter().any(|tag| tag.value() == "_imported_")
-            })
+            .filter(|bookmark| bookmark.embeddable)
             .collect();
-
         Ok(filtered_bookmarks)
     }
 
     #[instrument(skip(self), level = "debug")]
     fn get_bookmarks_without_embeddings(&self) -> ApplicationResult<Vec<Bookmark>> {
-        // Use the repository method to get only embeddable bookmarks without embeddings
+        let embedded_ids = self.vector_repository.get_embedded_ids()?;
+        // Use SQL-level filter for embeddable bookmarks, then exclude already-embedded
         let bookmarks = self.repository.get_embeddable_without_embeddings()?;
-        Ok(bookmarks)
+        Ok(bookmarks
+            .into_iter()
+            .filter(|b| b.id.map_or(true, |id| !embedded_ids.contains(&id)))
+            .collect())
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -375,11 +550,18 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 &import.title,
                 &import.content,
                 import.tags,
-                self.embedder.as_ref(),
             )?;
-            // todo: embeddings and code duplication
 
             self.repository.add(&mut bookmark)?;
+
+            // Generate embedding after bookmark has an ID
+            if bookmark.embeddable {
+                if let Some(id) = bookmark.id {
+                    let content = bookmark.get_content_for_embedding();
+                    self.upsert_embedding_for_bookmark(id, &content)?;
+                }
+            }
+
             processed_count += 1;
         }
 
@@ -409,22 +591,22 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 // Only update if force is true or the content has changed
                 if force || existing.content_hash.as_ref() != Some(&new_hash) {
                     eprintln!("Processing import: {}", import.url);
-                    // Generate embedding
-                    let embedding = self
-                        .embedder
-                        .embed(&content)?
-                        .map(|v| serialize_embedding(v).map_err(ApplicationError::from))
-                        .transpose()?;
 
                     // Create updated bookmark
                     let mut updated = existing.clone();
                     updated.title = import.title;
                     updated.description = String::new(); // Don't store content, only embeddings
-                    updated.embedding = embedding;
+                    updated.embedding = None;
                     updated.embeddable = true;
                     updated.content_hash = Some(new_hash);
 
                     self.repository.update(&updated)?;
+
+                    // Generate and store embedding in vector repository
+                    if let Some(id) = updated.id {
+                        self.upsert_embedding_for_bookmark(id, &content)?;
+                    }
+
                     processed_count += 1;
                 } else {
                     debug!("Skipping import: {} (content unchanged)", import.url);
@@ -434,12 +616,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 eprintln!("Processing import: {}", import.url);
                 let content = get_content_for_embedding(&import);
                 let content_hash = Some(calc_content_hash(&content));
-
-                let embedding = self
-                    .embedder
-                    .embed(&content)?
-                    .map(|v| serialize_embedding(v).map_err(ApplicationError::from))
-                    .transpose()?;
 
                 let tags = import.tags.clone();
                 let mut bookmark = BookmarkBuilder::default()
@@ -452,12 +628,18 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     .created_at(chrono::Utc::now())
                     .updated_at(chrono::Utc::now())
                     .embeddable(true)
-                    .embedding(embedding)
+                    .embedding(None::<Vec<u8>>)
                     .content_hash(content_hash)
                     .build()
                     .map_err(|e| ApplicationError::Domain(e.into()))?;
 
                 self.repository.add(&mut bookmark)?;
+
+                // Generate and store embedding after bookmark has an ID
+                if let Some(id) = bookmark.id {
+                    self.upsert_embedding_for_bookmark(id, &content)?;
+                }
+
                 processed_count += 1;
             }
         }
@@ -584,6 +766,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 if !dry_run {
                     if let Some(id) = bookmark.id {
                         self.repository.delete(id)?;
+                        // Best-effort: remove embedding from vector store
+                        let _ = self.vector_repository.delete_embedding(id);
                     }
                 }
                 deleted_count += 1;
@@ -696,17 +880,17 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         let content_hash = calc_content_hash(&file_data.content);
         bookmark.content_hash = Some(content_hash);
 
-        // Generate embedding if possible
-        if bookmark.embeddable {
-            let embedding_content = format!("{} {}", bookmark.title, bookmark.url);
-            bookmark.embedding = self
-                .embedder
-                .embed(&embedding_content)?
-                .map(|v| serialize_embedding(v).map_err(ApplicationError::from))
-                .transpose()?;
-        }
+        bookmark.embedding = None;
 
         self.repository.add(&mut bookmark)?;
+
+        // Generate and store embedding after bookmark has an ID
+        if bookmark.embeddable {
+            if let Some(id) = bookmark.id {
+                self.upsert_embedding_for_bookmark(id, &file_data.content)?;
+            }
+        }
+
         Ok(bookmark)
     }
 
@@ -770,17 +954,17 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         }
         updated.tags = new_tags;
 
-        // Regenerate embedding if embeddable
-        if updated.embeddable {
-            let embedding_content = format!("{} {}", updated.title, updated.url);
-            updated.embedding = self
-                .embedder
-                .embed(&embedding_content)?
-                .map(|v| serialize_embedding(v).map_err(ApplicationError::from))
-                .transpose()?;
-        }
+        updated.embedding = None;
 
         self.repository.update(&updated)?;
+
+        // Regenerate embedding in vector repository
+        if updated.embeddable {
+            if let Some(id) = updated.id {
+                self.upsert_embedding_for_bookmark(id, &file_data.content)?;
+            }
+        }
+
         Ok(updated)
     }
 
@@ -913,12 +1097,15 @@ mod tests {
 
     // Helper function to create a BookmarkServiceImpl with a test repository
     fn create_test_service() -> impl BookmarkService {
+        use crate::infrastructure::repositories::null_vector_repository::NullVectorRepository;
         let repository = setup_test_db();
         let arc_repository = Arc::new(repository);
         let embedder = Arc::new(DummyEmbedding);
+        let vector_repository = Arc::new(NullVectorRepository);
         BookmarkServiceImpl::new(
             arc_repository,
             embedder,
+            vector_repository,
             Arc::new(JsonImportRepository::new()),
         )
     }

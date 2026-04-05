@@ -12,6 +12,7 @@ pub mod completion;
 pub mod display;
 pub mod error;
 pub mod fzf;
+pub mod hsearch_handler;
 pub mod process;
 pub mod tag_commands;
 
@@ -28,6 +29,9 @@ pub fn execute_command_with_services(
             let handler =
                 command_handler::SearchCommandHandler::with_services(services, settings.clone());
             handler.execute(cli)
+        }
+        Some(Commands::HSearch { .. }) => {
+            hsearch_handler::hybrid_search(stderr, cli, &services)
         }
         Some(Commands::SemSearch { .. }) => {
             bookmark_commands::semantic_search(stderr, cli, &services)

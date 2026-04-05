@@ -14,12 +14,14 @@ use crate::config::Settings;
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::embedding::Embedder;
+use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
-use crate::infrastructure::embeddings::{DummyEmbedding, OpenAiEmbedding};
+use crate::infrastructure::embeddings::FastEmbedEmbedding;
 use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
+use crate::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
 use crossterm::style::Stylize;
 use std::path::Path;
 use std::sync::Arc;
@@ -29,6 +31,7 @@ pub struct ServiceContainer {
     // Core services
     pub bookmark_repository: Arc<SqliteBookmarkRepository>,
     pub embedder: Arc<dyn Embedder>,
+    pub vector_repository: Arc<dyn VectorRepository>,
     pub bookmark_service: Arc<dyn BookmarkService>,
     pub tag_service: Arc<dyn TagService>,
     pub action_service: Arc<dyn ActionService>,
@@ -41,10 +44,11 @@ pub struct ServiceContainer {
 
 impl ServiceContainer {
     /// Create all services with explicit dependency injection
-    pub fn new(config: &Settings, openai: bool) -> ApplicationResult<Self> {
+    pub fn new(config: &Settings) -> ApplicationResult<Self> {
         // Base infrastructure
         let bookmark_repository = Self::create_repository(&config.db_url)?;
-        let embedder = Self::create_embedder(openai)?;
+        let embedder = Self::create_embedder(config)?;
+        let vector_repository = Self::create_vector_repository(&config.db_url, &embedder)?;
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
         let interpolation_service = Self::create_interpolation_service();
         let template_service = Self::create_template_service();
@@ -53,6 +57,7 @@ impl ServiceContainer {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             bookmark_repository.clone(),
             embedder.clone(),
+            vector_repository.clone(),
             Arc::new(FileImportRepository::new()),
         ));
 
@@ -63,12 +68,14 @@ impl ServiceContainer {
             &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
             &embedder,
+            &vector_repository,
             config,
         )?;
 
         Ok(Self {
             bookmark_repository,
             embedder,
+            vector_repository,
             bookmark_service,
             tag_service,
             action_service,
@@ -105,12 +112,38 @@ impl ServiceContainer {
         Ok(Arc::new(repository))
     }
 
-    fn create_embedder(openai: bool) -> ApplicationResult<Arc<dyn Embedder>> {
-        if openai {
-            Ok(Arc::new(OpenAiEmbedding::default()))
-        } else {
-            Ok(Arc::new(DummyEmbedding))
-        }
+    fn create_embedder(config: &Settings) -> ApplicationResult<Arc<dyn Embedder>> {
+        let model_name = &config.embeddings.model;
+        let model = FastEmbedEmbedding::model_from_name(model_name).map_err(|e| {
+            crate::application::error::ApplicationError::Other(format!(
+                "Invalid embedding model '{}': {}",
+                model_name, e
+            ))
+        })?;
+        // FastEmbedEmbedding is lazy — the ONNX model is only loaded on
+        // first embed call, so this is fast and won't block startup.
+        let embedder = FastEmbedEmbedding::new(model);
+        Ok(Arc::new(embedder))
+    }
+
+    fn create_vector_repository(
+        db_url: &str,
+        embedder: &Arc<dyn Embedder>,
+    ) -> ApplicationResult<Arc<dyn VectorRepository>> {
+        let repo = SqliteVectorRepository::new(db_url).map_err(|e| {
+            crate::application::error::ApplicationError::Other(format!(
+                "Failed to create vector repository: {}",
+                e
+            ))
+        })?;
+        // Initialize the virtual table with the embedder's dimensions
+        repo.init_vec_table(embedder.dimensions()).map_err(|e| {
+            crate::application::error::ApplicationError::Other(format!(
+                "Failed to initialize vec_bookmarks table: {}",
+                e
+            ))
+        })?;
+        Ok(Arc::new(repo))
     }
 
     fn create_interpolation_service() -> Arc<dyn InterpolationService> {
@@ -128,6 +161,7 @@ impl ServiceContainer {
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
         embedder: &Arc<dyn Embedder>,
+        vector_repository: &Arc<dyn VectorRepository>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionService>> {
         let resolver = Self::create_action_resolver(
@@ -135,6 +169,7 @@ impl ServiceContainer {
             interpolation_service,
             clipboard_service,
             embedder,
+            vector_repository,
             config,
         )?;
         Ok(Arc::new(ActionServiceImpl::new(
@@ -148,6 +183,7 @@ impl ServiceContainer {
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
         embedder: &Arc<dyn Embedder>,
+        vector_repository: &Arc<dyn VectorRepository>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionResolver>> {
         // Create all actions with explicit dependencies
@@ -170,7 +206,7 @@ impl ServiceContainer {
         ));
 
         let markdown_action: Box<dyn BookmarkAction> = Box::new(
-            MarkdownAction::new_with_repository(repository.clone(), embedder.clone()),
+            MarkdownAction::new_with_repository(repository.clone(), vector_repository.clone(), embedder.clone()),
         );
 
         let env_action: Box<dyn BookmarkAction> =
@@ -196,6 +232,7 @@ impl std::fmt::Debug for ServiceContainer {
         f.debug_struct("ServiceContainer")
             .field("bookmark_repository", &"Arc<SqliteBookmarkRepository>")
             .field("embedder", &"Arc<dyn Embedder>")
+            .field("vector_repository", &"Arc<dyn VectorRepository>")
             .field("bookmark_service", &"Arc<dyn BookmarkService>")
             .field("tag_service", &"Arc<dyn TagService>")
             .field("action_service", &"Arc<dyn ActionService>")

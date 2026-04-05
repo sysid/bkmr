@@ -1,6 +1,5 @@
 pub(crate) mod dummy_provider;
-mod model;
-pub mod openai_provider;
+pub mod fastembed_provider;
 
 pub use dummy_provider::DummyEmbedding;
-pub use openai_provider::OpenAiEmbedding;
+pub use fastembed_provider::FastEmbedEmbedding;

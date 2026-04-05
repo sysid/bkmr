@@ -18,9 +18,6 @@ pub struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 
-    #[arg(long = "openai", help = "use OpenAI API to embed bookmarks")]
-    pub openai: bool,
-
     #[arg(long = "no-color", help = "Disable colored output")]
     pub no_color: bool,
 
@@ -131,8 +128,50 @@ pub enum Commands {
             help = "output selected bookmark content to stdout instead of executing (for shell wrapper integration)"
         )]
         stdout: bool,
+
+        #[arg(long = "embeddable", help = "filter to show only embeddable bookmarks")]
+        embeddable: bool,
     },
-    /// Semantic Search with OpenAI
+    /// Hybrid Search combining FTS and semantic search with RRF fusion
+    #[command(name = "hsearch")]
+    HSearch {
+        /// Search query text
+        query: String,
+
+        #[arg(short = 't', long = "tags", help = "all-of tag filter (comma-separated)")]
+        tags_all: Option<String>,
+
+        #[arg(short = 'T', long = "Tags", help = "exclude-all tag filter")]
+        tags_all_not: Option<String>,
+
+        #[arg(short = 'n', long = "ntags", help = "any-of tag filter")]
+        tags_any: Option<String>,
+
+        #[arg(short = 'N', long = "Ntags", help = "exclude-any tag filter")]
+        tags_any_not: Option<String>,
+
+        #[arg(short = 'e', long = "exact", help = "exact tag match")]
+        tags_exact: Option<String>,
+
+        #[arg(long = "mode", default_value = "hybrid", help = "search mode: hybrid or exact")]
+        mode: String,
+
+        #[arg(short = 'l', long = "limit", help = "limit number of results")]
+        limit: Option<i32>,
+
+        #[arg(long = "json", help = "output as JSON (includes rrf_score)")]
+        is_json: bool,
+
+        #[arg(long = "fzf", help = "use fzf for interactive selection")]
+        is_fuzzy: bool,
+
+        #[arg(long = "stdout", help = "output to stdout for piping")]
+        stdout: bool,
+
+        #[arg(long = "np", help = "no prompt")]
+        non_interactive: bool,
+    },
+    /// Semantic Search using local embeddings
     SemSearch {
         /// Input for similarity search (search terms)
         query: String,
@@ -263,8 +302,7 @@ pub enum Commands {
         #[arg(long = "disable", help = "Disable embedding for this bookmark")]
         disable: bool,
     },
-    /// Backfill embeddings for bookmarks, which have been added without embeddings.
-    /// E.g. when OpenAI API was not available.
+    /// Backfill embeddings for bookmarks that are marked embeddable but lack embeddings.
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,

@@ -27,7 +27,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
         name: None,
         config: None,
         debug: 0,
-        openai: false,
+
         no_color: false,
         generate_config: false,
         command: Some(Commands::Search {
@@ -53,6 +53,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
             interpolate: false,
             shell_stubs: false,
             stdout: false,
+            embeddable: false,
         }),
     };
 
@@ -94,7 +95,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
         name: None,
         config: None,
         debug: 0,
-        openai: false,
+
         no_color: false,
         generate_config: false,
         command: Some(Commands::Search {
@@ -120,6 +121,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
             interpolate: false,
             shell_stubs: false,
             stdout: false,
+            embeddable: false,
         }),
     };
 
@@ -186,7 +188,7 @@ fn test_search_command_structure_with_interpolate() {
         name: None,
         config: None,
         debug: 0,
-        openai: false,
+
         no_color: false,
         generate_config: false,
         command: Some(Commands::Search {
@@ -212,6 +214,7 @@ fn test_search_command_structure_with_interpolate() {
             interpolate: true, // Test with interpolation enabled
             shell_stubs: false,
             stdout: false,
+            embeddable: false,
         }),
     };
 

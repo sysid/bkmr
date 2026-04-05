@@ -21,7 +21,7 @@
 - Markdown documents with live rendering, incl. TOC
 - Plain text with Jinja template interpolation
 - Local files and directories integration
-- Semantic embeddings for AI-powered search
+- Semantic embeddings for local offline search (no API keys needed)
 
 **Centralize** your data in bkmr's database (`add`) or **keep it in your filesystem**
 (`import-files`) ([see](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)).
@@ -37,7 +37,7 @@ Example:
 - **Developer-focused**: Integrates seamlessly with your workflow and toolchain
 - **Multifunctional**: Handles many content types with context-aware actions
 - **Intelligent**: Full-text and semantic search capabilities
-- **Privacy-focused**: Local database, no cloud dependencies unless enabled
+- **Privacy-focused**: Fully local — database, embeddings, and search all run offline
 - **Fast**: 20x faster than similar Python tools
 
 ### NEW: Editor Integrations!
@@ -69,8 +69,8 @@ bkmr add "# Notes\n## Section 1" docs,_md_ --title "Project Notes"
 # Import files with frontmatter
 bkmr import-files ~/scripts/ --base-path SCRIPTS_HOME
 
-# AI-powered semantic search
-bkmr --openai sem-search "containerized application security"
+# Local semantic search (no API keys needed)
+bkmr sem-search "containerized application security"
 ```
 
 ### Screenshots
@@ -135,7 +135,8 @@ bkmr search --fzf
 | Command | Description |
 |---------|-------------|
 | `search` | Search across all content with full-text and tag filtering |
-| `sem-search` | AI-powered semantic search using OpenAI embeddings |
+| `hsearch` | Hybrid search combining FTS + semantic search with RRF fusion |
+| `sem-search` | Local semantic search using fastembed (offline, no API keys) |
 | `add` | Add new content (URLs, snippets, files, shell commands, etc.) |
 | `open` | Launch or interact with stored items (supports script arguments) |
 | `edit` | Smart editing: auto-detects file-imported bookmarks |
@@ -181,7 +182,7 @@ Comprehensive documentation is available in the **[bkmr Wiki](https://github.com
 - **[Configuration](https://github.com/sysid/bkmr/wiki/Configuration)** - Complete configuration reference
 - **[Template Interpolation](https://github.com/sysid/bkmr/wiki/Template-Interpolation)** - Jinja2 dynamic content
 - **[File Import and Editing](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)** - Frontmatter, base paths, smart editing
-- **[Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)** - OpenAI-powered AI search
+- **[Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)** - Local offline semantic search with fastembed
 - **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)** - LSP server and editor plugins
 - **[Advanced Workflows](https://github.com/sysid/bkmr/wiki/Advanced-Workflows)** - Power user techniques
 

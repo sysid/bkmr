@@ -3,6 +3,7 @@
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainError;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
+use crate::domain::search::RankedResult;
 use crate::domain::tag::Tag;
 use crate::infrastructure::repositories::sqlite::connection::PooledConnection;
 use crate::infrastructure::repositories::sqlite::error::{SqliteRepositoryError, SqliteResult};
@@ -84,4 +85,12 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
         &self,
         conn: &mut PooledConnection,
     ) -> Result<Vec<i32>, SqliteRepositoryError>;
+
+    /// FTS search returning results with rank positions preserved for RRF fusion.
+    /// If `filter_ids` is Some, only returns results whose IDs are in the set.
+    fn get_bookmarks_fts_ranked(
+        &self,
+        fts_query: &str,
+        filter_ids: Option<&HashSet<i32>>,
+    ) -> Result<Vec<RankedResult>, DomainError>;
 }

@@ -12,9 +12,11 @@ use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::embedding::Embedder;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
+use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
+use crate::infrastructure::repositories::null_vector_repository::NullVectorRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crate::lsp::backend::BkmrConfig;
 use crate::lsp::services::snippet_service::LspSnippetService;
@@ -30,6 +32,7 @@ pub struct TestServiceContainer {
     // Core services
     pub bookmark_repository: Arc<SqliteBookmarkRepository>,
     pub embedder: Arc<dyn Embedder>,
+    pub vector_repository: Arc<dyn VectorRepository>,
     pub bookmark_service: Arc<dyn BookmarkService>,
     pub tag_service: Arc<dyn TagService>,
     pub action_service: Arc<dyn ActionService>,
@@ -50,6 +53,7 @@ impl TestServiceContainer {
         // Create test database with proper migrations (shared test database)
         let bookmark_repository = Self::create_shared_test_db();
         let embedder = Self::create_test_embedder();
+        let vector_repository: Arc<dyn VectorRepository> = Arc::new(NullVectorRepository);
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
         let interpolation_service = Self::create_interpolation_service();
         let template_service = Self::create_template_service();
@@ -58,6 +62,7 @@ impl TestServiceContainer {
         let bookmark_service = Arc::new(BookmarkServiceImpl::new(
             bookmark_repository.clone(),
             embedder.clone(),
+            vector_repository.clone(),
             Arc::new(FileImportRepository::new()),
         ));
 
@@ -74,6 +79,7 @@ impl TestServiceContainer {
             _env_guard: env_guard,
             bookmark_repository,
             embedder,
+            vector_repository,
             bookmark_service,
             tag_service,
             action_service,
@@ -156,6 +162,7 @@ impl TestServiceContainer {
         let markdown_action: Box<dyn BookmarkAction> = Box::new(
             crate::application::actions::MarkdownAction::new_with_repository(
                 repository.clone(),
+                Arc::new(crate::infrastructure::repositories::null_vector_repository::NullVectorRepository),
                 embedder.clone(),
             ),
         );
@@ -228,6 +235,7 @@ impl std::fmt::Debug for TestServiceContainer {
         f.debug_struct("TestServiceContainer")
             .field("bookmark_repository", &"Arc<SqliteBookmarkRepository>")
             .field("embedder", &"Arc<dyn Embedder>")
+            .field("vector_repository", &"Arc<dyn VectorRepository>")
             .field("bookmark_service", &"Arc<dyn BookmarkService>")
             .field("tag_service", &"Arc<dyn TagService>")
             .field("action_service", &"Arc<dyn ActionService>")
