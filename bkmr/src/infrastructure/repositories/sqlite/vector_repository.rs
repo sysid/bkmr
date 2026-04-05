@@ -54,15 +54,17 @@ fn query_dimensions(conn: &Connection) -> DomainResult<Option<usize>> {
 impl SqliteVectorRepository {
     /// Open a rusqlite connection to the given database URL.
     /// The sqlite-vec extension must already be registered via register_sqlite_vec().
+    /// WAL journal mode is already set on the database file by init_pool's
+    /// bootstrap connection — no need to set it again here.
     pub fn new(db_url: &str) -> DomainResult<Self> {
         let conn = Connection::open(db_url).map_err(|e| {
             DomainError::RepositoryError(crate::domain::error::RepositoryError::Connection(
                 format!("Failed to open rusqlite connection for vector repo: {}", e),
             ))
         })?;
-        // WAL mode allows concurrent reads/writes from the Diesel pool and
-        // this rusqlite connection without blocking.
-        conn.execute_batch("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;")
+        // busy_timeout is per-connection — set it so this connection retries
+        // under contention instead of failing immediately.
+        conn.execute_batch("PRAGMA busy_timeout = 5000;")
             .map_err(|e| {
                 DomainError::RepositoryError(crate::domain::error::RepositoryError::Connection(
                     format!("Failed to configure vector repo connection: {}", e),

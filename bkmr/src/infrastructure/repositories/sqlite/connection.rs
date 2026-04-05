@@ -1,6 +1,7 @@
 use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::infrastructure::repositories::sqlite::migration::MIGRATIONS;
 use chrono::Local;
+use diesel::connection::SimpleConnection;
 use diesel::r2d2::{self, ConnectionManager};
 use diesel::sqlite::SqliteConnection;
 use diesel_migrations::MigrationHarness;
@@ -11,7 +12,27 @@ use tracing::{debug, info, instrument};
 pub type ConnectionPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
 pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<SqliteConnection>>;
 
-/// Initialize a connection pool
+/// Sets busy_timeout on every pool connection so concurrent access retries
+/// instead of failing immediately with SQLITE_BUSY.
+/// WAL mode is set once in init_pool before the pool is built — it's a
+/// file-level property that persists, so per-connection setting is unnecessary.
+#[derive(Debug)]
+struct SqliteBusyTimeoutCustomizer;
+
+impl r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for SqliteBusyTimeoutCustomizer {
+    fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
+        conn.batch_execute("PRAGMA busy_timeout = 5000;")
+            .map_err(diesel::r2d2::Error::QueryError)?;
+        Ok(())
+    }
+}
+
+/// Initialize a connection pool with consistent SQLite pragmas.
+///
+/// Strategy: WAL journal mode is set once via a bootstrap connection before
+/// pool creation. busy_timeout is set per-connection via on_acquire. This
+/// ensures all connections (diesel pool and rusqlite) use the same journal
+/// mode, eliminating mode-mismatch contention.
 pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
     debug!("Initializing connection pool for: {}", database_url);
 
@@ -22,10 +43,30 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
         }
     }
 
-    // Build the pool
+    // Set WAL mode once before any pool connections open. WAL is a file-level
+    // property that persists — all subsequent connections inherit it.
+    // This avoids the journal_mode=delete vs WAL mismatch between the diesel
+    // pool and the rusqlite connection in SqliteVectorRepository.
+    {
+        let bootstrap = rusqlite::Connection::open(database_url).map_err(|e| {
+            SqliteRepositoryError::ConnectionPoolError(format!(
+                "Failed to open bootstrap connection for WAL setup: {}", e
+            ))
+        })?;
+        bootstrap.execute_batch("PRAGMA journal_mode = WAL;").map_err(|e| {
+            SqliteRepositoryError::ConnectionPoolError(format!(
+                "Failed to set WAL journal mode: {}", e
+            ))
+        })?;
+        // bootstrap connection drops here — WAL mode persists on the file
+    }
+
+    // Build the pool. Pool size 4 is sufficient for a CLI tool.
+    // on_acquire sets busy_timeout=5000 on each connection.
     let manager = ConnectionManager::<SqliteConnection>::new(database_url);
     let pool = r2d2::Pool::builder()
-        .max_size(15)
+        .max_size(4)
+        .connection_customizer(Box::new(SqliteBusyTimeoutCustomizer))
         .build(manager)
         .map_err(|e| SqliteRepositoryError::ConnectionPoolError(e.to_string()))?;
 
