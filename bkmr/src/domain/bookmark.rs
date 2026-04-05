@@ -189,6 +189,8 @@ impl Bookmark {
             &self.url // environment variables
         } else if self.is_system_tag(SystemTag::Text) {
             &self.url // imported text content
+        } else if self.is_system_tag(SystemTag::Memory) {
+            &self.url // agent memory content
         } else {
             // URI bookmarks and unknown types: url is a link, description has the content
             &self.description
@@ -300,6 +302,13 @@ impl Bookmark {
         self.tags
             .iter()
             .any(|tag| tag.is_system_tag_of(SystemTag::Env))
+    }
+
+    /// Check if this bookmark is an agent memory
+    pub fn is_memory(&self) -> bool {
+        self.tags
+            .iter()
+            .any(|tag| tag.is_system_tag_of(SystemTag::Memory))
     }
 
     /// Get the appropriate content based on bookmark type
@@ -604,6 +613,35 @@ mod tests {
             !content.contains("rust-lang.org"),
             "should NOT embed URL"
         );
+    }
+
+    #[test]
+    fn given_memory_bookmark_when_get_embedding_content_then_uses_url_as_content() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("project").unwrap());
+        tags.insert(Tag::new("_mem_").unwrap());
+
+        let bookmark = Bookmark::new(
+            "The auth service uses JWT tokens with 24h expiry", // url = memory content
+            "Auth Token Policy",                                 // title
+            "",                                                  // description empty
+            tags,
+        )
+        .unwrap();
+
+        assert!(bookmark.is_memory());
+        let content = bookmark.get_content_for_embedding();
+        assert!(
+            content.contains("JWT tokens"),
+            "should embed url (the memory content)"
+        );
+        assert!(
+            content.contains("Auth Token Policy"),
+            "should embed title"
+        );
+        assert!(content.contains("project"), "should embed visible tags");
+        assert!(!content.contains("_mem_"), "should NOT embed system tags");
     }
 
     #[test]

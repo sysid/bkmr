@@ -158,6 +158,7 @@ bkmr intelligently handles different content types with appropriate actions:
 | Environment Variables | Print for sourcing in shell           | `_env_`      |
 | Markdown              | Render in browser with TOC            | `_md_`       |
 | Text Documents        | Copy to clipboard                     | `_imported_` |
+| Agent Memory          | Display content (stdout)               | `_mem_`      |
 | Local Files           | Open with default application         | (none)       |
 
 Learn more: **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)** | **[Core Concepts](https://github.com/sysid/bkmr/wiki/Core-Concepts)**

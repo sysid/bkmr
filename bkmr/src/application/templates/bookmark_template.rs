@@ -136,6 +136,21 @@ impl BookmarkTemplate {
 
                 return template;
             }
+            SystemTag::Memory => {
+                builder
+                    .url("Enter memory content here")
+                    .title("Memory Title")
+                    .comments("")
+                    .embeddable(true);
+
+                let mut template = builder.build().unwrap();
+
+                if let Ok(tag) = Tag::new(SystemTag::Memory.as_str()) {
+                    template.tags.insert(tag);
+                }
+
+                return template;
+            }
             SystemTag::Uri => {
                 builder
                     .url("https://")

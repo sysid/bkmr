@@ -171,6 +171,9 @@ impl TestServiceContainer {
             crate::application::actions::EnvAction::new(interpolation_service.clone()),
         );
 
+        let memory_action: Box<dyn BookmarkAction> =
+            Box::new(crate::application::actions::MemoryAction::new());
+
         let default_action: Box<dyn BookmarkAction> = Box::new(
             crate::application::actions::DefaultAction::new(interpolation_service.clone()),
         );
@@ -182,6 +185,7 @@ impl TestServiceContainer {
             shell_action,
             markdown_action,
             env_action,
+            memory_action,
             default_action,
         ))
     }

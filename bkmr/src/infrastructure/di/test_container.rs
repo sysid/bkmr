@@ -1,5 +1,6 @@
 use crate::application::actions::{
-    DefaultAction, EnvAction, MarkdownAction, ShellAction, SnippetAction, TextAction, UriAction,
+    DefaultAction, EnvAction, MarkdownAction, MemoryAction, ShellAction, SnippetAction, TextAction,
+    UriAction,
 };
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
 use crate::application::services::bookmark_service::BookmarkService;
@@ -132,6 +133,8 @@ impl TestServiceContainer {
         let env_action: Box<dyn BookmarkAction> =
             Box::new(EnvAction::new(interpolation_service.clone()));
 
+        let memory_action: Box<dyn BookmarkAction> = Box::new(MemoryAction::new());
+
         let default_action: Box<dyn BookmarkAction> =
             Box::new(DefaultAction::new(interpolation_service.clone()));
 
@@ -142,6 +145,7 @@ impl TestServiceContainer {
             shell_action,
             markdown_action,
             env_action,
+            memory_action,
             default_action,
         ))
     }

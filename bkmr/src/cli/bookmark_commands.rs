@@ -286,6 +286,7 @@ fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
             | SystemTag::Text
             | SystemTag::Shell
             | SystemTag::Env
+            | SystemTag::Memory
     ) {
         content.replace("\\n", "\n")
     } else {
@@ -319,6 +320,7 @@ pub fn add(
             "shell" => SystemTag::Shell,
             "md" | "markdown" => SystemTag::Markdown,
             "env" => SystemTag::Env,
+            "mem" | "memory" => SystemTag::Memory,
             _ => SystemTag::Uri, // Default to Uri for anything else
         };
 

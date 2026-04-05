@@ -861,6 +861,7 @@ fn sync_file_to_bookmark(
             "_md_" => Some(SystemTag::Markdown),
             "_env_" => Some(SystemTag::Env),
             "_imported_" => Some(SystemTag::Text),
+            "_mem_" => Some(SystemTag::Memory),
             _ => None,
         };
 

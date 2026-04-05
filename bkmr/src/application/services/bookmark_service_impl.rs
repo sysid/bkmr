@@ -818,6 +818,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             "_shell_" => SystemTag::Shell,
             "_md_" => SystemTag::Markdown,
             "_env_" => SystemTag::Env,
+            "_mem_" => SystemTag::Memory,
             _ => SystemTag::Shell, // Default for unknown types
         };
 

@@ -10,6 +10,7 @@ pub enum SystemTag {
     Shell,
     Markdown,
     Env,
+    Memory,
 }
 
 impl SystemTag {
@@ -21,6 +22,7 @@ impl SystemTag {
             Self::Shell => "_shell_",
             Self::Markdown => "_md_",
             Self::Env => "_env_",
+            Self::Memory => "_mem_",
         }
     }
 
@@ -31,7 +33,7 @@ impl SystemTag {
     pub fn is_known_system_tag(tag_str: &str) -> bool {
         matches!(
             tag_str,
-            "_snip_" | "_imported_" | "_shell_" | "_md_" | "_env_"
+            "_snip_" | "_imported_" | "_shell_" | "_md_" | "_env_" | "_mem_"
         )
     }
 }
