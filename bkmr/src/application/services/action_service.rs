@@ -76,7 +76,6 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
     ) -> DomainResult<()> {
         use crate::application::actions::shell_action::ShellAction;
         use crate::domain::action::BookmarkAction;
-        use crate::domain::system_tag::SystemTag;
         use crate::infrastructure::interpolation::minijinja_engine::{
             MiniJinjaEngine, SafeShellExecutor,
         };
@@ -88,8 +87,8 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
             self.record_bookmark_access(id)?;
         }
 
-        // Check if this is a shell bookmark and no_edit is requested
-        if no_edit && bookmark.tags.contains(&SystemTag::Shell.to_tag()?) {
+        // Use the resolver for consistent action dispatch, then apply --no-edit override
+        if no_edit && bookmark.is_shell() {
             debug!("Executing shell action with no-edit mode");
 
             // Create a direct (non-interactive) shell action with script arguments
@@ -103,10 +102,10 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
             return shell_action.execute(bookmark);
         }
 
-        // Otherwise, use the normal action resolver
+        // Use the normal action resolver
         let action = self.resolver.resolve_action(bookmark);
         debug!("Executing action: {}", action.description());
-        action.execute(bookmark) // todo: check interpolation
+        action.execute(bookmark)
     }
 
     fn get_default_action_description(&self, bookmark: &Bookmark) -> &'static str {

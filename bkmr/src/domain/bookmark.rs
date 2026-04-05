@@ -82,6 +82,7 @@ impl Bookmark {
             accessed_at: None,
         };
 
+        Self::validate_single_system_tag(&bookmark.tags)?;
         Ok(bookmark)
     }
 
@@ -131,9 +132,28 @@ impl Bookmark {
         self.embeddable = embeddable;
         self.updated_at = Utc::now();
     }
+    /// Validate that at most one known system tag is present in a tag set.
+    fn validate_single_system_tag(tags: &HashSet<Tag>) -> DomainResult<()> {
+        let system_tags: Vec<_> = tags.iter().filter(|t| t.is_known_system_tag()).collect();
+        if system_tags.len() > 1 {
+            let names: Vec<_> = system_tags.iter().map(|t| t.value().to_string()).collect();
+            return Err(DomainError::TagOperationFailed(format!(
+                "Bookmark may have at most one system tag, found: {}",
+                names.join(", ")
+            )));
+        }
+        Ok(())
+    }
+
     /// Add a tag to the bookmark
     pub fn add_tag(&mut self, tag: Tag) -> DomainResult<()> {
-        self.tags.insert(tag);
+        let was_new = self.tags.insert(tag.clone());
+        if was_new {
+            if let Err(e) = Self::validate_single_system_tag(&self.tags) {
+                self.tags.remove(&tag);
+                return Err(e);
+            }
+        }
         self.updated_at = Utc::now();
         Ok(())
     }
@@ -153,6 +173,7 @@ impl Bookmark {
 
     /// Set all tags at once (replacing existing tags)
     pub fn set_tags(&mut self, tags: HashSet<Tag>) -> DomainResult<()> {
+        Self::validate_single_system_tag(&tags)?;
         self.tags = tags;
         self.updated_at = Utc::now();
         Ok(())
@@ -893,5 +914,87 @@ mod tests {
         // Test get_action_content
         assert_eq!(bookmark_uri.get_action_content(), "https://example.com");
         assert_eq!(bookmark_snippet.get_action_content(), snippet_content);
+    }
+
+    #[test]
+    fn given_multiple_known_system_tags_when_new_then_returns_error() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_snip_").unwrap());
+        tags.insert(Tag::new("_shell_").unwrap());
+
+        let result = Bookmark::new("content", "title", "desc", tags);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("at most one system tag"), "got: {err}");
+    }
+
+    #[test]
+    fn given_bookmark_with_system_tag_when_add_second_system_tag_then_returns_error() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_snip_").unwrap());
+
+        let mut bookmark = Bookmark::new("content", "title", "desc", tags).unwrap();
+        let result = bookmark.add_system_tag(SystemTag::Shell);
+        assert!(result.is_err());
+        // Original tag should be preserved
+        assert!(bookmark.is_snippet());
+        assert!(!bookmark.is_shell());
+    }
+
+    #[test]
+    fn given_multiple_known_system_tags_when_set_tags_then_returns_error() {
+        let _ = init_test_env();
+        let mut bookmark = Bookmark::new("content", "title", "desc", HashSet::new()).unwrap();
+
+        let mut new_tags = HashSet::new();
+        new_tags.insert(Tag::new("_md_").unwrap());
+        new_tags.insert(Tag::new("_env_").unwrap());
+
+        let result = bookmark.set_tags(new_tags);
+        assert!(result.is_err());
+        // Original tags should be preserved
+        assert!(bookmark.tags.is_empty());
+    }
+
+    #[test]
+    fn given_bookmark_with_system_tag_when_add_same_tag_then_ok() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_snip_").unwrap());
+
+        let mut bookmark = Bookmark::new("content", "title", "desc", tags).unwrap();
+        // Adding the same system tag again is idempotent (HashSet)
+        let result = bookmark.add_tag(Tag::new("_snip_").unwrap());
+        assert!(result.is_ok());
+        assert!(bookmark.is_snippet());
+    }
+
+    #[test]
+    fn given_single_system_tag_when_set_tags_then_ok() {
+        let _ = init_test_env();
+        let mut bookmark = Bookmark::new("content", "title", "desc", HashSet::new()).unwrap();
+
+        let mut new_tags = HashSet::new();
+        new_tags.insert(Tag::new("_shell_").unwrap());
+        new_tags.insert(Tag::new("regular").unwrap());
+
+        let result = bookmark.set_tags(new_tags);
+        assert!(result.is_ok());
+        assert!(bookmark.is_shell());
+    }
+
+    #[test]
+    fn given_unknown_system_tags_when_new_then_allows_multiple() {
+        let _ = init_test_env();
+        // Unknown system tags (matching _xxx_ pattern but not in known list)
+        // should not trigger the validation
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_custom1_").unwrap());
+        tags.insert(Tag::new("_custom2_").unwrap());
+
+        let result = Bookmark::new("content", "title", "desc", tags);
+        assert!(result.is_ok());
     }
 }
