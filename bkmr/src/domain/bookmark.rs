@@ -176,10 +176,24 @@ impl Bookmark {
         Tag::format_tags(&self.tags)
     }
 
-    /// Get the content for embedding generation
-    /// url is too noisy, so we don't include it
+    /// Get content for embedding generation, dispatched by bookmark type.
+    /// Each type explicitly declares which field holds its embeddable content.
     pub fn get_content_for_embedding(&self) -> String {
-        build_embedding_content(&self.tags, &self.title, &self.description)
+        let content = if self.is_snippet() {
+            &self.url // code snippet
+        } else if self.is_system_tag(SystemTag::Shell) {
+            &self.url // shell script
+        } else if self.is_system_tag(SystemTag::Markdown) {
+            &self.url // markdown document
+        } else if self.is_system_tag(SystemTag::Env) {
+            &self.url // environment variables
+        } else if self.is_system_tag(SystemTag::Text) {
+            &self.url // imported text content
+        } else {
+            // URI bookmarks and unknown types: url is a link, description has the content
+            &self.description
+        };
+        build_embedding_content(&self.tags, &self.title, content)
     }
 
     /// Check if the bookmark matches all given tags
@@ -510,6 +524,86 @@ mod tests {
         assert!(!content.contains("_system"));
         assert!(content.contains("Example Site"));
         assert!(content.contains("An example website"));
+    }
+
+    #[test]
+    fn given_snippet_when_get_embedding_content_then_uses_url_as_content() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("sql").unwrap());
+        tags.insert(Tag::new("_snip_").unwrap());
+
+        let bookmark = Bookmark::new(
+            "SELECT * FROM users WHERE active = true", // url = the snippet code
+            "User Query",                               // title
+            "Finds active users",                       // description (should NOT be embedded)
+            tags,
+        )
+        .unwrap();
+
+        let content = bookmark.get_content_for_embedding();
+        assert!(
+            content.contains("SELECT * FROM users"),
+            "should embed url (the snippet code)"
+        );
+        assert!(
+            !content.contains("Finds active users"),
+            "should NOT embed description"
+        );
+        assert!(content.contains("User Query"), "should embed title");
+        assert!(content.contains("sql"), "should embed visible tags");
+        assert!(!content.contains("_snip_"), "should NOT embed system tags");
+    }
+
+    #[test]
+    fn given_shell_bookmark_when_get_embedding_content_then_uses_url_as_content() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("utils").unwrap());
+        tags.insert(Tag::new("_shell_").unwrap());
+
+        let bookmark = Bookmark::new(
+            "#!/bin/bash\necho 'hello'", // url = the shell script
+            "Greeting Script",            // title
+            "",                           // description empty (typical for shell)
+            tags,
+        )
+        .unwrap();
+
+        let content = bookmark.get_content_for_embedding();
+        assert!(
+            content.contains("#!/bin/bash"),
+            "should embed url (the shell script)"
+        );
+        assert!(
+            content.contains("Greeting Script"),
+            "should embed title"
+        );
+    }
+
+    #[test]
+    fn given_uri_bookmark_when_get_embedding_content_then_uses_description() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("rust").unwrap());
+
+        let bookmark = Bookmark::new(
+            "https://www.rust-lang.org", // url = a link (should NOT be embedded)
+            "Rust Language",              // title
+            "A systems programming language", // description (should be embedded)
+            tags,
+        )
+        .unwrap();
+
+        let content = bookmark.get_content_for_embedding();
+        assert!(
+            content.contains("systems programming"),
+            "should embed description"
+        );
+        assert!(
+            !content.contains("rust-lang.org"),
+            "should NOT embed URL"
+        );
     }
 
     #[test]

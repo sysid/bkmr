@@ -876,9 +876,9 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         bookmark.file_mtime = Some(file_data.file_mtime as i32);
         bookmark.file_hash = Some(file_data.file_hash.clone());
 
-        // Calculate content hash for the bookmark content
-        let content_hash = calc_content_hash(&file_data.content);
-        bookmark.content_hash = Some(content_hash);
+        // Calculate content hash from the same string that gets embedded
+        let embedding_content = bookmark.get_content_for_embedding();
+        bookmark.content_hash = Some(calc_content_hash(&embedding_content));
 
         bookmark.embedding = None;
 
@@ -887,7 +887,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         // Generate and store embedding after bookmark has an ID
         if bookmark.embeddable {
             if let Some(id) = bookmark.id {
-                self.upsert_embedding_for_bookmark(id, &file_data.content)?;
+                self.upsert_embedding_for_bookmark(id, &embedding_content)?;
             }
         }
 
@@ -940,10 +940,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         updated.file_mtime = Some(file_data.file_mtime as i32);
         updated.file_hash = Some(file_data.file_hash.clone());
 
-        // Update content hash
-        let content_hash = calc_content_hash(&file_data.content);
-        updated.content_hash = Some(content_hash);
-
         // Update tags (merge with existing, keeping system tags)
         let mut new_tags = file_data.tags.clone();
         // Preserve system tags from existing bookmark
@@ -954,6 +950,10 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         }
         updated.tags = new_tags;
 
+        // Calculate content hash from the same string that gets embedded (after tags are set)
+        let embedding_content = updated.get_content_for_embedding();
+        updated.content_hash = Some(calc_content_hash(&embedding_content));
+
         updated.embedding = None;
 
         self.repository.update(&updated)?;
@@ -961,7 +961,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         // Regenerate embedding in vector repository
         if updated.embeddable {
             if let Some(id) = updated.id {
-                self.upsert_embedding_for_bookmark(id, &file_data.content)?;
+                self.upsert_embedding_for_bookmark(id, &embedding_content)?;
             }
         }
 

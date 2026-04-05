@@ -105,8 +105,9 @@ impl MarkdownAction {
         self.embedder.dimensions() > 0
     }
 
-    /// Update bookmark with embedding if repository is available and conditions are met
-    fn update_embedding(&self, bookmark: &Bookmark, content: &str) -> DomainResult<()> {
+    /// Update bookmark with embedding if repository is available and conditions are met.
+    /// Uses bookmark.get_content_for_embedding() for consistent type-aware content.
+    fn update_embedding(&self, bookmark: &Bookmark) -> DomainResult<()> {
         // Check if embedding is allowed
         if !self.can_update_embedding(bookmark) {
             debug!("Embedding update skipped: not allowed or not possible");
@@ -121,15 +122,16 @@ impl MarkdownAction {
                 .get_by_id(id)?
                 .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
 
-            // Calculate content hash for the current content
-            let content_hash = calc_content_hash(content);
+            // Use type-aware content for embedding (consistent with backfill)
+            let content = updated_bookmark.get_content_for_embedding();
+            let content_hash = calc_content_hash(&content);
 
             // Only update if content has changed
             if updated_bookmark.content_hash.as_ref() != Some(&content_hash) {
                 debug!("Content changed, updating embedding for bookmark ID {}", id);
 
                 // Generate embedding and store in VectorRepository
-                if let Some(embedding) = self.embedder.embed_document(content)? {
+                if let Some(embedding) = self.embedder.embed_document(&content)? {
                     if let Some(vec_repo) = &self.vector_repository {
                         vec_repo.upsert_embedding(id, &embedding)?;
                     }
@@ -498,7 +500,7 @@ impl BookmarkAction for MarkdownAction {
         let rendered_markdown = markdown_content.clone();
 
         // Update embedding if possible
-        if let Err(e) = self.update_embedding(bookmark, &markdown_content) {
+        if let Err(e) = self.update_embedding(bookmark) {
             error!("Failed to update embedding: {}", e);
             // Continue with rendering - don't fail the whole operation if embedding fails
         }
