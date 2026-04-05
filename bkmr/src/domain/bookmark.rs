@@ -7,6 +7,18 @@ use derive_builder::Builder;
 use std::collections::HashSet;
 use std::fmt;
 
+/// Build the text content used for embedding generation.
+/// Filters out system tags and constructs: `"{tags}{title} -- {content}{tags}"`
+pub fn build_embedding_content(tags: &HashSet<Tag>, title: &str, content: &str) -> String {
+    let visible_tags: HashSet<_> = tags
+        .iter()
+        .filter(|tag| !tag.value().starts_with('_') && !tag.value().ends_with('_'))
+        .cloned()
+        .collect();
+    let tags_str = Tag::format_tags(&visible_tags);
+    format!("{}{} -- {}{}", tags_str, title, content, tags_str)
+}
+
 /// Represents a bookmark domain entity
 #[derive(Builder, Clone, PartialEq)]
 #[builder(setter(into))]
@@ -167,25 +179,7 @@ impl Bookmark {
     /// Get the content for embedding generation
     /// url is too noisy, so we don't include it
     pub fn get_content_for_embedding(&self) -> String {
-        let visible_tags = self.get_visible_tags();
-
-        let tags_str = Tag::format_tags(&visible_tags);
-        // let normalized_url = self.url.replace('\n', " ").replace('\r', "");
-        format!(
-            "{}{} -- {}{}",
-            tags_str, self.title, self.description, tags_str
-        )
-    }
-
-    fn get_visible_tags(&self) -> HashSet<Tag> {
-        // Filter out system tags (starting or ending with underscore)
-        let visible_tags: HashSet<_> = self
-            .tags
-            .iter()
-            .filter(|tag| !tag.value().starts_with('_') && !tag.value().ends_with('_'))
-            .cloned()
-            .collect();
-        visible_tags
+        build_embedding_content(&self.tags, &self.title, &self.description)
     }
 
     /// Check if the bookmark matches all given tags

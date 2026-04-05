@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::bookmark_service::BookmarkService;
-use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
+use crate::domain::bookmark::{build_embedding_content, Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
 use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::repositories::import_repository::{
@@ -1071,20 +1071,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(false)
     }
 }
-// Helper method
 fn get_content_for_embedding(import: &BookmarkImportData) -> String {
-    let visible_tags: HashSet<_> = import
-        .tags
-        .iter()
-        .filter(|tag| !tag.value().starts_with('_') && !tag.value().ends_with('_'))
-        .cloned()
-        .collect();
-
-    let tags_str = Tag::format_tags(&visible_tags);
-    format!(
-        "{}{} -- {}{}",
-        tags_str, import.title, import.content, tags_str
-    )
+    build_embedding_content(&import.tags, &import.title, &import.content)
 }
 
 #[cfg(test)]
