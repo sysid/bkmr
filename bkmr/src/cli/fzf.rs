@@ -264,7 +264,7 @@ fn create_bookmark_preview_text(bookmark: &Bookmark, action_description: &str) -
         ));
     }
 
-    format!("\x1b[1mBookmark Details:\x1b[0m\n{}", preview_text)
+    format!("{}\n{}", "Bookmark Details:".bold(), preview_text)
 }
 
 /// Create enhanced preview text with ANSI colors

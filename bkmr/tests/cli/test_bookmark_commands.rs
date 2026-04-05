@@ -2,7 +2,6 @@ use bkmr::cli::args::{Cli, Commands};
 use bkmr::domain::tag::Tag;
 use bkmr::util::argument_processor::ArgumentProcessor;
 use bkmr::util::testing::{init_test_env, EnvGuard};
-use termcolor::{ColorChoice, StandardStream};
 
 // fn create_mock_service() -> impl BookmarkService {
 //     // Create a real repository but in a test environment
@@ -58,7 +57,6 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
     };
 
     // Use a null output stream for testing
-    let _ = StandardStream::stderr(ColorChoice::Never);
 
     // We'll mock the service function calls by patching it with a function that records calls
     // For simplicity in this example, we'll just verify the core functions work as expected
@@ -126,7 +124,6 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
     };
 
     // Use a null output stream for testing
-    let _ = StandardStream::stderr(ColorChoice::Never);
 
     // todo: complete the test
     // Act

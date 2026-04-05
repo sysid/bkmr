@@ -3,7 +3,6 @@ use crate::cli::args::{Cli, Commands};
 use crate::cli::error::CliResult;
 use crate::config::Settings;
 use crate::infrastructure::di::ServiceContainer;
-use termcolor::StandardStream;
 
 pub mod args;
 pub mod bookmark_commands;
@@ -19,7 +18,6 @@ pub mod tag_commands;
 // Old execute_command removed - use execute_command_with_services with dependency injection
 
 pub fn execute_command_with_services(
-    stderr: StandardStream,
     cli: Cli,
     services: ServiceContainer,
     settings: &Settings,
@@ -31,10 +29,10 @@ pub fn execute_command_with_services(
             handler.execute(cli)
         }
         Some(Commands::HSearch { .. }) => {
-            hsearch_handler::hybrid_search(stderr, cli, &services)
+            hsearch_handler::hybrid_search(cli, &services)
         }
         Some(Commands::SemSearch { .. }) => {
-            bookmark_commands::semantic_search(stderr, cli, &services)
+            bookmark_commands::semantic_search(cli, &services)
         }
         Some(Commands::Open { .. }) => bookmark_commands::open(
             cli,

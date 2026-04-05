@@ -2,7 +2,6 @@
 use std::io::Write;
 
 use crossterm::style::Stylize;
-use termcolor::StandardStream;
 
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
@@ -29,10 +28,10 @@ fn parse_tags(s: &str) -> Option<std::collections::HashSet<Tag>> {
 }
 
 pub fn hybrid_search(
-    mut stderr: StandardStream,
     cli: Cli,
     services: &ServiceContainer,
 ) -> CliResult<()> {
+    let mut stderr = std::io::stderr();
     if let Commands::HSearch {
         query,
         tags_all,

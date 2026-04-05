@@ -34,7 +34,6 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
-use termcolor::StandardStream;
 use tracing::{instrument, warn};
 
 // Helper function to get and validate IDs
@@ -54,12 +53,12 @@ pub fn format_action_description(base_description: &str, opener: Option<&String>
     }
 }
 
-#[instrument(skip(stderr, cli, services))]
+#[instrument(skip(cli, services))]
 pub fn semantic_search(
-    mut stderr: StandardStream,
     cli: Cli,
     services: &ServiceContainer,
 ) -> CliResult<()> {
+    let mut stderr = std::io::stderr();
     if let Commands::SemSearch {
         query,
         limit,

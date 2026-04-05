@@ -553,7 +553,6 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
 
     // Get version from Cargo.toml
     let version = env!("CARGO_PKG_VERSION");
-    eprintln!("Starting bkmr LSP server v{}", version);
     info!("Starting bkmr LSP server v{}", version);
 
     // Create configuration
@@ -563,13 +562,11 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
         enable_interpolation: !no_interpolation,
     };
 
-    eprintln!("Configuration: {:?}", config);
     info!("Configuration: {:?}", config);
 
     // Validate environment before starting
     if let Err(e) = validate_environment().await {
         error!("Environment validation failed: {}", e);
-        eprintln!("Environment validation failed: {}", e);
         std::process::exit(1);
     }
 
@@ -610,7 +607,6 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
         }
     });
 
-    eprintln!("LSP service created, starting server on stdin/stdout");
     info!("LSP service created, starting server on stdin/stdout");
 
     // Create server with stdin/stdout
@@ -618,7 +614,6 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
     let stdout = tokio::io::stdout();
 
     // Start the server
-    eprintln!("Starting LSP server loop");
     info!("Starting LSP server loop");
     Server::new(stdin, stdout, socket).serve(service).await;
 

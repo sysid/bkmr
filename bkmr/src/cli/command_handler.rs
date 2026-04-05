@@ -12,8 +12,6 @@ use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::create_shell_function_name;
 use crossterm::style::Stylize;
 use itertools::Itertools;
-use std::io::Write;
-use termcolor::{Color, ColorSpec, StandardStream, WriteColor};
 use tracing::{instrument, warn};
 
 /// Determine sort criteria from CLI flags.
@@ -179,7 +177,6 @@ impl SearchCommandHandler {
         fields: &[DisplayField],
         non_interactive: bool,
         stdout: bool,
-        stderr: &mut StandardStream,
     ) -> CliResult<()> {
         match (is_fuzzy, is_json) {
             (true, _) => {
@@ -191,17 +188,16 @@ impl SearchCommandHandler {
                 write_bookmarks_as_json(&json_views)?;
             }
             _ => {
-                self.display_search_results(stderr, bookmarks, fields, non_interactive)?;
+                self.display_search_results(bookmarks, fields, non_interactive)?;
             }
         }
         Ok(())
     }
 
     /// Display search results in normal mode
-    #[instrument(skip(self, stderr, bookmarks, fields), level = "debug")]
+    #[instrument(skip(self, bookmarks, fields), level = "debug")]
     fn display_search_results(
         &self,
-        stderr: &mut StandardStream,
         bookmarks: &[Bookmark],
         fields: &[DisplayField],
         non_interactive: bool,
@@ -209,12 +205,11 @@ impl SearchCommandHandler {
         // If there's exactly one result and we're in interactive mode, execute the default action directly
         if bookmarks.len() == 1 && !non_interactive {
             let bookmark = &bookmarks[0];
-            writeln!(
-                stderr,
+            eprintln!(
                 "Found 1 bookmark: {} (ID: {}). Executing default action...",
                 bookmark.title.clone().green(),
                 bookmark.id.unwrap_or(0)
-            )?;
+            );
 
             return execute_bookmark_default_action(bookmark, self.services.action_service.clone());
         }
@@ -236,13 +231,8 @@ impl SearchCommandHandler {
             println!("{}", ids);
         } else {
             use crate::cli::process::process;
-            use crate::domain::error_context::CliErrorContext;
 
-            stderr
-                .set_color(ColorSpec::new().set_fg(Some(Color::Green)))
-                .cli_context("Failed to set color")?;
-            writeln!(stderr, "Selection: ").cli_context("Failed to write to stderr")?;
-            stderr.reset().cli_context("Failed to reset color")?;
+            eprintln!("{}", "Selection: ".green());
 
             process(bookmarks, &self.services, &self.settings)?;
         }
@@ -326,7 +316,6 @@ impl SearchCommandHandler {
             }
 
             // Handle output mode
-            let mut stderr = termcolor::StandardStream::stderr(termcolor::ColorChoice::Auto);
             self.handle_output_mode(
                 &bookmarks,
                 is_fuzzy,
@@ -335,7 +324,6 @@ impl SearchCommandHandler {
                 &fields,
                 non_interactive,
                 stdout,
-                &mut stderr,
             )?;
         }
         Ok(())

@@ -10,7 +10,6 @@ use clap::Parser;
 use crossterm::style::Stylize;
 use std::fs;
 use std::path::Path;
-use termcolor::{ColorChoice, StandardStream};
 use tracing::{debug, info, instrument};
 use tracing_subscriber::{
     filter::{filter_fn, LevelFilter},
@@ -23,8 +22,6 @@ fn main() {
     // Register sqlite-vec before any database connections
     bkmr::infrastructure::repositories::sqlite::register_sqlite_vec();
 
-    // use stderr as human output in order to make stdout output passable to downstream processes
-    let stderr = StandardStream::stderr(ColorChoice::Always);
     let cli = Cli::parse();
 
     // Determine if colors should be disabled
@@ -59,7 +56,7 @@ fn main() {
     };
 
     // Execute CLI command with services
-    if let Err(e) = execute_command_with_services(stderr, cli, service_container, settings) {
+    if let Err(e) = execute_command_with_services(cli, service_container, settings) {
         eprintln!("{}", format!("Error: {}", e).red());
         std::process::exit(exitcode::USAGE);
     }
@@ -214,12 +211,11 @@ fn handle_completion_command(shell: String) -> Result<(), Box<dyn std::error::Er
 }
 
 fn execute_command_with_services(
-    stderr: StandardStream,
     cli: Cli,
     services: ServiceContainer,
     settings: Settings,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    bkmr::cli::execute_command_with_services(stderr, cli, services, &settings)
+    bkmr::cli::execute_command_with_services(cli, services, &settings)
         .map_err(|e| format!("Command execution failed: {}", e).into())
 }
 
@@ -244,7 +240,6 @@ fn setup_logging(verbosity: u8, no_color: bool) {
         "reqwest",
         "mio",
         "want",
-        "tuikit",
         "hyper_util",
     ];
     let module_filter = filter_fn(move |metadata| {

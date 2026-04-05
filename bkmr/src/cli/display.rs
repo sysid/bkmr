@@ -4,10 +4,10 @@ use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crate::util::helper::{format_file_path, format_mtime};
 use chrono::{DateTime, Utc};
+use crossterm::style::Stylize;
 use derive_builder::Builder;
 use std::fmt;
 use std::io::{self, IsTerminal, Write};
-use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DisplayField {
@@ -203,89 +203,53 @@ pub fn show_bookmarks(
         return;
     }
 
-    // Check if the output is a TTY
-    let color_choice = if io::stderr().is_terminal() {
-        ColorChoice::Auto
-    } else {
-        ColorChoice::Never
-    };
-    let mut stderr = StandardStream::stderr(color_choice);
+    let use_color = io::stderr().is_terminal();
+    let mut stderr = io::stderr().lock();
     let first_col_width = bookmarks.len().to_string().len();
 
     for (i, bm) in bookmarks.iter().enumerate() {
         // Title/Metadata (green)
         if fields.contains(&DisplayField::Title) {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Green))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            if let Err(e) = write!(&mut stderr, "{:first_col_width$}. {}", i + 1, bm.title) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            let title_line = format!("{:first_col_width$}. {}", i + 1, bm.title);
+            let _ = write!(&mut stderr, "{}", if use_color { title_line.green().to_string() } else { title_line });
         }
 
         // Similarity score if available
         if let Some(similarity) = bm.similarity {
             if fields.contains(&DisplayField::Similarity) {
-                if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))) {
-                    eprintln!("Error setting color: {}", e);
-                }
-                if let Err(e) = write!(&mut stderr, " [{:.3}]", similarity) {
-                    eprintln!("Error writing to stderr: {}", e);
-                }
+                let _ = write!(&mut stderr, " [{:.3}]", similarity);
             }
         }
 
-        // ID (white)
+        // ID
         if fields.contains(&DisplayField::Id) {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            if let Err(e) = writeln!(&mut stderr, " [{}]", bm.id) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            let _ = writeln!(&mut stderr, " [{}]", bm.id);
         } else {
-            // End the title line if no ID is shown
-            if let Err(e) = writeln!(&mut stderr) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            let _ = writeln!(&mut stderr);
         }
 
         // URL (yellow)
         if fields.contains(&DisplayField::Url) {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Yellow))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            // Format multiline URL for display
             let formatted_url = if bm.url.contains('\n') {
-                bm.url.replace('\n', "\n    ") // Add proper indentation for each line
+                bm.url.replace('\n', "\n    ")
             } else {
                 bm.url.clone()
             };
-            if let Err(e) = writeln!(&mut stderr, "{:first_col_width$}  {}", "", formatted_url) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            let url_line = format!("{:first_col_width$}  {}", "", formatted_url);
+            let _ = writeln!(&mut stderr, "{}", if use_color { url_line.yellow().to_string() } else { url_line });
         }
 
-        // Description (white)
+        // Description
         if fields.contains(&DisplayField::Description) && !bm.description.is_empty() {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            if let Err(e) = writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.description) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            let _ = writeln!(&mut stderr, "{:first_col_width$}  {}", "", bm.description);
         }
 
         // Tags (blue)
         if fields.contains(&DisplayField::Tags) {
             let tags = bm.tags.replace(',', " ");
             if tags.find(|c: char| !c.is_whitespace()).is_some() {
-                if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Blue))) {
-                    eprintln!("Error setting color: {}", e);
-                }
-                if let Err(e) = writeln!(&mut stderr, "{:first_col_width$}  {}", "", tags.trim()) {
-                    eprintln!("Error writing to stderr: {}", e);
-                }
+                let tag_line = format!("{:first_col_width$}  {}", "", tags.trim());
+                let _ = writeln!(&mut stderr, "{}", if use_color { tag_line.blue().to_string() } else { tag_line });
             }
         }
 
@@ -297,90 +261,59 @@ pub fn show_bookmarks(
         }
 
         if fields.contains(&DisplayField::Embedding) {
-            let embed_status = if bm.embedding.is_empty() {
-                "null"
-            } else {
-                "yes"
-            };
+            let embed_status = if bm.embedding.is_empty() { "null" } else { "yes" };
             if !flags_and_embedding_line.is_empty() {
                 flags_and_embedding_line.push_str(" | ");
             }
             flags_and_embedding_line.push_str(&format!("embed: {}", embed_status));
         }
 
-        // Add embeddable status to the display
+        // Embeddable status
         if fields.contains(&DisplayField::Embeddable) {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            if let Err(e) = writeln!(
+            let _ = writeln!(
                 &mut stderr,
                 "{:first_col_width$}  Embeddable: {}",
                 "",
                 if bm.embeddable { "yes" } else { "no" }
-            ) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            );
         }
 
         // Print access count and embedding info if any exist
         if !flags_and_embedding_line.is_empty() {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::White))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            if let Err(e) = writeln!(
+            let _ = writeln!(
                 &mut stderr,
                 "{:first_col_width$}  {}",
                 "", flags_and_embedding_line
-            ) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            );
         }
 
         // Created and Last update timestamps (magenta)
         if fields.contains(&DisplayField::LastUpdateTs) {
-            if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Magenta))) {
-                eprintln!("Error setting color: {}", e);
-            }
-            // Format creation date as "null" if not available
             let created_str = match bm.created_at {
                 Some(created) => created.to_string(),
                 None => "null".to_string(),
             };
-
-            if let Err(e) = writeln!(
-                &mut stderr,
+            let ts_line = format!(
                 "{:first_col_width$}  Created: {} | Updated: {}",
                 "", created_str, bm.last_update_ts
-            ) {
-                eprintln!("Error writing to stderr: {}", e);
-            }
+            );
+            let _ = writeln!(&mut stderr, "{}", if use_color { ts_line.magenta().to_string() } else { ts_line });
         }
 
-        // File info (grey) - show if present and enabled
+        // File info (dark_grey) - show if present and enabled
         if settings.fzf_opts.show_file_info {
             if let (Some(file_path), Some(file_mtime)) = (&bm.file_path, bm.file_mtime) {
-                if let Err(e) = stderr.set_color(ColorSpec::new().set_fg(Some(Color::Ansi256(8)))) {
-                    // Use Ansi256 color 8 which is bright black (grey)
-                    eprintln!("Error setting color: {}", e);
-                }
                 let formatted_path = format_file_path(file_path, 120);
                 let formatted_time = format_mtime(file_mtime);
-                if let Err(e) = writeln!(
-                    &mut stderr,
+                let file_line = format!(
                     "{:first_col_width$}  📁 {} ({})",
                     "", formatted_path, formatted_time
-                ) {
-                    eprintln!("Error writing to stderr: {}", e);
-                }
+                );
+                let _ = writeln!(&mut stderr, "{}", if use_color { file_line.dark_grey().to_string() } else { file_line });
             }
         }
 
-        // Reset colors and print a blank line between bookmarks
-        if let Err(e) = stderr.reset() {
-            eprintln!("Error resetting color: {}", e);
-        }
-        eprintln!();
+        let _ = writeln!(&mut stderr);
     }
 }
 

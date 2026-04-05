@@ -84,7 +84,6 @@ fn setup_test_logging() {
         "reqwest",
         "mio",
         "want",
-        "tuikit",
         "hyper_util",
     ];
     let module_filter = filter_fn(move |metadata| {

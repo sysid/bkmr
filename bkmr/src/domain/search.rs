@@ -48,12 +48,8 @@ impl SemanticSearchResult {
         }
     }
 
-    /// Simple display text for semantic search results in fzf interface
-    /// This provides basic display formatting - enhanced formatting should be implemented
-    /// at the application layer where services are available
+    /// Plain text display for semantic search results (used as skim search text)
     pub fn display(&self) -> String {
-        use crossterm::style::Stylize;
-
         let id = self.bookmark.id.unwrap_or(0);
         let title = &self.bookmark.title;
         let url = &self.bookmark.url;
@@ -61,23 +57,15 @@ impl SemanticSearchResult {
         let tags_str = binding.trim_matches(',');
         let similarity = format!("{:.1}%", self.similarity * 100.0);
 
-        // Format with colors similar to main branch implementation
         let tags_display = if !tags_str.is_empty() {
-            format!(" [{}]", tags_str.magenta())
+            format!(" [{}]", tags_str)
         } else {
             String::new()
         };
 
-        let action_display = " (default)".cyan();
-
         format!(
-            "{}: {} <{}> ({}%){}{}",
-            id.to_string().blue(),
-            title.clone().green(),
-            url.clone().yellow(),
-            similarity.cyan(),
-            action_display,
-            tags_display
+            "{}: {} <{}> ({}%) (default){}",
+            id, title, url, similarity, tags_display
         )
     }
 }
