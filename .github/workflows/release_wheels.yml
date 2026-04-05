@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         platform:
-          - runner: ubuntu-22.04
+          - runner: ubuntu-24.04
             target: x86_64
         python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
@@ -39,6 +39,7 @@ jobs:
           args: --release --out dist --interpreter python${{ matrix.python-version }} --manifest-path bkmr/Cargo.toml
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: auto
+          container: 'off'
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
@@ -50,8 +51,6 @@ jobs:
     strategy:
       matrix:
         platform:
-          - runner: macos-14
-            target: x86_64
           - runner: macos-14
             target: aarch64
         python-version: ['3.10', '3.11', '3.12', '3.13']
