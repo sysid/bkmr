@@ -95,11 +95,6 @@ test-edit-bookmark-with-template: init  ## test-edit-bookmark-with-template (fil
 test-url-details:  ## test-url-details (charm strang verbose output), expect: "Rust Programming Language", "A language empowering everyone to build reliable and efficient software."
 	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib given_valid_url_when_loading_details_then_returns_correct_metadata -- --exact --nocapture
 
-.PHONY: run-load-texts
-run-load-texts: run-create-db  ## run-load-text
-	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai load-texts --dry-run "$(PROJ_DIR)"/bkmr/tests/resources/data.ndjson
-	#pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai load-texts "$(PROJ_DIR)"/bkmr/tests/resources/data.ndjson
-
 
 .PHONY: run-migrate-db
 run-migrate-db: init  ## run-migrate-db

@@ -85,3 +85,11 @@ and embeddable = 1;
 -- This query is for finding bookmarks that have tags but none of the tags are "mem", "snip", or "shell".
 SELECT count(*)
 FROM bookmarks WHERE tags NOT GLOB '*,_*_,*';
+
+-- clear all embeddings
+-- After this, bkmr backfill will regenerate embeddings for all embeddable = 1 bookmarks from scratch.
+-- Note: Don't try to DROP and recreate vec_bookmarks — the virtual table and its shadow tables (vec_bookmarks_chunks, vec_bookmarks_rowids, etc.) are managed by sqlite-vec internally. A simple DELETE is the clean way.
+DELETE FROM vec_bookmarks;
+UPDATE bookmarks SET content_hash = NULL;
+
+

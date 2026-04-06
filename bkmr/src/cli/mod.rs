@@ -64,7 +64,6 @@ pub fn execute_command_with_services(
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
         Some(Commands::SetEmbeddable { .. }) => bookmark_commands::set_embeddable(cli, &services),
         Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli, &services),
-        Some(Commands::LoadTexts { .. }) => bookmark_commands::load_texts(cli, &services),
         Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli, &services),
         Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli, &services),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),

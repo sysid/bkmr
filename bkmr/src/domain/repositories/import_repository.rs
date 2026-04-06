@@ -35,7 +35,6 @@ pub struct ImportOptions {
 
 pub trait ImportRepository: Send + Sync + Debug {
     fn import_json_bookmarks(&self, path: &str) -> DomainResult<Vec<BookmarkImportData>>;
-    fn import_text_documents(&self, path: &str) -> DomainResult<Vec<BookmarkImportData>>;
     fn import_files(
         &self,
         paths: &[String],

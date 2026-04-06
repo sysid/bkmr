@@ -332,23 +332,6 @@ pub enum Commands {
         dry_run: bool,
     },
 
-    /// Import text documents for semantic search (creates embeddings only, content NOT stored)
-    LoadTexts {
-        #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
-        dry_run: bool,
-
-        #[arg(
-            short = 'f',
-            long = "force",
-            help = "force update embeddings even if content has not changed"
-        )]
-        force: bool,
-
-        /// Path to NDJSON file containing text documents (one per line)
-        #[arg(help = "Path to NDJSON file with text documents (one JSON object per line)")]
-        path: String,
-    },
-
     /// Import files from directories (stores content, tracks source file for smart editing).
     ///
     /// Supported file types: .sh (shell scripts), .py (python scripts), .md (markdown files)

@@ -3,18 +3,11 @@
 use crate::domain::error::{DomainError, DomainResult, RepositoryError};
 use crate::domain::repositories::import_repository::{BookmarkImportData, ImportRepository};
 use crate::domain::tag::Tag;
-use crate::util::path::extract_filename;
 use crossterm::style::Stylize;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
-
-#[derive(Deserialize)]
-struct TextDocument {
-    id: String,
-    content: String,
-}
+use std::io::{BufReader, Read};
 
 #[derive(Deserialize)]
 struct JsonBookmark {
@@ -36,20 +29,6 @@ impl Default for JsonImportRepository {
 impl JsonImportRepository {
     pub fn new() -> Self {
         Self
-    }
-
-    /// Checks if the text document JSON has the required fields
-    fn check_text_document_format(&self, line: &str) -> DomainResult<()> {
-        let record: serde_json::Value = serde_json::from_str(line)
-            .map_err(|e| DomainError::CannotFetchMetadata(format!("Invalid JSON: {}", e)))?;
-
-        if record["id"].is_null() || record["content"].is_null() {
-            return Err(DomainError::CannotFetchMetadata(
-                "Missing required fields (id, content)".to_string(),
-            ));
-        }
-
-        Ok(())
     }
 }
 
@@ -103,53 +82,6 @@ impl ImportRepository for JsonImportRepository {
                 url: bookmark.url,
                 title: bookmark.title,
                 content: bookmark.description,
-                tags,
-            });
-        }
-
-        Ok(imports)
-    }
-
-    fn import_text_documents(&self, path: &str) -> DomainResult<Vec<BookmarkImportData>> {
-        let file = File::open(path)
-            .map_err(|e| DomainError::CannotFetchMetadata(format!("Failed to open file: {}", e)))?;
-
-        let reader = BufReader::new(file);
-        let mut imports = Vec::new();
-
-        for (i, line) in reader.lines().enumerate() {
-            let line = line.map_err(|e| {
-                DomainError::RepositoryError(RepositoryError::Other(format!(
-                    "Failed to read line {}: {}",
-                    i + 1,
-                    e
-                )))
-            })?;
-
-            // Skip empty lines
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            // Validate the document structure
-            self.check_text_document_format(&line)?;
-
-            let record: TextDocument = serde_json::from_str(&line).map_err(|e| {
-                DomainError::RepositoryError(RepositoryError::Other(format!(
-                    "Failed to parse JSON at line {}: {}",
-                    i + 1,
-                    e
-                )))
-            })?;
-
-            let id = record.id;
-            let filename = extract_filename(&id);
-            let tags = Tag::parse_tags(",_imported_,")?;
-
-            imports.push(BookmarkImportData {
-                url: id,
-                title: filename,
-                content: record.content,
                 tags,
             });
         }
@@ -234,65 +166,4 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn given_ndjson_file_when_import_text_documents_then_creates_document_data() -> DomainResult<()>
-    {
-        // Create temporary test file with NDJSON format
-        let mut temp_file = NamedTempFile::new()?;
-        writeln!(
-            temp_file,
-            r#"{{"id": "doc1", "content": "Document 1 content."}}"#
-        )?;
-        writeln!(
-            temp_file,
-            r#"{{"id": "doc2", "content": "Document 2 content."}}"#
-        )?;
-
-        let repo = JsonImportRepository::new();
-        let imports = repo.import_text_documents(temp_file.path().to_str().unwrap())?;
-
-        assert_eq!(imports.len(), 2);
-        assert_eq!(imports[0].url, "doc1");
-        assert_eq!(imports[0].title, "doc1");
-        assert_eq!(imports[0].content, "Document 1 content.");
-        assert!(imports[0].tags.iter().any(|t| t.value() == "_imported_"));
-
-        assert_eq!(imports[1].url, "doc2");
-        assert_eq!(imports[1].title, "doc2");
-        assert_eq!(imports[1].content, "Document 2 content.");
-        assert!(imports[1].tags.iter().any(|t| t.value() == "_imported_"));
-
-        Ok(())
-    }
-
-    #[test]
-    fn given_json_array_when_import_as_text_documents_then_returns_error() {
-        // Create temporary test file with JSON array format
-        let mut temp_file = NamedTempFile::new().unwrap();
-        write!(
-            temp_file,
-            r#"[
-                {{"id": "doc1", "content": "Document 1 content."}},
-                {{"id": "doc2", "content": "Document 2 content."}}
-            ]"#
-        )
-        .unwrap();
-
-        let repo = JsonImportRepository::new();
-        let result = repo.import_text_documents(temp_file.path().to_str().unwrap());
-        assert!(
-            result.is_err(),
-            "Should fail when trying to parse JSON array as NDJSON"
-        );
-    }
-
-    #[test]
-    fn given_invalid_json_when_import_text_documents_then_returns_error() {
-        let mut temp_file = NamedTempFile::new().unwrap();
-        writeln!(temp_file, r#"{{"id": "doc1" invalid json}}"#).unwrap();
-
-        let repo = JsonImportRepository::new();
-        let result = repo.import_text_documents(temp_file.path().to_str().unwrap());
-        assert!(result.is_err());
-    }
 }

@@ -92,11 +92,6 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Use case: agent bulk imports, migrations, seeding a database.
     fn load_json_bookmarks(&self, path: &str, dry_run: bool) -> ApplicationResult<usize>;
 
-    /// Import text documents from NDJSON for semantic search. Stores ONLY embeddings and
-    /// a document ID — the actual text content is NOT persisted. Supports hash-based
-    /// incremental updates. Use case: making an external document corpus searchable.
-    fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize>;
-
     /// Import files from directories with frontmatter metadata. Stores full content AND
     /// tracks source file (path, mtime, hash) for smart editing and change detection.
     /// Supports incremental updates and orphan deletion. Use case: indexing script/doc

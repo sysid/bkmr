@@ -940,44 +940,6 @@ pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     Ok(())
 }
 
-#[instrument(skip(cli), level = "debug")]
-pub fn load_texts(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
-    if let Commands::LoadTexts {
-        dry_run,
-        force,
-        path,
-    } = cli.command.unwrap()
-    {
-        // Check if real embeddings are available
-        if services.embedder.dimensions() == 0 {
-            eprintln!(
-                "{}",
-                "Error: Cannot load texts without an embedding provider configured."
-                    .red()
-            );
-            return Err(CliError::CommandFailed(
-                "No embedding provider configured - embeddings not available".to_string(),
-            ));
-        }
-
-        eprintln!("Loading text documents from NDJSON file: {}", path);
-        eprintln!("(Expecting one JSON document per line)");
-
-        let bookmark_service = services.bookmark_service.clone();
-
-        if dry_run {
-            let count = bookmark_service.load_texts(&path, true, force)?;
-            eprintln!("Dry run completed - would process {} text entries", count);
-            return Ok(());
-        }
-
-        // Process the texts
-        let processed_count = bookmark_service.load_texts(&path, false, force)?;
-        eprintln!("Successfully processed {} text entries", processed_count);
-    }
-    Ok(())
-}
-
 #[instrument(skip(cli))]
 pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     if let Commands::Info { show_schema } = cli.command.unwrap() {

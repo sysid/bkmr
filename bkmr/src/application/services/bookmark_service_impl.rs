@@ -571,90 +571,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(processed_count)
     }
 
-    /// Import text documents for semantic search. Content is used to generate embeddings
-    /// via `build_embedding_from_import()` but is NOT stored in the bookmark — only the
-    /// document ID (in url) and a content hash (for change detection) are persisted.
-    /// Uses the free function instead of `Bookmark::get_content_for_embedding()` because
-    /// the bookmark doesn't contain the text that needs embedding.
-    #[instrument(skip(self), level = "debug")]
-    fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize> {
-        let imports = self
-            .import_repository
-            .import_text_documents(path)
-            .map_err(|e| ApplicationError::Other(format!("Failed to import data: {}", e)))?;
-
-        if dry_run {
-            return Ok(imports.len());
-        }
-
-        let mut processed_count = 0;
-
-        for import in imports {
-            // Check if bookmark with URL already exists
-            if let Some(existing) = self.repository.get_by_url(&import.url)? {
-                // Calculate content hash for comparison
-                let content = build_embedding_from_import(&import);
-                let new_hash = calc_content_hash(&content);
-
-                // Only update if force is true or the content has changed
-                if force || existing.content_hash.as_ref() != Some(&new_hash) {
-                    eprintln!("Processing import: {}", import.url);
-
-                    // Create updated bookmark
-                    let mut updated = existing.clone();
-                    updated.title = import.title;
-                    updated.description = String::new(); // Don't store content, only embeddings
-                    updated.embedding = None;
-                    updated.embeddable = true;
-                    updated.content_hash = Some(new_hash);
-
-                    self.repository.update(&updated)?;
-
-                    // Generate and store embedding in vector repository
-                    if let Some(id) = updated.id {
-                        self.upsert_embedding_for_bookmark(id, &content)?;
-                    }
-
-                    processed_count += 1;
-                } else {
-                    debug!("Skipping import: {} (content unchanged)", import.url);
-                }
-            } else {
-                // Create new bookmark with embedding
-                eprintln!("Processing import: {}", import.url);
-                let content = build_embedding_from_import(&import);
-                let content_hash = Some(calc_content_hash(&content));
-
-                let tags = import.tags.clone();
-                let mut bookmark = BookmarkBuilder::default()
-                    .id(None)
-                    .url(import.url)
-                    .title(import.title)
-                    .description(String::new())
-                    .tags(tags)
-                    .access_count(0)
-                    .created_at(chrono::Utc::now())
-                    .updated_at(chrono::Utc::now())
-                    .embeddable(true)
-                    .embedding(None::<Vec<u8>>)
-                    .content_hash(content_hash)
-                    .build()
-                    .map_err(|e| ApplicationError::Domain(e.into()))?;
-
-                self.repository.add(&mut bookmark)?;
-
-                // Generate and store embedding after bookmark has an ID
-                if let Some(id) = bookmark.id {
-                    self.upsert_embedding_for_bookmark(id, &content)?;
-                }
-
-                processed_count += 1;
-            }
-        }
-
-        Ok(processed_count)
-    }
-
     /// Import files from directories with frontmatter parsing. Stores full content in url,
     /// tracks source file (file_path, file_mtime, file_hash) for smart editing. Generates
     /// embeddings via `Bookmark::get_content_for_embedding()` (type-aware dispatch).
@@ -1086,16 +1002,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
         Ok(false)
     }
-}
-
-/// Build embedding content directly from raw import data (before a Bookmark exists).
-///
-/// Used exclusively by `load_texts` where the full text content is embedded but NOT stored
-/// in the bookmark (description is empty, url holds only the document ID). The domain method
-/// `Bookmark::get_content_for_embedding()` cannot be used here because the bookmark doesn't
-/// contain the text that needs to be embedded.
-fn build_embedding_from_import(import: &BookmarkImportData) -> String {
-    build_embedding_content(&import.tags, &import.title, &import.content)
 }
 
 #[cfg(test)]

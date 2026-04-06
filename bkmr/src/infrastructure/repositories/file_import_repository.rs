@@ -246,11 +246,6 @@ impl ImportRepository for FileImportRepository {
         self.json_import_repository.import_json_bookmarks(path)
     }
 
-    fn import_text_documents(&self, path: &str) -> DomainResult<Vec<BookmarkImportData>> {
-        // Delegate to JsonImportRepository
-        self.json_import_repository.import_text_documents(path)
-    }
-
     fn import_files(
         &self,
         paths: &[String],
