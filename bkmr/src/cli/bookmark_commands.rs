@@ -849,7 +849,36 @@ pub fn set_embeddable(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     }
 }
 
-#[instrument(skip(cli), level = "debug")]
+/// Clear all embeddings from vec_bookmarks and reset all content hashes.
+/// Shared by `clear-embeddings` and `backfill --force`.
+fn purge_all_embeddings(services: &ServiceContainer) -> CliResult<()> {
+    services.vector_repository.clear_all()?;
+    services.bookmark_repository.clear_all_content_hashes()?;
+    Ok(())
+}
+
+pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+    let has = services.vector_repository.has_embeddings()?;
+    if !has {
+        eprintln!("No embeddings found — nothing to clear.");
+        return Ok(());
+    }
+
+    eprint!("This will delete ALL embeddings and content hashes. Continue? [y/N] ");
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| CliError::CommandFailed(format!("Failed to read input: {}", e)))?;
+    if !input.trim().eq_ignore_ascii_case("y") {
+        eprintln!("Aborted.");
+        return Ok(());
+    }
+
+    purge_all_embeddings(services)?;
+    eprintln!("Cleared all embeddings and content hashes.");
+    Ok(())
+}
+
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         // Check if real embeddings are available
@@ -861,10 +890,10 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         }
         let bookmark_service = services.bookmark_service.clone();
 
-        // For force mode, clear all existing embeddings first
+        // For force mode, clear all existing embeddings and content hashes first
         if force {
-            eprintln!("Force mode: clearing all existing embeddings...");
-            services.vector_repository.clear_all()?;
+            eprintln!("Force mode: clearing all existing embeddings and content hashes...");
+            purge_all_embeddings(services)?;
         }
 
         // Get bookmarks to process based on force flag

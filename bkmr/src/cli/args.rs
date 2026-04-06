@@ -322,6 +322,9 @@ pub enum Commands {
         )]
         force: bool,
     },
+    /// Clear all embeddings and content hashes (clean slate for backfill)
+    ClearEmbeddings {},
+
     /// Bulk-create bookmarks from JSON array (skips existing Content/URLs, no update support)
     LoadJson {
         /// Path to JSON file: [{url, title, description, tags}, ...]

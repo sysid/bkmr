@@ -170,6 +170,7 @@ bkmr search --fzf
 | `info` | Show configuration, database path, embedding status |
 | `set-embeddable` | Mark bookmarks for semantic search embedding |
 | `backfill` | Generate missing embeddings |
+| `clear-embeddings` | Clear all embeddings and content hashes |
 | `lsp` | Start LSP server for editor snippet completion |
 | `completion` | Generate shell completions (bash, zsh, fish) |
 | `surprise` | Open random URL bookmarks |

@@ -54,11 +54,14 @@ bkmr set-embeddable 123 --disable
 # Backfill embeddings for all embeddable bookmarks that lack them
 bkmr backfill
 
-# Force regenerate all embeddings (e.g., after model change)
+# Force regenerate all embeddings (clears embeddings + content hashes first)
 bkmr backfill --force
 
 # Preview what would be backfilled without making changes
 bkmr backfill --dry-run
+
+# Clear all embeddings and content hashes without regenerating
+bkmr clear-embeddings
 ```
 
 ## Interactive Search Mode
@@ -143,7 +146,7 @@ model = "NomicEmbedTextV15"  # default
 
 Quantized variants (`*Q`) are also available for faster inference.
 
-**After changing models**: Run `bkmr backfill --force` to regenerate all embeddings.
+**After changing models**: Run `bkmr backfill --force` to regenerate all embeddings (this also clears content hashes). Alternatively, run `bkmr clear-embeddings` first for a clean slate, then `bkmr backfill`.
 
 ## Optimal Content for Embeddings
 

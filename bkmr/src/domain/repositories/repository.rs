@@ -93,4 +93,7 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
         fts_query: &str,
         filter_ids: Option<&HashSet<i32>>,
     ) -> Result<Vec<RankedResult>, DomainError>;
+
+    /// Reset all content hashes to NULL (clean slate for re-embedding)
+    fn clear_all_content_hashes(&self) -> Result<(), DomainError>;
 }

@@ -818,6 +818,20 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
         Ok(bookmarks)
     }
+
+    fn clear_all_content_hashes(&self) -> Result<(), DomainError> {
+        let mut conn = self.get_connection()?;
+        sql_query("UPDATE bookmarks SET content_hash = NULL")
+            .execute(&mut conn)
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to clear content hashes: {}",
+                    e
+                ))
+            })?;
+        debug!("Cleared all content hashes");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1675,6 +1689,38 @@ mod tests {
                 );
             }
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_with_content_hash_when_clear_all_hashes_then_all_null(
+    ) -> Result<(), DomainError> {
+        let repo = setup_test_db();
+        repo.empty_bookmark_table()?;
+
+        let mut bookmark =
+            create_test_bookmark("Hash Test", "https://hash-test.com", vec!["test"])?;
+        bookmark.content_hash = Some(vec![1, 2, 3, 4]);
+        repo.add(&mut bookmark)?;
+
+        let mut bookmark2 =
+            create_test_bookmark("Hash Test 2", "https://hash-test2.com", vec!["test"])?;
+        bookmark2.content_hash = Some(vec![5, 6, 7, 8]);
+        repo.add(&mut bookmark2)?;
+
+        // Verify hashes are set
+        let before = repo.get_by_id(bookmark.id.unwrap())?.unwrap();
+        assert!(before.content_hash.is_some());
+
+        // Clear all hashes
+        repo.clear_all_content_hashes()?;
+
+        // Verify all hashes are now NULL
+        let after1 = repo.get_by_id(bookmark.id.unwrap())?.unwrap();
+        let after2 = repo.get_by_id(bookmark2.id.unwrap())?.unwrap();
+        assert!(after1.content_hash.is_none());
+        assert!(after2.content_hash.is_none());
 
         Ok(())
     }
