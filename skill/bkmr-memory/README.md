@@ -4,11 +4,19 @@ Teaches AI agents (Claude Code, Copilot CLI, pi-mono) how to use [bkmr](https://
 
 ## What It Does
 
-- **READ**: Query bkmr for relevant memories at task start and before decisions
+- **READ**: Query bkmr for relevant memories at task start, before decisions, and when encountering bugs
 - **WRITE**: Store non-trivial learnings with proper taxonomy and deduplication
+- **UPDATE**: Enrich or correct existing memories with `bkmr update --url`
 - **DEDUP**: Check for existing memories before creating new ones
 
-Memories use the `_mem_` system tag and one of five classification tags: `fact`, `procedure`, `preference`, `episode`, `gotcha`.
+Memories use the `_mem_` system tag and one of five classification tags: `fact`, `procedure`, `preference`, `episode`, `gotcha`. Optional `project:foo` tags scope memories to a project.
+
+## Location
+
+```
+bkmr/skill/bkmr-memory/     # Source (lives in the bkmr repo)
+~/.claude/skills/bkmr-memory # Symlink (makes it available to Claude Code)
+```
 
 ## Files
 
@@ -20,9 +28,9 @@ bkmr-memory/
     └── evals.json     # Test case definitions with assertions
 ```
 
-Eval workspace (sibling directory, not part of the skill):
+Eval workspace (created at runtime, not checked in):
 ```
-bkmr-memory-workspace/
+~/.claude/skills/bkmr-memory-workspace/
 └── iteration-N/
     ├── benchmark.json
     ├── session-start-query/
@@ -44,7 +52,7 @@ bkmr-memory-workspace/
 ### Prerequisites
 
 - `bkmr` installed and on PATH
-- A bkmr database (test or scratch — evals write to it)
+- A bkmr database (test or scratch -- evals write to it)
 - Claude Code CLI (`claude`) for spawning subagents
 
 ### Quick Regression Test
@@ -74,7 +82,7 @@ You: For each test case in ~/.claude/skills/bkmr-memory/evals/evals.json,
 |---|------|-------|----------------|
 | 0 | session-start-query | READ workflow | Uses `-t _mem_`, checks gotchas/preferences, does NOT write |
 | 1 | post-task-memory-write | WRITE workflow | Dedup first, `-t mem --no-web`, classification tag, content in url field |
-| 2 | dedup-scenario | Dedup logic | Searches before writing, uses `_mem_` filter, skips/edits if match exists |
+| 2 | dedup-scenario | Dedup logic | Searches before writing, uses `_mem_` filter, updates or skips if match exists |
 
 ### Grading
 
@@ -103,7 +111,7 @@ From iteration-1 (2026-04-05):
 | Avg tool calls | 8.3 | 14.3 |
 
 Key failure modes without the skill:
-- Content placed in `-d` (description) instead of url — breaks embeddings and display
+- Content placed in `-d` (description) instead of url -- breaks embeddings and display
 - No classification tags from the taxonomy
 - No dedup check before writing
 - No `_mem_` filter on read queries (searches entire DB)
@@ -126,9 +134,19 @@ bkmr delete 17,18,19
 ### Editing SKILL.md
 
 The skill body is loaded whenever Claude triggers it. Key constraints:
-- Keep under 500 lines (currently ~340)
+- Keep under 500 lines
 - Every code example must be a complete, copy-pasteable command
-- The "Mandatory Tag Rules" section at the top is the most important — agents read top-down
+- The "Mandatory Tag Rules" section at the top is the most important -- agents read top-down
+- Memory content limit: 500 tokens max (url field)
+
+### Key Concepts
+
+- **url field IS the memory** -- first positional arg to `bkmr add`, used for embeddings and display
+- **`-t mem`** on write automatically adds `_mem_` system tag
+- **`-t _mem_`** on read filters to memory bookmarks only
+- **`bkmr update --url "new content" <id>`** updates memory content without opening an editor
+- **`bkmr update --title "new title" <id>`** fixes titles for better searchability
+- **`project:foo`** tag structure scopes memories to a project
 
 ### Iteration Loop
 
@@ -156,10 +174,11 @@ Add to `evals/evals.json`:
 ```
 
 Good test cases to add:
-- **Memory update**: User corrects a previously stored fact
-- **Large content**: Agent receives a long code dump — should summarize, not store verbatim
-- **Irrelevant noise**: Agent finishes trivial work — should NOT store anything
+- **Memory update**: User corrects a previously stored fact (should use `bkmr update --url`)
+- **Large content**: Agent receives a long code dump -- should summarize, not store verbatim
+- **Irrelevant noise**: Agent finishes trivial work -- should NOT store anything
 - **Multi-category query**: Task that requires checking facts AND gotchas AND procedures
+- **Project scoping**: Memory stored with `project:foo` tag, queried with project filter
 
 ### Description Optimization
 
@@ -176,10 +195,16 @@ You: Use the skill-creator to optimize the description for bkmr-memory.
 The `_mem_` system tag's default action (`MemoryAction`) prints `bookmark.url` to stdout. Embeddings are computed from url + title + tags. Description is not embedded and not displayed.
 
 **Why exactly one classification tag?**
-Enables category-filtered queries (`-n gotcha`, `-n preference`). Multiple classifications would make a memory ambiguous — is it a gotcha or a fact? Pick the primary one.
+Enables category-filtered queries (`-n gotcha`, `-n preference`). Multiple classifications would make a memory ambiguous -- is it a gotcha or a fact? Pick the primary one.
+
+**Why `bkmr update --url` instead of `bkmr edit`?**
+`bkmr update --url` is non-interactive and scriptable. `bkmr edit` opens an editor which agents cannot drive. For agents, `update --url` is the correct way to modify memory content.
 
 **Why dedup before write?**
 bkmr has no built-in uniqueness constraint on content. Without explicit dedup, agents accumulate near-identical memories that dilute search results.
 
 **Why `--no-web` on every add?**
-Without it, bkmr tries to fetch URL metadata (title, favicon) from the content string as if it were a URL. Memory content is plain text, not a URL — the fetch fails or returns garbage.
+Without it, bkmr tries to fetch URL metadata (title, favicon) from the content string as if it were a URL. Memory content is plain text, not a URL -- the fetch fails or returns garbage.
+
+**Why `project:foo` tag structure?**
+Enables project-scoped queries (`-t project:myapp`) without polluting the flat tag namespace. The colon convention makes project tags visually distinct from classification and topic tags.

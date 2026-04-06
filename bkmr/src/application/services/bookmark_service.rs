@@ -87,13 +87,20 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Record that a bookmark was accessed
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark>;
 
-    /// Import bookmarks from a JSON file
+    /// Bulk-create bookmarks from a JSON array file. Stores full content (url, title,
+    /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates.
+    /// Use case: agent bulk imports, migrations, seeding a database.
     fn load_json_bookmarks(&self, path: &str, dry_run: bool) -> ApplicationResult<usize>;
 
-    /// Load texts from NDJSON file and create embeddings for semantic search
+    /// Import text documents from NDJSON for semantic search. Stores ONLY embeddings and
+    /// a document ID — the actual text content is NOT persisted. Supports hash-based
+    /// incremental updates. Use case: making an external document corpus searchable.
     fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize>;
 
-    /// Import files from directories, parsing frontmatter metadata
+    /// Import files from directories with frontmatter metadata. Stores full content AND
+    /// tracks source file (path, mtime, hash) for smart editing and change detection.
+    /// Supports incremental updates and orphan deletion. Use case: indexing script/doc
+    /// directories while keeping files as the source of truth.
     fn import_files(
         &self,
         paths: &[String],

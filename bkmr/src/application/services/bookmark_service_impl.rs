@@ -518,6 +518,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(bookmark)
     }
 
+    /// Bulk-create bookmarks from JSON array. Creates full Bookmark objects (url, title,
+    /// description, tags) and generates embeddings via `Bookmark::get_content_for_embedding()`
+    /// (type-aware dispatch). Skips URLs that already exist — no update support.
     #[instrument(skip(self), level = "debug")]
     fn load_json_bookmarks(&self, path: &str, dry_run: bool) -> ApplicationResult<usize> {
         let imports = self
@@ -568,6 +571,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(processed_count)
     }
 
+    /// Import text documents for semantic search. Content is used to generate embeddings
+    /// via `build_embedding_from_import()` but is NOT stored in the bookmark — only the
+    /// document ID (in url) and a content hash (for change detection) are persisted.
+    /// Uses the free function instead of `Bookmark::get_content_for_embedding()` because
+    /// the bookmark doesn't contain the text that needs embedding.
     #[instrument(skip(self), level = "debug")]
     fn load_texts(&self, path: &str, dry_run: bool, force: bool) -> ApplicationResult<usize> {
         let imports = self
@@ -585,7 +593,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             // Check if bookmark with URL already exists
             if let Some(existing) = self.repository.get_by_url(&import.url)? {
                 // Calculate content hash for comparison
-                let content = get_content_for_embedding(&import);
+                let content = build_embedding_from_import(&import);
                 let new_hash = calc_content_hash(&content);
 
                 // Only update if force is true or the content has changed
@@ -614,7 +622,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             } else {
                 // Create new bookmark with embedding
                 eprintln!("Processing import: {}", import.url);
-                let content = get_content_for_embedding(&import);
+                let content = build_embedding_from_import(&import);
                 let content_hash = Some(calc_content_hash(&content));
 
                 let tags = import.tags.clone();
@@ -647,6 +655,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(processed_count)
     }
 
+    /// Import files from directories with frontmatter parsing. Stores full content in url,
+    /// tracks source file (file_path, file_mtime, file_hash) for smart editing. Generates
+    /// embeddings via `Bookmark::get_content_for_embedding()` (type-aware dispatch).
+    /// Supports incremental updates (--update) and orphan cleanup (--delete-missing).
     #[instrument(skip(self), level = "debug")]
     fn import_files(
         &self,
@@ -802,7 +814,9 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(None)
     }
 
-    /// Create a new bookmark from file data
+    /// Create a new bookmark from file import data. Stores file content in url field,
+    /// sets file_path/file_mtime/file_hash for source tracking, and generates embeddings
+    /// via `Bookmark::get_content_for_embedding()`.
     fn create_bookmark_from_file(
         &self,
         file_data: &FileImportData,
@@ -895,7 +909,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(bookmark)
     }
 
-    /// Update existing bookmark from file data
+    /// Update existing bookmark from changed file data. Preserves system tags from existing
+    /// bookmark, recalculates content hash, and regenerates embeddings.
     fn update_bookmark_from_file(
         &self,
         existing: &Bookmark,
@@ -1072,7 +1087,14 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(false)
     }
 }
-fn get_content_for_embedding(import: &BookmarkImportData) -> String {
+
+/// Build embedding content directly from raw import data (before a Bookmark exists).
+///
+/// Used exclusively by `load_texts` where the full text content is embedded but NOT stored
+/// in the bookmark (description is empty, url holds only the document ID). The domain method
+/// `Bookmark::get_content_for_embedding()` cannot be used here because the bookmark doesn't
+/// contain the text that needs to be embedded.
+fn build_embedding_from_import(import: &BookmarkImportData) -> String {
     build_embedding_content(&import.tags, &import.title, &import.content)
 }
 

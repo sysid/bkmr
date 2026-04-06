@@ -2,7 +2,7 @@
 -- select count(*)
 select *
 from bookmarks
-where embeddable = 1;
+where embeddable = 0;
 
 select *
 from bookmarks_fts
@@ -67,3 +67,21 @@ from bookmarks
 where embeddable = 1
   and instr(tags, ',_imported_,') > 0;
 
+-- name: delete_embeddable_imported
+delete from bookmarks
+where embeddable = 1
+  and instr(tags, ',_imported_,') > 0;
+
+-- name: mark_snip_non_embeddable
+-- UPDATE bookmarks SET embeddable = 0 WHERE tags LIKE '%_snip_%';
+UPDATE bookmarks SET embeddable = 1 WHERE tags LIKE '%_mem_%';
+
+select *
+from bookmarks
+where tags LIKE '%_shell_%'
+and embeddable = 1;
+
+
+-- This query is for finding bookmarks that have tags but none of the tags are "mem", "snip", or "shell".
+SELECT count(*)
+FROM bookmarks WHERE tags NOT GLOB '*,_*_,*';

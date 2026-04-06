@@ -197,8 +197,16 @@ impl Bookmark {
         Tag::format_tags(&self.tags)
     }
 
-    /// Get content for embedding generation, dispatched by bookmark type.
-    /// Each type explicitly declares which field holds its embeddable content.
+    /// Build the text string used for embedding generation, dispatched by system tag.
+    ///
+    /// For content-bearing types (_snip_, _shell_, _md_, _env_, _imported_, _mem_), the
+    /// actual content lives in `self.url`. For URI bookmarks (no system tag), the url is
+    /// a link and the meaningful text is in `self.description`.
+    ///
+    /// The result is passed to `build_embedding_content()` which prepends tags and title.
+    ///
+    /// NOTE: `load_texts` cannot use this method because it embeds ephemeral content that
+    /// is NOT stored in the bookmark. It uses `build_embedding_from_import()` instead.
     pub fn get_content_for_embedding(&self) -> String {
         let content = if self.is_snippet() {
             &self.url // code snippet

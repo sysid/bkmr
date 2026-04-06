@@ -322,9 +322,9 @@ pub enum Commands {
         )]
         force: bool,
     },
-    /// Load bookmarks from JSON array file
+    /// Bulk-create bookmarks from JSON array (skips existing Content/URLs, no update support)
     LoadJson {
-        /// Path to the JSON file containing an array of bookmark objects
+        /// Path to JSON file: [{url, title, description, tags}, ...]
         #[arg(help = "Path to JSON file with an array of bookmark objects")]
         path: String,
 
@@ -332,7 +332,7 @@ pub enum Commands {
         dry_run: bool,
     },
 
-    /// Import text documents for semantic search (stores embeddings only, not content)
+    /// Import text documents for semantic search (creates embeddings only, content NOT stored)
     LoadTexts {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
@@ -349,7 +349,7 @@ pub enum Commands {
         path: String,
     },
 
-    /// Import files from directories, parsing frontmatter metadata.
+    /// Import files from directories (stores content, tracks source file for smart editing).
     ///
     /// Supported file types: .sh (shell scripts), .py (python scripts), .md (markdown files)
     ///
