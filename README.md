@@ -5,15 +5,13 @@
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 [![Build Status][build-image]][build-url]
 
-> A local-first knowledge base for humans and AI agents. Store anything, find it by meaning, act on it instantly.
+> A local-first memory for humans and AI agents. Store anything, find it by meaning, act on it instantly.
 
 # Beyond Bookmarks and Snippets: Knowledge Management for Humans and Agents
 
-[bkmr reborn](https://sysid.github.io/bkmr-reborn/)
+`bkmr` - [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - memories, bookmarks, snippets, etc, searchable, executable.
 
-`bkmr` - [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - is a fast, feature-rich command-line tool that handles bookmarks, snippets, markdown files, scripts and more and adds powerful search.
-
-**Organize**, **find**, and **apply** your various content types:
+**Organize**, **find**, and **apply** various content types:
 
 - Web URLs with automatic metadata extraction
 - Code snippets for quick access and reuse
@@ -21,33 +19,32 @@
 - Markdown documents with live rendering, incl. TOC
 - Plain text with Jinja template interpolation
 - Local files and directories integration
-- Semantic embeddings for local offline search (no API keys needed)
 
 **Centralize** your data in bkmr's database (`add`) or **keep it in your filesystem**
 (`import-files`) ([see](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)).
 
-- bookmarks, links short snippets go into the database
-- large markdown documents or scripts stay where they are and references go into database
+- e.g. memories, bookmarks, links, snippets in database
+- large documents or scripts in filesystem, references go into database
 
-**Both options provide the full benefits of `bkmr`.**
+**Both options provide the full management capability of `bkmr`.**
 
 ## Why bkmr?
 
-- **Developer-focused**: Integrates seamlessly with your workflow and toolchain
+- **Developer- and agent-focused**: Integrates seamlessly with workflow and toolchain
+- **Agent-friendly**: JSON output, non-interactive mode, and `_mem_` system tag for AI agent memory
 - **Multifunctional**: Handles many content types with context-aware actions
 - **Intelligent**: Full-text and semantic search capabilities
 - **Privacy-focused**: Fully local — database, embeddings, and search all run offline
 - **Fast**: 20x faster than similar Python tools
-- **Agent-friendly**: JSON output, non-interactive mode, and `_mem_` system tag for AI agent memory
 - **Automation-ready**: Programmatic CLI with `--json`, `--np`, `--stdout` for pipelines and integrations
 
 **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)**:
 - **Built-in LSP server**: Use `bkmr lsp` for VS Code, Vim, Emacs - automatic snippet completion with language-aware filtering
 - **[Neovim Plugin](https://github.com/sysid/bkmr-nvim)**: Visual interface with Telescope integration and zero configuration
-- **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin for all IDEs
+- **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin
 
 
-## NEW: Agent Memory
+## Agent Memory and Skill
 
 Persistent long-term memory for AI agents. The `_mem_` system tag and `hsearch` (hybrid FTS + semantic search) create a complete read/write memory interface:
 
@@ -62,7 +59,7 @@ bkmr hsearch "database configuration" -t _mem_ --json --np
 # All output is structured JSON — designed for programmatic consumption
 ```
 
-Use ready-made [`skill/bkmr-memory`](skill/bkmr-memory/SKILL.md). It defines a complete memory protocol with taxonomy, deduplication, and session workflows.
+Use [`skill/bkmr-memory`](skill/bkmr-memory/SKILL.md). It defines a complete memory protocol with taxonomy, deduplication, and session workflows.
 
 See **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)** for complete documentation.
 

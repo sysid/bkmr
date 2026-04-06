@@ -363,9 +363,13 @@ Did I learn something new?
 
 ---
 
-## 5. Session Workflow Summary
+## 5. Session Workflow (MANDATORY)
 
-### At Session Start
+These steps are NON-OPTIONAL. You MUST execute actual bkmr commands (not just read this
+section).
+
+### At Session Start (BEFORE any work)
+You MUST run these queries before writing code, making plans, or answering questions:
 ```bash
 # 1. Query for project-relevant memories
 bkmr hsearch "<project-name> <current-task-keywords>" -t _mem_ --json --np -l 10
@@ -377,18 +381,21 @@ bkmr hsearch "<area-of-work>" -t _mem_ -n gotcha --json --np
 bkmr search -t _mem_ -n preference --json --np -l 10
 ```
 
-### During Work
+### During Work (BEFORE decisions, AT strange bugs)
 ```bash
 # Before architectural decisions, check for prior decisions/gotchas
 bkmr hsearch "<decision topic>" -t _mem_ --json --np
 ```
 
-### At Session End
+### At Task End or Session End (BEFORE signing off)
+You MUST evaluate whether anything learned warrants storing. Run the decision tree
+from section 3. If something qualifies, dedup and store:
 ```bash
-# 1. Reflect: did I learn anything non-trivial?
+# 1. Reflect: did I learn anything non-trivial that isn't in code/docs/git?
 # 2. If yes, dedup check:
 bkmr hsearch "<summary of what I learned>" -t _mem_ --json --np -l 3
 # 3. If no duplicate, store it:
 bkmr add "concise memory content" "classification,topic1,topic2" \
   --title "Descriptive title" -t mem --no-web
+# 4. If nothing worth storing, that's fine — but you must have evaluated.
 ```
