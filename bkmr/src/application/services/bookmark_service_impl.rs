@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::bookmark_service::BookmarkService;
-use crate::domain::bookmark::{build_embedding_content, Bookmark, BookmarkBuilder};
+use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
 use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::repositories::import_repository::{
-    BookmarkImportData, FileImportData, ImportRepository,
+    FileImportData, ImportRepository,
 };
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
