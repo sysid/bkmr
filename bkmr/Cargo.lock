@@ -376,7 +376,7 @@ dependencies = [
 
 [[package]]
 name = "bkmr"
-version = "7.1.0"
+version = "7.2.0"
 dependencies = [
  "arboard",
  "assert_cmd",
