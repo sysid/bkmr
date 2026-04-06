@@ -1,12 +1,23 @@
 -- name: get_all
+-- select count(*)
 select *
-from bookmarks;
+from bookmarks
+where embeddable = 1;
 
 select *
 from bookmarks_fts
 where bookmarks_fts match 'xxx' -- :fts_query
 order by rank;
 
+
+--- delete embeddings
+update bookmarks
+set embedding = NULL
+where embedding IS NOT NULL;
+
+update bookmarks
+set content_hash = NULL
+where content_hash IS NOT NULL;
 
 /*
  For tracking the database version, I use the built in user-version variable that sqlite provides
@@ -48,3 +59,11 @@ ORDER BY tags;
 
  SELECT 1 as diesel_exists
  FROM sqlite_master WHERE type='table' AND name='__diesel_schema_migrations';
+
+-- name: get_embeddable_imported
+-- Use instr() for exact token matching; LIKE treats '_' as a wildcard.
+select *
+from bookmarks
+where embeddable = 1
+  and instr(tags, ',_imported_,') > 0;
+

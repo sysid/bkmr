@@ -53,7 +53,7 @@ init:  ## init
 
 .PHONY: test
 test:  ## tests, single-threaded (all functionality)
-	@rm -f $(app_root)/db/bkmr.db
+	@rm -f $(app_root)/db/bkmr.db $(app_root)/db/bkmr.db-shm $(app_root)/db/bkmr.db-wal
 	pushd $(pkg_src) && RUST_LOG=error BKMR_DB_URL=../db/bkmr.db cargo test -- --test-threads=1 --quiet
 
 .PHONY: test-lsp

@@ -4,7 +4,7 @@ description: >
   Use bkmr as persistent long-term memory across agent sessions. This skill teaches how to store,
   query, deduplicate, and manage memories using bkmr's bookmark system with the _mem_ system tag.
   Use this skill whenever starting a new task (to recall relevant context), before architectural
-  decisions (to check for gotchas), and before ending a session (to persist non-trivial learnings).
+  decisions (to check for precedence), and when encountering bugs or surprises (to check for gotchas).
   Also use when the user mentions remembering something, recalling past sessions, storing knowledge,
   agent memory, or cross-session persistence. Even if the user doesn't explicitly say "memory",
   trigger this skill when context from past work would clearly help the current task.
@@ -50,22 +50,27 @@ The five classification tags:
 A memory without a classification tag cannot be filtered by category — it becomes a second-class
 citizen in search results and breaks the taxonomy that makes memory useful.
 
+## Optional Tag Rules
+
+1. You may use topic tags for additional classification (e.g., `database`, `postgres`, `deployment`, `auth`).
+2. To limit scope to a project, you may use a project tag. MANDATORY STRUCTURE for project tag: `project:foo`.  
+
 ---
 
 ## How It Works
 
 A memory bookmark has three meaningful fields:
 
-| Field | Purpose | Limit |
-|-------|---------|-------|
-| `url` | **The memory content** (what you're storing) | ~1000 tokens |
-| `title` | A concise, searchable title | Short phrase |
+| Field | Purpose | Limit           |
+|-------|---------|-----------------|
+| `url` | **The memory content** (what you're storing) | max. 500 tokens |
+| `title` | A concise, searchable title | Short phrase    |
 | `tags` | Classification + topic tags | Comma-separated |
 
 **The `url` field IS the memory.** This is the first positional argument to `bkmr add`. Do NOT
 put memory content in the `-d` (description) field — that field is not used for embeddings or
 the memory display action. If you put content in description instead of url, the memory becomes
-unsearchable and displays as empty.
+unsearchable and displays as empty. Keep memories concise.
 
 Embeddings for semantic search are computed from **content (url) + title + visible tags** (system
 tags like `_mem_` are excluded from embeddings). This means your title and tags directly affect
@@ -80,6 +85,7 @@ how well the memory is found — make them descriptive.
 - **At every task start** — before doing any work, check for relevant memories
 - **Before architectural decisions** — check for gotchas, preferences, procedures
 - **When something feels familiar** — "didn't we solve this before?"
+- **When encountering a bug or surprise** — check for past episodes or gotchas
 
 ### How to Query
 
@@ -143,7 +149,7 @@ bkmr search "testing framework" -t _mem_ -n preference --json --np -l 10
 ```
 
 The `url` field contains the actual memory content. The `rrf_score` (hsearch) indicates relevance
-— higher is better. Use `id` to reference a specific memory for updates or edits.
+— higher is better. Use `id` to reference a specific memory for updates.
 
 To view a single memory in detail:
 ```bash
@@ -237,7 +243,7 @@ bkmr add \
 # Gotcha
 bkmr add \
   "bkmr integration tests MUST run single-threaded (--test-threads=1) because they share a SQLite DB file. Parallel execution causes SQLITE_BUSY errors that look like test failures but are actually lock contention." \
-  "gotcha,testing,bkmr" \
+  "project:bkmr,gotcha,testing" \
   --title "bkmr tests require single-threaded execution" \
   -t mem --no-web
 ```
@@ -261,31 +267,53 @@ bkmr hsearch "your proposed memory content keywords" -t _mem_ --json --np -l 3
 ```
 
 **Decision logic:**
-- If no results or all results are clearly different → **create new** memory
-- If top result covers the same topic but is outdated → **edit** the existing one: `bkmr edit <id>`
-- If top result says essentially the same thing → **skip**, don't create a duplicate
-- If top result is related but your new insight adds information → **edit** to merge both
+- **No match** → create new memory
+- **Outdated match** → update content with `bkmr update --url "..." <id>`
+- **Same content exists** → skip, don't duplicate
+- **Related but adds info** → update to merge both facts
+
+### Update Examples
+
+**Scenario 1: Outdated fact** — port changed from 5432 to 5433
 
 ```bash
-# Example: check before storing a database fact
-bkmr hsearch "production database connection" -t _mem_ -n fact --json --np -l 3
+# Step 1: Search finds existing memory
+bkmr hsearch "production database" -t _mem_ -n fact --json --np -l 3
+# Returns: id=42, url="Prod DB on port 5432", title="Production database config"
 
-# If ID 42 exists with outdated port info, update it:
-bkmr edit 42
-# This opens the editor — update the url field with current info
+# Step 2: Update the content (port changed)
+bkmr update --url "Production PostgreSQL 15 on port 5433. Pool max 50." 42
 ```
 
-### Tag Management
+**Scenario 2: Enriching a memory** — adding new info to existing memory
 
 ```bash
-# Add a topic tag to an existing memory
-bkmr update 42 -t newtopic
+# Step 1: Search finds a thin memory
+bkmr hsearch "auth service" -t _mem_ --json --np -l 3
+# Returns: id=87, url="Auth uses JWT with 24h expiry", title="Auth token config"
 
-# Remove an obsolete tag
-bkmr update 42 -n oldtopic
+# Step 2: Enrich with more detail
+bkmr update --url "Auth uses JWT with 24h expiry. Refresh tokens in Redis (not DB). Token rotation enabled. JWKS endpoint at /api/.well-known/jwks.json." 87
+```
 
-# Replace all tags (careful — include _mem_ classification and topics)
-bkmr update 42 -t "fact,database,postgres,production" -f
+**Scenario 3: Fixing a bad title** — improving searchability
+
+```bash
+bkmr update --title "Auth service: JWT expiry, refresh tokens, JWKS endpoint" 87
+```
+
+**Scenario 4: Reclassifying a memory** — was stored as fact, should be gotcha
+
+```bash
+# Replace all tags (must include _mem_ and new classification)
+bkmr update 87 -t "_mem_,gotcha,auth,jwt" -f
+```
+
+**Scenario 5: Adding topic tags** — make memory more discoverable
+
+```bash
+# Additive: keep existing tags, add new ones
+bkmr update 87 -t redis,security
 ```
 
 ---
@@ -306,7 +334,7 @@ Did I learn something new?
     │       │       │   ├── No → Don't store
     │       │       │   └── Yes
     │       │       │       ├── Does a similar memory already exist?
-    │       │       │       │   ├── Yes → Edit/merge existing (bkmr edit <id>)
+    │       │       │       │   ├── Yes → Update existing (bkmr update --url "..." <id>)
     │       │       │       │   └── No → Create new memory
     │       │       │       └── Done
     │       │       └── Done

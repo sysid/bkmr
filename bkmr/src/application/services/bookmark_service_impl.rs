@@ -1236,32 +1236,33 @@ mod tests {
         }
     }
 
-    // #[test]
-    // #[serial]
-    // fn given_existing_bookmark_when_update_content_then_updates_correctly() {
-    //     // Arrange
-    //     let _env = init_test_env();
-    //     let _guard = EnvGuard::new();
-    //     let service = create_test_service();
-    //     let id = 1; // Using an existing ID from the test database
-    //     let new_title = "Updated Google";
-    //     let new_description = "Updated description";
-    //
-    //     // Act
-    //     let updated = service
-    //         .update_bookmark_content(id, new_title, new_description)
-    //         .unwrap();
-    //
-    //     // Assert
-    //     assert_eq!(updated.title, new_title);
-    //     assert_eq!(updated.description, new_description);
-    //
-    //     // Verify changes were persisted
-    //     let retrieved = service.get_bookmark(id).unwrap().unwrap();
-    //     assert_eq!(retrieved.title, new_title);
-    //     assert_eq!(retrieved.description, new_description);
-    // }
-    //
+    #[test]
+    fn given_existing_bookmark_when_update_fields_then_persists_changes() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let service = create_test_service();
+        let id = 1; // Existing ID from test database
+
+        // Act: fetch, mutate title/description/url, save
+        let mut bookmark = service.get_bookmark(id).unwrap().unwrap();
+        bookmark.title = "Updated Title".to_string();
+        bookmark.description = "Updated Description".to_string();
+        bookmark.url = "https://updated-url.example.com".to_string();
+        let updated = service.update_bookmark(bookmark, false).unwrap();
+
+        // Assert
+        assert_eq!(updated.title, "Updated Title");
+        assert_eq!(updated.description, "Updated Description");
+        assert_eq!(updated.url, "https://updated-url.example.com");
+
+        // Verify persistence
+        let retrieved = service.get_bookmark(id).unwrap().unwrap();
+        assert_eq!(retrieved.title, "Updated Title");
+        assert_eq!(retrieved.description, "Updated Description");
+        assert_eq!(retrieved.url, "https://updated-url.example.com");
+    }
+
     // #[test]
     // #[serial]
     // fn given_non_existent_bookmark_when_update_content_then_returns_error() {

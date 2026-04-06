@@ -508,6 +508,9 @@ pub fn update(
         tags,
         tags_not,
         force,
+        title,
+        description,
+        url,
         open_with,
     } = cli.command.unwrap()
     {
@@ -545,21 +548,37 @@ pub fn update(
                     }
                 }
 
-                // Update custom opener if provided
-                if let Some(opener) = &open_with {
-                    // Fetch latest version to avoid stale data
+                // Update scalar fields if provided (title, description, url, opener)
+                let has_field_updates =
+                    title.is_some() || description.is_some() || url.is_some() || open_with.is_some();
+                if has_field_updates {
+                    // Fetch latest version to avoid stale data after tag operations
                     if let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? {
-                        latest_bookmark.opener = if opener.is_empty() {
-                            None
-                        } else {
-                            Some(opener.clone())
-                        };
-                        bookmark_service.update_bookmark(latest_bookmark, false)?;
-                        if opener.is_empty() {
-                            eprintln!("Custom opener cleared");
-                        } else {
-                            eprintln!("Custom opener set to: {}", opener);
+                        if let Some(ref t) = title {
+                            latest_bookmark.title = t.clone();
+                            eprintln!("Title set to: {}", t);
                         }
+                        if let Some(ref d) = description {
+                            latest_bookmark.description = d.clone();
+                            eprintln!("Description set to: {}", d);
+                        }
+                        if let Some(ref u) = url {
+                            latest_bookmark.url = u.clone();
+                            eprintln!("URL set to: {}", u);
+                        }
+                        if let Some(ref opener) = open_with {
+                            latest_bookmark.opener = if opener.is_empty() {
+                                None
+                            } else {
+                                Some(opener.clone())
+                            };
+                            if opener.is_empty() {
+                                eprintln!("Custom opener cleared");
+                            } else {
+                                eprintln!("Custom opener set to: {}", opener);
+                            }
+                        }
+                        bookmark_service.update_bookmark(latest_bookmark, false)?;
                     }
                 }
             } else {

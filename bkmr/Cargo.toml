@@ -2,7 +2,7 @@
 name = "bkmr"
 version = "7.1.0"
 edition = "2021"
-description = "A Unified CLI Tool for Bookmark, Snippet, and Knowledge Management"
+description = "Knowledge management for humans and agents — bookmarks, snippets, etc, searchable, executable."
 repository = "https://github.com/sysid/bkmr"
 readme = "../README.md"
 license = "BSD-3-Clause"
