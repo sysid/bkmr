@@ -1,6 +1,6 @@
 [package]
 name = "bkmr"
-version = "7.2.0"
+version = "7.3.0"
 edition = "2021"
 description = "Knowledge management for humans and agents — bookmarks, snippets, etc, searchable, executable."
 repository = "https://github.com/sysid/bkmr"
