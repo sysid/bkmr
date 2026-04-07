@@ -31,7 +31,7 @@ itertools = "0.14.0"
 markdown = "1.0.0"
 md5 = "0.7.0"
 minijinja = "2.19.0"
-fastembed = { version = "5", default-features = false, features = ["ort-download-binaries-rustls-tls", "hf-hub-rustls-tls", "image-models"] }
+fastembed = { version = "5", default-features = false, features = ["hf-hub-rustls-tls", "image-models"] }
 open = "5.3.3"
 regex = "1.12.3"
 reqwest = {version = "0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls"] }
@@ -58,6 +58,11 @@ zerocopy = { version = "0.7", features = ["derive"] }
 tower-lsp = "0.20"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "io-std", "time", "process", "sync"] }
 async-trait = "0.1"
+
+[features]
+default = ["ort-download-binaries"]
+ort-download-binaries = ["fastembed/ort-download-binaries-rustls-tls"]
+system-ort = ["fastembed/ort-load-dynamic"]
 
 [dev-dependencies]
 assert_cmd = "2.2.0"
