@@ -101,7 +101,7 @@ impl FastEmbedEmbedding {
 
             if needs_download {
                 eprintln!(
-                    "Downloading embedding model {:?} (one-time, ~130MB)...",
+                    "Downloading embedding model {:?} (one-time)...",
                     self.embedding_model
                 );
                 eprintln!("Cache location: {}", cache_dir);

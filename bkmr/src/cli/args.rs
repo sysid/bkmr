@@ -14,6 +14,10 @@ pub struct Cli {
     #[arg(short, long, value_name = "FILE")]
     pub config: Option<PathBuf>,
 
+    /// Path to database file (overrides BKMR_DB_URL and config.toml)
+    #[arg(long = "db", value_name = "FILE", global = true)]
+    pub db: Option<PathBuf>,
+
     /// Turn debugging information on
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,

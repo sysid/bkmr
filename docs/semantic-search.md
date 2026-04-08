@@ -9,7 +9,7 @@ Semantic search uses local embeddings (vector representations of text) via [fast
 ## Requirements
 
 - No external API keys needed — everything runs locally
-- First use downloads the embedding model (~130MB, one-time)
+- First use downloads the embedding model (~500MB, one-time)
 - Model cache location: `~/.cache/bkmr/models/` (override with `FASTEMBED_CACHE_DIR`)
 
 ## Basic Usage

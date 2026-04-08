@@ -32,10 +32,15 @@ fn main() {
 
     // Load configuration with CLI overrides
     let config_path_ref = cli.config.as_deref();
-    let settings = load_settings(config_path_ref).unwrap_or_else(|e| {
+    let mut settings = load_settings(config_path_ref).unwrap_or_else(|e| {
         debug!("Failed to load settings: {}. Using defaults.", e);
         Settings::default()
     });
+
+    // CLI --db flag takes highest priority
+    if let Some(ref db_path) = cli.db {
+        settings.db_url = db_path.to_string_lossy().to_string();
+    }
 
     // Handle all database-independent operations first
     if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
