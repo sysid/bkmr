@@ -40,17 +40,43 @@ bkmr sem-search "deployment automation script"
 bkmr sem-search "error handling patterns"
 ```
 
-## Managing Embeddable Content
+## Embedding Defaults
 
-Not all content benefits from semantic embeddings. By default, new bookmarks are not marked as embeddable.
+By default, all new bookmarks are embeddable and participate in semantic search. Embeddings are generated automatically when you `add`, `load-json`, or `import-files`.
+
+To opt out of embedding on creation:
 
 ```bash
-# Mark a bookmark as embeddable (will generate embeddings)
-bkmr set-embeddable 123 --enable
+# Add a bookmark without generating an embedding
+bkmr add "https://example.com" tag1,tag2 --no-embed
 
-# Mark a bookmark as non-embeddable
-bkmr set-embeddable 123 --disable
+# Import files without embeddings
+bkmr import-files ./scripts --no-embed
 
+# Bulk-load JSON without embeddings
+bkmr load-json bookmarks.json --no-embed
+```
+
+## Managing Embeddings on Existing Bookmarks
+
+Use `update --embed` / `--no-embed` to change the embeddable state of existing bookmarks:
+
+```bash
+# Enable embedding for an existing bookmark (generates embedding immediately)
+bkmr update 123 --embed
+
+# Disable embedding (removes embedding and content hash)
+bkmr update 123 --no-embed
+
+# Works with multiple IDs
+bkmr update 123,456,789 --embed
+```
+
+**Note:** Bookmarks created before v7.6.0 default to non-embeddable. Use `update --embed` to enable them, then `backfill` to generate embeddings in batch.
+
+## Batch Operations
+
+```bash
 # Backfill embeddings for all embeddable bookmarks that lack them
 bkmr backfill
 
@@ -150,7 +176,7 @@ Quantized variants (`*Q`) are also available for faster inference.
 
 ## Optimal Content for Embeddings
 
-Not all content types benefit equally from embeddings. Consider enabling embeddings for:
+All bookmarks are embedded by default. Content that benefits most:
 
 - Technical documentation and notes
 - Complex code snippets with explanatory comments
@@ -158,10 +184,10 @@ Not all content types benefit equally from embeddings. Consider enabling embeddi
 - Reference materials and guides
 - Markdown files that change frequently
 
-Content that may not benefit as much:
-- Very short snippets or one-liners
-- URLs without descriptive content
-- Binary files or executables
+Content where you might use `--no-embed`:
+- Very short one-liner snippets
+- URLs you only access by tag, not by meaning
+- Temporary bookmarks you'll delete soon
 
 ## Privacy
 

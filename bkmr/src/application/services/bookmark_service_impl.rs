@@ -86,6 +86,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         description: Option<&str>,
         tags: Option<&HashSet<Tag>>,
         fetch_metadata: bool,
+        embeddable: bool,
     ) -> ApplicationResult<Bookmark> {
         // Check if bookmark with URL already exists
         let existing_id = self
@@ -137,6 +138,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         let mut bookmark =
             Bookmark::new(url, &title_str, &desc_str, all_tags)
                 .app_context("creating new bookmark from provided data")?;
+        bookmark.set_embeddable(embeddable);
 
         self.repository
             .add(&mut bookmark)
@@ -302,14 +304,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         self.update_bookmark(bookmark, false)
     }
 
-    #[instrument(skip_all, level = "debug")]
-    fn search_bookmarks(&self, query: &BookmarkQuery) -> ApplicationResult<Vec<Bookmark>> {
-        debug!("Searching bookmarks with query: {:?}", query);
-
-        let bookmarks = self.repository.search(query)?;
-        Ok(bookmarks)
-    }
-
     // Implement the convenience method for text search
     #[instrument(skip_all, level = "debug")]
     fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
@@ -318,6 +312,14 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending));
 
         self.search_bookmarks(&query)
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn search_bookmarks(&self, query: &BookmarkQuery) -> ApplicationResult<Vec<Bookmark>> {
+        debug!("Searching bookmarks with query: {:?}", query);
+
+        let bookmarks = self.repository.search(query)?;
+        Ok(bookmarks)
     }
 
     #[instrument(skip(self, search), level = "debug")]
@@ -522,7 +524,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     /// description, tags) and generates embeddings via `Bookmark::get_content_for_embedding()`
     /// (type-aware dispatch). Skips URLs that already exist — no update support.
     #[instrument(skip(self), level = "debug")]
-    fn load_json_bookmarks(&self, path: &str, dry_run: bool) -> ApplicationResult<usize> {
+    fn load_json_bookmarks(&self, path: &str, dry_run: bool, embeddable: bool) -> ApplicationResult<usize> {
         let imports = self
             .import_repository
             .import_json_bookmarks(path)
@@ -554,6 +556,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 &import.content,
                 import.tags,
             )?;
+            bookmark.set_embeddable(embeddable);
 
             self.repository.add(&mut bookmark)?;
 
@@ -584,6 +587,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         dry_run: bool,
         verbose: bool,
         base_path_name: Option<&str>,
+        embeddable: bool,
     ) -> ApplicationResult<(usize, usize, usize)> {
         use crate::domain::repositories::import_repository::ImportOptions;
 
@@ -680,7 +684,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             } else {
                 // Create new bookmark
                 if !dry_run {
-                    self.create_bookmark_from_file(file_data, &settings, base_path_name)?;
+                    self.create_bookmark_from_file(file_data, &settings, base_path_name, embeddable)?;
                 }
                 added_count += 1;
                 println!("Added bookmark: {}", file_data.name);
@@ -738,6 +742,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         file_data: &FileImportData,
         settings: &crate::config::Settings,
         base_path_name: Option<&str>,
+        embeddable: bool,
     ) -> ApplicationResult<Bookmark> {
         use crate::domain::system_tag::SystemTag;
 
@@ -768,7 +773,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             .updated_at(chrono::Utc::now())
             .embedding(None)
             .content_hash(None)
-            .embeddable(true)
+            .embeddable(embeddable)
             .file_path(None)
             .file_mtime(None)
             .file_hash(None)
@@ -1115,7 +1120,7 @@ mod tests {
 
         // Act
         let bookmark = service
-            .add_bookmark(url, Some(title), Some(description), Some(&tags), false)
+            .add_bookmark(url, Some(title), Some(description), Some(&tags), false, true)
             .unwrap();
 
         // Assert
@@ -1149,6 +1154,7 @@ mod tests {
             Some("Description"),
             None,
             false,
+            true,
         );
 
         // Assert
@@ -1335,7 +1341,7 @@ mod tests {
         // First add a test bookmark that we can delete
         let url = "https://todelete.example.com";
         let bookmark = service
-            .add_bookmark(url, Some("To Delete"), Some("Description"), None, false)
+            .add_bookmark(url, Some("To Delete"), Some("Description"), None, false, true)
             .unwrap();
         let id = bookmark.id.unwrap();
 
@@ -1541,34 +1547,35 @@ mod tests {
                 Some("Description"),
                 None,
                 false,
+                true,
             )
             .unwrap();
         let id = bookmark.id.unwrap();
 
-        // Verify initial state
-        assert!(!bookmark.embeddable, "Default should be false");
+        // Verify initial state — default is now true
+        assert!(bookmark.embeddable, "Default should be true");
 
-        // Act - Enable embedding
-        let updated = service.set_bookmark_embeddable(id, true).unwrap();
+        // Act - Disable embedding
+        let updated = service.set_bookmark_embeddable(id, false).unwrap();
 
         // Assert
-        assert!(updated.embeddable, "Flag should be updated to true");
+        assert!(!updated.embeddable, "Flag should be updated to false");
 
         // Verify persistence
         let retrieved = service.get_bookmark(id).unwrap().unwrap();
-        assert!(retrieved.embeddable, "Flag should be persisted as true");
+        assert!(!retrieved.embeddable, "Flag should be persisted as false");
 
-        // Act - Disable embedding
-        let updated_again = service.set_bookmark_embeddable(id, false).unwrap();
+        // Act - Re-enable embedding
+        let updated_again = service.set_bookmark_embeddable(id, true).unwrap();
 
         // Assert
-        assert!(!updated_again.embeddable, "Flag should be updated to false");
+        assert!(updated_again.embeddable, "Flag should be updated to true");
 
         // Verify persistence
         let retrieved_again = service.get_bookmark(id).unwrap().unwrap();
         assert!(
-            !retrieved_again.embeddable,
-            "Flag should be persisted as false"
+            retrieved_again.embeddable,
+            "Flag should be persisted as true"
         );
     }
 }

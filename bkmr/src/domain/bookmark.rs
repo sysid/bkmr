@@ -33,7 +33,7 @@ pub struct Bookmark {
     pub updated_at: DateTime<Utc>,
     pub embedding: Option<Vec<u8>>,
     pub content_hash: Option<Vec<u8>>,
-    #[builder(default = "false")]
+    #[builder(default = "true")]
     pub embeddable: bool,
     #[builder(default)]
     pub file_path: Option<String>,
@@ -74,7 +74,7 @@ impl Bookmark {
             updated_at: now,
             embedding: None,
             content_hash: None,
-            embeddable: false, // Default to false
+            embeddable: true, // Default to true — all new bookmarks participate in semantic search
             file_path: None,
             file_mtime: None,
             file_hash: None,
@@ -828,16 +828,16 @@ mod tests {
         )
         .unwrap();
 
-        // Default should be false
-        assert!(!bookmark.embeddable);
-
-        // Set to true
-        bookmark.set_embeddable(true);
+        // Default should be true
         assert!(bookmark.embeddable);
 
-        // Set back to false
+        // Set to false
         bookmark.set_embeddable(false);
         assert!(!bookmark.embeddable);
+
+        // Set back to true
+        bookmark.set_embeddable(true);
+        assert!(bookmark.embeddable);
     }
     #[test]
     fn given_tag_when_check_system_then_validates_system_status() {

@@ -62,6 +62,7 @@ impl CommandService {
                 description,
                 Some(&tag_set),
                 false, // Don't fetch metadata for snippets
+                true,  // embeddable by default
             )
             .map_err(LspError::from)
             .map_err(|e| e.context("adding snippet bookmark via service"))?;
@@ -524,6 +525,7 @@ mod tests {
                 None,
                 Some(&tags),
                 false,
+                true,
             )
             .unwrap();
         let id = bookmark.id.unwrap();

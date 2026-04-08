@@ -21,7 +21,7 @@ fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_datab
         .to_string();
 
     // Act
-    let processed_count = bookmark_service.load_json_bookmarks(&test_file_path, false)?;
+    let processed_count = bookmark_service.load_json_bookmarks(&test_file_path, false, true)?;
 
     // Assert
     // Verify that the correct number of bookmarks were processed

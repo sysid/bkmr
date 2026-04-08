@@ -56,13 +56,7 @@ $BKMR add "SELECT * FROM pods WHERE status = 'Running'" "kubernetes,sql,_snip_" 
     --title "SQL query for kubernetes pod status"
 
 echo ""
-echo "--- Marking embeddable bookmarks ---"
-for id in $(seq 1 11); do
-    $BKMR set-embeddable "$id" --enable
-done
-
-echo ""
-echo "--- Setup complete (embeddings created during set-embeddable) ---"
+echo "--- Setup complete (bookmarks are embeddable by default) ---"
 echo "Database: $TEST_DB"
 echo ""
 $BKMR info

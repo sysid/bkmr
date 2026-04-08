@@ -14,7 +14,7 @@ fn test_import_files_with_yaml_frontmatter() {
     let paths = vec![test_dir.to_string()];
 
     // First import (should add files)
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     if let Err(e) = &result {
         eprintln!("Import failed: {:?}", e);
     }
@@ -51,7 +51,7 @@ echo "duplicate test"
     let paths = vec![temp_dir.path().to_string_lossy().to_string()];
 
     // First import should succeed
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     assert!(result.is_ok(), "First import should succeed");
 
     // Create second file with same name
@@ -69,7 +69,7 @@ echo "another duplicate"
     .unwrap();
 
     // Second import without --update should fail with DuplicateName error
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     assert!(result.is_err(), "Import should fail due to duplicate name");
 
     if let Err(e) = result {
@@ -105,7 +105,7 @@ echo "version 1"
     let paths = vec![temp_dir.path().to_string_lossy().to_string()];
 
     // First import
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     assert!(result.is_ok(), "First import should succeed");
     let (added, _, _) = result.unwrap();
     assert_eq!(added, 1, "Should add one file");
@@ -124,7 +124,7 @@ echo "version 2"
     .unwrap();
 
     // Import with update flag
-    let result = service.import_files(&paths, true, false, false, false, None);
+    let result = service.import_files(&paths, true, false, false, false, None, true);
     assert!(result.is_ok(), "Update import should succeed");
     let (added, updated, _) = result.unwrap();
     assert_eq!(added, 0, "Should not add new files");
@@ -140,7 +140,7 @@ fn test_import_files_dry_run() {
     let paths = vec![test_dir.to_string()];
 
     // Dry run should not modify database
-    let result = service.import_files(&paths, false, false, true, false, None);
+    let result = service.import_files(&paths, false, false, true, false, None, true);
     assert!(result.is_ok(), "Dry run should succeed");
 
     let (added, _updated, _deleted) = result.unwrap();
@@ -180,7 +180,7 @@ ls -la
 
     let paths = vec![temp_dir.path().to_string_lossy().to_string()];
 
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     assert!(result.is_ok(), "Import with hash comments should succeed");
 
     let (added, _, _) = result.unwrap();
@@ -210,7 +210,7 @@ echo "missing name field"
     let paths = vec![temp_dir.path().to_string_lossy().to_string()];
 
     // Should succeed but skip files without names (warnings should be logged)
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     assert!(
         result.is_ok(),
         "Import should succeed but skip invalid files"
@@ -246,7 +246,7 @@ This is snippet content that should be tagged as _snip_, not _shell_.
     let paths = vec![temp_dir.path().to_string_lossy().to_string()];
 
     // Import the file
-    let result = service.import_files(&paths, false, false, false, false, None);
+    let result = service.import_files(&paths, false, false, false, false, None, true);
     assert!(result.is_ok(), "Import should succeed");
 
     let (added, _, _) = result.unwrap();

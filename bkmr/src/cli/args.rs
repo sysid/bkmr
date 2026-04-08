@@ -235,6 +235,8 @@ pub enum Commands {
             help = "custom command to open this bookmark (replaces default open behavior)"
         )]
         open_with: Option<String>,
+        #[arg(long = "no-embed", help = "do not generate embedding for semantic search")]
+        no_embed: bool,
     },
     /// Delete bookmarks by ID
     Delete {
@@ -262,6 +264,10 @@ pub enum Commands {
             help = "set custom command to open this bookmark (use empty string to clear)"
         )]
         open_with: Option<String>,
+        #[arg(long = "embed", help = "enable embedding for semantic search")]
+        embed: bool,
+        #[arg(long = "no-embed", help = "disable embedding for semantic search")]
+        no_embed: bool,
     },
     /// Edit bookmarks interactively in $EDITOR (smart: opens source file for imports)
     Edit {
@@ -299,17 +305,6 @@ pub enum Commands {
         #[arg(long, help = "Pre-fill the database with demo entries")]
         pre_fill: bool,
     },
-    /// Set whether a bookmark can be embedded (used for semantic search)
-    SetEmbeddable {
-        /// ID of the bookmark
-        id: i32,
-
-        #[arg(long = "enable", help = "Enable embedding for this bookmark")]
-        enable: bool,
-
-        #[arg(long = "disable", help = "Disable embedding for this bookmark")]
-        disable: bool,
-    },
     /// Generate missing embeddings for embeddable bookmarks
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
@@ -333,6 +328,8 @@ pub enum Commands {
 
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
+        #[arg(long = "no-embed", help = "do not generate embedding for semantic search")]
+        no_embed: bool,
     },
 
     /// Import files from directories (stores content, tracks source file for smart editing).
@@ -388,6 +385,8 @@ pub enum Commands {
             help = "Base path variable name from config (e.g., SCRIPTS_HOME). Paths must be relative to the base path location."
         )]
         base_path: Option<String>,
+        #[arg(long = "no-embed", help = "do not generate embedding for semantic search")]
+        no_embed: bool,
     },
 
     /// Show program information and configuration details
