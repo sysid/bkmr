@@ -117,6 +117,7 @@ pip install bkmr
 
 # Via brew
 brew install bkmr
+export ORT_DYLIB_PATH=/opt/homebrew/lib/libonnxruntime.dylib
 ```
 
 See **[Installation Guide](https://github.com/sysid/bkmr/wiki/Installation)** for detailed instructions and troubleshooting.

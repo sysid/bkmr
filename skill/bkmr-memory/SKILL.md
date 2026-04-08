@@ -1,13 +1,16 @@
 ---
 name: bkmr-memory
 description: >
-  Use bkmr as persistent long-term memory across agent sessions. This skill teaches how to store,
-  query, deduplicate, and manage memories using bkmr's bookmark system with the _mem_ system tag.
-  Use this skill whenever starting a new task (to recall relevant context), before architectural
-  decisions (to check for precedence), and when encountering bugs or surprises (to check for gotchas).
-  Also use when the user mentions remembering something, recalling past sessions, storing knowledge,
-  agent memory, or cross-session persistence. Even if the user doesn't explicitly say "memory",
-  trigger this skill when context from past work would clearly help the current task.
+  Primary memory system — supersedes built-in file-based memory (MEMORY.md / memory/ directory).
+  All memory reads and writes go through bkmr, not the filesystem. Invoke for ANY of:
+  (1) User asks about memories, past sessions, what you remember — "what do you know about X".
+  (2) User asks to remember or save something for future sessions.
+  (3) Starting a new task — check for relevant context, gotchas, or preferences.
+  (4) Encountered a bug or surprise — check if seen before.
+  (5) Making an architectural or tooling decision — check for prior decisions.
+  (6) End of task — persist non-trivial learnings.
+  When in doubt, invoke — a quick bkmr query costs almost nothing.
+  DO NOT use file-based memory — use bkmr instead.
 ---
 
 # bkmr-memory — Persistent Agent Memory
@@ -23,12 +26,16 @@ them, memories are unfindable or uncategorized noise.
 
 **READING — every query must include `-t _mem_`:**
 ```bash
-bkmr hsearch "query" -t _mem_ --json --np       # hybrid search
-bkmr search "query" -t _mem_ --json --np         # FTS search
-bkmr search -t _mem_ -n gotcha --json --np       # tag-filtered search
+bkmr hsearch "query" -t _mem_ --json --np       # default: hybrid (FTS + semantic)
 ```
 The `-t _mem_` flag scopes results to agent memories only. Without it, you search the entire
 bookmark database (personal bookmarks, snippets, shells, etc.) — guaranteed noise.
+
+Always use `hsearch` as your search command. It combines FTS and semantic ranking via
+Reciprocal Rank Fusion, so it handles both keyword and conceptual queries well.
+Only fall back to `search` (FTS-only) when you specifically need exact phrase matching
+(`'"JWT expiry"'`), boolean logic (`'auth NOT oauth'`), or tag-only browsing with no
+query text (`-t _mem_ -n gotcha`).
 
 **WRITING — every memory must use `-t mem` AND exactly one classification tag:**
 ```bash
@@ -89,10 +96,11 @@ how well the memory is found — make them descriptive.
 
 ### How to Query
 
-Use `hsearch` (hybrid FTS + semantic) as the default — it handles imprecise queries well:
+Use **one** `hsearch` call per lookup. Do not run both `hsearch` and `search` for the same
+query — the results overlap heavily and waste context.
 
 ```bash
-# Hybrid search — best for natural language queries
+# Standard query — handles keywords and conceptual matches
 bkmr hsearch "database connection pooling" -t _mem_ --json --np
 
 # With a classification filter — narrows results to a category
@@ -102,25 +110,22 @@ bkmr hsearch "deployment steps" -t _mem_ -n procedure --json --np
 bkmr hsearch "auth middleware" -t _mem_ --json --np -l 5
 ```
 
-Use `search` (FTS-only) when you need exact keyword matching or structured queries:
+**FTS-only fallback** — use `search` instead of `hsearch` only for these three cases:
 
 ```bash
-# FTS5 exact phrase search
+# 1. Exact phrase match (quotes inside the query)
 bkmr search '"JWT expiry"' -t _mem_ --json --np
 
-# FTS5 boolean: find memories about auth BUT NOT about OAuth
+# 2. Boolean logic (AND/OR/NOT)
 bkmr search 'auth NOT oauth' -t _mem_ --json --np
 
-# Tag-only search: all gotchas
+# 3. Tag-only browse with no query text
 bkmr search -t _mem_ -n gotcha --json --np
-
-# Combined: FTS query filtered to preferences
-bkmr search "testing framework" -t _mem_ -n preference --json --np -l 10
 ```
 
 ### Reading the Results
 
-**hsearch --json** returns:
+`hsearch --json` returns:
 ```json
 [
   {
@@ -133,28 +138,14 @@ bkmr search "testing framework" -t _mem_ -n preference --json --np -l 10
 ]
 ```
 
-**search --json** returns:
-```json
-[
-  {
-    "id": 42,
-    "url": "The auth service uses JWT with 24h expiry.",
-    "title": "Auth token architecture",
-    "tags": ["_mem_", "fact", "auth"],
-    "access_count": 5,
-    "created_at": "2026-01-15T10:30:00+00:00",
-    "updated_at": "2026-03-20T14:00:00+00:00"
-  }
-]
-```
+The `url` field contains the actual memory content. The `rrf_score` indicates relevance —
+higher is better. Use `id` to reference a specific memory for updates.
 
-The `url` field contains the actual memory content. The `rrf_score` (hsearch) indicates relevance
-— higher is better. Use `id` to reference a specific memory for updates.
+To view a single memory in detail: `bkmr show 42 --json`
 
-To view a single memory in detail:
-```bash
-bkmr show 42 --json
-```
+Note: `search --json` returns a slightly different shape (tags as array, includes
+`access_count`/`created_at`/`updated_at` instead of `rrf_score`), but the key fields
+(`id`, `url`, `title`, `tags`) are the same.
 
 ### Query Patterns by Situation
 
@@ -162,9 +153,10 @@ bkmr show 42 --json
 |-----------|-------|
 | Starting work on a project | `bkmr hsearch "project-name overview" -t _mem_ --json --np -l 10` |
 | Before changing architecture | `bkmr hsearch "architecture decisions" -t _mem_ -n gotcha --json --np` |
-| Checking user preferences | `bkmr search -t _mem_ -n preference --json --np` |
+| Checking user preferences | `bkmr hsearch "conventions style" -t _mem_ -n preference --json --np` |
 | Recalling a past debugging session | `bkmr hsearch "debugged auth issue" -t _mem_ -n episode --json --np` |
 | Looking up a deployment procedure | `bkmr hsearch "deploy staging" -t _mem_ -n procedure --json --np` |
+| Browse all gotchas (no query) | `bkmr search -t _mem_ -n gotcha --json --np` |
 
 ---
 
@@ -369,16 +361,14 @@ These steps are NON-OPTIONAL. You MUST execute actual bkmr commands (not just re
 section).
 
 ### At Session Start (BEFORE any work)
-You MUST run these queries before writing code, making plans, or answering questions:
+Query for relevant memories before writing code, making plans, or answering questions.
+A single well-crafted hsearch is usually enough — don't run multiple overlapping queries.
 ```bash
-# 1. Query for project-relevant memories
+# Primary query — combine project name + task keywords for best recall
 bkmr hsearch "<project-name> <current-task-keywords>" -t _mem_ --json --np -l 10
 
-# 2. Check for gotchas related to what you're about to do
+# Only add a second query if the task involves a specific risk area
 bkmr hsearch "<area-of-work>" -t _mem_ -n gotcha --json --np
-
-# 3. Check user preferences if making style/tool decisions
-bkmr search -t _mem_ -n preference --json --np -l 10
 ```
 
 ### During Work (BEFORE decisions, AT strange bugs)
