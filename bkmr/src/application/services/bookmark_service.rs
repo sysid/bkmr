@@ -17,6 +17,7 @@ pub trait BookmarkService: Send + Sync + Debug {
         description: Option<&str>,
         tags: Option<&HashSet<Tag>>,
         fetch_metadata: bool,
+        embeddable: bool,
     ) -> ApplicationResult<Bookmark>;
 
     /// Delete a bookmark by ID
@@ -90,7 +91,7 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Bulk-create bookmarks from a JSON array file. Stores full content (url, title,
     /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates.
     /// Use case: agent bulk imports, migrations, seeding a database.
-    fn load_json_bookmarks(&self, path: &str, dry_run: bool) -> ApplicationResult<usize>;
+    fn load_json_bookmarks(&self, path: &str, dry_run: bool, embeddable: bool) -> ApplicationResult<usize>;
 
     /// Import files from directories with frontmatter metadata. Stores full content AND
     /// tracks source file (path, mtime, hash) for smart editing and change detection.
@@ -104,5 +105,6 @@ pub trait BookmarkService: Send + Sync + Debug {
         dry_run: bool,
         verbose: bool,
         base_path_name: Option<&str>,
+        embeddable: bool,
     ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
 }

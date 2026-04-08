@@ -25,6 +25,7 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
     let _ = Cli {
         name: None,
         config: None,
+        db: None,
         debug: 0,
 
         no_color: false,
@@ -92,6 +93,7 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
     let _ = Cli {
         name: None,
         config: None,
+        db: None,
         debug: 0,
 
         no_color: false,
@@ -184,6 +186,7 @@ fn test_search_command_structure_with_interpolate() {
     let cli = Cli {
         name: None,
         config: None,
+        db: None,
         debug: 0,
 
         no_color: false,

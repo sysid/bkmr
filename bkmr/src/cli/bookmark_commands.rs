@@ -34,7 +34,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
-use tracing::{instrument, warn};
+use tracing::{info, instrument, warn};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -311,6 +311,7 @@ pub fn add(
         clone_id,
         stdin,
         open_with,
+        no_embed,
     } = cli.command.unwrap()
     {
         // Convert bookmark_type string to SystemTag
@@ -392,6 +393,7 @@ pub fn add(
                 desc.as_deref(),
                 Some(&tag_set),
                 !no_web,
+                !no_embed,
             )?;
 
             // Set custom opener if provided
@@ -433,6 +435,7 @@ pub fn add(
                     Some(&edited_bookmark.description),
                     Some(&edited_bookmark.tags),
                     false, // Don't fetch metadata since we've already edited it
+                    !no_embed,
                 ) {
                     Ok(mut bookmark) => {
                         // Set custom opener if provided via CLI flag
@@ -512,13 +515,31 @@ pub fn update(
         description,
         url,
         open_with,
+        embed,
+        no_embed,
     } = cli.command.unwrap()
     {
         let id_list = get_ids(ids)?;
 
+        if embed && no_embed {
+            return Err(CliError::InvalidInput(
+                "Cannot specify both --embed and --no-embed".to_string(),
+            ));
+        }
+
         for id in id_list {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
                 eprintln!("Updating: {} ({})", bookmark.title, bookmark.url);
+
+                // Handle embedding flag changes
+                if embed || no_embed {
+                    let updated = bookmark_service.set_bookmark_embeddable(id, embed)?;
+                    eprintln!(
+                        "Embedding {}: {}",
+                        if embed { "enabled" } else { "disabled" },
+                        updated.title
+                    );
+                }
 
                 if force && tags.is_some() {
                     // Replace all tags
@@ -813,42 +834,6 @@ pub fn create_db(cli: Cli, services: &ServiceContainer, settings: &Settings) -> 
     Ok(())
 }
 
-#[instrument(skip(cli))]
-pub fn set_embeddable(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
-    if let Commands::SetEmbeddable {
-        id,
-        enable,
-        disable,
-    } = cli.command.unwrap()
-    {
-        let bookmark_service = services.bookmark_service.clone();
-
-        // Ensure that exactly one flag is provided
-        if enable == disable {
-            return Err(CliError::InvalidInput(
-                "Exactly one of --enable or --disable must be specified".to_string(),
-            ));
-        }
-
-        // Set the embeddable flag
-        let embeddable = enable;
-        match bookmark_service.set_bookmark_embeddable(id, embeddable) {
-            Ok(bookmark) => {
-                eprintln!(
-                    "Bookmark '{}' (ID: {}) is now {} for embedding",
-                    bookmark.title,
-                    bookmark.id.unwrap_or(0),
-                    if embeddable { "enabled" } else { "disabled" }
-                );
-                Ok(())
-            }
-            Err(e) => Err(CliError::from(e)),
-        }
-    } else {
-        Err(CliError::Other("Invalid command".to_string()))
-    }
-}
-
 /// Clear all embeddings from vec_bookmarks and reset all content hashes.
 /// Shared by `clear-embeddings` and `backfill --force`.
 fn purge_all_embeddings(services: &ServiceContainer) -> CliResult<()> {
@@ -875,10 +860,12 @@ pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()>
     }
 
     purge_all_embeddings(services)?;
+    info!("All embeddings and content hashes cleared");
     eprintln!("Cleared all embeddings and content hashes.");
     Ok(())
 }
 
+#[instrument(skip(cli, services), level = "debug")]
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         // Check if real embeddings are available
@@ -934,6 +921,7 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                     }
                 }
             }
+            info!(count = bookmarks.len(), force = force, "Backfill complete");
             eprintln!(
                 "Completed embedding backfill for {} bookmarks",
                 bookmarks.len()
@@ -945,13 +933,13 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
-    if let Commands::LoadJson { path, dry_run } = cli.command.unwrap() {
+    if let Commands::LoadJson { path, dry_run, no_embed } = cli.command.unwrap() {
         eprintln!("Loading bookmarks from JSON array: {}", path);
 
         let bookmark_service = services.bookmark_service.clone();
 
         if dry_run {
-            let count = bookmark_service.load_json_bookmarks(&path, true)?;
+            let count = bookmark_service.load_json_bookmarks(&path, true, !no_embed)?;
             eprintln!(
                 "Dry run completed - would process {} bookmark entries",
                 count
@@ -960,7 +948,8 @@ pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         }
 
         // Process the bookmarks
-        let processed_count = bookmark_service.load_json_bookmarks(&path, false)?;
+        let processed_count = bookmark_service.load_json_bookmarks(&path, false, !no_embed)?;
+        info!(count = processed_count, path = %path, "JSON load complete");
         eprintln!(
             "Successfully processed {} bookmark entries",
             processed_count
@@ -1387,6 +1376,7 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         dry_run,
         verbose,
         base_path,
+        no_embed,
     }) = cli.command
     {
         // Validate base path if provided
@@ -1423,6 +1413,7 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             dry_run,
             verbose,
             base_path.as_deref(),
+            !no_embed,
         ) {
             Ok((added, updated, deleted)) => {
                 if dry_run {

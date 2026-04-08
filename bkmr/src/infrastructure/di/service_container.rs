@@ -26,6 +26,7 @@ use crate::infrastructure::repositories::sqlite::vector_repository::SqliteVector
 use crossterm::style::Stylize;
 use std::path::Path;
 use std::sync::Arc;
+use tracing::{debug, error, info};
 
 /// Production service container - single source of truth for service creation
 pub struct ServiceContainer {
@@ -46,6 +47,8 @@ pub struct ServiceContainer {
 impl ServiceContainer {
     /// Create all services with explicit dependency injection
     pub fn new(config: &Settings) -> ApplicationResult<Self> {
+        debug!(db_url = %config.db_url, "Creating ServiceContainer");
+
         // Base infrastructure
         let bookmark_repository = Self::create_repository(&config.db_url)?;
         let embedder = Self::create_embedder(config)?;
@@ -73,6 +76,7 @@ impl ServiceContainer {
             config,
         )?;
 
+        info!("ServiceContainer initialized");
         Ok(Self {
             bookmark_repository,
             embedder,
@@ -89,6 +93,7 @@ impl ServiceContainer {
     fn create_repository(db_url: &str) -> ApplicationResult<Arc<SqliteBookmarkRepository>> {
         // Check if the database file exists before trying to create the repository
         if !Path::new(db_url).exists() {
+            error!(db_url = %db_url, "Database not found");
             eprintln!(
                 "{}",
                 format!("Error: Database not found at '{}'", db_url).red()
@@ -115,6 +120,7 @@ impl ServiceContainer {
 
     fn create_embedder(config: &Settings) -> ApplicationResult<Arc<dyn Embedder>> {
         let model_name = &config.embeddings.model;
+        debug!(model = %model_name, "Creating embedder");
         let model = FastEmbedEmbedding::model_from_name(model_name).map_err(|e| {
             crate::application::error::ApplicationError::Other(format!(
                 "Invalid embedding model '{}': {}",

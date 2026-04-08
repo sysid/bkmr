@@ -9,7 +9,7 @@ use std::fs::{self};
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 pub trait TemplateService: Send + Sync + Debug {
     fn edit_bookmark_with_template(
@@ -81,6 +81,7 @@ impl TemplateService for TemplateServiceImpl {
             .app_context("Failed to open editor")?;
 
         if !status.success() {
+            warn!(editor = %self.editor, exit_code = ?status.code(), "Editor exited with error");
             return Err(ApplicationError::Other(
                 "Editor exited with error".to_string(),
             ));

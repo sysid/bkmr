@@ -36,6 +36,7 @@ fn given_stdin_content_when_add_then_stores_content_in_url_column() {
             None,
             Some(&tag_set),
             false,
+            true,
         )
         .unwrap();
 
@@ -72,7 +73,7 @@ fn given_stdin_with_shell_type_when_add_then_creates_shell_bookmark() {
     tag_set.insert(Tag::new("test").unwrap());
 
     let bookmark = bookmark_service
-        .add_bookmark(test_script, Some(title), None, Some(&tag_set), false)
+        .add_bookmark(test_script, Some(title), None, Some(&tag_set), false, true)
         .unwrap();
 
     assert!(bookmark.id.is_some());
@@ -103,7 +104,7 @@ fn given_stdin_with_multiline_content_when_add_then_preserves_formatting() {
     tag_set.insert(Tag::new("multiline").unwrap());
 
     let bookmark = bookmark_service
-        .add_bookmark(multiline_content, Some(title), None, Some(&tag_set), false)
+        .add_bookmark(multiline_content, Some(title), None, Some(&tag_set), false, true)
         .unwrap();
 
     assert_eq!(bookmark.url, multiline_content);

@@ -424,6 +424,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             return Err(SqliteRepositoryError::BookmarkNotFound(id).into());
         }
 
+        debug!(bookmark_id = id, "Bookmark updated in database");
         Ok(())
     }
 
@@ -455,7 +456,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let mut conn = self.get_connection()?;
 
         // Begin transaction
-        conn.transaction::<bool, diesel::result::Error, _>(|conn| {
+        let deleted = conn.transaction::<bool, diesel::result::Error, _>(|conn| {
             let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
             if result == 0 {
                 return Ok(false); // No bookmark was deleted
@@ -464,7 +465,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         })
         .map_err(SqliteRepositoryError::DatabaseError)?;
 
-        Ok(true)
+        if deleted {
+            debug!(bookmark_id = id, "Bookmark deleted from database");
+        }
+        Ok(deleted)
     }
 
     #[instrument(skip_all, level = "trace")]

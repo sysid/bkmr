@@ -269,17 +269,15 @@ impl ImportRepository for FileImportRepository {
                         Ok(file_data) => all_files.push(file_data),
                         Err(e) => {
                             if _options.verbose {
+                                warn!(path = %path.display(), error = %e, "Skipping file");
                                 eprintln!("Skipping {}: {}", path.display(), e);
                             } else {
-                                debug!("Skipping {}: {}", path.display(), e);
+                                debug!(path = %path.display(), error = %e, "Skipping file");
                             }
                         }
                     }
                 } else if _options.verbose {
-                    eprintln!(
-                        "Skipping {}: unsupported file type (expected .sh, .py, or .md)",
-                        path.display()
-                    );
+                    warn!(path = %path.display(), "Skipping unsupported file type");
                 }
             } else if path.is_dir() {
                 // Directory - use WalkBuilder for recursive traversal
@@ -305,9 +303,10 @@ impl ImportRepository for FileImportRepository {
                                     }
                                     Err(e) => {
                                         if _options.verbose {
+                                            warn!(path = %entry_path.display(), error = %e, "Skipping file");
                                             eprintln!("Skipping {}: {}", entry_path.display(), e);
                                         } else {
-                                            debug!("Skipping {}: {}", entry_path.display(), e);
+                                            debug!(path = %entry_path.display(), error = %e, "Skipping file");
                                         }
                                     }
                                 }

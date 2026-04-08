@@ -62,7 +62,6 @@ pub fn execute_command_with_services(
         Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services),
         Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
-        Some(Commands::SetEmbeddable { .. }) => bookmark_commands::set_embeddable(cli, &services),
         Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli, &services),
         Some(Commands::ClearEmbeddings { .. }) => {
             bookmark_commands::clear_embeddings(cli, &services)
