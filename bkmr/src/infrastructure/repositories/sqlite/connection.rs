@@ -58,6 +58,7 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
                 "Failed to set WAL journal mode: {}", e
             ))
         })?;
+        debug!("WAL journal mode set via bootstrap connection");
         // bootstrap connection drops here — WAL mode persists on the file
     }
 
@@ -129,6 +130,7 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
     }
 
     // Display pending migrations
+    info!(count = pending.len(), "Running pending database migrations");
     eprintln!("This version requires DB schema migration:");
     for migration in &pending {
         eprintln!("  - {}", migration.name());
@@ -196,6 +198,7 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
         SqliteRepositoryError::MigrationError(format!("Failed to run migrations: {}", e))
     })?;
 
+    info!("Migrations completed successfully");
     eprintln!("Migrations completed successfully.");
     Ok(())
 }

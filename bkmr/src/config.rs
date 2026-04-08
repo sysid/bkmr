@@ -210,7 +210,7 @@ fn parse_fzf_opts(opts_str: &str) -> FzfOpts {
 // Load settings from config files and environment variables
 #[instrument(level = "debug")]
 pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
-    trace!("Loading settings");
+    debug!("Loading settings");
 
     // Start with default settings
     let mut settings = Settings::default();
@@ -229,7 +229,7 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
                     // Expand db_url path after loading from file
                     expand_db_url(&mut settings);
 
-                    trace!("Successfully loaded settings from specified file");
+                    debug!("Settings loaded from specified file: {:?}", path);
                 } else {
                     warn!("Failed to parse config file: {:?}", path);
                 }
@@ -297,13 +297,13 @@ fn apply_env_overrides(settings: &mut Settings) {
     let mut used_env_vars = false;
 
     if let Ok(db_url) = std::env::var("BKMR_DB_URL") {
-        trace!("Using BKMR_DB_URL from environment: {}", db_url);
+        debug!("Using BKMR_DB_URL from environment: {}", db_url);
         settings.db_url = db_url;
         used_env_vars = true;
     }
 
     if let Ok(fzf_opts) = std::env::var("BKMR_FZF_OPTS") {
-        trace!("Using BKMR_FZF_OPTS from environment: {}", fzf_opts);
+        debug!("Using BKMR_FZF_OPTS from environment: {}", fzf_opts);
         settings.fzf_opts = parse_fzf_opts(&fzf_opts);
         used_env_vars = true;
     }

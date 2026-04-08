@@ -5,7 +5,9 @@ use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::util::helper::is_stdout_piped;
 use crossterm::style::Stylize;
+use tracing::instrument;
 
+#[instrument(skip(cli, services), level = "debug")]
 pub fn show_tags(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Tags { tag } = cli.command.unwrap() {
         let tag_service = &services.tag_service;

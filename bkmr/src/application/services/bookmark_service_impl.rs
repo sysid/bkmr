@@ -21,7 +21,7 @@ use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
 use crate::util::validation::ValidationHelper;
 use std::path::Path;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 #[derive(Debug)]
 pub struct BookmarkServiceImpl<R: BookmarkRepository> {
@@ -152,6 +152,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         }
 
+        info!(bookmark_id = ?bookmark.id, title = %bookmark.title, "Bookmark created");
         Ok(bookmark)
     }
 
@@ -170,6 +171,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             debug!("Could not delete embedding for bookmark {}: {} (may not exist)", id, e);
         }
 
+        if result {
+            info!(bookmark_id = id, "Bookmark deleted");
+        }
         Ok(result)
     }
 
@@ -260,6 +264,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         self.repository
             .update(&bookmark)
             .with_app_context(|| format!("updating bookmark with ID {:?}", bookmark.id))?;
+        info!(bookmark_id = ?bookmark.id, "Bookmark updated");
         Ok(bookmark)
     }
 
@@ -319,6 +324,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         debug!("Searching bookmarks with query: {:?}", query);
 
         let bookmarks = self.repository.search(query)?;
+        debug!(result_count = bookmarks.len(), "Search complete");
         Ok(bookmarks)
     }
 
@@ -377,9 +383,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         }
 
+        debug!(query = %search.query, result_count = results.len(), "Semantic search complete");
         Ok(results)
     }
 
+    #[instrument(skip(self, search), level = "debug", fields(query = %search.query, mode = ?search.mode))]
     fn hybrid_search(
         &self,
         search: &HybridSearch,
@@ -453,6 +461,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         }
 
+        debug!(result_count = results.len(), "Hybrid search complete");
         Ok(results)
     }
 
@@ -571,6 +580,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             processed_count += 1;
         }
 
+        info!(count = processed_count, path = %path, "JSON import complete");
         Ok(processed_count)
     }
 
@@ -710,6 +720,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         }
 
+        info!(added = added_count, updated = updated_count, deleted = deleted_count, "File import complete");
         Ok((added_count, updated_count, deleted_count))
     }
 }

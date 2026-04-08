@@ -6,7 +6,7 @@ use crate::domain::error::DomainResult;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::util::interpolation::InterpolationHelper;
 use std::sync::Arc;
-use tracing::{debug, instrument};
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct SnippetAction {
@@ -19,7 +19,6 @@ impl SnippetAction {
         clipboard_service: Arc<dyn ClipboardService>,
         interpolation_service: Arc<dyn InterpolationService>,
     ) -> Self {
-        debug!("Creating new SnippetAction");
         Self {
             clipboard_service,
             interpolation_service,

@@ -3,7 +3,7 @@ use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::services::clipboard::ClipboardService;
 #[cfg(target_os = "linux")]
 use tracing::debug;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 /// Linux Clipboard Implementation Strategy:
 ///
@@ -59,11 +59,17 @@ impl ClipboardServiceImpl {
         match Clipboard::new() {
             Ok(mut clipboard) => clipboard
                 .set_text(text)
-                .map_err(|e| DomainError::Other(format!("Failed to set clipboard text: {}", e))),
-            Err(e) => Err(DomainError::Other(format!(
-                "Failed to initialize clipboard: {}",
-                e
-            ))),
+                .map_err(|e| {
+                    warn!(error = %e, "Failed to set clipboard text");
+                    DomainError::Other(format!("Failed to set clipboard text: {}", e))
+                }),
+            Err(e) => {
+                warn!(error = %e, "Failed to initialize clipboard");
+                Err(DomainError::Other(format!(
+                    "Failed to initialize clipboard: {}",
+                    e
+                )))
+            }
         }
     }
 

@@ -34,7 +34,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use std::{fs, io};
-use tracing::{instrument, warn};
+use tracing::{info, instrument, warn};
 
 // Helper function to get and validate IDs
 fn get_ids(ids: String) -> CliResult<Vec<i32>> {
@@ -860,10 +860,12 @@ pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()>
     }
 
     purge_all_embeddings(services)?;
+    info!("All embeddings and content hashes cleared");
     eprintln!("Cleared all embeddings and content hashes.");
     Ok(())
 }
 
+#[instrument(skip(cli, services), level = "debug")]
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         // Check if real embeddings are available
@@ -919,6 +921,7 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                     }
                 }
             }
+            info!(count = bookmarks.len(), force = force, "Backfill complete");
             eprintln!(
                 "Completed embedding backfill for {} bookmarks",
                 bookmarks.len()
@@ -946,6 +949,7 @@ pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 
         // Process the bookmarks
         let processed_count = bookmark_service.load_json_bookmarks(&path, false, !no_embed)?;
+        info!(count = processed_count, path = %path, "JSON load complete");
         eprintln!(
             "Successfully processed {} bookmark entries",
             processed_count

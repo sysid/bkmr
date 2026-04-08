@@ -8,6 +8,7 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, Read};
+use tracing::{debug, warn};
 
 #[derive(Deserialize)]
 struct JsonBookmark {
@@ -34,6 +35,7 @@ impl JsonImportRepository {
 
 impl ImportRepository for JsonImportRepository {
     fn import_json_bookmarks(&self, path: &str) -> DomainResult<Vec<BookmarkImportData>> {
+        debug!(path = %path, "Importing bookmarks from JSON");
         let file = File::open(path)
             .map_err(|e| DomainError::CannotFetchMetadata(format!("Failed to open file: {}", e)))?;
 
@@ -62,6 +64,7 @@ impl ImportRepository for JsonImportRepository {
                 match Tag::new(tag_str) {
                     Ok(tag) => {
                         if tag.is_system_tag() && !tag.is_known_system_tag() {
+                            warn!(tag = %tag.value(), "Unknown system tag ignored");
                             eprintln!(
                                 "{} Unknown system tag '{}' ignored",
                                 "Warning".yellow(),
@@ -72,7 +75,7 @@ impl ImportRepository for JsonImportRepository {
                         tags.insert(tag);
                     }
                     Err(e) => {
-                        // Log warning but continue
+                        warn!(tag = %tag_str, error = %e, "Invalid tag");
                         eprintln!("{} Invalid tag '{}': {}", "Warning".yellow(), tag_str, e);
                     }
                 }

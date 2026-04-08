@@ -42,6 +42,8 @@ fn main() {
         settings.db_url = db_path.to_string_lossy().to_string();
     }
 
+    info!(db_url = %settings.db_url, config_source = ?settings.config_source, "Configuration loaded");
+
     // Handle all database-independent operations first
     if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
         if let Err(e) = result {

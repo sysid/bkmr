@@ -5,7 +5,8 @@ use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::tag_service::TagService;
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::tag::Tag;
-use tracing::{debug, instrument};
+use crate::domain::error_context::ApplicationErrorContext;
+use tracing::instrument;
 
 pub struct TagServiceImpl<R: BookmarkRepository> {
     repository: Arc<R>,
@@ -13,7 +14,6 @@ pub struct TagServiceImpl<R: BookmarkRepository> {
 
 impl<R: BookmarkRepository> TagServiceImpl<R> {
     pub fn new(repository: Arc<R>) -> Self {
-        debug!("Creating new TagServiceImpl");
         Self { repository }
     }
 }
@@ -21,13 +21,15 @@ impl<R: BookmarkRepository> TagServiceImpl<R> {
 impl<R: BookmarkRepository> TagService for TagServiceImpl<R> {
     #[instrument(skip(self), level = "debug", fields(repo_type = std::any::type_name::<R>()))]
     fn get_all_tags(&self) -> ApplicationResult<Vec<(Tag, usize)>> {
-        let tags = self.repository.get_all_tags()?;
+        let tags = self.repository.get_all_tags()
+            .app_context("retrieving all tags")?;
         Ok(tags)
     }
 
     #[instrument(skip(self), level = "debug", fields(tag = %tag.value()))]
     fn get_related_tags(&self, tag: &Tag) -> ApplicationResult<Vec<(Tag, usize)>> {
-        let related_tags = self.repository.get_related_tags(tag)?;
+        let related_tags = self.repository.get_related_tags(tag)
+            .app_context("retrieving related tags")?;
         Ok(related_tags)
     }
 

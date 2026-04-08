@@ -18,7 +18,7 @@ pub struct Cli {
     #[arg(long = "db", value_name = "FILE", global = true)]
     pub db: Option<PathBuf>,
 
-    /// Turn debugging information on
+    /// Turn debugging information on (-d=info, -dd=debug, -ddd=trace)
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 

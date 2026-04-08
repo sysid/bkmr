@@ -3,7 +3,7 @@ use diesel::{RunQueryDsl, SqliteConnection};
 use crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError;
 use diesel::sqlite::Sqlite;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("./migrations");
 
@@ -36,13 +36,14 @@ pub fn init_db(
     })?;
 
     pending.iter().for_each(|m| {
-        debug!("Pending Migration: {}", m.name());
+        info!("Pending migration: {}", m.name());
     });
 
     connection.run_pending_migrations(MIGRATIONS).map_err(|e| {
         SqliteRepositoryError::MigrationError(format!("Failed to run pending migrations: {}", e))
     })?;
 
+    info!("All migrations applied successfully");
     Ok(())
 }
 

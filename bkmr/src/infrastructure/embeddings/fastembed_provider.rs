@@ -2,7 +2,7 @@ use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
 use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
 use std::sync::Mutex;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument, warn};
 
 /// Local embedding provider using fastembed with ONNX Runtime.
 /// Default model: NomicEmbedTextV15 (768 dimensions).
@@ -100,13 +100,14 @@ impl FastEmbedEmbedding {
             let needs_download = !cache_path.exists() || cache_path.read_dir().map_or(true, |mut d| d.next().is_none());
 
             if needs_download {
+                info!(model = ?self.embedding_model, cache = %cache_dir, "Downloading embedding model (one-time)");
                 eprintln!(
                     "Downloading embedding model {:?} (one-time)...",
                     self.embedding_model
                 );
                 eprintln!("Cache location: {}", cache_dir);
             } else {
-                eprintln!("Loading embedding model {:?}...", self.embedding_model);
+                info!(model = ?self.embedding_model, "Loading embedding model");
             }
 
             debug!(
@@ -117,6 +118,7 @@ impl FastEmbedEmbedding {
                 .with_cache_dir(cache_dir.into())
                 .with_show_download_progress(true);
             let model = TextEmbedding::try_new(options).map_err(|e| {
+                warn!(error = %e, model = ?self.embedding_model, "Failed to initialize embedding model");
                 DomainError::ConfigurationError(format!(
                     "Failed to initialize embedding model: {}",
                     e

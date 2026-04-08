@@ -1,7 +1,7 @@
 use crate::domain;
 use crate::domain::error::DomainResult;
 use std::time::{Duration, Instant};
-use tracing::debug;
+use tracing::{debug, warn};
 
 /// Check if a website is accessible
 #[allow(dead_code)]
@@ -25,11 +25,15 @@ pub fn check_website(url: &str, timeout_milliseconds: u64) -> (bool, u128) {
 
 // TODO: timeout
 pub fn load_url_details(url: &str) -> DomainResult<(String, String, String)> {
+    debug!(url = %url, "Fetching URL metadata");
     let client = reqwest::blocking::Client::new();
     let body = client
         .get(url)
         .send()
-        .map_err(|e| domain::error::DomainError::CannotFetchMetadata(e.to_string()))?
+        .map_err(|e| {
+            warn!(url = %url, error = %e, "Failed to fetch URL");
+            domain::error::DomainError::CannotFetchMetadata(e.to_string())
+        })?
         .text()
         .map_err(|e| domain::error::DomainError::CannotFetchMetadata(e.to_string()))?;
 

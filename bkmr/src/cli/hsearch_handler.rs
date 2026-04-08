@@ -10,6 +10,7 @@ use crate::domain::search::{HybridSearch, SearchMode};
 use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::util::helper::is_stdout_piped;
+use tracing::instrument;
 
 /// Parse a comma-separated tag string into a HashSet<Tag>
 fn parse_tags(s: &str) -> Option<std::collections::HashSet<Tag>> {
@@ -27,6 +28,7 @@ fn parse_tags(s: &str) -> Option<std::collections::HashSet<Tag>> {
     if tags.is_empty() { None } else { Some(tags) }
 }
 
+#[instrument(skip(cli, services), level = "debug")]
 pub fn hybrid_search(
     cli: Cli,
     services: &ServiceContainer,

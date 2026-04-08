@@ -4,7 +4,7 @@ use crate::domain::repositories::vector_repository::VectorRepository;
 use rusqlite::Connection;
 use std::collections::HashSet;
 use std::sync::Mutex;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 use zerocopy::AsBytes;
 
 /// sqlite-vec backed implementation of VectorRepository.
@@ -28,6 +28,7 @@ impl std::fmt::Debug for SqliteVectorRepository {
 /// Lock the mutex, mapping poison errors to DomainError.
 fn lock_conn(mutex: &Mutex<Connection>) -> DomainResult<std::sync::MutexGuard<'_, Connection>> {
     mutex.lock().map_err(|e| {
+        warn!("Vector repository connection lock poisoned: {}", e);
         DomainError::BookmarkOperationFailed(format!(
             "Vector repository connection lock poisoned: {}",
             e
@@ -92,6 +93,11 @@ impl VectorRepository for SqliteVectorRepository {
         if table_exists {
             match query_dimensions(&conn)? {
                 Some(dims) if dims != dimensions => {
+                    warn!(
+                        old_dims = dims,
+                        new_dims = dimensions,
+                        "Embedding model dimensions changed, recreating vector table"
+                    );
                     eprintln!(
                         "Embedding model dimensions changed ({} -> {}), recreating vector table...",
                         dims, dimensions
