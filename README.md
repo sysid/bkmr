@@ -5,11 +5,11 @@
 [![Docs.rs](https://docs.rs/bkmr/badge.svg)](https://docs.rs/bkmr)
 [![Build Status][build-image]][build-url]
 
-> A local-first memory for humans and AI agents. Store anything, find it by meaning, act on it instantly.
+> Store anything, find it by meaning, act on it instantly.
 
 # Beyond Bookmarks and Snippets: Knowledge Management for Humans and Agents
 
-`bkmr` - [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - memories, bookmarks, snippets, etc, searchable, executable.
+`bkmr` - [crate of the week 482](https://this-week-in-rust.org/blog/2023/02/15/this-week-in-rust-482/) - memories, bookmarks, snippets, text - search it, invoke it!
 
 **Organize**, **find**, and **apply** various content types:
 
@@ -20,14 +20,6 @@
 - Plain text with Jinja template interpolation
 - Local files and directories integration
 
-**Centralize** your data in bkmr's database (`add`) or **keep it in your filesystem**
-(`import-files`) ([see](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)).
-
-- e.g. memories, bookmarks, links, snippets in database
-- large documents or scripts in filesystem, references go into database
-
-**Both options provide the full management capability of `bkmr`.**
-
 ## Why bkmr?
 
 - **Developer- and agent-focused**: Integrates seamlessly with workflow and toolchain
@@ -37,12 +29,7 @@
 - **Privacy-focused**: Fully local — database, embeddings, and search all run offline
 - **Fast**: 20x faster than similar Python tools
 - **Automation-ready**: Programmatic CLI with `--json`, `--np`, `--stdout` for pipelines and integrations
-
-**[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)**:
-- **Built-in LSP server**: Use `bkmr lsp` for VS Code, Vim, Emacs - automatic snippet completion with language-aware filtering
-- **[Neovim Plugin](https://github.com/sysid/bkmr-nvim)**: Visual interface with Telescope integration and zero configuration
-- **[IntelliJ Plugin](https://github.com/sysid/bkmr-intellij-plugin)**: JetBrains Marketplace plugin
-
+- **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)**: Built-in LSP server
 
 ## Agent Memory and Skill
 
@@ -59,9 +46,9 @@ bkmr hsearch "database configuration" -t _mem_ --json --np
 # All output is structured JSON — designed for programmatic consumption
 ```
 
-Use [`skill/bkmr-memory`](skill/bkmr-memory/SKILL.md). It defines a complete memory protocol with taxonomy, deduplication, and session workflows.
+Use [`skill/bkmr-memory`](skill/bkmr-memory/SKILL.md). It defines a comprehensive memory protocol with taxonomy, deduplication, and session workflows.
 
-See **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)** for complete documentation.
+See **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)**.
 
 ## Quick Examples
 
@@ -94,15 +81,19 @@ bkmr hsearch "database config" -t _mem_ --json --np
 
 ### Screenshots
 
-**Bookmarks:**
-<img src="./docs/bkmr4-bookmarks.png" alt="bookmarks" width="800"/>
+**General Usage:**
 
-**Snippets:**
-<img src="./docs/bkmr4-fzf-snippets.png" alt="fzf-snippets" width="800"/>
+![bkmr demo](docs/demo.gif)
 
-**Demos:**
-- <a href="https://asciinema.org/a/q4Okf4j2ja757Nav5wf0tNz8k?autoplay=1" alt="Never Context-Switch Again"><img src="https://asciinema.org/a/q4Okf4j2ja757Nav5wf0tNz8k.svg" /></a>
-- [Overview](https://asciinema.org/a/VTsHuw1Ugsbo10EP0tZ3PdpoG?autoplay=1&speed=2&t=3) | [Getting Started](https://asciinema.org/a/wpnsTw3Cl7DK2R7jK7WVpp9OR?autoplay=1&speed=2&t=3) | [Search and Filter](https://asciinema.org/a/M97UJMKxw1nxnzO4SaowGZAmb?autoplay=1&speed=2&t=3) | [Edit and Update](https://asciinema.org/a/uCuNPSlqRemlcXiVQ3CIqq8uV?autoplay=1&speed=2&t=3) | [Tag Management](https://asciinema.org/a/jNOLfhc6aFV3wPGTgOzgrM7Kc?autoplay=1&speed=2&t=3)
+**Fuzzy Search with FZF:**
+
+![fzf demo](docs/fzf-demo.gif)
+
+**Agent Memory:**
+
+![agent demo](docs/agent-demo.gif)
+
+> Detailed walkthroughs: [Overview](https://asciinema.org/a/VTsHuw1Ugsbo10EP0tZ3PdpoG?autoplay=1&speed=2&t=3) | [Getting Started](https://asciinema.org/a/wpnsTw3Cl7DK2R7jK7WVpp9OR?autoplay=1&speed=2&t=3) | [Search and Filter](https://asciinema.org/a/M97UJMKxw1nxnzO4SaowGZAmb?autoplay=1&speed=2&t=3) | [Edit and Update](https://asciinema.org/a/uCuNPSlqRemlcXiVQ3CIqq8uV?autoplay=1&speed=2&t=3) | [Tag Management](https://asciinema.org/a/jNOLfhc6aFV3wPGTgOzgrM7Kc?autoplay=1&speed=2&t=3)
 
 ## Getting Started
 
