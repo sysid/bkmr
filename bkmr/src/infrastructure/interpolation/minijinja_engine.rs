@@ -9,7 +9,7 @@ use minijinja::{Environment, Error, ErrorKind, Value};
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 // #[derive(Debug)]
 pub struct MiniJinjaEngine {
@@ -121,7 +121,7 @@ impl MiniJinjaEngine {
             .env
             .template_from_str(url)
             .map_err(|e| {
-                warn!(error = %e, "Template syntax error");
+                debug!(error = %e, "Template syntax error (content may not be a MiniJinja template)");
                 InterpolationError::Syntax(e.to_string())
             })?;
 
@@ -130,7 +130,7 @@ impl MiniJinjaEngine {
         template
             .render(context)
             .map_err(|e| {
-                warn!(error = %e, "Template rendering failed");
+                debug!(error = %e, "Template rendering failed");
                 InterpolationError::Rendering(e.to_string())
             })
     }
