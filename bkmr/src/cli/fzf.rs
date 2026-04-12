@@ -113,7 +113,18 @@ impl SkimItem for FzfBookmarkItem {
         Line::from(spans)
     }
 
-    fn preview(&self, _context: PreviewContext) -> ItemPreview {
+    fn preview(&self, context: PreviewContext) -> ItemPreview {
+        // When the query can't possibly match this item, return empty preview.
+        // This handles the race where RunPreview fires before the async matcher
+        // finishes: the stale selected item gets an empty preview instead of
+        // showing outdated content.  Returning AnsiText("") goes through skim's
+        // first preview branch which sends PreviewReady → needs_render, ensuring
+        // the cleared preview is actually painted (unlike preview_fn which doesn't
+        // trigger a re-render).
+        let query = context.query;
+        if !query.is_empty() && !is_fuzzy_subsequence(query, &self.display_text) {
+            return ItemPreview::AnsiText(String::new());
+        }
         ItemPreview::AnsiText(self.preview_text.clone())
     }
 
@@ -126,6 +137,23 @@ impl SkimItem for SemanticSearchResult {
     fn text(&self) -> Cow<'_, str> {
         Cow::Owned(self.display())
     }
+}
+
+/// Check if `query` is a case-insensitive subsequence of `text`.
+/// Skim's default fuzzy matcher requires query chars to appear in order in the
+/// item text, so this is the correct predicate for "could this item match?".
+fn is_fuzzy_subsequence(query: &str, text: &str) -> bool {
+    let mut text_chars = text.chars().flat_map(|c| c.to_lowercase());
+    for qc in query.chars().flat_map(|c| c.to_lowercase()) {
+        loop {
+            match text_chars.next() {
+                Some(tc) if tc == qc => break,
+                Some(_) => continue,
+                None => return false,
+            }
+        }
+    }
+    true
 }
 
 /// Compute color segments sorted by position for the classic display style
