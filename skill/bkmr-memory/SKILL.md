@@ -60,7 +60,12 @@ citizen in search results and breaks the taxonomy that makes memory useful.
 ## Optional Tag Rules
 
 1. You may use topic tags for additional classification (e.g., `database`, `postgres`, `deployment`, `auth`).
-2. To limit scope to a project, you may use a project tag. MANDATORY STRUCTURE for project tag: `project:foo`.  
+2. To limit scope to a project, you may use a project tag. MANDATORY STRUCTURE for project tag: `project:foo`.
+3. **No redundant tags.** If you use a project tag `project:foo`, do NOT also add a bare `foo` tag —
+   `project:foo` already carries the project identity. Same rule for any topic expressed as both a
+   namespaced and bare tag (e.g., don't pair `lang:python` with `python`). Pick the more specific
+   form and drop the other. Redundant tags dilute embedding signal and waste the 2–4 topic-tag budget.
+   Topic tags should name the *subject matter* (e.g., `fzf`, `skim`, `bash`), not repeat the project.
 
 ---
 
@@ -351,6 +356,7 @@ Did I learn something new?
 | Duplicate memories | Noise drowns signal | Always dedup before writing |
 | Storing things from CLAUDE.md | Already in context every session | Only store what's NOT in docs |
 | Over-tagging | Dilutes search relevance | 1 classification + 2-4 topic tags max |
+| Redundant project + bare tag (`project:bkmr` AND `bkmr`) | Namespaced tag already carries the identity; the bare tag is noise | Keep only `project:bkmr`; use remaining topic tags for subject matter (`fzf`, `bash`, …) |
 | Storing every session | Most sessions are routine | Only store sessions with non-obvious learnings |
 
 ---
