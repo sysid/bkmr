@@ -51,7 +51,7 @@ The five classification tags:
 | `fact` | Infrastructure truths, config, architecture | "Prod DB is PostgreSQL 15 on port 5433" |
 | `procedure` | How-to steps, deployment, workarounds | "Deploy: make deploy-staging, then verify health" |
 | `preference` | User conventions, tool choices, style | "User prefers pytest, uses fixtures not setUp" |
-| `episode` | Session summaries, debugging narratives | "2026-04-04: JWT expiry was 5s not 5m" |
+| `episode` | Debugging narratives, surprising discoveries | "2026-04-04: JWT expiry was 5s not 5m" |
 | `gotcha` | Non-obvious pitfalls, things that broke | "CI silently succeeds when registry is down" |
 
 A memory without a classification tag cannot be filtered by category — it becomes a second-class
@@ -187,6 +187,13 @@ Before completing any task, ask yourself:
 - Obvious things ("this project uses Rust" — the Cargo.toml says that)
 - Temporary state or in-progress work details
 - Full file contents or large artifacts
+- **What you changed** — file lists, renames, refactoring summaries, documentation updates.
+  All of this is recoverable from `git log`, `git diff`, and reading the code.
+  A memory that says "Updated files X, Y, Z" or "Renamed A to B" is pure noise.
+- **Anything derivable by reading the codebase** — project structure, which classes exist,
+  what frameworks are used, how modules are wired together. The code is the source of truth;
+  re-reading it is cheap. Only store *interpretations* that aren't obvious from the code
+  (e.g., "X looks wrong but is intentional because of Y constraint").
 
 ### Memory Taxonomy
 
@@ -197,7 +204,7 @@ Every memory gets exactly **one** classification tag:
 | `fact` | Truths about infrastructure, config, architecture | Short declarative statement |
 | `procedure` | How-to sequences, deployment steps, workarounds | Numbered steps or command sequence |
 | `preference` | User conventions, tool choices, style decisions | "User prefers X over Y because Z" |
-| `episode` | Session summaries, debugging narratives, decisions made | "On DATE, we did X because Y, learned Z" |
+| `episode` | Debugging narratives, surprising discoveries, non-obvious decisions | "On DATE, X failed because Y (non-obvious). Fix was Z." |
 | `gotcha` | Non-obvious pitfalls, footguns, things that broke before | "X looks like it should work but fails because Y" |
 
 ### How to Store
@@ -321,8 +328,8 @@ bkmr update 87 -t redis,security
 Did I learn something new?
 ├── No → Don't store
 └── Yes
-    ├── Is it in the source code, docs, or git history?
-    │   ├── Yes → Don't store (it's already findable)
+    ├── Is it in the source code, docs, git history, or derivable by reading the codebase?
+    │   ├── Yes → Don't store (code is source of truth; git log recovers changes)
     │   └── No
     │       ├── Is it trivial or obvious?
     │       │   ├── Yes → Don't store
@@ -330,9 +337,13 @@ Did I learn something new?
     │       │       ├── Would a future session benefit from knowing this?
     │       │       │   ├── No → Don't store
     │       │       │   └── Yes
-    │       │       │       ├── Does a similar memory already exist?
-    │       │       │       │   ├── Yes → Update existing (bkmr update --url "..." <id>)
-    │       │       │       │   └── No → Create new memory
+    │       │       │       ├── Could I re-derive this by reading code + git log in < 5 min?
+    │       │       │       │   ├── Yes → Don't store (re-derivation is cheaper than stale memory)
+    │       │       │       │   └── No
+    │       │       │       │       ├── Does a similar memory already exist?
+    │       │       │       │       │   ├── Yes → Update existing (bkmr update --url "..." <id>)
+    │       │       │       │       │   └── No → Create new memory
+    │       │       │       │       └── Done
     │       │       │       └── Done
     │       │       └── Done
     │       └── Done
@@ -358,6 +369,8 @@ Did I learn something new?
 | Over-tagging | Dilutes search relevance | 1 classification + 2-4 topic tags max |
 | Redundant project + bare tag (`project:bkmr` AND `bkmr`) | Namespaced tag already carries the identity; the bare tag is noise | Keep only `project:bkmr`; use remaining topic tags for subject matter (`fzf`, `bash`, …) |
 | Storing every session | Most sessions are routine | Only store sessions with non-obvious learnings |
+| Storing what you changed | Git log is authoritative; file lists, renames, refactorings are noise | Store the *insight* or *decision rationale*, not the change list |
+| Storing codebase structure | Reading the code is cheap; structure changes with every PR | Only store non-obvious *interpretations* (e.g., "X exists because of Y constraint") |
 
 ---
 
