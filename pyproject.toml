@@ -21,7 +21,7 @@ build-backend = "maturin"
 [tool.uv]
 managed = true
 dev-dependencies = [
-    "pip>=24.2",
+    "pip>=26.0",
     "pytest>=8.3.2",
     "pytest-mock>=3.14.0",
     "ruff>=0.6.1",

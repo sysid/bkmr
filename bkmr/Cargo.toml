@@ -45,7 +45,7 @@ serde_yaml = "0.9.34"
 serde_with = {version = "3.18.0", features =["chrono"] }
 sha2 = "0.10.9"
 shellexpand = "3.1.2"
-skim = "4.4.0"
+skim = "4.6.0"
 tempfile = "3.27.0"
 thiserror = "2.0.18"
 toml = "0.8.23"
