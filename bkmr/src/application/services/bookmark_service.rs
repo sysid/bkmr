@@ -10,6 +10,9 @@ use std::fmt::Debug;
 /// Service interface for bookmark-related operations
 pub trait BookmarkService: Send + Sync + Debug {
     /// Add a new bookmark
+    ///
+    /// `opener`: optional custom open command. `Some("")` is treated as `None`
+    /// so callers can pass through CLI-flag values without normalising first.
     fn add_bookmark(
         &self,
         url: &str,
@@ -18,6 +21,7 @@ pub trait BookmarkService: Send + Sync + Debug {
         tags: Option<&HashSet<Tag>>,
         fetch_metadata: bool,
         embeddable: bool,
+        opener: Option<&str>,
     ) -> ApplicationResult<Bookmark>;
 
     /// Delete a bookmark by ID

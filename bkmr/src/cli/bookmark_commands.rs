@@ -387,24 +387,15 @@ pub fn add(
             let url_value = final_url.unwrap();
             let processed_content = process_content_for_type(&url_value, system_tag);
 
-            let mut bookmark = bookmark_service.add_bookmark(
+            let bookmark = bookmark_service.add_bookmark(
                 &processed_content,
                 title.as_deref(),
                 desc.as_deref(),
                 Some(&tag_set),
                 !no_web,
                 !no_embed,
+                open_with.as_deref(),
             )?;
-
-            // Set custom opener if provided
-            if let Some(opener) = open_with {
-                bookmark.opener = if opener.is_empty() {
-                    None
-                } else {
-                    Some(opener)
-                };
-                bookmark_service.update_bookmark(bookmark.clone(), false)?;
-            }
 
             eprintln!(
                 "Added bookmark: {} (ID: {})",
@@ -428,6 +419,12 @@ pub fn add(
                     return Ok(());
                 }
 
+                // CLI flag overrides whatever was set in the edit template;
+                // otherwise fall back to the OPENER section parsed from the template
+                let effective_opener = open_with
+                    .as_deref()
+                    .or(edited_bookmark.opener.as_deref());
+
                 // Add the edited bookmark
                 match bookmark_service.add_bookmark(
                     &edited_bookmark.url,
@@ -436,19 +433,9 @@ pub fn add(
                     Some(&edited_bookmark.tags),
                     false, // Don't fetch metadata since we've already edited it
                     !no_embed,
+                    effective_opener,
                 ) {
-                    Ok(mut bookmark) => {
-                        // Set custom opener if provided via CLI flag
-                        // Note: opener can also be set via the edit template
-                        if let Some(opener) = &open_with {
-                            bookmark.opener = if opener.is_empty() {
-                                None
-                            } else {
-                                Some(opener.clone())
-                            };
-                            bookmark_service.update_bookmark(bookmark.clone(), false)?;
-                        }
-
+                    Ok(bookmark) => {
                         eprintln!(
                             "Added bookmark: {} (ID: {})",
                             bookmark.title,

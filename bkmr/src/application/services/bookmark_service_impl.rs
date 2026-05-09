@@ -87,6 +87,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         tags: Option<&HashSet<Tag>>,
         fetch_metadata: bool,
         embeddable: bool,
+        opener: Option<&str>,
     ) -> ApplicationResult<Bookmark> {
         // Check if bookmark with URL already exists
         let existing_id = self
@@ -139,6 +140,14 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             Bookmark::new(url, &title_str, &desc_str, all_tags)
                 .app_context("creating new bookmark from provided data")?;
         bookmark.set_embeddable(embeddable);
+        bookmark.opener = opener.and_then(|s| {
+            let trimmed = s.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(trimmed.to_string())
+            }
+        });
 
         self.repository
             .add(&mut bookmark)
@@ -1131,7 +1140,7 @@ mod tests {
 
         // Act
         let bookmark = service
-            .add_bookmark(url, Some(title), Some(description), Some(&tags), false, true)
+            .add_bookmark(url, Some(title), Some(description), Some(&tags), false, true, None)
             .unwrap();
 
         // Assert
@@ -1151,6 +1160,37 @@ mod tests {
     }
 
     #[test]
+    fn given_opener_when_add_bookmark_then_persists_opener() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let service = create_test_service();
+        let url = "https://opener-persist.example.com";
+        let opener = "firefox --new-window";
+
+        let bookmark = service
+            .add_bookmark(url, Some("Opener Test"), Some(""), None, false, true, Some(opener))
+            .unwrap();
+
+        let retrieved = service.get_bookmark(bookmark.id.unwrap()).unwrap().unwrap();
+        assert_eq!(retrieved.opener.as_deref(), Some(opener));
+    }
+
+    #[test]
+    fn given_empty_opener_when_add_bookmark_then_stores_none() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let service = create_test_service();
+        let url = "https://opener-empty.example.com";
+
+        let bookmark = service
+            .add_bookmark(url, Some("Empty Opener"), Some(""), None, false, true, Some("   "))
+            .unwrap();
+
+        let retrieved = service.get_bookmark(bookmark.id.unwrap()).unwrap().unwrap();
+        assert!(retrieved.opener.is_none());
+    }
+
+    #[test]
     fn given_existing_url_when_add_bookmark_then_returns_error() {
         // Arrange
         let _env = init_test_env();
@@ -1166,6 +1206,7 @@ mod tests {
             None,
             false,
             true,
+            None,
         );
 
         // Assert
@@ -1352,7 +1393,7 @@ mod tests {
         // First add a test bookmark that we can delete
         let url = "https://todelete.example.com";
         let bookmark = service
-            .add_bookmark(url, Some("To Delete"), Some("Description"), None, false, true)
+            .add_bookmark(url, Some("To Delete"), Some("Description"), None, false, true, None)
             .unwrap();
         let id = bookmark.id.unwrap();
 
@@ -1559,6 +1600,7 @@ mod tests {
                 None,
                 false,
                 true,
+                None,
             )
             .unwrap();
         let id = bookmark.id.unwrap();

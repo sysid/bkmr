@@ -663,6 +663,7 @@ pub fn clone_bookmark(
                 Some(&edited_bookmark.tags),
                 false, // Don't fetch metadata since we've already edited it
                 true,  // embeddable by default
+                edited_bookmark.opener.as_deref(),
             ) {
                 Ok(new_bookmark) => {
                     println!(
@@ -791,6 +792,7 @@ fn edit_database_content(
                     Some(&new_bookmark.tags),
                     false, // Don't fetch metadata since we already have everything
                     true,  // embeddable by default
+                    new_bookmark.opener.as_deref(),
                 ) {
                     Ok(_) => {
                         eprintln!("  Successfully created new bookmark");
