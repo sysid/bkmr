@@ -15,6 +15,7 @@ fn test_base_path_configuration() {
         base_paths,
         embeddings: Default::default(),
         config_source: Default::default(),
+        no_color: Default::default(),
     };
 
     // Test has_base_path function
@@ -48,6 +49,7 @@ fn test_base_path_usage_examples() {
         base_paths,
         embeddings: Default::default(),
         config_source: Default::default(),
+        no_color: Default::default(),
     };
 
     // Simulate how the system resolves paths
@@ -74,6 +76,7 @@ fn test_environment_variable_expansion() {
         base_paths,
         embeddings: Default::default(),
         config_source: Default::default(),
+        no_color: Default::default(),
     };
 
     let resolved = resolve_file_path(&settings, "$TEST_HOME/file.txt");

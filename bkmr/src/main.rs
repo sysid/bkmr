@@ -24,9 +24,11 @@ fn main() {
 
     let cli = Cli::parse();
 
-    // Determine if colors should be disabled
-    // Force no colors for LSP command to avoid ANSI escape sequences in LSP logs
-    let no_color = cli.no_color || matches!(cli.command, Some(Commands::Lsp { .. }));
+    // Determine if colors should be disabled.
+    // Honor the --no-color flag and the NO_COLOR convention (https://no-color.org/).
+    let no_color_requested = cli.no_color || std::env::var_os("NO_COLOR").is_some();
+    // Force no colors for LSP command to avoid ANSI escape sequences in LSP logs.
+    let no_color = no_color_requested || matches!(cli.command, Some(Commands::Lsp { .. }));
 
     setup_logging(cli.debug, no_color);
 
@@ -41,6 +43,10 @@ fn main() {
     if let Some(ref db_path) = cli.db {
         settings.db_url = db_path.to_string_lossy().to_string();
     }
+
+    // Propagate the resolved colour opt-out so display code can honor it
+    // (display writes to a TTY; the LSP-forced value is irrelevant there).
+    settings.no_color = no_color_requested;
 
     info!(db_url = %settings.db_url, config_source = ?settings.config_source, "Configuration loaded");
 

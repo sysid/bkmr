@@ -41,6 +41,18 @@ pub fn is_stderr_piped() -> bool {
     !io::stderr().is_terminal()
 }
 
+/// Decide whether ANSI colour should be emitted to an output stream.
+///
+/// Colour is enabled only when it has not been explicitly disabled and the
+/// target stream is an interactive terminal. The `no_color` argument is the
+/// effective opt-out, folding together the `--no-color` CLI flag and the
+/// `NO_COLOR` environment variable convention (https://no-color.org/), both
+/// resolved at startup. Piped/redirected output (`stream_is_terminal == false`)
+/// never receives colour, regardless of the flag.
+pub fn should_use_color(no_color: bool, stream_is_terminal: bool) -> bool {
+    !no_color && stream_is_terminal
+}
+
 /// Format file path for display, truncating if necessary
 pub fn format_file_path(path: &str, max_length: usize) -> String {
     if path.len() <= max_length {
@@ -131,6 +143,20 @@ mod tests {
         let input = vec!["3".to_string(), "abc".to_string(), "2".to_string()];
         let result = ensure_int_vector(&input);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn given_color_disabled_when_should_use_color_then_false_even_on_terminal() {
+        // Explicit opt-out (--no-color or NO_COLOR) wins over an interactive terminal.
+        assert!(!should_use_color(true, true));
+        assert!(!should_use_color(true, false));
+    }
+
+    #[test]
+    fn given_color_enabled_then_color_only_on_a_terminal() {
+        // Colour on a real terminal, but never when piped/redirected.
+        assert!(should_use_color(false, true));
+        assert!(!should_use_color(false, false));
     }
 
     #[test]

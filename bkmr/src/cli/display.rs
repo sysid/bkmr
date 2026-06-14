@@ -203,7 +203,7 @@ pub fn show_bookmarks(
         return;
     }
 
-    let use_color = io::stderr().is_terminal();
+    let use_color = crate::util::helper::should_use_color(settings.no_color, io::stderr().is_terminal());
     let mut stderr = io::stderr().lock();
     let first_col_width = bookmarks.len().to_string().len();
 
