@@ -22,7 +22,7 @@ pub struct Cli {
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 
-    #[arg(long = "no-color", help = "Disable colored output")]
+    #[arg(long = "no-color", help = "Disable colored output", global = true)]
     pub no_color: bool,
 
     #[arg(
@@ -416,4 +416,30 @@ pub enum Commands {
         #[arg(short = 't', long = "tags", help = "add tags to taglist")]
         tags: Option<String>,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn given_no_color_before_subcommand_when_parsing_then_flag_is_set() {
+        let cli = Cli::try_parse_from(["bkmr", "--no-color", "search"]).unwrap();
+        assert!(cli.no_color);
+    }
+
+    #[test]
+    fn given_no_color_after_subcommand_when_parsing_then_flag_is_set() {
+        // Regression: as a global flag, --no-color must be accepted in the
+        // `bkmr search --no-color` position too (see issue #73).
+        let cli = Cli::try_parse_from(["bkmr", "search", "--no-color"]).unwrap();
+        assert!(cli.no_color);
+    }
+
+    #[test]
+    fn given_no_no_color_flag_when_parsing_then_flag_is_unset() {
+        let cli = Cli::try_parse_from(["bkmr", "search"]).unwrap();
+        assert!(!cli.no_color);
+    }
 }

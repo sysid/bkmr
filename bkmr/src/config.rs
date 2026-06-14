@@ -120,6 +120,11 @@ pub struct Settings {
     /// Tracks configuration source (not serialized)
     #[serde(skip)]
     pub config_source: ConfigSource,
+
+    /// Effective colour opt-out from the `--no-color` flag / `NO_COLOR` env var
+    /// (resolved at startup, not serialized)
+    #[serde(skip)]
+    pub no_color: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Default)]
@@ -168,6 +173,7 @@ impl Default for Settings {
             base_paths: HashMap::new(),
             embeddings: EmbeddingOpts::default(),
             config_source: ConfigSource::Default,
+            no_color: false,
         }
     }
 }
@@ -587,6 +593,7 @@ mod tests {
             base_paths: HashMap::new(),
             embeddings: EmbeddingOpts::default(),
             config_source: ConfigSource::ConfigFile,
+            no_color: false,
         };
 
         // Verify settings match expected values
