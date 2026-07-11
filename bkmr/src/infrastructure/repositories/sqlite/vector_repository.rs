@@ -5,7 +5,7 @@ use rusqlite::Connection;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use tracing::{debug, instrument, warn};
-use zerocopy::AsBytes;
+use zerocopy::IntoBytes;
 
 /// sqlite-vec backed implementation of VectorRepository.
 ///

@@ -221,7 +221,10 @@ impl FileImportRepository {
         // Calculate SHA-256 hash of the clean content
         let mut hasher = Sha256::new();
         hasher.update(clean_content.as_bytes());
-        let file_hash = format!("{:x}", hasher.finalize());
+        // hex::encode matches the previous `{:x}` output (lowercase, zero-padded,
+        // no prefix); sha2 0.11 switched to hybrid-array `Array`, which no longer
+        // implements `LowerHex`.
+        let file_hash = hex::encode(hasher.finalize());
 
         // Ensure we always store absolute paths
         let absolute_path = file_path

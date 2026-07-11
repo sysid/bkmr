@@ -8,29 +8,29 @@ use tracing::{debug, instrument};
 
 use crate::lsp::backend::BkmrConfig;
 use crate::lsp::domain::{CompletionContext, Snippet, SnippetFilter};
-use crate::lsp::services::{AsyncSnippetService, LanguageTranslator, LspSnippetService};
+use crate::lsp::services::{AsyncSnippetService, LanguageTranslator};
 
 /// Service for handling completion logic
 pub struct CompletionService {
-    snippet_service: Arc<LspSnippetService>,
+    snippet_service: Arc<dyn AsyncSnippetService>,
     config: BkmrConfig,
 }
 
 impl std::fmt::Debug for CompletionService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CompletionService")
-            .field("snippet_service", &"<LspSnippetService>")
+            .field("snippet_service", &"<AsyncSnippetService>")
             .field("config", &self.config)
             .finish()
     }
 }
 
 impl CompletionService {
-    pub fn new(snippet_service: Arc<LspSnippetService>) -> Self {
+    pub fn new(snippet_service: Arc<dyn AsyncSnippetService>) -> Self {
         Self::with_config(snippet_service, BkmrConfig::default())
     }
 
-    pub fn with_config(snippet_service: Arc<LspSnippetService>, config: BkmrConfig) -> Self {
+    pub fn with_config(snippet_service: Arc<dyn AsyncSnippetService>, config: BkmrConfig) -> Self {
         Self {
             snippet_service,
             config,
@@ -77,7 +77,7 @@ impl CompletionService {
         SnippetFilter::new(
             context.language_id.clone(),
             query_prefix,
-            50, // TODO: Make configurable
+            self.config.max_completions,
             self.config.enable_interpolation,
         )
     }
@@ -123,11 +123,10 @@ impl CompletionService {
             label: label.clone(),
             kind: Some(item_kind),
             detail: Some(detail_text.to_string()),
-            documentation: Some(Documentation::String(if snippet_content.len() > 500 {
-                format!("{}...", &snippet_content[..500])
-            } else {
-                snippet_content.clone()
-            })),
+            documentation: Some(Documentation::String(truncate_preview(
+                &snippet_content,
+                500,
+            ))),
             insert_text_format: Some(text_format),
             filter_text: Some(label.clone()),
             sort_text: Some(label.clone()),
@@ -159,33 +158,23 @@ impl CompletionService {
     }
 }
 
+/// Truncate content to at most `max_chars` characters for the documentation
+/// preview, respecting char boundaries (byte-slicing panics on multibyte UTF-8).
+fn truncate_preview(content: &str, max_chars: usize) -> String {
+    match content.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => format!("{}...", &content[..byte_idx]),
+        None => content.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, EnvGuard};
     use tower_lsp::lsp_types::{Position, Range, Url};
 
-    // TODO: consolidate this
-    /*
-     * IMPORTANT: LSP Test Database Synchronization Requirements
-     *
-     * All tests in this module that access the database must follow these patterns:
-     *
-     * 1. Tests run single-threaded (--test-threads=1) so no special synchronization needed
-     * 2. NEVER use LspSnippetService::new() in tests - it calls factory methods that
-     *    bypass test environment setup and try to access production database
-     * 3. ALWAYS use proper test service construction pattern:
-     *    - Call init_test_env(), EnvGuard::new(), setup_test_db()
-     *    - Manually construct BookmarkServiceImpl with test repository
-     *    - Use LspSnippetService::with_service() constructor
-     *
-     * This was discovered when make test-all was failing due to race conditions.
-     * The issue was that LspSnippetService::new() -> factory::create_bookmark_service()
-     * would try to read from global AppState and access a database that doesn't exist
-     * in the test environment, causing "Database not found" errors.
-     *
-     * See CLAUDE.md for complete details on this synchronization issue.
-     */
+    // Tests run single-threaded (--test-threads=1) against a shared SQLite file.
+    // Always construct services via TestServiceContainer, never production factories.
 
     #[tokio::test]
     async fn given_context_with_query_when_getting_completions_then_returns_filtered_items() {
@@ -398,6 +387,29 @@ mod tests {
             }
             _ => panic!("Expected text edit"),
         }
+    }
+
+    #[tokio::test]
+    async fn given_multibyte_content_longer_than_preview_when_creating_item_then_does_not_panic() {
+        // Documentation preview truncation must respect char boundaries:
+        // 200 x '€' (3 bytes each) = 600 bytes, and byte 500 falls mid-char.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let snippet = Snippet::new(
+            1,
+            "Multibyte".to_string(),
+            "€".repeat(200),
+            "desc".to_string(),
+            vec!["rust".to_string(), "_snip_".to_string()],
+        );
+
+        let ctx = crate::util::test_context::TestContext::new();
+        let service = ctx.create_lsp_services().completion_service;
+        let uri = Url::parse("file:///test.rs").expect("parse URI");
+
+        let result = service.snippet_to_completion_item(&snippet, "", None, "rust", &uri);
+
+        assert!(result.is_ok(), "must not panic or fail: {:?}", result.err());
     }
 
     #[tokio::test]

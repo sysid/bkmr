@@ -31,31 +31,10 @@ pub struct LspSnippetService {
 }
 
 impl LspSnippetService {
-    // Remove factory-based constructor - use dependency injection only
-
-    /// Create with specific services (for testing)
     pub fn with_services(
         bookmark_service: Arc<dyn BookmarkService>,
         interpolation_service: Arc<dyn InterpolationService>,
     ) -> Self {
-        Self {
-            bookmark_service,
-            interpolation_service,
-        }
-    }
-
-    /// Create with a specific bookmark service (for testing) - backward compatibility
-    pub fn with_service(bookmark_service: Arc<dyn BookmarkService>) -> Self {
-        use crate::application::InterpolationServiceImpl;
-        use crate::infrastructure::interpolation::minijinja_engine::{
-            MiniJinjaEngine, SafeShellExecutor,
-        };
-        use std::sync::Arc;
-
-        let shell_executor = Arc::new(SafeShellExecutor::new());
-        let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-        let interpolation_service = Arc::new(InterpolationServiceImpl::new(template_engine));
-
         Self {
             bookmark_service,
             interpolation_service,

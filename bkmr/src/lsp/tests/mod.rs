@@ -7,23 +7,8 @@ mod integration_tests {
 
     use tower_lsp::lsp_types::{Position, Url};
 
-    /*
-     * IMPORTANT: LSP Integration Test Database Synchronization
-     *
-     * These integration tests require careful database access patterns:
-     *
-     * 1. Tests run single-threaded (--test-threads=1) so no special synchronization needed
-     * 2. NEVER use LspSnippetService::new() - it bypasses test environment
-     * 3. ALWAYS use proper test service construction:
-     *    - init_test_env() + EnvGuard::new() + setup_test_db()
-     *    - Manual BookmarkServiceImpl construction with test repository
-     *    - LspSnippetService::with_service() constructor
-     *
-     * These tests were failing in make test-all due to factory method calls
-     * trying to access production database configuration instead of test setup.
-     *
-     * See CLAUDE.md and completion_service.rs tests for full documentation.
-     */
+    // Tests run single-threaded (--test-threads=1) against a shared SQLite file.
+    // Always construct services via TestServiceContainer, never production factories.
 
     #[tokio::test]
     async fn given_context_when_getting_completions_then_returns_items() {
@@ -204,7 +189,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_create_snippet_command_when_executed_then_creates_snippet() {
         // Arrange
-        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
+        use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
@@ -218,7 +203,6 @@ mod integration_tests {
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
-                BkmrConfig::default(),
                 lsp_services.completion_service,
                 lsp_services.document_service,
                 lsp_services.command_service,
@@ -252,7 +236,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_list_snippets_command_when_executed_then_returns_filtered_list() {
         // Arrange
-        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
+        use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
@@ -266,7 +250,6 @@ mod integration_tests {
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
-                BkmrConfig::default(),
                 lsp_services.completion_service,
                 lsp_services.document_service,
                 lsp_services.command_service,
@@ -329,7 +312,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_update_snippet_command_when_executed_then_updates_and_preserves_system_tag() {
         // Arrange
-        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
+        use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
@@ -343,7 +326,6 @@ mod integration_tests {
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
-                BkmrConfig::default(),
                 lsp_services.completion_service,
                 lsp_services.document_service,
                 lsp_services.command_service,
@@ -406,7 +388,7 @@ mod integration_tests {
     #[tokio::test]
     async fn given_delete_snippet_command_when_executed_then_deletes_snippet() {
         // Arrange
-        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
+        use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
         use tower_lsp::lsp_types::ExecuteCommandParams;
@@ -420,7 +402,6 @@ mod integration_tests {
         let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
-                BkmrConfig::default(),
                 lsp_services.completion_service,
                 lsp_services.document_service,
                 lsp_services.command_service,
