@@ -217,6 +217,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn given_query_prefix_with_hyphen_when_getting_completions_then_does_not_error() {
+        // Regression: a word ending in a hyphen produced the FTS term `metadata:foo-*`,
+        // which SQLite FTS5 rejects with `syntax error near "*"`, failing the whole
+        // combined query and returning zero completions.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let service = ctx.create_lsp_services().completion_service;
+
+        let range = Range {
+            start: Position {
+                line: 0,
+                character: 0,
+            },
+            end: Position {
+                line: 0,
+                character: 4,
+            },
+        };
+        let context = CompletionContext::new(
+            Url::parse("file:///test.mk").expect("parse URI"),
+            Position {
+                line: 0,
+                character: 4,
+            },
+            Some("make".to_string()),
+        )
+        .with_query(crate::lsp::domain::CompletionQuery::new(
+            "foo-".to_string(),
+            range,
+        ));
+
+        let result = service.get_completions(&context).await;
+
+        assert!(
+            result.is_ok(),
+            "hyphenated prefix must not crash FTS: {:?}",
+            result.err()
+        );
+    }
+
+    #[tokio::test]
     async fn given_plain_snippet_when_creating_completion_item_then_uses_plain_text_format() {
         // Arrange
         let _env = init_test_env();

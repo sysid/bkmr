@@ -97,8 +97,13 @@ impl AsyncSnippetService for LspSnippetService {
             // Add prefix search if specified
             if let Some(ref prefix) = filter_clone.query_prefix {
                 if !prefix.trim().is_empty() {
-                    // Use title prefix search for better snippet matching
-                    text_parts.push(format!("metadata:{}*", prefix));
+                    // Use title prefix search for better snippet matching.
+                    // Quote the prefix so punctuation in the word (e.g. a hyphen,
+                    // which would yield `metadata:foo-*`) doesn't cause an FTS5
+                    // `syntax error near "*"`. The word extractor only admits
+                    // alphanumerics, `_` and `-`, so the prefix can never contain a
+                    // `"` — the quoting is injection-safe.
+                    text_parts.push(format!("metadata:\"{}\"*", prefix));
                 }
             }
 
