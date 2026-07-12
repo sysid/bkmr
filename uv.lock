@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "bkmr"
-version = "7.6.1"
+version = "7.6.6"
 source = { editable = "." }
 
 [package.dev-dependencies]

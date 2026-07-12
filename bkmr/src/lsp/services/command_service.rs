@@ -95,7 +95,10 @@ impl CommandService {
         }
 
         query.tags_all = Some(tags_all);
-        query.sort = Some(SortCriteria::new(SortField::Modified, SortDirection::Descending));
+        query.sort = Some(SortCriteria::new(
+            SortField::Modified,
+            SortDirection::Descending,
+        ));
 
         let bookmarks = self
             .bookmark_service

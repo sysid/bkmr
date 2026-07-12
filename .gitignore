@@ -37,3 +37,4 @@ target/
 db/bkmr.v1.db
 db/bkmr.v2.db
 ~$documentation.pptx
+dist/

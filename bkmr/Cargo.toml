@@ -35,10 +35,10 @@ minijinja = "2.21.0"
 fastembed = { version = "5", default-features = false, features = ["hf-hub-rustls-tls", "image-models"] }
 open = "5.3.6"
 regex = "1.13.0"
-reqwest = {version = "0.12.28", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+reqwest = {version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }
 rusqlite = { version = "0.35.0", features = ["bundled"] }  # https://github.com/sysid/bkmr/issues/6#issuecomment-1435966997
 sqlite-vec = "0.1.9"
-rustyline = "15.0.0"
+rustyline = "18.0.1"
 select = "0.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.150"
@@ -46,10 +46,10 @@ serde_yaml = "0.9.34"
 serde_with = {version = "3.21.0", features =["chrono"] }
 sha2 = "0.11.0"
 shellexpand = "3.1.2"
-skim = "4.10.0"
+skim = "5.1"
 tempfile = "3.27.0"
 thiserror = "2.0.18"
-toml = "0.8.23"
+toml = "1.1"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2.5.8"
@@ -68,10 +68,6 @@ system-ort = ["fastembed/ort-load-dynamic"]
 [dev-dependencies]
 assert_cmd = "2.2.2"
 predicates = "3.1.4"
-
-[build-dependencies]
-pyo3 = { version = "0.24", features = ["extension-module", "anyhow"] }
-
 
 [profile.release]
 codegen-units = 1

@@ -78,14 +78,7 @@ fn setup_test_logging() {
     env::set_var("SKIM_LOG", "info");
     env::set_var("TUIKIT_LOG", "info");
 
-    let noisy_modules = [
-        "skim",
-        "html5ever",
-        "reqwest",
-        "mio",
-        "want",
-        "hyper_util",
-    ];
+    let noisy_modules = ["skim", "html5ever", "reqwest", "mio", "want", "hyper_util"];
     let module_filter = filter_fn(move |metadata| {
         !noisy_modules
             .iter()

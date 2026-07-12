@@ -113,8 +113,7 @@ impl SearchCommandHandler {
         );
 
         // Determine sort criteria
-        let sort_criteria =
-            determine_sort_criteria(sort_field.as_deref(), order_desc, order_asc)?;
+        let sort_criteria = determine_sort_criteria(sort_field.as_deref(), order_desc, order_asc)?;
 
         // Validate and convert limit
         let limit_usize = match limit {
@@ -369,55 +368,82 @@ mod tests {
     #[test]
     fn given_no_flags_when_determine_sort_criteria_then_returns_id_ascending() {
         let result = determine_sort_criteria(None, false, false).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Id, SortDirection::Ascending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Id, SortDirection::Ascending)
+        );
     }
 
     #[test]
     fn given_desc_flag_only_when_determine_sort_criteria_then_returns_modified_descending() {
         let result = determine_sort_criteria(None, true, false).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Modified, SortDirection::Descending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Modified, SortDirection::Descending)
+        );
     }
 
     #[test]
     fn given_asc_flag_only_when_determine_sort_criteria_then_returns_modified_ascending() {
         let result = determine_sort_criteria(None, false, true).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Modified, SortDirection::Ascending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Modified, SortDirection::Ascending)
+        );
     }
 
     #[test]
     fn given_both_direction_flags_when_determine_sort_criteria_then_desc_wins() {
         let result = determine_sort_criteria(None, true, true).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Modified, SortDirection::Descending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Modified, SortDirection::Descending)
+        );
     }
 
     #[test]
     fn given_sort_title_when_determine_sort_criteria_then_returns_title_ascending() {
         let result = determine_sort_criteria(Some("title"), false, false).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Title, SortDirection::Ascending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Title, SortDirection::Ascending)
+        );
     }
 
     #[test]
     fn given_sort_title_desc_when_determine_sort_criteria_then_returns_title_descending() {
         let result = determine_sort_criteria(Some("title"), true, false).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Title, SortDirection::Descending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Title, SortDirection::Descending)
+        );
     }
 
     #[test]
     fn given_sort_modified_when_determine_sort_criteria_then_returns_modified_descending() {
         let result = determine_sort_criteria(Some("modified"), false, false).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Modified, SortDirection::Descending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Modified, SortDirection::Descending)
+        );
     }
 
     #[test]
     fn given_sort_modified_asc_when_determine_sort_criteria_then_returns_modified_ascending() {
         let result = determine_sort_criteria(Some("modified"), false, true).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Modified, SortDirection::Ascending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Modified, SortDirection::Ascending)
+        );
     }
 
     #[test]
     fn given_sort_id_desc_when_determine_sort_criteria_then_returns_id_descending() {
         let result = determine_sort_criteria(Some("id"), true, false).unwrap();
-        assert_eq!(result, SortCriteria::new(SortField::Id, SortDirection::Descending));
+        assert_eq!(
+            result,
+            SortCriteria::new(SortField::Id, SortDirection::Descending)
+        );
     }
 
     #[test]

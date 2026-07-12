@@ -218,12 +218,7 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test")?);
 
-        let bookmark = Bookmark::new(
-            "https://example.com",
-            "Example",
-            "A test bookmark",
-            tags,
-        )?;
+        let bookmark = Bookmark::new("https://example.com", "Example", "A test bookmark", tags)?;
 
         // Convert to JSON views
         let views = vec![JsonBookmarkView::from_domain(&bookmark)];

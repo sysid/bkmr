@@ -117,22 +117,17 @@ impl MiniJinjaEngine {
         }
 
         debug!("Rendering template");
-        let template = self
-            .env
-            .template_from_str(url)
-            .map_err(|e| {
-                debug!(error = %e, "Template syntax error (content may not be a MiniJinja template)");
-                InterpolationError::Syntax(e.to_string())
-            })?;
+        let template = self.env.template_from_str(url).map_err(|e| {
+            debug!(error = %e, "Template syntax error (content may not be a MiniJinja template)");
+            InterpolationError::Syntax(e.to_string())
+        })?;
 
         let context = self.create_context(bookmark);
 
-        template
-            .render(context)
-            .map_err(|e| {
-                debug!(error = %e, "Template rendering failed");
-                InterpolationError::Rendering(e.to_string())
-            })
+        template.render(context).map_err(|e| {
+            debug!(error = %e, "Template rendering failed");
+            InterpolationError::Rendering(e.to_string())
+        })
     }
 }
 

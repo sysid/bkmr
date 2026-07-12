@@ -513,11 +513,17 @@ mod tests {
         bookmark.record_access();
         assert_eq!(bookmark.access_count, 1);
         assert!(bookmark.accessed_at.is_some());
-        assert_eq!(bookmark.updated_at, updated_at_before, "record_access must not change updated_at");
+        assert_eq!(
+            bookmark.updated_at, updated_at_before,
+            "record_access must not change updated_at"
+        );
 
         bookmark.record_access();
         assert_eq!(bookmark.access_count, 2);
-        assert_eq!(bookmark.updated_at, updated_at_before, "record_access must not change updated_at");
+        assert_eq!(
+            bookmark.updated_at, updated_at_before,
+            "record_access must not change updated_at"
+        );
     }
 
     #[test]
@@ -570,8 +576,8 @@ mod tests {
 
         let bookmark = Bookmark::new(
             "SELECT * FROM users WHERE active = true", // url = the snippet code
-            "User Query",                               // title
-            "Finds active users",                       // description (should NOT be embedded)
+            "User Query",                              // title
+            "Finds active users",                      // description (should NOT be embedded)
             tags,
         )
         .unwrap();
@@ -599,8 +605,8 @@ mod tests {
 
         let bookmark = Bookmark::new(
             "#!/bin/bash\necho 'hello'", // url = the shell script
-            "Greeting Script",            // title
-            "",                           // description empty (typical for shell)
+            "Greeting Script",           // title
+            "",                          // description empty (typical for shell)
             tags,
         )
         .unwrap();
@@ -610,10 +616,7 @@ mod tests {
             content.contains("#!/bin/bash"),
             "should embed url (the shell script)"
         );
-        assert!(
-            content.contains("Greeting Script"),
-            "should embed title"
-        );
+        assert!(content.contains("Greeting Script"), "should embed title");
     }
 
     #[test]
@@ -623,8 +626,8 @@ mod tests {
         tags.insert(Tag::new("rust").unwrap());
 
         let bookmark = Bookmark::new(
-            "https://www.rust-lang.org", // url = a link (should NOT be embedded)
-            "Rust Language",              // title
+            "https://www.rust-lang.org",      // url = a link (should NOT be embedded)
+            "Rust Language",                  // title
             "A systems programming language", // description (should be embedded)
             tags,
         )
@@ -635,10 +638,7 @@ mod tests {
             content.contains("systems programming"),
             "should embed description"
         );
-        assert!(
-            !content.contains("rust-lang.org"),
-            "should NOT embed URL"
-        );
+        assert!(!content.contains("rust-lang.org"), "should NOT embed URL");
     }
 
     #[test]
@@ -650,8 +650,8 @@ mod tests {
 
         let bookmark = Bookmark::new(
             "The auth service uses JWT tokens with 24h expiry", // url = memory content
-            "Auth Token Policy",                                 // title
-            "",                                                  // description empty
+            "Auth Token Policy",                                // title
+            "",                                                 // description empty
             tags,
         )
         .unwrap();
@@ -662,10 +662,7 @@ mod tests {
             content.contains("JWT tokens"),
             "should embed url (the memory content)"
         );
-        assert!(
-            content.contains("Auth Token Policy"),
-            "should embed title"
-        );
+        assert!(content.contains("Auth Token Policy"), "should embed title");
         assert!(content.contains("project"), "should embed visible tags");
         assert!(!content.contains("_mem_"), "should NOT embed system tags");
     }
@@ -896,13 +893,8 @@ mod tests {
 
         // Create a URI bookmark
         let tags_uri = HashSet::new();
-        let bookmark_uri = Bookmark::new(
-            "https://example.com",
-            "Example Site",
-            "A website",
-            tags_uri,
-        )
-        .unwrap();
+        let bookmark_uri =
+            Bookmark::new("https://example.com", "Example Site", "A website", tags_uri).unwrap();
 
         // Create a snippet bookmark
         let mut tags_snippet = HashSet::new();

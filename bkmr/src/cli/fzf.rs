@@ -457,12 +457,7 @@ pub fn fzf_process(
                     fzf_opts.show_action,
                 )
             } else {
-                FzfBookmarkItem::new_classic(
-                    bookmark,
-                    max_id_width,
-                    &action_description,
-                    settings,
-                )
+                FzfBookmarkItem::new_classic(bookmark, max_id_width, &action_description, settings)
             }
         })
         .collect();
@@ -473,9 +468,8 @@ pub fn fzf_process(
         execute!(std::io::stdout(), EnterAlternateScreen)?;
     }
 
-    let skim_output = Skim::run_items(options, items).map_err(|e| {
-        crate::cli::error::CliError::CommandFailed(format!("Skim failed: {}", e))
-    });
+    let skim_output = Skim::run_items(options, items)
+        .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Skim failed: {}", e)));
 
     if use_alternate_screen {
         execute!(std::io::stdout(), LeaveAlternateScreen)?;

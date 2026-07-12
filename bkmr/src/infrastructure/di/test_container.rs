@@ -126,9 +126,12 @@ impl TestServiceContainer {
             true, // Test with interactive mode enabled
         ));
 
-        let markdown_action: Box<dyn BookmarkAction> = Box::new(
-            MarkdownAction::new_with_repository(repository.clone(), Arc::new(NullVectorRepository), embedder.clone()),
-        );
+        let markdown_action: Box<dyn BookmarkAction> =
+            Box::new(MarkdownAction::new_with_repository(
+                repository.clone(),
+                Arc::new(NullVectorRepository),
+                embedder.clone(),
+            ));
 
         let env_action: Box<dyn BookmarkAction> =
             Box::new(EnvAction::new(interpolation_service.clone()));

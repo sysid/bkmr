@@ -105,7 +105,8 @@ impl VectorRepository for SqliteVectorRepository {
                     conn.execute_batch("DROP TABLE IF EXISTS vec_bookmarks")
                         .map_err(|e| {
                             DomainError::BookmarkOperationFailed(format!(
-                                "Failed to drop vec_bookmarks for dimension change: {}", e
+                                "Failed to drop vec_bookmarks for dimension change: {}",
+                                e
                             ))
                         })?;
                 }
@@ -126,7 +127,8 @@ impl VectorRepository for SqliteVectorRepository {
         ))
         .map_err(|e| {
             DomainError::BookmarkOperationFailed(format!(
-                "Failed to create vec_bookmarks table: {}", e
+                "Failed to create vec_bookmarks table: {}",
+                e
             ))
         })?;
         debug!("vec_bookmarks table created with {} dimensions", dimensions);
@@ -143,7 +145,8 @@ impl VectorRepository for SqliteVectorRepository {
         )
         .map_err(|e| {
             DomainError::BookmarkOperationFailed(format!(
-                "Failed to delete old embedding for bookmark {}: {}", bookmark_id, e
+                "Failed to delete old embedding for bookmark {}: {}",
+                bookmark_id, e
             ))
         })?;
 
@@ -153,7 +156,8 @@ impl VectorRepository for SqliteVectorRepository {
         )
         .map_err(|e| {
             DomainError::BookmarkOperationFailed(format!(
-                "Failed to insert embedding for bookmark {}: {}", bookmark_id, e
+                "Failed to insert embedding for bookmark {}: {}",
+                bookmark_id, e
             ))
         })?;
 
@@ -170,7 +174,8 @@ impl VectorRepository for SqliteVectorRepository {
         )
         .map_err(|e| {
             DomainError::BookmarkOperationFailed(format!(
-                "Failed to delete embedding for bookmark {}: {}", bookmark_id, e
+                "Failed to delete embedding for bookmark {}: {}",
+                bookmark_id, e
             ))
         })?;
         Ok(())
@@ -193,7 +198,8 @@ impl VectorRepository for SqliteVectorRepository {
             )
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
-                    "Failed to prepare vector search query: {}", e
+                    "Failed to prepare vector search query: {}",
+                    e
                 ))
             })?;
 
@@ -203,14 +209,13 @@ impl VectorRepository for SqliteVectorRepository {
                 |row| Ok((row.get::<_, i32>(0)?, row.get::<_, f64>(1)?)),
             )
             .map_err(|e| {
-                DomainError::BookmarkOperationFailed(format!(
-                    "Vector search query failed: {}", e
-                ))
+                DomainError::BookmarkOperationFailed(format!("Vector search query failed: {}", e))
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
-                    "Failed to collect vector search results: {}", e
+                    "Failed to collect vector search results: {}",
+                    e
                 ))
             })?;
 
@@ -224,7 +229,8 @@ impl VectorRepository for SqliteVectorRepository {
             .query_row("SELECT COUNT(*) FROM vec_bookmarks", [], |row| row.get(0))
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
-                    "Failed to check vec_bookmarks count: {}", e
+                    "Failed to check vec_bookmarks count: {}",
+                    e
                 ))
             })?;
         Ok(count > 0)
@@ -239,9 +245,7 @@ impl VectorRepository for SqliteVectorRepository {
     fn clear_all(&self) -> DomainResult<()> {
         let conn = lock_conn(&self.conn)?;
         conn.execute("DELETE FROM vec_bookmarks", []).map_err(|e| {
-            DomainError::BookmarkOperationFailed(format!(
-                "Failed to clear vec_bookmarks: {}", e
-            ))
+            DomainError::BookmarkOperationFailed(format!("Failed to clear vec_bookmarks: {}", e))
         })?;
         debug!("Cleared all embeddings from vec_bookmarks");
         Ok(())
@@ -249,22 +253,24 @@ impl VectorRepository for SqliteVectorRepository {
 
     fn get_embedded_ids(&self) -> DomainResult<HashSet<i32>> {
         let conn = lock_conn(&self.conn)?;
-        let mut stmt = conn.prepare("SELECT rowid FROM vec_bookmarks").map_err(|e| {
-            DomainError::BookmarkOperationFailed(format!(
-                "Failed to query embedded IDs: {}", e
-            ))
-        })?;
+        let mut stmt = conn
+            .prepare("SELECT rowid FROM vec_bookmarks")
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!("Failed to query embedded IDs: {}", e))
+            })?;
         let ids = stmt
             .query_map([], |row| row.get::<_, i32>(0))
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
-                    "Failed to collect embedded IDs: {}", e
+                    "Failed to collect embedded IDs: {}",
+                    e
                 ))
             })?
             .collect::<Result<HashSet<_>, _>>()
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
-                    "Failed to collect embedded IDs: {}", e
+                    "Failed to collect embedded IDs: {}",
+                    e
                 ))
             })?;
         Ok(ids)
@@ -350,9 +356,7 @@ mod tests {
         repo.upsert_embedding(2, &[0.9f32, 0.9, 0.9, 0.9]).unwrap();
         repo.upsert_embedding(3, &[0.5f32, 0.5, 0.5, 0.5]).unwrap();
 
-        let results = repo
-            .search_nearest(&[0.8f32, 0.8, 0.8, 0.8], 3)
-            .unwrap();
+        let results = repo.search_nearest(&[0.8f32, 0.8, 0.8, 0.8], 3).unwrap();
 
         assert_eq!(results.len(), 3);
         assert_eq!(results[0].0, 2);

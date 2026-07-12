@@ -1125,8 +1125,11 @@ mod tests {
         // Action with repository
         let repository = Arc::new(crate::util::testing::setup_test_db());
         let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let vector_repository = Arc::new(crate::infrastructure::repositories::null_vector_repository::NullVectorRepository);
-        let action_with_repo = MarkdownAction::new_with_repository(repository, vector_repository, embedder);
+        let vector_repository = Arc::new(
+            crate::infrastructure::repositories::null_vector_repository::NullVectorRepository,
+        );
+        let action_with_repo =
+            MarkdownAction::new_with_repository(repository, vector_repository, embedder);
 
         // Create test bookmarks
         let mut tags = HashSet::new();

@@ -2,7 +2,9 @@
 use crate::application::error::ApplicationResult;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
-use crate::domain::search::{HybridSearch, HybridSearchResult, SemanticSearch, SemanticSearchResult};
+use crate::domain::search::{
+    HybridSearch, HybridSearchResult, SemanticSearch, SemanticSearchResult,
+};
 use crate::domain::tag::Tag;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -65,10 +67,7 @@ pub trait BookmarkService: Send + Sync + Debug {
     ) -> ApplicationResult<Vec<SemanticSearchResult>>;
 
     /// Perform hybrid search combining FTS and semantic search with RRF fusion
-    fn hybrid_search(
-        &self,
-        search: &HybridSearch,
-    ) -> ApplicationResult<Vec<HybridSearchResult>>;
+    fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>>;
 
     /// Get bookmark by URL
     fn get_bookmark_by_url(&self, url: &str) -> ApplicationResult<Option<Bookmark>>;
@@ -95,7 +94,12 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Bulk-create bookmarks from a JSON array file. Stores full content (url, title,
     /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates.
     /// Use case: agent bulk imports, migrations, seeding a database.
-    fn load_json_bookmarks(&self, path: &str, dry_run: bool, embeddable: bool) -> ApplicationResult<usize>;
+    fn load_json_bookmarks(
+        &self,
+        path: &str,
+        dry_run: bool,
+        embeddable: bool,
+    ) -> ApplicationResult<usize>;
 
     /// Import files from directories with frontmatter metadata. Stores full content AND
     /// tracks source file (path, mtime, hash) for smart editing and change detection.

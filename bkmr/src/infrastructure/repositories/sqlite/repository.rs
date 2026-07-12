@@ -456,14 +456,15 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let mut conn = self.get_connection()?;
 
         // Begin transaction
-        let deleted = conn.transaction::<bool, diesel::result::Error, _>(|conn| {
-            let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
-            if result == 0 {
-                return Ok(false); // No bookmark was deleted
-            }
-            Ok(true)
-        })
-        .map_err(SqliteRepositoryError::DatabaseError)?;
+        let deleted = conn
+            .transaction::<bool, diesel::result::Error, _>(|conn| {
+                let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
+                if result == 0 {
+                    return Ok(false); // No bookmark was deleted
+                }
+                Ok(true)
+            })
+            .map_err(SqliteRepositoryError::DatabaseError)?;
 
         if deleted {
             debug!(bookmark_id = id, "Bookmark deleted from database");
@@ -776,9 +777,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let ranked: Vec<RankedResult> = ids
             .into_iter()
             .enumerate()
-            .filter(|(_, id)| {
-                filter_ids.map_or(true, |ids| ids.contains(id))
-            })
+            .filter(|(_, id)| filter_ids.map_or(true, |ids| ids.contains(id)))
             .enumerate()
             .map(|(filtered_rank, (_, id))| RankedResult {
                 bookmark_id: id,
@@ -1655,7 +1654,10 @@ mod tests {
             .with_text_query(Some("TEST"))
             .with_tags_all(Some(&all_tags))
             .with_tags_any(Some(&any_tags))
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending))
+            .with_sort(SortCriteria::new(
+                SortField::Modified,
+                SortDirection::Descending,
+            ))
             .with_limit(Some(5));
 
         // Act

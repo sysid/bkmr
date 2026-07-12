@@ -212,9 +212,12 @@ impl ServiceContainer {
             config.shell_opts.interactive,
         ));
 
-        let markdown_action: Box<dyn BookmarkAction> = Box::new(
-            MarkdownAction::new_with_repository(repository.clone(), vector_repository.clone(), embedder.clone()),
-        );
+        let markdown_action: Box<dyn BookmarkAction> =
+            Box::new(MarkdownAction::new_with_repository(
+                repository.clone(),
+                vector_repository.clone(),
+                embedder.clone(),
+            ));
 
         let env_action: Box<dyn BookmarkAction> =
             Box::new(EnvAction::new(interpolation_service.clone()));

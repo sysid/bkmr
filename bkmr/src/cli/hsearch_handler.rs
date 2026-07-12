@@ -25,14 +25,15 @@ fn parse_tags(s: &str) -> Option<std::collections::HashSet<Tag>> {
             }
         })
         .collect();
-    if tags.is_empty() { None } else { Some(tags) }
+    if tags.is_empty() {
+        None
+    } else {
+        Some(tags)
+    }
 }
 
 #[instrument(skip(cli, services), level = "debug")]
-pub fn hybrid_search(
-    cli: Cli,
-    services: &ServiceContainer,
-) -> CliResult<()> {
+pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     let mut stderr = std::io::stderr();
     if let Commands::HSearch {
         query,
@@ -96,8 +97,7 @@ pub fn hybrid_search(
                 .collect();
             println!(
                 "{}",
-                serde_json::to_string_pretty(&json_results)
-                    .unwrap_or_else(|_| "[]".to_string())
+                serde_json::to_string_pretty(&json_results).unwrap_or_else(|_| "[]".to_string())
             );
         } else if is_piped {
             // Tab-delimited output for piping: id, title, url, rrf_score

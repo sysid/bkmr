@@ -54,10 +54,7 @@ pub fn format_action_description(base_description: &str, opener: Option<&String>
 }
 
 #[instrument(skip(cli, services))]
-pub fn semantic_search(
-    cli: Cli,
-    services: &ServiceContainer,
-) -> CliResult<()> {
+pub fn semantic_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     let mut stderr = std::io::stderr();
     if let Commands::SemSearch {
         query,
@@ -70,7 +67,8 @@ pub fn semantic_search(
             writeln!(
                 stderr,
                 "{}",
-                "Error: Semantic search requires embeddings. Configure an embedding provider.".red()
+                "Error: Semantic search requires embeddings. Configure an embedding provider."
+                    .red()
             )
             .cli_context("writing no-embedder error message to stderr")?;
             return Err(CliError::CommandFailed(
@@ -200,8 +198,10 @@ pub fn open(
                         println!("{}", content);
                     } else {
                         // Use action service to execute default action
-                        let base_description = action_service.get_default_action_description(&bookmark);
-                        let action_type = format_action_description(base_description, bookmark.opener.as_ref());
+                        let base_description =
+                            action_service.get_default_action_description(&bookmark);
+                        let action_type =
+                            format_action_description(base_description, bookmark.opener.as_ref());
                         eprintln!("Performing '{}' for: {}", action_type, bookmark.title);
 
                         // Execute default action with access recording handled by action service
@@ -421,9 +421,7 @@ pub fn add(
 
                 // CLI flag overrides whatever was set in the edit template;
                 // otherwise fall back to the OPENER section parsed from the template
-                let effective_opener = open_with
-                    .as_deref()
-                    .or(edited_bookmark.opener.as_deref());
+                let effective_opener = open_with.as_deref().or(edited_bookmark.opener.as_deref());
 
                 // Add the edited bookmark
                 match bookmark_service.add_bookmark(
@@ -557,8 +555,10 @@ pub fn update(
                 }
 
                 // Update scalar fields if provided (title, description, url, opener)
-                let has_field_updates =
-                    title.is_some() || description.is_some() || url.is_some() || open_with.is_some();
+                let has_field_updates = title.is_some()
+                    || description.is_some()
+                    || url.is_some()
+                    || open_with.is_some();
                 if has_field_updates {
                     // Fetch latest version to avoid stale data after tag operations
                     if let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? {
@@ -727,7 +727,8 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         for bookmark in &bookmarks {
             // Get the action description, incorporating custom opener if present
             let base_description = action_service.get_default_action_description(bookmark);
-            let action_description = format_action_description(base_description, bookmark.opener.as_ref());
+            let action_description =
+                format_action_description(base_description, bookmark.opener.as_ref());
 
             // Show what we're doing
             eprintln!(
@@ -857,7 +858,10 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
         // Check if real embeddings are available
         if services.embedder.dimensions() == 0 {
-            eprintln!("{}", "Error: Cannot backfill embeddings without an embedding provider configured.".red());
+            eprintln!(
+                "{}",
+                "Error: Cannot backfill embeddings without an embedding provider configured.".red()
+            );
             return Err(CliError::CommandFailed(
                 "No embedding provider configured - embeddings not available".to_string(),
             ));
@@ -920,7 +924,12 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 
 #[instrument(skip(cli))]
 pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
-    if let Commands::LoadJson { path, dry_run, no_embed } = cli.command.unwrap() {
+    if let Commands::LoadJson {
+        path,
+        dry_run,
+        no_embed,
+    } = cli.command.unwrap()
+    {
         eprintln!("Loading bookmarks from JSON array: {}", path);
 
         let bookmark_service = services.bookmark_service.clone();
@@ -1054,22 +1063,35 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             .unwrap_or(0);
 
         println!("\nEmbeddings:");
-        println!("  Model: {} ({} dims)", settings.embeddings.model, services.embedder.dimensions());
+        println!(
+            "  Model: {} ({} dims)",
+            settings.embeddings.model,
+            services.embedder.dimensions()
+        );
         let cache_dir = crate::infrastructure::embeddings::FastEmbedEmbedding::cache_dir();
         let cache_path = std::path::Path::new(&cache_dir);
         let model_downloaded = cache_path.exists()
-            && cache_path.read_dir().map_or(false, |mut d| d.next().is_some());
+            && cache_path
+                .read_dir()
+                .map_or(false, |mut d| d.next().is_some());
         println!(
             "  Model cache: {} ({})",
             cache_dir,
-            if model_downloaded { "downloaded" } else { "not downloaded" }
+            if model_downloaded {
+                "downloaded"
+            } else {
+                "not downloaded"
+            }
         );
         println!(
             "  Embedded: {} of {} embeddable bookmarks",
             vec_embedded_count, embeddable_count
         );
         if let Some(dims) = vec_dims {
-            println!("  Vector table: vec_bookmarks ({} dims, {} rows)", dims, vec_embedded_count);
+            println!(
+                "  Vector table: vec_bookmarks ({} dims, {} rows)",
+                dims, vec_embedded_count
+            );
         } else if !vec_has_embeddings {
             println!("  Vector table: vec_bookmarks (empty)");
         }
@@ -1165,9 +1187,7 @@ fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<
 }
 
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
-pub fn pre_fill_database(
-    repository: &SqliteBookmarkRepository,
-) -> CliResult<()> {
+pub fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()> {
     // Create demo entries
     let demo_entries = vec![
         // Regular URLs

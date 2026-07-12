@@ -168,5 +168,4 @@ mod tests {
         let result = repo.import_json_bookmarks(temp_file.path().to_str().unwrap());
         assert!(result.is_err());
     }
-
 }

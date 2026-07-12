@@ -23,7 +23,10 @@ impl std::fmt::Debug for FastEmbedEmbedding {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FastEmbedEmbedding")
             .field("dims", &self.dims)
-            .field("initialized", &self.model.lock().map(|g| g.is_some()).unwrap_or(false))
+            .field(
+                "initialized",
+                &self.model.lock().map(|g| g.is_some()).unwrap_or(false),
+            )
             .finish()
     }
 }
@@ -97,7 +100,10 @@ impl FastEmbedEmbedding {
         if guard.is_none() {
             let cache_dir = Self::cache_dir();
             let cache_path = std::path::Path::new(&cache_dir);
-            let needs_download = !cache_path.exists() || cache_path.read_dir().map_or(true, |mut d| d.next().is_none());
+            let needs_download = !cache_path.exists()
+                || cache_path
+                    .read_dir()
+                    .map_or(true, |mut d| d.next().is_none());
 
             if needs_download {
                 info!(model = ?self.embedding_model, cache = %cache_dir, "Downloading embedding model (one-time)");

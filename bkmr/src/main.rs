@@ -247,14 +247,7 @@ fn setup_logging(verbosity: u8, no_color: bool) {
     };
 
     // Create a noisy module filter
-    let noisy_modules = [
-        "skim",
-        "html5ever",
-        "reqwest",
-        "mio",
-        "want",
-        "hyper_util",
-    ];
+    let noisy_modules = ["skim", "html5ever", "reqwest", "mio", "want", "hyper_util"];
     let module_filter = filter_fn(move |metadata| {
         !noisy_modules
             .iter()

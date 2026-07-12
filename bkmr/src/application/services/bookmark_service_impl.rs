@@ -7,9 +7,7 @@ use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
 use crate::domain::error_context::ApplicationErrorContext;
-use crate::domain::repositories::import_repository::{
-    FileImportData, ImportRepository,
-};
+use crate::domain::repositories::import_repository::{FileImportData, ImportRepository};
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
@@ -136,9 +134,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             title_str,
             all_tags.len()
         );
-        let mut bookmark =
-            Bookmark::new(url, &title_str, &desc_str, all_tags)
-                .app_context("creating new bookmark from provided data")?;
+        let mut bookmark = Bookmark::new(url, &title_str, &desc_str, all_tags)
+            .app_context("creating new bookmark from provided data")?;
         bookmark.set_embeddable(embeddable);
         bookmark.opener = opener.and_then(|s| {
             let trimmed = s.trim();
@@ -177,7 +174,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         // Best-effort: remove embedding from vector store (may not exist)
         if let Err(e) = self.vector_repository.delete_embedding(id) {
-            debug!("Could not delete embedding for bookmark {}: {} (may not exist)", id, e);
+            debug!(
+                "Could not delete embedding for bookmark {}: {} (may not exist)",
+                id, e
+            );
         }
 
         if result {
@@ -218,7 +218,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
             // Remove from vector store
             if let Err(e) = self.vector_repository.delete_embedding(id) {
-                debug!("Could not delete embedding for bookmark {}: {} (may not exist)", id, e);
+                debug!(
+                    "Could not delete embedding for bookmark {}: {} (may not exist)",
+                    id, e
+                );
             }
 
             // No need to force embedding creation since we're turning it off
@@ -323,7 +326,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
         let query = BookmarkQuery::new()
             .with_text_query(Some(query))
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending));
+            .with_sort(SortCriteria::new(
+                SortField::Modified,
+                SortDirection::Descending,
+            ));
 
         self.search_bookmarks(&query)
     }
@@ -397,10 +403,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self, search), level = "debug", fields(query = %search.query, mode = ?search.mode))]
-    fn hybrid_search(
-        &self,
-        search: &HybridSearch,
-    ) -> ApplicationResult<Vec<HybridSearchResult>> {
+    fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>> {
         use crate::domain::search::{RankedResult, SearchMode};
 
         let limit = search.effective_limit();
@@ -411,10 +414,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         let filter_ids = if search.has_tag_filters() {
             let all_bookmarks = self.repository.get_all()?;
             let filtered = search.apply_tag_filters(&all_bookmarks);
-            let ids: std::collections::HashSet<i32> = filtered
-                .into_iter()
-                .filter_map(|b| b.id)
-                .collect();
+            let ids: std::collections::HashSet<i32> =
+                filtered.into_iter().filter_map(|b| b.id).collect();
             if ids.is_empty() {
                 return Ok(vec![]);
             }
@@ -438,13 +439,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             let query_embedding = self.embedder.embed_query(&search.query)?;
             match query_embedding {
                 Some(embedding) => {
-                    let vec_results = self
-                        .vector_repository
-                        .search_nearest_filtered(
-                            &embedding,
-                            internal_limit,
-                            filter_ids.as_ref(),
-                        )?;
+                    let vec_results = self.vector_repository.search_nearest_filtered(
+                        &embedding,
+                        internal_limit,
+                        filter_ids.as_ref(),
+                    )?;
                     vec_results
                         .into_iter()
                         .enumerate()
@@ -542,7 +541,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     /// description, tags) and generates embeddings via `Bookmark::get_content_for_embedding()`
     /// (type-aware dispatch). Skips URLs that already exist — no update support.
     #[instrument(skip(self), level = "debug")]
-    fn load_json_bookmarks(&self, path: &str, dry_run: bool, embeddable: bool) -> ApplicationResult<usize> {
+    fn load_json_bookmarks(
+        &self,
+        path: &str,
+        dry_run: bool,
+        embeddable: bool,
+    ) -> ApplicationResult<usize> {
         let imports = self
             .import_repository
             .import_json_bookmarks(path)
@@ -568,12 +572,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             debug!("Processing import: {}", import.url);
 
             // Create the bookmark
-            let mut bookmark = Bookmark::new(
-                &import.url,
-                &import.title,
-                &import.content,
-                import.tags,
-            )?;
+            let mut bookmark =
+                Bookmark::new(&import.url, &import.title, &import.content, import.tags)?;
             bookmark.set_embeddable(embeddable);
 
             self.repository.add(&mut bookmark)?;
@@ -703,7 +703,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             } else {
                 // Create new bookmark
                 if !dry_run {
-                    self.create_bookmark_from_file(file_data, &settings, base_path_name, embeddable)?;
+                    self.create_bookmark_from_file(
+                        file_data,
+                        &settings,
+                        base_path_name,
+                        embeddable,
+                    )?;
                 }
                 added_count += 1;
                 println!("Added bookmark: {}", file_data.name);
@@ -729,7 +734,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         }
 
-        info!(added = added_count, updated = updated_count, deleted = deleted_count, "File import complete");
+        info!(
+            added = added_count,
+            updated = updated_count,
+            deleted = deleted_count,
+            "File import complete"
+        );
         Ok((added_count, updated_count, deleted_count))
     }
 }
@@ -1140,7 +1150,15 @@ mod tests {
 
         // Act
         let bookmark = service
-            .add_bookmark(url, Some(title), Some(description), Some(&tags), false, true, None)
+            .add_bookmark(
+                url,
+                Some(title),
+                Some(description),
+                Some(&tags),
+                false,
+                true,
+                None,
+            )
             .unwrap();
 
         // Assert
@@ -1168,7 +1186,15 @@ mod tests {
         let opener = "firefox --new-window";
 
         let bookmark = service
-            .add_bookmark(url, Some("Opener Test"), Some(""), None, false, true, Some(opener))
+            .add_bookmark(
+                url,
+                Some("Opener Test"),
+                Some(""),
+                None,
+                false,
+                true,
+                Some(opener),
+            )
             .unwrap();
 
         let retrieved = service.get_bookmark(bookmark.id.unwrap()).unwrap().unwrap();
@@ -1183,7 +1209,15 @@ mod tests {
         let url = "https://opener-empty.example.com";
 
         let bookmark = service
-            .add_bookmark(url, Some("Empty Opener"), Some(""), None, false, true, Some("   "))
+            .add_bookmark(
+                url,
+                Some("Empty Opener"),
+                Some(""),
+                None,
+                false,
+                true,
+                Some("   "),
+            )
             .unwrap();
 
         let retrieved = service.get_bookmark(bookmark.id.unwrap()).unwrap().unwrap();
@@ -1393,7 +1427,15 @@ mod tests {
         // First add a test bookmark that we can delete
         let url = "https://todelete.example.com";
         let bookmark = service
-            .add_bookmark(url, Some("To Delete"), Some("Description"), None, false, true, None)
+            .add_bookmark(
+                url,
+                Some("To Delete"),
+                Some("Description"),
+                None,
+                false,
+                true,
+                None,
+            )
             .unwrap();
         let id = bookmark.id.unwrap();
 

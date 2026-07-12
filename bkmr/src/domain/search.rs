@@ -204,7 +204,10 @@ pub struct HybridSearchResult {
 
 impl HybridSearchResult {
     pub fn new(bookmark: Bookmark, rrf_score: f64) -> Self {
-        Self { bookmark, rrf_score }
+        Self {
+            bookmark,
+            rrf_score,
+        }
     }
 }
 
@@ -227,12 +230,10 @@ impl RrfFusion {
         let mut scores: HashMap<i32, f64> = HashMap::new();
 
         for result in fts_results {
-            *scores.entry(result.bookmark_id).or_default() +=
-                1.0 / (k + result.rank as f64 + 1.0);
+            *scores.entry(result.bookmark_id).or_default() += 1.0 / (k + result.rank as f64 + 1.0);
         }
         for result in sem_results {
-            *scores.entry(result.bookmark_id).or_default() +=
-                1.0 / (k + result.rank as f64 + 1.0);
+            *scores.entry(result.bookmark_id).or_default() += 1.0 / (k + result.rank as f64 + 1.0);
         }
 
         let mut scored: Vec<(i32, f64)> = scores.into_iter().collect();
@@ -253,8 +254,7 @@ mod tests {
         let mut tags = HashSet::new();
         tags.insert(Tag::new("test").unwrap());
 
-        let mut bookmark =
-            Bookmark::new("https://example.com", title, content, tags).unwrap();
+        let mut bookmark = Bookmark::new("https://example.com", title, content, tags).unwrap();
 
         bookmark.set_embeddable(has_embedding);
         bookmark
@@ -268,12 +268,24 @@ mod tests {
         // Doc 2 appears only in FTS → single-engine score
         // Doc 3 appears only in semantic → single-engine score
         let fts = vec![
-            RankedResult { bookmark_id: 1, rank: 0 },
-            RankedResult { bookmark_id: 2, rank: 1 },
+            RankedResult {
+                bookmark_id: 1,
+                rank: 0,
+            },
+            RankedResult {
+                bookmark_id: 2,
+                rank: 1,
+            },
         ];
         let sem = vec![
-            RankedResult { bookmark_id: 1, rank: 0 },
-            RankedResult { bookmark_id: 3, rank: 1 },
+            RankedResult {
+                bookmark_id: 1,
+                rank: 0,
+            },
+            RankedResult {
+                bookmark_id: 3,
+                rank: 1,
+            },
         ];
 
         let results = RrfFusion::fuse(&fts, &sem, 60.0, 10);
@@ -295,8 +307,14 @@ mod tests {
     #[test]
     fn given_one_empty_list_when_fuse_then_single_engine_scores() {
         let fts = vec![
-            RankedResult { bookmark_id: 1, rank: 0 },
-            RankedResult { bookmark_id: 2, rank: 1 },
+            RankedResult {
+                bookmark_id: 1,
+                rank: 0,
+            },
+            RankedResult {
+                bookmark_id: 2,
+                rank: 1,
+            },
         ];
         let sem: Vec<RankedResult> = vec![];
 
@@ -314,12 +332,14 @@ mod tests {
     #[test]
     fn given_tied_ranks_when_fuse_then_correct_scores() {
         // Two docs at same rank in different engines
-        let fts = vec![
-            RankedResult { bookmark_id: 1, rank: 0 },
-        ];
-        let sem = vec![
-            RankedResult { bookmark_id: 2, rank: 0 },
-        ];
+        let fts = vec![RankedResult {
+            bookmark_id: 1,
+            rank: 0,
+        }];
+        let sem = vec![RankedResult {
+            bookmark_id: 2,
+            rank: 0,
+        }];
 
         let results = RrfFusion::fuse(&fts, &sem, 60.0, 10);
 
@@ -331,9 +351,10 @@ mod tests {
 
     #[test]
     fn given_k_constant_when_fuse_then_dampening_applied() {
-        let fts = vec![
-            RankedResult { bookmark_id: 1, rank: 0 },
-        ];
+        let fts = vec![RankedResult {
+            bookmark_id: 1,
+            rank: 0,
+        }];
         let sem: Vec<RankedResult> = vec![];
 
         // With k=60: score = 1/61
@@ -350,9 +371,18 @@ mod tests {
     #[test]
     fn given_limit_when_fuse_then_truncated() {
         let fts = vec![
-            RankedResult { bookmark_id: 1, rank: 0 },
-            RankedResult { bookmark_id: 2, rank: 1 },
-            RankedResult { bookmark_id: 3, rank: 2 },
+            RankedResult {
+                bookmark_id: 1,
+                rank: 0,
+            },
+            RankedResult {
+                bookmark_id: 2,
+                rank: 1,
+            },
+            RankedResult {
+                bookmark_id: 3,
+                rank: 2,
+            },
         ];
         let sem: Vec<RankedResult> = vec![];
 

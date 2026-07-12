@@ -57,12 +57,10 @@ impl ClipboardServiceImpl {
     #[cfg(not(target_os = "linux"))]
     fn copy_to_clipboard_arboard(&self, text: &str) -> DomainResult<()> {
         match Clipboard::new() {
-            Ok(mut clipboard) => clipboard
-                .set_text(text)
-                .map_err(|e| {
-                    warn!(error = %e, "Failed to set clipboard text");
-                    DomainError::Other(format!("Failed to set clipboard text: {}", e))
-                }),
+            Ok(mut clipboard) => clipboard.set_text(text).map_err(|e| {
+                warn!(error = %e, "Failed to set clipboard text");
+                DomainError::Other(format!("Failed to set clipboard text: {}", e))
+            }),
             Err(e) => {
                 warn!(error = %e, "Failed to initialize clipboard");
                 Err(DomainError::Other(format!(

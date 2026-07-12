@@ -52,7 +52,11 @@ pub enum Commands {
         #[arg(long = "exact-prefix", help = "prefix tags combined with --exact")]
         tags_exact_prefix: Option<String>,
 
-        #[arg(short = 't', long = "tags", help = "must have ALL these tags (comma-separated)")]
+        #[arg(
+            short = 't',
+            long = "tags",
+            help = "must have ALL these tags (comma-separated)"
+        )]
         tags_all: Option<String>,
 
         #[arg(long = "tags-prefix", help = "prefix tags combined with --tags")]
@@ -68,7 +72,11 @@ pub enum Commands {
         #[arg(long = "Tags-prefix", help = "prefix tags combined with --Tags")]
         tags_all_not_prefix: Option<String>,
 
-        #[arg(short = 'n', long = "ntags", help = "must have ANY of these tags (comma-separated)")]
+        #[arg(
+            short = 'n',
+            long = "ntags",
+            help = "must have ANY of these tags (comma-separated)"
+        )]
         tags_any: Option<String>,
 
         #[arg(long = "ntags-prefix", help = "prefix tags combined with --ntags")]
@@ -84,13 +92,24 @@ pub enum Commands {
         #[arg(long = "Ntags-prefix", help = "prefix tags combined with --Ntags")]
         tags_any_not_prefix: Option<String>,
 
-        #[arg(short = 'o', long = "descending", help = "sort descending (implies --sort modified if no --sort given)")]
+        #[arg(
+            short = 'o',
+            long = "descending",
+            help = "sort descending (implies --sort modified if no --sort given)"
+        )]
         order_desc: bool,
 
-        #[arg(short = 'O', long = "ascending", help = "sort ascending (implies --sort modified if no --sort given)")]
+        #[arg(
+            short = 'O',
+            long = "ascending",
+            help = "sort ascending (implies --sort modified if no --sort given)"
+        )]
         order_asc: bool,
 
-        #[arg(long = "sort", help = "sort field: id, title, modified (default: id). Without -o/-O, id/title default ascending, modified defaults descending")]
+        #[arg(
+            long = "sort",
+            help = "sort field: id, title, modified (default: id). Without -o/-O, id/title default ascending, modified defaults descending"
+        )]
         sort_field: Option<String>,
 
         #[arg(long = "np", help = "no prompt")]
@@ -142,22 +161,46 @@ pub enum Commands {
         /// Search query text
         query: String,
 
-        #[arg(short = 't', long = "tags", help = "must have ALL these tags (comma-separated)")]
+        #[arg(
+            short = 't',
+            long = "tags",
+            help = "must have ALL these tags (comma-separated)"
+        )]
         tags_all: Option<String>,
 
-        #[arg(short = 'T', long = "Tags", help = "exclude if has ALL these tags (comma-separated)")]
+        #[arg(
+            short = 'T',
+            long = "Tags",
+            help = "exclude if has ALL these tags (comma-separated)"
+        )]
         tags_all_not: Option<String>,
 
-        #[arg(short = 'n', long = "ntags", help = "must have ANY of these tags (comma-separated)")]
+        #[arg(
+            short = 'n',
+            long = "ntags",
+            help = "must have ANY of these tags (comma-separated)"
+        )]
         tags_any: Option<String>,
 
-        #[arg(short = 'N', long = "Ntags", help = "exclude if has ANY of these tags (comma-separated)")]
+        #[arg(
+            short = 'N',
+            long = "Ntags",
+            help = "exclude if has ANY of these tags (comma-separated)"
+        )]
         tags_any_not: Option<String>,
 
-        #[arg(short = 'e', long = "exact", help = "exact tag match (comma-separated)")]
+        #[arg(
+            short = 'e',
+            long = "exact",
+            help = "exact tag match (comma-separated)"
+        )]
         tags_exact: Option<String>,
 
-        #[arg(long = "mode", default_value = "hybrid", help = "search mode: hybrid or exact")]
+        #[arg(
+            long = "mode",
+            default_value = "hybrid",
+            help = "search mode: hybrid or exact"
+        )]
         mode: String,
 
         #[arg(short = 'l', long = "limit", help = "limit number of results")]
@@ -239,7 +282,10 @@ pub enum Commands {
             help = "custom command to open this bookmark (replaces default open behavior)"
         )]
         open_with: Option<String>,
-        #[arg(long = "no-embed", help = "do not generate embedding for semantic search")]
+        #[arg(
+            long = "no-embed",
+            help = "do not generate embedding for semantic search"
+        )]
         no_embed: bool,
     },
     /// Delete bookmarks by ID
@@ -332,7 +378,10 @@ pub enum Commands {
 
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
-        #[arg(long = "no-embed", help = "do not generate embedding for semantic search")]
+        #[arg(
+            long = "no-embed",
+            help = "do not generate embedding for semantic search"
+        )]
         no_embed: bool,
     },
 
@@ -389,7 +438,10 @@ pub enum Commands {
             help = "Base path variable name from config (e.g., SCRIPTS_HOME). Paths must be relative to the base path location."
         )]
         base_path: Option<String>,
-        #[arg(long = "no-embed", help = "do not generate embedding for semantic search")]
+        #[arg(
+            long = "no-embed",
+            help = "do not generate embedding for semantic search"
+        )]
         no_embed: bool,
     },
 

@@ -154,8 +154,9 @@ upload:  ## Publish to crates.io
 
 
 .PHONY: build-wheel
-build-wheel:  ## build-wheel
-	maturin build --release -m bkmr/Cargo.toml
+build-wheel:  ## build the release wheel (py3-none, maturin bin bindings) into dist/
+	maturin build --release -m bkmr/Cargo.toml --out dist
+	@echo "-M- Wheel(s) in dist/:" && ls -1 dist/*.whl
 
 .PHONY: build
 build:  ## build release version

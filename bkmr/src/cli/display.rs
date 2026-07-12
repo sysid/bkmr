@@ -203,7 +203,8 @@ pub fn show_bookmarks(
         return;
     }
 
-    let use_color = crate::util::helper::should_use_color(settings.no_color, io::stderr().is_terminal());
+    let use_color =
+        crate::util::helper::should_use_color(settings.no_color, io::stderr().is_terminal());
     let mut stderr = io::stderr().lock();
     let first_col_width = bookmarks.len().to_string().len();
 
@@ -211,7 +212,15 @@ pub fn show_bookmarks(
         // Title/Metadata (green)
         if fields.contains(&DisplayField::Title) {
             let title_line = format!("{:first_col_width$}. {}", i + 1, bm.title);
-            let _ = write!(&mut stderr, "{}", if use_color { title_line.green().to_string() } else { title_line });
+            let _ = write!(
+                &mut stderr,
+                "{}",
+                if use_color {
+                    title_line.green().to_string()
+                } else {
+                    title_line
+                }
+            );
         }
 
         // Similarity score if available
@@ -236,7 +245,15 @@ pub fn show_bookmarks(
                 bm.url.clone()
             };
             let url_line = format!("{:first_col_width$}  {}", "", formatted_url);
-            let _ = writeln!(&mut stderr, "{}", if use_color { url_line.yellow().to_string() } else { url_line });
+            let _ = writeln!(
+                &mut stderr,
+                "{}",
+                if use_color {
+                    url_line.yellow().to_string()
+                } else {
+                    url_line
+                }
+            );
         }
 
         // Description
@@ -249,7 +266,15 @@ pub fn show_bookmarks(
             let tags = bm.tags.replace(',', " ");
             if tags.find(|c: char| !c.is_whitespace()).is_some() {
                 let tag_line = format!("{:first_col_width$}  {}", "", tags.trim());
-                let _ = writeln!(&mut stderr, "{}", if use_color { tag_line.blue().to_string() } else { tag_line });
+                let _ = writeln!(
+                    &mut stderr,
+                    "{}",
+                    if use_color {
+                        tag_line.blue().to_string()
+                    } else {
+                        tag_line
+                    }
+                );
             }
         }
 
@@ -261,7 +286,11 @@ pub fn show_bookmarks(
         }
 
         if fields.contains(&DisplayField::Embedding) {
-            let embed_status = if bm.embedding.is_empty() { "null" } else { "yes" };
+            let embed_status = if bm.embedding.is_empty() {
+                "null"
+            } else {
+                "yes"
+            };
             if !flags_and_embedding_line.is_empty() {
                 flags_and_embedding_line.push_str(" | ");
             }
@@ -297,7 +326,15 @@ pub fn show_bookmarks(
                 "{:first_col_width$}  Created: {} | Updated: {}",
                 "", created_str, bm.last_update_ts
             );
-            let _ = writeln!(&mut stderr, "{}", if use_color { ts_line.magenta().to_string() } else { ts_line });
+            let _ = writeln!(
+                &mut stderr,
+                "{}",
+                if use_color {
+                    ts_line.magenta().to_string()
+                } else {
+                    ts_line
+                }
+            );
         }
 
         // File info (dark_grey) - show if present and enabled
@@ -309,7 +346,15 @@ pub fn show_bookmarks(
                     "{:first_col_width$}  📁 {} ({})",
                     "", formatted_path, formatted_time
                 );
-                let _ = writeln!(&mut stderr, "{}", if use_color { file_line.dark_grey().to_string() } else { file_line });
+                let _ = writeln!(
+                    &mut stderr,
+                    "{}",
+                    if use_color {
+                        file_line.dark_grey().to_string()
+                    } else {
+                        file_line
+                    }
+                );
             }
         }
 

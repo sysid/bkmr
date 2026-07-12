@@ -553,13 +553,8 @@ mod tests {
         .unwrap();
 
         // Create a bookmark that matches only one
-        let partial_bookmark = Bookmark::new(
-            "https://example.com",
-            "Rust",
-            "Learn Rust",
-            tags,
-        )
-        .unwrap();
+        let partial_bookmark =
+            Bookmark::new("https://example.com", "Rust", "Learn Rust", tags).unwrap();
 
         // Test the specifications
         assert!(and_spec.is_satisfied_by(&matching_bookmark));
@@ -578,13 +573,8 @@ mod tests {
 
         // Create bookmarks for testing
         let tags = HashSet::new();
-        let rust_bookmark = Bookmark::new(
-            "https://example.com",
-            "Rust",
-            "Learn Rust",
-            tags.clone(),
-        )
-        .unwrap();
+        let rust_bookmark =
+            Bookmark::new("https://example.com", "Rust", "Learn Rust", tags.clone()).unwrap();
 
         let python_bookmark = Bookmark::new(
             "https://example.com",
@@ -615,21 +605,11 @@ mod tests {
         let not_spec = spec.not();
 
         let tags = HashSet::new();
-        let rust_bookmark = Bookmark::new(
-            "https://example.com",
-            "Rust",
-            "Learn Rust",
-            tags.clone(),
-        )
-        .unwrap();
+        let rust_bookmark =
+            Bookmark::new("https://example.com", "Rust", "Learn Rust", tags.clone()).unwrap();
 
-        let other_bookmark = Bookmark::new(
-            "https://example.com",
-            "Python",
-            "Learn Python",
-            tags,
-        )
-        .unwrap();
+        let other_bookmark =
+            Bookmark::new("https://example.com", "Python", "Learn Python", tags).unwrap();
 
         assert!(!not_spec.is_satisfied_by(&rust_bookmark));
         assert!(not_spec.is_satisfied_by(&other_bookmark));
@@ -683,13 +663,8 @@ mod tests {
         let mut rust_tags = HashSet::new();
         rust_tags.insert(rust_tag.clone());
 
-        let rust_bookmark = Bookmark::new(
-            "https://example.com",
-            "Rust",
-            "Learn Rust",
-            rust_tags,
-        )
-        .unwrap();
+        let rust_bookmark =
+            Bookmark::new("https://example.com", "Rust", "Learn Rust", rust_tags).unwrap();
 
         // Test the complex specification
         assert!(complex_spec.is_satisfied_by(&rust_web_bookmark));
@@ -712,11 +687,20 @@ mod tests {
         // Create query with text search specification
         let query = BookmarkQuery::new()
             .with_specification(TextSearchSpecification::new("rust".to_string()))
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending))
+            .with_sort(SortCriteria::new(
+                SortField::Modified,
+                SortDirection::Descending,
+            ))
             .with_limit(Some(10));
 
         assert!(query.matches(&bookmark));
-        assert_eq!(query.sort, Some(SortCriteria::new(SortField::Modified, SortDirection::Descending)));
+        assert_eq!(
+            query.sort,
+            Some(SortCriteria::new(
+                SortField::Modified,
+                SortDirection::Descending
+            ))
+        );
         assert_eq!(query.limit, Some(10));
     }
 
@@ -843,8 +827,10 @@ mod tests {
         assert!(results6.iter().any(|b| b.id == Some(2)));
 
         // Test 7: Sorting by date (ascending)
-        let query7 = BookmarkQuery::new()
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Ascending));
+        let query7 = BookmarkQuery::new().with_sort(SortCriteria::new(
+            SortField::Modified,
+            SortDirection::Ascending,
+        ));
         let results7 = query7.apply_non_text_filters(&bookmarks);
 
         assert_eq!(results7.len(), 3);
@@ -853,8 +839,10 @@ mod tests {
         assert_eq!(results7[2].id, Some(1)); // Newest last
 
         // Test 8: Sorting by date (descending)
-        let query8 = BookmarkQuery::new()
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending));
+        let query8 = BookmarkQuery::new().with_sort(SortCriteria::new(
+            SortField::Modified,
+            SortDirection::Descending,
+        ));
         let results8 = query8.apply_non_text_filters(&bookmarks);
 
         assert_eq!(results8.len(), 3);
@@ -880,7 +868,10 @@ mod tests {
         let combined_query = BookmarkQuery::new()
             .with_tags_all(Some(&all_tags))
             .with_tags_any_not(Some(&any_not_tags))
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending))
+            .with_sort(SortCriteria::new(
+                SortField::Modified,
+                SortDirection::Descending,
+            ))
             .with_limit(Some(1));
 
         let combined_results = combined_query.apply_non_text_filters(&bookmarks);
@@ -921,7 +912,10 @@ mod tests {
 
         let query = BookmarkQuery::new()
             .with_tags_all(Some(&tags))
-            .with_sort(SortCriteria::new(SortField::Modified, SortDirection::Descending))
+            .with_sort(SortCriteria::new(
+                SortField::Modified,
+                SortDirection::Descending,
+            ))
             .with_limit(Some(10));
 
         // Apply filters to empty collection

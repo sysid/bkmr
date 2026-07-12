@@ -106,12 +106,7 @@ impl TestContext {
         description: &str,
         tags: HashSet<Tag>,
     ) -> Result<Bookmark, crate::domain::error::DomainError> {
-        Bookmark::new(
-            url,
-            title,
-            description,
-            tags,
-        )
+        Bookmark::new(url, title, description, tags)
     }
 
     /// Create a simple bookmark with default values for testing

@@ -19,7 +19,9 @@ pub type PooledConnection = r2d2::PooledConnection<ConnectionManager<SqliteConne
 #[derive(Debug)]
 struct SqliteBusyTimeoutCustomizer;
 
-impl r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for SqliteBusyTimeoutCustomizer {
+impl r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
+    for SqliteBusyTimeoutCustomizer
+{
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), diesel::r2d2::Error> {
         conn.batch_execute("PRAGMA busy_timeout = 5000;")
             .map_err(diesel::r2d2::Error::QueryError)?;
@@ -50,14 +52,18 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
     {
         let bootstrap = rusqlite::Connection::open(database_url).map_err(|e| {
             SqliteRepositoryError::ConnectionPoolError(format!(
-                "Failed to open bootstrap connection for WAL setup: {}", e
+                "Failed to open bootstrap connection for WAL setup: {}",
+                e
             ))
         })?;
-        bootstrap.execute_batch("PRAGMA journal_mode = WAL;").map_err(|e| {
-            SqliteRepositoryError::ConnectionPoolError(format!(
-                "Failed to set WAL journal mode: {}", e
-            ))
-        })?;
+        bootstrap
+            .execute_batch("PRAGMA journal_mode = WAL;")
+            .map_err(|e| {
+                SqliteRepositoryError::ConnectionPoolError(format!(
+                    "Failed to set WAL journal mode: {}",
+                    e
+                ))
+            })?;
         debug!("WAL journal mode set via bootstrap connection");
         // bootstrap connection drops here — WAL mode persists on the file
     }
