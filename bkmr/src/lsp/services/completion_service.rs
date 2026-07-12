@@ -1,6 +1,6 @@
 use crate::domain::error::{DomainError, DomainResult};
 use std::sync::Arc;
-use tower_lsp::lsp_types::{
+use tower_lsp_server::ls_types::{
     CompletionItem, CompletionItemKind, CompletionTextEdit, Documentation, InsertTextFormat,
     TextEdit,
 };
@@ -87,9 +87,9 @@ impl CompletionService {
         &self,
         snippet: &Snippet,
         query: &str,
-        replacement_range: Option<tower_lsp::lsp_types::Range>,
+        replacement_range: Option<tower_lsp_server::ls_types::Range>,
         language_id: &str,
-        uri: &tower_lsp::lsp_types::Url,
+        uri: &tower_lsp_server::ls_types::Uri,
     ) -> DomainResult<CompletionItem> {
         // Snippet content is already processed (interpolated) by LspSnippetService
         // We only need to apply language translation
@@ -171,7 +171,7 @@ fn truncate_preview(content: &str, max_chars: usize) -> String {
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, EnvGuard};
-    use tower_lsp::lsp_types::{Position, Range, Url};
+    use tower_lsp_server::ls_types::{Position, Range, Uri};
 
     // Tests run single-threaded (--test-threads=1) against a shared SQLite file.
     // Always construct services via TestServiceContainer, never production factories.
@@ -185,7 +185,7 @@ mod tests {
         let lsp_bundle = ctx.create_lsp_services();
         let service = lsp_bundle.completion_service;
 
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
         let context = CompletionContext::new(
             uri,
             Position {
@@ -226,7 +226,7 @@ mod tests {
             },
         };
         let context = CompletionContext::new(
-            Url::parse("file:///test.mk").expect("parse URI"),
+            "file:///test.mk".parse::<Uri>().expect("parse URI"),
             Position {
                 line: 0,
                 character: 4,
@@ -264,7 +264,7 @@ mod tests {
         let lsp_bundle = ctx.create_lsp_services();
         let service = lsp_bundle.completion_service;
 
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = service.snippet_to_completion_item(&plain_snippet, "", None, "rust", &uri);
@@ -296,7 +296,7 @@ mod tests {
         let lsp_bundle = ctx.create_lsp_services();
         let service = lsp_bundle.completion_service;
 
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = service.snippet_to_completion_item(&regular_snippet, "", None, "rust", &uri);
@@ -328,7 +328,7 @@ mod tests {
         let lsp_bundle = ctx.create_lsp_services();
         let service = lsp_bundle.completion_service;
 
-        let uri = Url::parse("file:///test.py").expect("parse URI");
+        let uri = "file:///test.py".parse::<Uri>().expect("parse URI");
 
         // Act
         let result =
@@ -360,7 +360,7 @@ mod tests {
         let lsp_bundle = ctx.create_lsp_services();
         let service = lsp_bundle.completion_service;
 
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
         let range = Range {
             start: Position {
                 line: 0,
@@ -405,7 +405,7 @@ mod tests {
 
         let ctx = crate::util::test_context::TestContext::new();
         let service = ctx.create_lsp_services().completion_service;
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
 
         let result = service.snippet_to_completion_item(&snippet, "", None, "rust", &uri);
 

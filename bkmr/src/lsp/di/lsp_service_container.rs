@@ -35,7 +35,7 @@ mod tests {
     use super::*;
     use crate::lsp::domain::CompletionContext;
     use crate::util::testing::{init_test_env, EnvGuard};
-    use tower_lsp::lsp_types::{Position, Url};
+    use tower_lsp_server::ls_types::{Position, Uri};
 
     fn container_with_interpolation(enabled: bool) -> LspServiceContainer {
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
@@ -50,7 +50,7 @@ mod tests {
     }
 
     async fn completion_texts(container: &LspServiceContainer, title: &str) -> String {
-        let uri = Url::parse("file:///test.txt").expect("parse URI");
+        let uri = "file:///test.txt".parse::<Uri>().expect("parse URI");
         let context = CompletionContext::new(
             uri,
             Position {

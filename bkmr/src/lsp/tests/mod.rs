@@ -5,7 +5,7 @@ mod integration_tests {
 
     use crate::util::testing::{init_test_env, EnvGuard};
 
-    use tower_lsp::lsp_types::{Position, Url};
+    use tower_lsp_server::ls_types::{Position, Uri};
 
     // Tests run single-threaded (--test-threads=1) against a shared SQLite file.
     // Always construct services via TestServiceContainer, never production factories.
@@ -17,7 +17,7 @@ mod integration_tests {
         let lsp_services = test_container.create_lsp_services();
         let service = lsp_services.completion_service;
 
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
         let context = CompletionContext::new(
             uri,
             Position {
@@ -51,7 +51,7 @@ mod integration_tests {
             "Universal snippet".to_string(),
             vec!["universal".to_string(), "_snip_".to_string()],
         );
-        let uri = Url::parse("file:///test.py").expect("parse URI");
+        let uri = "file:///test.py".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = LanguageTranslator::translate_snippet(&snippet, "python", &uri);
@@ -66,7 +66,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn given_plain_snippet_when_creating_completion_then_uses_plain_text_format() {
-        use tower_lsp::lsp_types::{CompletionItemKind, InsertTextFormat};
+        use tower_lsp_server::ls_types::{CompletionItemKind, InsertTextFormat};
 
         // Arrange
         let plain_snippet = Snippet::new(
@@ -81,7 +81,7 @@ mod integration_tests {
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
         let lsp_services = test_container.create_lsp_services();
         let service = lsp_services.completion_service;
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = service.snippet_to_completion_item(&plain_snippet, "", None, "rust", &uri);
@@ -98,7 +98,7 @@ mod integration_tests {
 
     #[tokio::test]
     async fn given_regular_snippet_when_creating_completion_then_uses_snippet_format() {
-        use tower_lsp::lsp_types::{CompletionItemKind, InsertTextFormat};
+        use tower_lsp_server::ls_types::{CompletionItemKind, InsertTextFormat};
 
         // Arrange
         let regular_snippet = Snippet::new(
@@ -113,7 +113,7 @@ mod integration_tests {
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
         let lsp_services = test_container.create_lsp_services();
         let service = lsp_services.completion_service;
-        let uri = Url::parse("file:///test.rs").expect("parse URI");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = service.snippet_to_completion_item(&regular_snippet, "", None, "rust", &uri);
@@ -133,7 +133,7 @@ mod integration_tests {
         use crate::lsp::services::LanguageTranslator;
 
         // Arrange
-        let uri = Url::parse("file:///test.go").expect("parse URI");
+        let uri = "file:///test.go".parse::<Uri>().expect("parse URI");
         let rust_content = "fn example() {\n    let x = 5;\n        let y = 10;\n}";
 
         // Act
@@ -153,7 +153,7 @@ mod integration_tests {
         use crate::lsp::services::LanguageTranslator;
 
         // Arrange
-        let uri = Url::parse("file:///path/to/example.rs").expect("parse URI");
+        let uri = "file:///path/to/example.rs".parse::<Uri>().expect("parse URI");
         let content = "// File: {{ filename }}";
 
         // Act
@@ -192,15 +192,15 @@ mod integration_tests {
         use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
-        use tower_lsp::lsp_types::ExecuteCommandParams;
-        use tower_lsp::{Client, LanguageServer};
+        use tower_lsp_server::ls_types::ExecuteCommandParams;
+        use tower_lsp_server::{Client, LanguageServer};
 
         // Use centralized test service container
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
         let lsp_services = test_container.create_lsp_services();
         // Use services from container
 
-        let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
+        let (service, _socket) = tower_lsp_server::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 lsp_services.completion_service,
@@ -239,15 +239,15 @@ mod integration_tests {
         use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
-        use tower_lsp::lsp_types::ExecuteCommandParams;
-        use tower_lsp::{Client, LanguageServer};
+        use tower_lsp_server::ls_types::ExecuteCommandParams;
+        use tower_lsp_server::{Client, LanguageServer};
 
         // Use centralized test service container
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
         let lsp_services = test_container.create_lsp_services();
         // Use services from container
 
-        let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
+        let (service, _socket) = tower_lsp_server::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 lsp_services.completion_service,
@@ -315,15 +315,15 @@ mod integration_tests {
         use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
-        use tower_lsp::lsp_types::ExecuteCommandParams;
-        use tower_lsp::{Client, LanguageServer};
+        use tower_lsp_server::ls_types::ExecuteCommandParams;
+        use tower_lsp_server::{Client, LanguageServer};
 
         // Use centralized test service container
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
         let lsp_services = test_container.create_lsp_services();
         // Use services from container
 
-        let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
+        let (service, _socket) = tower_lsp_server::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 lsp_services.completion_service,
@@ -391,15 +391,15 @@ mod integration_tests {
         use crate::lsp::backend::BkmrLspBackend;
 
         use serde_json::json;
-        use tower_lsp::lsp_types::ExecuteCommandParams;
-        use tower_lsp::{Client, LanguageServer};
+        use tower_lsp_server::ls_types::ExecuteCommandParams;
+        use tower_lsp_server::{Client, LanguageServer};
 
         // Use centralized test service container
         let test_container = crate::util::test_service_container::TestServiceContainer::new();
         let lsp_services = test_container.create_lsp_services();
         // Use services from container
 
-        let (service, _socket) = tower_lsp::LspService::new(|client: Client| {
+        let (service, _socket) = tower_lsp_server::LspService::new(|client: Client| {
             BkmrLspBackend::with_services(
                 client,
                 lsp_services.completion_service,

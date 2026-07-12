@@ -7,7 +7,7 @@ use crate::lsp::domain::{CompletionContext, CompletionQuery};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tower_lsp::lsp_types::{Position, Range, Url};
+use tower_lsp_server::ls_types::{Position, Range, Uri};
 use tracing::{debug, instrument};
 
 /// Per-document state tracked for open documents
@@ -87,7 +87,7 @@ impl DocumentService {
     #[instrument(skip(self))]
     pub async fn extract_completion_context(
         &self,
-        uri: &Url,
+        uri: &Uri,
         position: Position,
     ) -> CompletionContext {
         let docs = self.documents.read().await;
@@ -183,7 +183,7 @@ impl Default for DocumentService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::Position;
+    use tower_lsp_server::ls_types::Position;
 
     #[tokio::test]
     async fn given_new_document_when_opening_then_stores_correctly() {
@@ -208,7 +208,7 @@ mod tests {
         // Arrange
         let service = DocumentService::new();
         let uri_str = "file:///test.rs".to_string();
-        let uri = Url::parse(&uri_str).expect("parse URI");
+        let uri = uri_str.parse::<Uri>().expect("parse URI");
         let content = "hello world".to_string();
         let position = Position {
             line: 0,
@@ -232,7 +232,7 @@ mod tests {
         // Arrange
         let service = DocumentService::new();
         let uri_str = "file:///test.rs".to_string();
-        let uri = Url::parse(&uri_str).expect("parse URI");
+        let uri = uri_str.parse::<Uri>().expect("parse URI");
         let content = "   ".to_string(); // Only whitespace
         let position = Position {
             line: 0,
@@ -256,7 +256,7 @@ mod tests {
         // but 8+3=11 bytes; byte-slicing at the UTF-16 offset panics mid-char.
         let service = DocumentService::new();
         let uri_str = "file:///test.rs".to_string();
-        let uri = Url::parse(&uri_str).expect("parse URI");
+        let uri = uri_str.parse::<Uri>().expect("parse URI");
         service
             .open_document(uri_str, "rust".to_string(), "🚀🚀abc".to_string())
             .await;
@@ -278,7 +278,7 @@ mod tests {
     async fn given_position_past_line_end_when_extracting_query_then_returns_none() {
         let service = DocumentService::new();
         let uri_str = "file:///test.rs".to_string();
-        let uri = Url::parse(&uri_str).expect("parse URI");
+        let uri = uri_str.parse::<Uri>().expect("parse URI");
         service
             .open_document(uri_str, "rust".to_string(), "abc".to_string())
             .await;
@@ -296,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn given_unopened_document_when_extracting_context_then_returns_context_without_query() {
         let service = DocumentService::new();
-        let uri = Url::parse("file:///never-opened.rs").expect("parse URI");
+        let uri = "file:///never-opened.rs".parse::<Uri>().expect("parse URI");
 
         let context = service
             .extract_completion_context(

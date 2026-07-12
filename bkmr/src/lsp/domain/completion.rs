@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::{Position, Range, Url};
+use tower_lsp_server::ls_types::{Position, Range, Uri};
 
 /// Represents a completion query extracted from the document
 #[derive(Debug, Clone, PartialEq)]
@@ -20,14 +20,14 @@ impl CompletionQuery {
 /// Context for completion requests
 #[derive(Debug, Clone)]
 pub struct CompletionContext {
-    pub uri: Url,
+    pub uri: Uri,
     pub position: Position,
     pub language_id: Option<String>,
     pub query: Option<CompletionQuery>,
 }
 
 impl CompletionContext {
-    pub fn new(uri: Url, position: Position, language_id: Option<String>) -> Self {
+    pub fn new(uri: Uri, position: Position, language_id: Option<String>) -> Self {
         Self {
             uri,
             position,
@@ -108,7 +108,7 @@ impl Default for SnippetFilter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::Position;
+    use tower_lsp_server::ls_types::Position;
 
     #[test]
     fn given_text_and_range_when_creating_completion_query_then_stores_correctly() {
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn given_completion_context_when_adding_query_then_updates_correctly() {
         // Arrange
-        let uri = Url::parse("file:///test.rs").expect("parse URL");
+        let uri = "file:///test.rs".parse::<Uri>().expect("parse URL");
         let position = Position {
             line: 0,
             character: 5,

@@ -5,9 +5,9 @@
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde_json::Value;
-use tower_lsp::jsonrpc::Result as LspResult;
-use tower_lsp::lsp_types::*;
-use tower_lsp::{Client, LanguageServer, LspService, Server};
+use tower_lsp_server::jsonrpc::Result as LspResult;
+use tower_lsp_server::ls_types::*;
+use tower_lsp_server::{Client, LanguageServer, LspService, Server};
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::lsp::error::LspError;
@@ -136,7 +136,6 @@ impl BkmrLspBackend {
     }
 }
 
-#[tower_lsp::async_trait]
 impl LanguageServer for BkmrLspBackend {
     #[instrument(skip(self, params))]
     async fn initialize(&self, params: InitializeParams) -> LspResult<InitializeResult> {
@@ -196,6 +195,8 @@ impl LanguageServer for BkmrLspBackend {
                 name: "bkmr-lsp".to_string(),
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
             }),
+            // ls-types added `offset_encoding`; default (None) preserves prior behavior.
+            ..Default::default()
         };
 
         info!("Initialize complete - manual completion only (no trigger characters)");
@@ -264,7 +265,9 @@ impl LanguageServer for BkmrLspBackend {
 
         debug!(
             "Completion request for {}:{},{}",
-            uri, position.line, position.character
+            uri.as_str(),
+            position.line,
+            position.character
         );
 
         // Only respond to manual completion requests (Ctrl+Space)

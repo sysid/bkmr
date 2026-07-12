@@ -12,7 +12,7 @@ use crate::lsp::error::{LspError, LspResult};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tower_lsp::lsp_types::{Position, Range, TextEdit, Url, WorkspaceEdit};
+use tower_lsp_server::ls_types::{Position, Range, TextEdit, Uri, WorkspaceEdit};
 use tracing::{debug, instrument};
 
 /// Service for handling LSP command execution
@@ -295,7 +295,7 @@ impl CommandService {
             new_text: comment_text,
         };
 
-        let uri = Url::parse(file_uri)
+        let uri = file_uri.parse::<Uri>()
             .map_err(|e| DomainError::Other(format!("Parse file URI for workspace edit: {}", e)))?;
 
         let mut changes = HashMap::new();
@@ -310,12 +310,15 @@ impl CommandService {
 
     /// Get the relative path from project root
     fn get_relative_path(file_uri: &str) -> DomainResult<String> {
-        let url = Url::parse(file_uri)
+        let url = file_uri.parse::<Uri>()
             .map_err(|e| DomainError::Other(format!("Parse file URI: {}", e)))?;
 
+        // ls-types `to_file_path` returns `Option<Cow<Path>>` (url::Url returned
+        // `Result<PathBuf, ()>`); convert to an owned PathBuf to keep the rest unchanged.
         let file_path = url
             .to_file_path()
-            .map_err(|_| DomainError::Other("Convert URL to file path".to_string()))?;
+            .ok_or_else(|| DomainError::Other("Convert URL to file path".to_string()))?
+            .into_owned();
 
         // Try to find a project root by looking for common indicators
         let mut current = file_path.as_path();

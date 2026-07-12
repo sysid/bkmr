@@ -1,6 +1,6 @@
 use regex::{Regex, RegexBuilder};
 use std::sync::OnceLock;
-use tower_lsp::lsp_types::Url;
+use tower_lsp_server::ls_types::Uri;
 use tracing::{debug, instrument};
 
 use crate::domain::error::{DomainError, DomainResult};
@@ -35,7 +35,7 @@ impl LanguageTranslator {
     pub fn translate_snippet(
         snippet: &Snippet,
         language_id: &str,
-        uri: &Url,
+        uri: &Uri,
     ) -> DomainResult<String> {
         // Snippet content is already processed (interpolated + raw blocks handled) by LspSnippetService
         // We just need to apply language translation
@@ -58,7 +58,7 @@ impl LanguageTranslator {
     pub fn translate_rust_patterns(
         content: &str,
         language_id: &str,
-        uri: &Url,
+        uri: &Uri,
     ) -> DomainResult<String> {
         let target_lang = LanguageRegistry::get_language_info(language_id);
 
@@ -90,7 +90,12 @@ impl LanguageTranslator {
 
         // Add file name replacement for simple relative path
         if processed_content.contains("{{ filename }}") {
-            let filename = uri.path().split('/').next_back().unwrap_or("untitled");
+            let filename = uri
+                .path()
+                .as_str()
+                .split('/')
+                .next_back()
+                .unwrap_or("untitled");
             processed_content = processed_content.replace("{{ filename }}", filename);
         }
 
@@ -170,7 +175,7 @@ mod tests {
             "Test description".to_string(),
             vec!["universal".to_string(), "_snip_".to_string()],
         );
-        let uri = Url::parse("file:///test.py").expect("parse URI");
+        let uri = "file:///test.py".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = LanguageTranslator::translate_snippet(&snippet, "python", &uri);
@@ -191,7 +196,7 @@ mod tests {
             "Test description".to_string(),
             vec!["rust".to_string(), "_snip_".to_string()],
         );
-        let uri = Url::parse("file:///test.py").expect("parse URI");
+        let uri = "file:///test.py".parse::<Uri>().expect("parse URI");
 
         // Act
         let result = LanguageTranslator::translate_snippet(&snippet, "python", &uri);
@@ -205,7 +210,7 @@ mod tests {
     #[test]
     fn given_rust_line_comments_when_translating_to_python_then_converts_correctly() {
         // Arrange
-        let uri = Url::parse("file:///test.py").expect("parse URI");
+        let uri = "file:///test.py".parse::<Uri>().expect("parse URI");
         let rust_content = r#"// This is a line comment
     // Indented comment
 let x = 5; // End of line comment"#;
@@ -224,7 +229,7 @@ let x = 5; // End of line comment"#;
     #[test]
     fn given_rust_block_comments_when_translating_to_python_then_converts_correctly() {
         // Arrange
-        let uri = Url::parse("file:///test.py").expect("parse URI");
+        let uri = "file:///test.py".parse::<Uri>().expect("parse URI");
         let rust_content = r#"/* This is a block comment */
 /*
 Multi-line
@@ -244,7 +249,7 @@ block comment
     #[test]
     fn given_rust_indentation_when_translating_to_go_then_converts_to_tabs() {
         // Arrange
-        let uri = Url::parse("file:///test.go").expect("parse URI");
+        let uri = "file:///test.go".parse::<Uri>().expect("parse URI");
         let rust_content = r#"fn example() {
     let x = 5;
         let y = 10;
@@ -266,7 +271,7 @@ block comment
     #[test]
     fn given_filename_template_when_translating_then_replaces_correctly() {
         // Arrange
-        let uri = Url::parse("file:///path/to/example.rs").expect("parse URI");
+        let uri = "file:///path/to/example.rs".parse::<Uri>().expect("parse URI");
         let content = "// File: {{ filename }}";
 
         // Act
