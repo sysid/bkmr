@@ -1,3 +1,6 @@
+use crate::domain::tag::Tag;
+use crate::lsp::domain::LanguageRegistry;
+use std::collections::HashSet;
 use tower_lsp_server::ls_types::{Position, Range, Uri};
 
 /// Represents a completion query extracted from the document
@@ -78,19 +81,25 @@ impl SnippetFilter {
         }
     }
 
-    /// Build FTS query for snippets that includes both language-specific and universal snippets
-    pub fn build_fts_query(&self) -> Option<String> {
-        if let Some(ref lang) = self.language_id {
-            if !lang.trim().is_empty() {
-                // Query for either (language AND _snip_) OR (universal AND _snip_)
-                return Some(format!(
-                    r#"(tags:{} AND tags:"_snip_") OR (tags:universal AND tags:"_snip_")"#,
-                    lang
-                ));
-            }
-        }
-        // Fallback: just get all snippets with _snip_ tag
-        Some(r#"tags:"_snip_""#.to_string())
+    /// Tags of which a snippet must carry at least one to be offered: the language's
+    /// aliases plus `universal`. None when the language is unknown (offer all snippets).
+    ///
+    /// Matched exactly by the repository, not via FTS: FTS tokenizes tags
+    /// (`rust-analyzer` -> `rust`, `analyzer`) and rejects hyphenated barewords.
+    pub fn language_tags(&self) -> Option<HashSet<Tag>> {
+        let lang = self
+            .language_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())?;
+        Some(
+            LanguageRegistry::tags_for_language(lang)
+                .iter()
+                .map(String::as_str)
+                .chain(std::iter::once("universal"))
+                .filter_map(|t| Tag::new(t).ok())
+                .collect(),
+        )
     }
 }
 
@@ -193,44 +202,39 @@ mod tests {
     }
 
     #[test]
-    fn given_language_id_when_building_fts_query_then_includes_universal_snippets() {
+    fn given_language_id_when_getting_language_tags_then_includes_aliases_and_universal() {
         // Arrange
         let filter = SnippetFilter::new(Some("rust".to_string()), None, 50, true);
 
         // Act
-        let query = filter.build_fts_query();
+        let tags = filter.language_tags().expect("language tags");
 
         // Assert
-        assert_eq!(
-            query,
-            Some(
-                r#"(tags:rust AND tags:"_snip_") OR (tags:universal AND tags:"_snip_")"#
-                    .to_string()
-            )
-        );
+        let values: HashSet<&str> = tags.iter().map(|t| t.value()).collect();
+        assert_eq!(values, HashSet::from(["rust", "rs", "universal"]));
     }
 
     #[test]
-    fn given_no_language_id_when_building_fts_query_then_returns_basic_query() {
+    fn given_no_language_id_when_getting_language_tags_then_returns_none() {
         // Arrange
         let filter = SnippetFilter::new(None, None, 50, true);
 
         // Act
-        let query = filter.build_fts_query();
+        let tags = filter.language_tags();
 
         // Assert
-        assert_eq!(query, Some(r#"tags:"_snip_""#.to_string()));
+        assert!(tags.is_none());
     }
 
     #[test]
-    fn given_empty_language_id_when_building_fts_query_then_returns_basic_query() {
+    fn given_empty_language_id_when_getting_language_tags_then_returns_none() {
         // Arrange
-        let filter = SnippetFilter::new(Some("".to_string()), None, 50, true);
+        let filter = SnippetFilter::new(Some("  ".to_string()), None, 50, true);
 
         // Act
-        let query = filter.build_fts_query();
+        let tags = filter.language_tags();
 
         // Assert
-        assert_eq!(query, Some(r#"tags:"_snip_""#.to_string()));
+        assert!(tags.is_none());
     }
 }
