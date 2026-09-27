@@ -468,7 +468,7 @@ pub fn fzf_process(
         execute!(std::io::stdout(), EnterAlternateScreen)?;
     }
 
-    let skim_output = Skim::run_items(options, items)
+    let skim_output = Skim::run_with(options, Some(closed_item_receiver(items)))
         .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Skim failed: {}", e)));
 
     if use_alternate_screen {
@@ -597,4 +597,76 @@ fn reset_terminal_state(skip: bool) {
         crossterm::cursor::Show
     );
     let _ = stdout.flush();
+}
+
+/// Build a skim item source whose sender is already dropped.
+///
+/// Why not `Skim::run_items`: skim 5.1 keeps its sender alive for the whole
+/// session, so skim's collector thread never sees the channel close and keeps
+/// calling kanal's `recv_timeout(1ms)`, which busy-yields instead of parking.
+/// Result: one core pinned at ~100% for as long as the picker is open.
+/// Dropping the sender lets the collector exit once all items are consumed.
+/// Upstream: https://github.com/skim-rs/skim/issues/1181 — revert to
+/// `Skim::run_items` once fixed.
+fn closed_item_receiver<I, T>(items: I) -> SkimItemReceiver
+where
+    I: IntoIterator<Item = T>,
+    T: SkimItem,
+{
+    let (tx, rx) = unbounded();
+    let batch: Vec<Arc<dyn SkimItem>> = items
+        .into_iter()
+        .map(|item| Arc::new(item) as Arc<dyn SkimItem>)
+        .collect();
+    // Cannot fail: unbounded channel and `rx` is still held here.
+    let _ = tx.send(batch);
+    drop(tx);
+    rx
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn given_items_when_receiver_drained_then_all_items_delivered() {
+        let rx = closed_item_receiver(vec!["a".to_string(), "b".to_string()]);
+
+        let delivered: Vec<String> = rx
+            .recv()
+            .expect("first batch must be delivered")
+            .iter()
+            .map(|item| item.text().to_string())
+            .collect();
+
+        assert_eq!(delivered, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn given_items_when_receiver_drained_then_channel_reports_closed() {
+        // skim's collector thread only stops polling when the channel closes;
+        // an open channel means a CPU-burning spin for the picker's lifetime.
+        let rx = closed_item_receiver(vec!["a".to_string()]);
+        rx.recv().expect("first batch must be delivered");
+
+        assert!(
+            rx.is_terminated(),
+            "channel must be closed after all items are consumed"
+        );
+    }
+
+    #[test]
+    fn given_more_items_than_one_batch_when_drained_then_every_item_delivered() {
+        let items: Vec<String> = (0..2500).map(|i| i.to_string()).collect();
+        let rx = closed_item_receiver(items);
+
+        let mut count = 0;
+        // Non-blocking drain: a blocking recv() would hang forever if the
+        // channel stays open, which is exactly the bug under test.
+        while let Ok(Some(batch)) = rx.try_recv() {
+            count += batch.len();
+        }
+
+        assert_eq!(count, 2500);
+    }
 }

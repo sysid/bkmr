@@ -156,7 +156,7 @@ Note: `search --json` returns a slightly different shape (tags as array, include
 
 | Situation | Query |
 |-----------|-------|
-| Starting work on a project | `bkmr hsearch "project-name overview" -t _mem_ --json --np -l 10` |
+| Starting work on a project | `bkmr hsearch "project-name overview" -t _mem_ --json --np -l 5` |
 | Before changing architecture | `bkmr hsearch "architecture decisions" -t _mem_ -n gotcha --json --np` |
 | Checking user preferences | `bkmr hsearch "conventions style" -t _mem_ -n preference --json --np` |
 | Recalling a past debugging session | `bkmr hsearch "debugged auth issue" -t _mem_ -n episode --json --np` |
@@ -384,7 +384,7 @@ Query for relevant memories before writing code, making plans, or answering ques
 A single well-crafted hsearch is usually enough — don't run multiple overlapping queries.
 ```bash
 # Primary query — combine project name + task keywords for best recall
-bkmr hsearch "<project-name> <current-task-keywords>" -t _mem_ --json --np -l 10
+bkmr hsearch "<project-name> <current-task-keywords>" -t _mem_ --json --np -l 5
 
 # Only add a second query if the task involves a specific risk area
 bkmr hsearch "<area-of-work>" -t _mem_ -n gotcha --json --np
