@@ -1,22 +1,25 @@
 #!/bin/bash
 # Quick automated verification of hsearch functionality.
-# Run after test-hsearch-setup.sh, from the project root.
+# Run after scripts/test/hsearch/setup.sh.
+#   BKMR_BIN  binary to use (default: repo debug build)
 
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 export BKMR_DB_URL="/tmp/bkmr_hsearch_test.db"
-BKMR="${BKMR_BIN:-./bkmr/target/debug/bkmr}"
+BKMR="${BKMR_BIN:-$REPO_ROOT/bkmr/target/debug/bkmr}"
 PASS=0
 FAIL=0
 
 if [ ! -f "$BKMR_DB_URL" ]; then
-    echo "ERROR: Test database not found. Run scripts/test-hsearch-setup.sh first."
+    echo "ERROR: Test database not found. Run scripts/test/hsearch/setup.sh first."
     exit 1
 fi
 
 check() {
     local name="$1"
     shift
-    if eval "$@" 2>/dev/null; then
+    if eval "$*" 2>/dev/null; then
         echo "  PASS: $name"
         ((PASS++)) || true
     else

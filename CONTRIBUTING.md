@@ -24,12 +24,12 @@ Please be respectful to all contributors and users. We aim to foster an inclusiv
 
 2. Build the project:
    ```bash
-   cargo build
+   cargo build --manifest-path bkmr/Cargo.toml
    ```
 
-3. Run tests:
+3. Run tests (single-threaded; see [TESTING.md](TESTING.md)):
    ```bash
-   cargo test
+   make test
    ```
 
 ## Development Workflow
@@ -45,7 +45,7 @@ Please be respectful to all contributors and users. We aim to foster an inclusiv
 
 4. Run tests locally:
    ```bash
-   cargo test
+   make test
    ```
 
 5. Submit a pull request.
@@ -74,6 +74,8 @@ The project follows clean architecture principles with an onion model:
 - Provide meaningful error messages
 
 ### Testing
+
+How to run, structure and extend tests is described in [TESTING.md](TESTING.md). In short:
 
 - Write unit tests for all public functions
 - Follow the Arrange/Act/Assert pattern
