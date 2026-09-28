@@ -170,6 +170,10 @@ Use the plugin's sandbox IDE; it keeps its own settings under `build/idea-sandbo
 
 Cleanup: `rm -rf /tmp/bkmr-dev`; reset Binary Path in the sandbox IDE.
 
+GOTCHA:
+- sandbox IDE config must be put in place completely and then restarted (keeps settings)
+- must point to correct binary
+
 ### hsearch TC catalogue
 
 Setup: `bash scripts/test/hsearch/setup.sh && export BKMR_DB_URL=/tmp/bkmr_hsearch_test.db`

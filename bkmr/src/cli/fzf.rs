@@ -601,13 +601,14 @@ fn reset_terminal_state(skip: bool) {
 
 /// Build a skim item source whose sender is already dropped.
 ///
-/// Why not `Skim::run_items`: skim 5.1 keeps its sender alive for the whole
+/// Why not `Skim::run_items`: skim < 5.7.2 keeps its sender alive for the whole
 /// session, so skim's collector thread never sees the channel close and keeps
 /// calling kanal's `recv_timeout(1ms)`, which busy-yields instead of parking.
 /// Result: one core pinned at ~100% for as long as the picker is open.
 /// Dropping the sender lets the collector exit once all items are consumed.
-/// Upstream: https://github.com/skim-rs/skim/issues/1181 — revert to
-/// `Skim::run_items` once fixed.
+/// Upstream: https://github.com/skim-rs/skim/issues/1181 — fixed in skim 5.7.2
+/// (`run_items` now drops its sender). Kept for now; revert to
+/// `Skim::run_items` once the skim dependency is >= 5.7.2.
 fn closed_item_receiver<I, T>(items: I) -> SkimItemReceiver
 where
     I: IntoIterator<Item = T>,
