@@ -37,6 +37,11 @@ impl CompletionService {
         }
     }
 
+    /// Upper bound on items per completion response
+    pub fn max_completions(&self) -> usize {
+        self.config.max_completions
+    }
+
     /// Generate completion items from context
     #[instrument(skip(self))]
     pub async fn get_completions(

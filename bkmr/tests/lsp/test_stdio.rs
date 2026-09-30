@@ -188,3 +188,27 @@ fn given_unknown_command_when_executed_then_server_answers_and_stays_alive() {
     assert_eq!(labels, ["Universal TODO"]);
     lsp.shutdown();
 }
+
+#[test]
+fn given_fewer_snippets_than_limit_when_completing_then_list_is_complete() {
+    // A complete list lets the client filter locally instead of re-querying (and
+    // re-rendering every template) on each keystroke.
+    let db = TestDb::new();
+    db.add("println!(\"{}\", ${1:v});", "rust,_snip_", "Rust println");
+    let mut lsp = LspSession::start(&db, &[]);
+    lsp.initialize();
+    lsp.open("file:///tmp/t.rs", "rust", "\n");
+
+    let result = lsp.request(
+        "textDocument/completion",
+        json!({
+            "textDocument": {"uri": "file:///tmp/t.rs"},
+            "position": {"line": 0, "character": 0},
+            "context": {"triggerKind": 1}
+        }),
+    );
+
+    assert_eq!(result["items"].as_array().expect("items").len(), 1);
+    assert_eq!(result["isIncomplete"], false);
+    lsp.shutdown();
+}

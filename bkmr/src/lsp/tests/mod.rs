@@ -456,4 +456,85 @@ mod integration_tests {
         let get_result = backend.execute_command(get_params).await.unwrap().unwrap();
         assert!(!get_result.get("success").unwrap().as_bool().unwrap());
     }
+
+    #[tokio::test]
+    async fn given_more_snippets_than_limit_when_completing_then_list_is_marked_incomplete() {
+        // Truncated results must stay incomplete so the client re-queries as the user types.
+        use crate::lsp::backend::{BkmrConfig, BkmrLspBackend};
+        use crate::lsp::di::LspServiceContainer;
+        use tower_lsp_server::ls_types::{
+            CompletionParams, CompletionResponse, CompletionTriggerKind, DidOpenTextDocumentParams,
+            TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams,
+        };
+        use tower_lsp_server::{Client, LanguageServer};
+
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let test_container = crate::util::test_service_container::TestServiceContainer::new();
+        let services = LspServiceContainer::new(
+            test_container.bookmark_service.clone(),
+            test_container.interpolation_service.clone(),
+            BkmrConfig {
+                max_completions: 2,
+                enable_interpolation: true,
+            },
+        );
+        for (content, title) in [
+            ("let one = 1;", "Limit One"),
+            ("let two = 2;", "Limit Two"),
+            ("let three = 3;", "Limit Three"),
+        ] {
+            services
+                .command_service
+                .create_snippet(content, title, None, vec!["rust".to_string()])
+                .expect("create snippet");
+        }
+        let (service, _socket) = tower_lsp_server::LspService::new(|client: Client| {
+            BkmrLspBackend::with_services(
+                client,
+                services.completion_service,
+                services.document_service,
+                services.command_service,
+            )
+        });
+        let backend = service.inner();
+        let uri = "file:///limit.rs".parse::<Uri>().expect("parse URI");
+        backend
+            .did_open(DidOpenTextDocumentParams {
+                text_document: TextDocumentItem {
+                    uri: uri.clone(),
+                    language_id: "rust".to_string(),
+                    version: 1,
+                    text: "\n".to_string(),
+                },
+            })
+            .await;
+
+        let response = backend
+            .completion(CompletionParams {
+                text_document_position: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri },
+                    position: Position {
+                        line: 0,
+                        character: 0,
+                    },
+                },
+                work_done_progress_params: Default::default(),
+                partial_result_params: Default::default(),
+                context: Some(tower_lsp_server::ls_types::CompletionContext {
+                    trigger_kind: CompletionTriggerKind::INVOKED,
+                    trigger_character: None,
+                }),
+            })
+            .await
+            .expect("completion");
+
+        match response {
+            Some(CompletionResponse::List(list)) => {
+                assert_eq!(list.items.len(), 2);
+                assert!(list.is_incomplete, "truncated list must be incomplete");
+            }
+            other => panic!("expected completion list, got {:?}", other),
+        }
+    }
 }
