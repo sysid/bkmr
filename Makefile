@@ -52,78 +52,38 @@ init:  ## init
 	@tree -a  $(app_root)/db
 
 .PHONY: test
-test:  ## tests, single-threaded (all functionality)
+test:  ## L1: unit + integration tests incl. LSP over stdio, single-threaded (see TESTING.md)
 	@rm -f $(app_root)/db/bkmr.db $(app_root)/db/bkmr.db-shm $(app_root)/db/bkmr.db-wal
 	pushd $(pkg_src) && RUST_LOG=error BKMR_DB_URL=../db/bkmr.db cargo test -- --test-threads=1 --quiet
 
-.PHONY: test-lsp
-test-lsp: test-lsp-client test-lsp-filtering test-lsp-language  ## test all LSP functionality
+.PHONY: test-scenarios
+test-scenarios:  ## L2: black-box scenarios (hsearch; downloads the embedding model on first run)
+	@set -euo pipefail
+	@cargo build --manifest-path $(pkg_src)/Cargo.toml
+	@bash scripts/test/hsearch/setup.sh
+	@bash scripts/test/hsearch/verify.sh
 
-.PHONY: show-lsp-commands
-show-lsp-commands:  ## show available LSP commands
-	@echo "Showing available LSP commands..."
-	@python3 scripts/lsp/show_commands.py
+.PHONY: test-all
+test-all: test test-scenarios  ## L1 + L2: all automated tests
 
-.PHONY: test-lsp-client
-test-lsp-client:  ## test LSP protocol client
-	@echo "Testing LSP protocol communication..."
-	@python3 scripts/lsp/test_lsp_client.py
-
-.PHONY: test-lsp-filtering
-test-lsp-filtering:  ## test LSP server-side vs client-side filtering
-	@echo "Testing LSP filtering behavior..."
-	@python3 scripts/lsp/test_lsp_filtering.py
-
-.PHONY: test-lsp-language
-test-lsp-language:  ## test LSP language-aware filtering
-	@echo "Testing LSP language filtering..."
-	@python3 scripts/lsp/test_lsp_language_filtering.py
+BKMR_DEV_DIR ?= /tmp/bkmr-dev
+.PHONY: test-env
+test-env:  ## L3: seed $(BKMR_DEV_DIR) for manual editor testing (nvim, IntelliJ; see TESTING.md)
+	@set -euo pipefail
+	@cargo build --manifest-path $(pkg_src)/Cargo.toml
+	@mkdir -p $(BKMR_DEV_DIR)/bin $(BKMR_DEV_DIR)/proj
+	@bash scripts/test/lib/seed.sh lsp $(BKMR_DEV_DIR)/test.db
+	@ln -sf $(app_root)/scripts/test/lib/bkmr-dev $(BKMR_DEV_DIR)/bin/bkmr
+	@touch $(BKMR_DEV_DIR)/proj/t.rs $(BKMR_DEV_DIR)/proj/t.js $(BKMR_DEV_DIR)/proj/t.sh $(BKMR_DEV_DIR)/proj/t.py
+	@: > $(BKMR_DEV_DIR)/lsp.log
+	@echo ""
+	@echo "nvim:     cd $(BKMR_DEV_DIR)/proj && PATH=$(BKMR_DEV_DIR)/bin:\$$PATH nvim t.rs"
+	@echo "IntelliJ: Settings > Tools > bkmr > Binary Path = $(BKMR_DEV_DIR)/bin/bkmr"
+	@echo "log:      tail -f $(BKMR_DEV_DIR)/lsp.log"
 
 .PHONY: import-files
 import-files:  ## import-files for testing from tests/resources/import_test/
 	bkmr import-files bkmr/tests/resources/import_test/
-
-.PHONY: run-all
-#run-all: test-url-details test-env run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search ## run-all
-run-all: run-migrate-db run-backfill run-update run-show run-create-db run-edit-sem run-tags run-delete run-add run-search  ## run-all
-
-.PHONY: test-edit-bookmark-with-template
-test-edit-bookmark-with-template: init  ## test-edit-bookmark-with-template (file should be updated)
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --lib -- application::services::template_service::tests::test_edit_bookmark_with_template --ignored --nocapture --exact
-
-.PHONY: test-url-details
-test-url-details:  ## test-url-details (charm strang verbose output), expect: "Rust Programming Language", "A language empowering everyone to build reliable and efficient software."
-	RUST_LOG=skim=info BKMR_DB_URL=../db/bkmr.db pushd $(pkg_src) && cargo test --package bkmr --test test_lib given_valid_url_when_loading_details_then_returns_correct_metadata -- --exact --nocapture
-
-
-.PHONY: run-migrate-db
-run-migrate-db: init  ## run-migrate-db
-	@echo "--------------------------------------------------------------------------------"
-	@echo "-M- First run: should do migration"
-	cp bkmr/tests/resources/schema_v1_migration_test.db ~/xxx/test_migration.db
-	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/test_migration.db cargo run -- -d -d -d --openai
-	@echo "--------------------------------------------------------------------------------"
-	@echo "-M- Second run: should be ok, do nothing"
-	pushd $(pkg_src) && BKMR_DB_URL=$(HOME)/xxx/test_migration.db cargo run -- -d -d -d --openai
-
-.PHONY: run-backfill
-run-backfill: run-create-db  ## run-backfill
-	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test.db cargo run -- -d -d --openai backfill --dry-run  # only shows "Google" entry
-
-
-.PHONY: run-create-db
-run-create-db:  ## run-create-db: opens new /tmp/bkmr_test.db
-	rm -vf /tmp/bkmr_test.db
-	pushd $(pkg_src) && BKMR_DB_URL=/tmp/bkmr_test_db cargo run -- -d -d create-db /tmp/bkmr_test.db
-	open /tmp/bkmr_test.db
-
-.PHONY: run-edit-sem
-run-edit-sem: init  ## run-edit-sem with openai semantic
-	pushd $(pkg_src) && BKMR_DB_URL=~/xxx/schema_v2_with_embeddings.db cargo run -- -d -d --openai edit 1
-
-.PHONY: run-edit
-run-edit: init-db   ## run-edit v1
-	pushd $(pkg_src) && BKMR_DB_URL=../db/bkmr.db cargo run -- -d -d edit 1,3
 
 .PHONY: install-diesel-cli
 install-diesel-cli:  ## install-diesel-cli

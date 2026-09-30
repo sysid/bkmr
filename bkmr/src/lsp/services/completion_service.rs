@@ -37,6 +37,11 @@ impl CompletionService {
         }
     }
 
+    /// Upper bound on items per completion response
+    pub fn max_completions(&self) -> usize {
+        self.config.max_completions
+    }
+
     /// Generate completion items from context
     #[instrument(skip(self))]
     pub async fn get_completions(
@@ -245,6 +250,158 @@ mod tests {
             "hyphenated prefix must not crash FTS: {:?}",
             result.err()
         );
+    }
+
+    fn completion_context_for(language_id: &str) -> CompletionContext {
+        CompletionContext::new(
+            "file:///test.src".parse::<Uri>().expect("parse URI"),
+            Position {
+                line: 0,
+                character: 0,
+            },
+            Some(language_id.to_string()),
+        )
+    }
+
+    #[tokio::test]
+    async fn given_hyphenated_language_id_when_getting_completions_then_returns_matching_snippet() {
+        // Regression: the language id was spliced unquoted into the FTS query, and
+        // `tags:objective-c` is an FTS5 syntax error ("no such column: c"), so every
+        // completion request in such a buffer failed.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let services = ctx.create_lsp_services();
+        services
+            .command_service
+            .create_snippet(
+                "[[Foo alloc] init]",
+                "ObjC Alloc Init",
+                None,
+                vec!["objective-c".to_string()],
+            )
+            .expect("create snippet");
+
+        let items = services
+            .completion_service
+            .get_completions(&completion_context_for("objective-c"))
+            .await
+            .expect("hyphenated language id must not break completion");
+
+        assert!(items.iter().any(|i| i.label == "ObjC Alloc Init"));
+    }
+
+    #[tokio::test]
+    async fn given_bookmark_tagged_snip_without_system_tag_when_getting_completions_then_excluded()
+    {
+        // Regression: FTS tokenizes `_snip_` to `snip`, so a plain bookmark tagged
+        // `snip` matched the snippet filter and leaked into completion.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let tags: std::collections::HashSet<crate::domain::tag::Tag> = ["snip", "rust"]
+            .iter()
+            .map(|t| crate::domain::tag::Tag::new(t).expect("tag"))
+            .collect();
+        ctx.bookmark_service()
+            .add_bookmark(
+                "https://example.com/not-a-snippet",
+                Some("Not A Snippet"),
+                None,
+                Some(&tags),
+                false,
+                false,
+                None,
+            )
+            .expect("add bookmark");
+        let services = ctx.create_lsp_services();
+
+        let items = services
+            .completion_service
+            .get_completions(&completion_context_for("rust"))
+            .await
+            .expect("completions");
+
+        assert!(!items.iter().any(|i| i.label == "Not A Snippet"));
+    }
+
+    #[tokio::test]
+    async fn given_snippet_tagged_with_hyphenated_superstring_when_getting_completions_then_excluded(
+    ) {
+        // Regression: FTS tokenizes `rust-analyzer` to `rust` + `analyzer`, so the
+        // tag `rust-analyzer` matched a `rust` buffer.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let services = ctx.create_lsp_services();
+        services
+            .command_service
+            .create_snippet(
+                "\"rust-analyzer.check.command\": \"clippy\"",
+                "RA Clippy Setting",
+                None,
+                vec!["rust-analyzer".to_string()],
+            )
+            .expect("create snippet");
+
+        let items = services
+            .completion_service
+            .get_completions(&completion_context_for("rust"))
+            .await
+            .expect("completions");
+
+        assert!(!items.iter().any(|i| i.label == "RA Clippy Setting"));
+    }
+
+    #[tokio::test]
+    async fn given_snippet_tagged_with_language_alias_when_getting_completions_then_included() {
+        // A snippet tagged `js` must show in a buffer whose languageId is `javascript`.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let services = ctx.create_lsp_services();
+        services
+            .command_service
+            .create_snippet(
+                "console.log($1)",
+                "Alias Console Log",
+                None,
+                vec!["js".to_string()],
+            )
+            .expect("create snippet");
+
+        let items = services
+            .completion_service
+            .get_completions(&completion_context_for("javascript"))
+            .await
+            .expect("completions");
+
+        assert!(items.iter().any(|i| i.label == "Alias Console Log"));
+    }
+
+    #[tokio::test]
+    async fn given_universal_snippet_when_getting_completions_for_any_language_then_included() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let services = ctx.create_lsp_services();
+        services
+            .command_service
+            .create_snippet(
+                "// TODO: $1",
+                "Universal Todo",
+                None,
+                vec!["universal".to_string()],
+            )
+            .expect("create snippet");
+
+        let items = services
+            .completion_service
+            .get_completions(&completion_context_for("python"))
+            .await
+            .expect("completions");
+
+        assert!(items.iter().any(|i| i.label == "Universal Todo"));
     }
 
     #[tokio::test]

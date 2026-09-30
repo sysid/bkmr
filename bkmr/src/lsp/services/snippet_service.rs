@@ -5,9 +5,11 @@
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::InterpolationService;
 use crate::domain::repositories::query::BookmarkQuery;
+use crate::domain::tag::Tag;
 use crate::lsp::domain::{Snippet, SnippetFilter};
 use crate::util::interpolation::InterpolationHelper;
 use async_trait::async_trait;
+use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -61,19 +63,14 @@ impl AsyncSnippetService for LspSnippetService {
         let bookmark_service = Arc::clone(&self.bookmark_service);
         let filter_clone = filter.clone();
 
+        let snip_tag = Tag::new("_snip_").map_err(|e| SnippetError::Service(e.to_string()))?;
+
         let bookmarks = tokio::task::spawn_blocking(move || {
-            // Build the bookmark query based on the snippet filter
-            let mut query = BookmarkQuery::new();
+            // FTS is only a coarse pre-filter here: it tokenizes tags (`_snip_` ->
+            // `snip`), so exact tag semantics come from tags_all/tags_any below.
+            // Only constant or quoted terms may go into the FTS string.
+            let mut text_query = r#"tags:"_snip_""#.to_string();
 
-            // Build the text query combining FTS and prefix search
-            let mut text_parts = Vec::new();
-
-            // Add FTS query if we have one
-            if let Some(fts_query) = filter_clone.build_fts_query() {
-                text_parts.push(fts_query);
-            }
-
-            // Add prefix search if specified
             if let Some(ref prefix) = filter_clone.query_prefix {
                 if !prefix.trim().is_empty() {
                     // Use title prefix search for better snippet matching.
@@ -82,19 +79,14 @@ impl AsyncSnippetService for LspSnippetService {
                     // `syntax error near "*"`. The word extractor only admits
                     // alphanumerics, `_` and `-`, so the prefix can never contain a
                     // `"` — the quoting is injection-safe.
-                    text_parts.push(format!("metadata:\"{}\"*", prefix));
+                    text_query.push_str(&format!(" AND metadata:\"{}\"*", prefix));
                 }
             }
 
-            // Combine all text parts with AND logic
-            if !text_parts.is_empty() {
-                let combined_query = if text_parts.len() == 1 {
-                    text_parts.into_iter().next().unwrap()
-                } else {
-                    text_parts.join(" AND ")
-                };
-                query = query.with_text_query(Some(&combined_query));
-            }
+            let mut query = BookmarkQuery::new()
+                .with_text_query(Some(&text_query))
+                .with_tags_all(Some(&HashSet::from([snip_tag])))
+                .with_tags_any(filter_clone.language_tags().as_ref());
 
             // Set limit
             if filter_clone.max_results > 0 {

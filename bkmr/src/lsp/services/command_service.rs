@@ -86,15 +86,17 @@ impl CommandService {
         let mut tags_all = HashSet::new();
         tags_all.insert(snip_tag);
 
-        // If language specified, filter by language tag
-        if let Some(lang) = language_id {
-            // Map LSP language ID to our tag format
-            let language_tag = Self::map_language_id_to_tag(lang);
-            let lang_tag = Tag::new(&language_tag).map_err(LspError::from)?;
-            tags_all.insert(lang_tag);
-        }
-
         query.tags_all = Some(tags_all);
+
+        // If language specified, accept any of its alias tags (same table as completion)
+        if let Some(lang) = language_id {
+            let lang_tags = LanguageRegistry::tags_for_language(lang)
+                .iter()
+                .map(Tag::new)
+                .collect::<Result<HashSet<_>, _>>()
+                .map_err(LspError::from)?;
+            query.tags_any = Some(lang_tags);
+        }
         query.sort = Some(SortCriteria::new(
             SortField::Modified,
             SortDirection::Descending,
@@ -243,29 +245,6 @@ impl CommandService {
         })
     }
 
-    /// Map LSP language ID to our tag format
-    fn map_language_id_to_tag(language_id: &str) -> String {
-        match language_id {
-            "rust" => "rust",
-            "python" => "python",
-            "javascript" | "javascriptreact" => "js",
-            "typescript" | "typescriptreact" => "ts",
-            "shellscript" | "bash" | "sh" => "sh",
-            "go" => "go",
-            "java" => "java",
-            "cpp" | "c" => "cpp",
-            "html" => "html",
-            "css" | "scss" | "sass" => "css",
-            "markdown" => "md",
-            "yaml" => "yaml",
-            "json" => "json",
-            "sql" => "sql",
-            "ruby" => "ruby",
-            "php" => "php",
-            _ => language_id,
-        }
-        .to_string()
-    }
     /// Execute the insertFilepathComment command
     #[instrument(skip(file_uri))]
     pub fn insert_filepath_comment(file_uri: &str) -> DomainResult<WorkspaceEdit> {
@@ -357,6 +336,36 @@ mod tests {
     use crate::infrastructure::repositories::null_vector_repository::NullVectorRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
     use std::sync::Arc;
+
+    #[test]
+    fn given_snippet_tagged_with_full_language_name_when_listing_by_language_then_included() {
+        // Regression: listSnippets mapped `javascript` -> `js` only, so a snippet tagged
+        // `javascript` showed up in completion but not in the list (and vice versa for `js`).
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let ctx = crate::util::test_context::TestContext::new();
+        let service = ctx.create_command_service();
+        service
+            .create_snippet(
+                "console.log($1)",
+                "Full Name Console Log",
+                None,
+                vec!["javascript".to_string()],
+            )
+            .expect("create snippet");
+
+        let result = service
+            .list_snippets(Some("javascript"))
+            .expect("list snippets");
+
+        let titles: Vec<&str> = result["snippets"]
+            .as_array()
+            .expect("snippets array")
+            .iter()
+            .filter_map(|s| s["title"].as_str())
+            .collect();
+        assert!(titles.contains(&"Full Name Console Log"));
+    }
 
     #[test]
     fn given_valid_snippet_data_when_creating_then_returns_snippet_with_id() {

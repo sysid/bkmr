@@ -302,8 +302,13 @@ impl LanguageServer for BkmrLspBackend {
                     context.get_query_text().unwrap_or("")
                 );
 
+                // Only a truncated result needs re-querying as the user types; a complete
+                // list is filtered client-side, so templates render once per completion
+                // session instead of on every keystroke.
+                let is_incomplete =
+                    completion_items.len() >= self.completion_service.max_completions();
                 Ok(Some(CompletionResponse::List(CompletionList {
-                    is_incomplete: true,
+                    is_incomplete,
                     items: completion_items,
                 })))
             }

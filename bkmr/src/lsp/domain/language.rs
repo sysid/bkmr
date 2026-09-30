@@ -123,6 +123,37 @@ impl LanguageRegistry {
         }
     }
 
+    /// Map an LSP languageId to the snippet tags accepted for that language.
+    ///
+    /// Single source of truth for language filtering: completion and
+    /// `bkmr.listSnippets` must agree, so both go through this table.
+    /// Unmapped ids fall back to the id itself.
+    pub fn tags_for_language(language_id: &str) -> Vec<String> {
+        let id = language_id.trim().to_lowercase();
+        let aliases: &[&str] = match id.as_str() {
+            "rust" => &["rust", "rs"],
+            "python" => &["python", "py"],
+            "javascript" => &["javascript", "js"],
+            "javascriptreact" => &["javascriptreact", "jsx", "javascript", "js"],
+            "typescript" => &["typescript", "ts"],
+            "typescriptreact" => &["typescriptreact", "tsx", "typescript", "ts"],
+            // VS Code sends `shellscript`, Neovim `sh`/`bash`/`zsh`
+            "shellscript" | "shell" | "sh" | "bash" | "zsh" => {
+                &["shell", "sh", "bash", "zsh", "shellscript"]
+            }
+            "go" => &["go", "golang"],
+            "scss" => &["scss", "css"],
+            "sass" => &["sass", "css"],
+            "markdown" => &["markdown", "md"],
+            "yaml" => &["yaml", "yml"],
+            "ruby" => &["ruby", "rb"],
+            "make" | "makefile" => &["make", "makefile"],
+            "dockerfile" => &["dockerfile", "docker"],
+            _ => return vec![id],
+        };
+        aliases.iter().map(|a| a.to_string()).collect()
+    }
+
     /// Get legacy comment syntax for backward compatibility
     pub fn get_comment_syntax(file_path: &str) -> &'static str {
         let extension = std::path::Path::new(file_path)
@@ -222,6 +253,30 @@ mod tests {
         assert_eq!(language_info.line_comment, Some("#".to_string()));
         assert_eq!(language_info.block_comment, None);
         assert_eq!(language_info.indent_char, "    ");
+    }
+
+    #[test]
+    fn given_javascript_language_id_when_getting_tags_then_includes_short_alias() {
+        let tags = LanguageRegistry::tags_for_language("javascript");
+
+        assert!(tags.contains(&"javascript".to_string()));
+        assert!(tags.contains(&"js".to_string()));
+    }
+
+    #[test]
+    fn given_vscode_shellscript_id_when_getting_tags_then_includes_common_shell_tags() {
+        let tags = LanguageRegistry::tags_for_language("shellscript");
+
+        assert!(tags.contains(&"sh".to_string()));
+        assert!(tags.contains(&"bash".to_string()));
+        assert!(tags.contains(&"shell".to_string()));
+    }
+
+    #[test]
+    fn given_unmapped_language_id_when_getting_tags_then_returns_id_itself_lowercased() {
+        let tags = LanguageRegistry::tags_for_language("Objective-C");
+
+        assert_eq!(tags, vec!["objective-c".to_string()]);
     }
 
     #[test]

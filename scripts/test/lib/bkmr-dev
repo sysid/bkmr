@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Run a bkmr binary against a throwaway database with debug logging to a file.
+#
+# Editors launch it in place of `bkmr` (nvim: via PATH, IntelliJ: Binary Path), so
+# manual tests never touch the real database and the server log is always captured.
+#
+#   BKMR_BIN      binary to run (default: repo debug build); e.g. ~/bin/bkmr7.6.8 for a
+#                 before/after comparison against a released version
+#   BKMR_DEV_DIR  state directory holding test.db and lsp.log (default: /tmp/bkmr-dev)
+
+set -euo pipefail
+
+# Resolve through the symlink `make test-env` places at $BKMR_DEV_DIR/bin/bkmr
+SCRIPT_DIR="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+DEV_DIR="${BKMR_DEV_DIR:-/tmp/bkmr-dev}"
+
+export BKMR_DB_URL="$DEV_DIR/test.db"
+# stdout must stay untouched: it carries the LSP protocol
+exec "${BKMR_BIN:-$REPO_ROOT/bkmr/target/debug/bkmr}" -dd "$@" 2>>"$DEV_DIR/lsp.log"

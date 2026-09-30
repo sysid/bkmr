@@ -234,6 +234,7 @@ Access your snippets directly within your editor without context switching.
 
 ### Built-in LSP Server
 
+The LSP server does one job: Putting `_snip_` bookmarks into the editor's completion list.
 Compatible with VS Code, Vim, Emacs, Sublime, and any LSP-compatible editor.
 
 ```bash
@@ -273,17 +274,11 @@ cargo build --release
 
 ### Running Tests
 
-**IMPORTANT**: All tests must be run single-threaded:
-
 ```bash
-# Run tests (REQUIRED: single-threaded)
-cargo test -- --test-threads=1
-
-# Or use Makefile
 make test
 ```
 
-**Why single-threaded?** Tests share a SQLite database and environment variables. Parallel execution causes race conditions.
+See **[TESTING.md](TESTING.md)** for everything test-related: automated, scenario and manual editor tests.
 
 See **[Development](https://github.com/sysid/bkmr/wiki/Development)** for complete contributor guide.
 
