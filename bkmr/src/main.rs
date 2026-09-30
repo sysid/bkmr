@@ -141,11 +141,6 @@ fn handle_create_db_command(
         migration::init_db(&mut conn)
             .map_err(|e| format!("Failed to initialize database: {}", e))?;
 
-        // Clean the bookmark table to ensure we start with an empty database
-        repository
-            .empty_bookmark_table()
-            .map_err(|e| format!("Failed to empty bookmark table: {}", e))?;
-
         eprintln!("Database created successfully at: {}", db_path);
 
         // Handle pre-fill if requested

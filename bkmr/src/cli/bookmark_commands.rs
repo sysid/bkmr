@@ -10,7 +10,7 @@ use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
-use crate::config::{get_config_file_path, ConfigSource};
+use crate::config::get_config_file_path;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error_context::CliErrorContext;
 use crate::domain::repositories::repository::BookmarkRepository;
@@ -20,7 +20,6 @@ use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
-use crate::infrastructure::repositories::sqlite::migration;
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
@@ -743,85 +742,6 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     Ok(())
 }
 
-#[instrument(skip(cli))]
-pub fn create_db(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
-    if let Commands::CreateDb { path, pre_fill } = cli.command.unwrap() {
-        // Get the database path from either the command-line argument or the config system
-        let db_path = match path {
-            Some(p) => p,
-            None => {
-                // Get from config system via settings parameter
-                let configured_path = &settings.db_url;
-
-                // Check if we're using default configuration
-                if settings.config_source == ConfigSource::Default {
-                    eprintln!(
-                        "{}",
-                        "Warning: Using default database path. No configuration found.".yellow()
-                    );
-                    eprintln!("Default path: {}", configured_path);
-                    eprintln!(
-                        "Consider creating a configuration file at ~/.config/bkmr/config.toml"
-                    );
-                    eprintln!("or setting the BKMR_DB_URL environment variable.");
-
-                    // Ask for confirmation when using default configuration
-                    if !confirm("Continue with default database location?") {
-                        eprintln!("Database creation cancelled.");
-                        return Ok(());
-                    }
-                }
-
-                configured_path.clone()
-            }
-        };
-
-        // Check if the database file already exists
-        if Path::new(&db_path).exists() {
-            return Err(CliError::InvalidInput(format!(
-                "Database already exists at: {}. Please choose a different path or delete the existing file.",
-                db_path
-            )));
-        }
-
-        // Create parent directories if they don't exist
-        if let Some(parent) = Path::new(&db_path).parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| {
-                    CliError::Io(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Failed to create parent directories: {}", e),
-                    ))
-                })?;
-            }
-        }
-
-        eprintln!("Creating new database at: {}", db_path);
-
-        // Create the repository with the new path
-        let repository = SqliteBookmarkRepository::from_url(&db_path)?;
-
-        // Get a connection
-        let mut conn = repository.get_connection()?;
-
-        // Run migrations to set up the schema
-        migration::init_db(&mut conn)?;
-
-        // Clean the bookmark table to ensure we start with an empty database
-        repository.empty_bookmark_table()?;
-
-        eprintln!("Database created successfully at: {}", db_path);
-
-        // Pre-fill the database with demo entries if requested
-        if pre_fill {
-            eprintln!("Pre-filling database with demo entries...");
-            pre_fill_database(&repository)?;
-            eprintln!("Demo entries added successfully!");
-        }
-    }
-    Ok(())
-}
-
 /// Clear all embeddings from vec_bookmarks and reset all content hashes.
 /// Shared by `clear-embeddings` and `backfill --force`.
 fn purge_all_embeddings(services: &ServiceContainer) -> CliResult<()> {
@@ -1495,11 +1415,6 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
         let repository = setup_test_db();
-
-        // Make sure we start with an empty database
-        repository
-            .empty_bookmark_table()
-            .expect("Failed to empty bookmark table");
 
         // Verify database is initially empty
         let initial_bookmarks = repository.get_all().expect("Failed to get bookmarks");

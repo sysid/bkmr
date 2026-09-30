@@ -1,0 +1,695 @@
+[
+  {
+    "url": "console.log(${1:msg})",
+    "title": "JS alias log",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "js"
+    ],
+    "group": "language-filter",
+    "why": "tag 'js' is an alias of languageId javascript"
+  },
+  {
+    "url": "console.error(${1:err})",
+    "title": "JS full-name error",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "javascript"
+    ],
+    "group": "language-filter",
+    "why": "full language name 'javascript' as tag"
+  },
+  {
+    "url": "println!(\"{}\", ${1:v});",
+    "title": "Rust println",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "rust"
+    ],
+    "group": "language-filter",
+    "why": "exact language tag 'rust'"
+  },
+  {
+    "url": "\"rust-analyzer.check.command\": \"clippy\"",
+    "title": "RA clippy setting",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "rust-analyzer"
+    ],
+    "group": "language-filter",
+    "why": "tag 'rust-analyzer' must not match languageId rust (exact tag match)"
+  },
+  {
+    "url": "https://example.com",
+    "title": "Not a snippet",
+    "description": "",
+    "tags": [
+      "rust",
+      "snip"
+    ],
+    "group": "language-filter",
+    "why": "tags 'snip,rust' without system tag _snip_: never completed"
+  },
+  {
+    "url": "echo \"${1:hello}\"",
+    "title": "Bash echo",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "bash"
+    ],
+    "group": "language-filter",
+    "why": "tag 'bash' matches languageId shellscript"
+  },
+  {
+    "url": "// TODO: ${1:what}",
+    "title": "Universal TODO",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "universal"
+    ],
+    "group": "language-filter",
+    "why": "tag 'universal' completes in every language"
+  },
+  {
+    "url": "// rendered at {{ \"date +%H:%M:%S\" | shell }}",
+    "title": "Render counter",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "rust"
+    ],
+    "group": "completion-session",
+    "why": "each render runs the shell filter, logged as 'Executing shell command: date' (TESTING.md Completion sessions)"
+  },
+  {
+    "url": "print(\"filler 01\")",
+    "title": "Py filler 01",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 02\")",
+    "title": "Py filler 02",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 03\")",
+    "title": "Py filler 03",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 04\")",
+    "title": "Py filler 04",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 05\")",
+    "title": "Py filler 05",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 06\")",
+    "title": "Py filler 06",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 07\")",
+    "title": "Py filler 07",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 08\")",
+    "title": "Py filler 08",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 09\")",
+    "title": "Py filler 09",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 10\")",
+    "title": "Py filler 10",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 11\")",
+    "title": "Py filler 11",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 12\")",
+    "title": "Py filler 12",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 13\")",
+    "title": "Py filler 13",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 14\")",
+    "title": "Py filler 14",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 15\")",
+    "title": "Py filler 15",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 16\")",
+    "title": "Py filler 16",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 17\")",
+    "title": "Py filler 17",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 18\")",
+    "title": "Py filler 18",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 19\")",
+    "title": "Py filler 19",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 20\")",
+    "title": "Py filler 20",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 21\")",
+    "title": "Py filler 21",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 22\")",
+    "title": "Py filler 22",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 23\")",
+    "title": "Py filler 23",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 24\")",
+    "title": "Py filler 24",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 25\")",
+    "title": "Py filler 25",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 26\")",
+    "title": "Py filler 26",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 27\")",
+    "title": "Py filler 27",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 28\")",
+    "title": "Py filler 28",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 29\")",
+    "title": "Py filler 29",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 30\")",
+    "title": "Py filler 30",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 31\")",
+    "title": "Py filler 31",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 32\")",
+    "title": "Py filler 32",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 33\")",
+    "title": "Py filler 33",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 34\")",
+    "title": "Py filler 34",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 35\")",
+    "title": "Py filler 35",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 36\")",
+    "title": "Py filler 36",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 37\")",
+    "title": "Py filler 37",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 38\")",
+    "title": "Py filler 38",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 39\")",
+    "title": "Py filler 39",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 40\")",
+    "title": "Py filler 40",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 41\")",
+    "title": "Py filler 41",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 42\")",
+    "title": "Py filler 42",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 43\")",
+    "title": "Py filler 43",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 44\")",
+    "title": "Py filler 44",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 45\")",
+    "title": "Py filler 45",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 46\")",
+    "title": "Py filler 46",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 47\")",
+    "title": "Py filler 47",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 48\")",
+    "title": "Py filler 48",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 49\")",
+    "title": "Py filler 49",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 50\")",
+    "title": "Py filler 50",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 51\")",
+    "title": "Py filler 51",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 52\")",
+    "title": "Py filler 52",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 53\")",
+    "title": "Py filler 53",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 54\")",
+    "title": "Py filler 54",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  },
+  {
+    "url": "print(\"filler 55\")",
+    "title": "Py filler 55",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "python"
+    ],
+    "group": "truncation",
+    "why": "55 python snippets + Universal TODO > max_completions (50): truncated, isIncomplete"
+  }
+]

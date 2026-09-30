@@ -53,6 +53,7 @@ impl<R: BookmarkRepository> TagService for TagServiceImpl<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::bookmark::Bookmark;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
     use std::collections::HashSet;
 
@@ -64,85 +65,71 @@ mod tests {
     }
 
     #[test]
-    fn given_test_database_when_get_all_tags_then_returns_all_tags() {
+    fn given_tagged_bookmarks_when_get_all_tags_then_returns_all_tags_with_counts() {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
-        let service = create_test_service();
+        let repository = Arc::new(setup_test_db());
+        for (url, tags) in [
+            ("https://one.example.com", "aaa,ccc"),
+            ("https://two.example.com", "aaa,bbb,ccc"),
+            ("https://three.example.com", "ccc,xxx"),
+            ("https://four.example.com", "yyy"),
+        ] {
+            let mut bookmark =
+                Bookmark::new(url, "title", "", Tag::parse_tags(tags).unwrap()).unwrap();
+            repository.add(&mut bookmark).unwrap();
+        }
+        let service = TagServiceImpl::new(repository);
 
         // Act
         let tag_counts = service.get_all_tags().unwrap();
 
         // Assert
-        // Based on up.sql data, we expect these tags: aaa, bbb, ccc, xxx, yyy
-        assert!(!tag_counts.is_empty(), "Tag list should not be empty");
-
-        // Check that the expected tags are present
-        let tags: HashSet<String> = tag_counts
+        let counts: HashSet<(String, usize)> = tag_counts
             .iter()
-            .map(|(tag, _)| tag.value().to_string())
+            .map(|(tag, count)| (tag.value().to_string(), *count))
             .collect();
-
-        assert!(tags.contains("aaa"), "Tag 'aaa' should be present");
-        assert!(tags.contains("bbb"), "Tag 'bbb' should be present");
-        assert!(tags.contains("ccc"), "Tag 'ccc' should be present");
-        assert!(tags.contains("xxx"), "Tag 'xxx' should be present");
-        assert!(tags.contains("yyy"), "Tag 'yyy' should be present");
-
-        // Verify that tag counts are reasonable
-        let aaa_count = tag_counts
-            .iter()
-            .find(|(tag, _)| tag.value() == "aaa")
-            .map(|(_, count)| *count)
-            .unwrap_or(0);
-
-        // From up.sql, 'aaa' appears in 4 records
-        assert_eq!(aaa_count, 4, "Tag 'aaa' should appear in 4 bookmarks");
+        let expected: HashSet<(String, usize)> =
+            [("aaa", 2), ("bbb", 1), ("ccc", 3), ("xxx", 1), ("yyy", 1)]
+                .iter()
+                .map(|(tag, count)| (tag.to_string(), *count))
+                .collect();
+        assert_eq!(counts, expected);
     }
 
     #[test]
-    fn given_test_database_when_get_related_tags_for_ccc_then_returns_correct_related_tags() {
+    fn given_tagged_bookmarks_when_get_related_tags_for_ccc_then_returns_cooccurring_tags() {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
-        let service = create_test_service();
+        let repository = Arc::new(setup_test_db());
+        for (url, tags) in [
+            ("https://one.example.com", "aaa,ccc"),
+            ("https://two.example.com", "aaa,bbb,ccc"),
+            ("https://three.example.com", "ccc,xxx"),
+            ("https://four.example.com", "yyy"),
+        ] {
+            let mut bookmark =
+                Bookmark::new(url, "title", "", Tag::parse_tags(tags).unwrap()).unwrap();
+            repository.add(&mut bookmark).unwrap();
+        }
+        let service = TagServiceImpl::new(repository);
         let ccc_tag = Tag::new("ccc").unwrap();
 
         // Act
         let related_tags = service.get_related_tags(&ccc_tag).unwrap();
 
-        // Assert
-        let related_tag_names: HashSet<String> = related_tags
+        // Assert: 'yyy' never appears together with 'ccc'
+        let related: HashSet<(String, usize)> = related_tags
             .iter()
-            .map(|(tag, _)| tag.value().to_string())
+            .map(|(tag, count)| (tag.value().to_string(), *count))
             .collect();
-
-        // Based on up.sql, 'ccc' co-occurs with 'aaa', 'bbb', 'xxx', 'yyy'
-        assert!(
-            related_tag_names.contains("aaa"),
-            "Tag 'aaa' should be related to 'ccc'"
-        );
-        assert!(
-            related_tag_names.contains("bbb"),
-            "Tag 'bbb' should be related to 'ccc'"
-        );
-        assert!(
-            related_tag_names.contains("yyy"),
-            "Tag 'yyy' should be related to 'ccc'"
-        );
-
-        // Check the most frequent co-occurrence
-        let aaa_count = related_tags
+        let expected: HashSet<(String, usize)> = [("aaa", 2), ("bbb", 1), ("xxx", 1)]
             .iter()
-            .find(|(tag, _)| tag.value() == "aaa")
-            .map(|(_, count)| *count)
-            .unwrap_or(0);
-
-        // From up.sql, 'aaa' co-occurs with 'ccc' in 2 records
-        assert_eq!(
-            aaa_count, 2,
-            "Tag 'aaa' should co-occur with 'ccc' in 2 bookmarks"
-        );
+            .map(|(tag, count)| (tag.to_string(), *count))
+            .collect();
+        assert_eq!(related, expected);
     }
 
     #[test]

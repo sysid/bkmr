@@ -63,19 +63,53 @@ fn search_bookmarks(
     service.search_bookmarks(&query_with_limit)
 }
 
+// Adds a bookmark without web fetch and returns its id
+fn add(service: &impl BookmarkService, url: &str, title: &str, tags: &str) -> i32 {
+    service
+        .add_bookmark(
+            url,
+            Some(title),
+            None,
+            Some(&parse_tags(tags)),
+            false,
+            true,
+            None,
+        )
+        .unwrap()
+        .id
+        .unwrap()
+}
+
+fn ids(bookmarks: &[bkmr::domain::bookmark::Bookmark]) -> HashSet<i32> {
+    bookmarks.iter().filter_map(|b| b.id).collect()
+}
+
 #[test]
 fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_results() {
     // Arrange
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
-
-    // Based on up.sql, we know these tags exist: aaa, bbb, ccc, xxx, yyy
-    let _ = parse_tags("aaa,bbb,ccc,xxx,yyy");
-
-    // Get all bookmarks to understand the dataset
-    let all_bookmarks = service.get_all_bookmarks(None, None).unwrap();
-    println!("Total bookmarks in test DB: {}", all_bookmarks.len());
+    let aaa_bbb = add(
+        &service,
+        "https://aaa-bbb.example.com",
+        "aaa bbb",
+        "aaa,bbb",
+    );
+    let aaa_bbb_ccc = add(
+        &service,
+        "https://aaa-bbb-ccc.example.com",
+        "aaa bbb ccc",
+        "aaa,bbb,ccc",
+    );
+    let ccc_yyy = add(
+        &service,
+        "https://ccc-yyy.example.com",
+        "ccc yyy",
+        "ccc,yyy",
+    );
+    let xxx = add(&service, "https://xxx.example.com", "xxx", "xxx");
+    let _aaa = add(&service, "https://aaa.example.com", "aaa", "aaa");
 
     // Case 1: All tags must be "aaa" AND "bbb"
     let tags_all = parse_tags("aaa,bbb");
@@ -93,11 +127,7 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
     )
     .unwrap();
 
-    // Assert all results have both tags
-    for bookmark in &results {
-        assert!(bookmark.tags.contains(&Tag::new("aaa").unwrap()));
-        assert!(bookmark.tags.contains(&Tag::new("bbb").unwrap()));
-    }
+    assert_eq!(ids(&results), HashSet::from([aaa_bbb, aaa_bbb_ccc]));
 
     // Case 2: Any tag must be "xxx" OR "yyy"
     let tags_any = parse_tags("xxx,yyy");
@@ -115,13 +145,7 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
     )
     .unwrap();
 
-    // Assert each result has at least one of the tags
-    for bookmark in &results_any {
-        assert!(
-            bookmark.tags.contains(&Tag::new("xxx").unwrap())
-                || bookmark.tags.contains(&Tag::new("yyy").unwrap())
-        );
-    }
+    assert_eq!(ids(&results_any), HashSet::from([ccc_yyy, xxx]));
 
     // Case 3: Complex - (has "aaa" AND "bbb") but NOT "ccc"
     let tags_all = parse_tags("aaa,bbb");
@@ -140,12 +164,7 @@ fn given_complex_tag_combinations_when_search_bookmarks_then_returns_correct_res
     )
     .unwrap();
 
-    // Assert correct filtering
-    for bookmark in &results_complex {
-        assert!(bookmark.tags.contains(&Tag::new("aaa").unwrap()));
-        assert!(bookmark.tags.contains(&Tag::new("bbb").unwrap()));
-        assert!(!bookmark.tags.contains(&Tag::new("ccc").unwrap()));
-    }
+    assert_eq!(ids(&results_complex), HashSet::from([aaa_bbb]));
 }
 
 #[test]
@@ -154,6 +173,9 @@ fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filte
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
+    let text_and_tag = add(&service, "https://one.example.com", "TEST entry one", "aaa");
+    let _text_only = add(&service, "https://two.example.com", "TEST entry two", "bbb");
+    let tag_only = add(&service, "https://three.example.com", "Other entry", "aaa");
 
     // Search for "TEST" in text and filter by tag "aaa"
     let query = "TEST";
@@ -174,26 +196,7 @@ fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filte
     .unwrap();
 
     // Assert both text and tag filters were applied
-    for bookmark in &results {
-        // Should have the tag
-        assert!(bookmark.tags.contains(&Tag::new("aaa").unwrap()));
-
-        // Should match the text query
-        let text_match = bookmark
-            .title
-            .to_lowercase()
-            .contains(&query.to_lowercase())
-            || bookmark
-                .description
-                .to_lowercase()
-                .contains(&query.to_lowercase())
-            || bookmark.url.to_lowercase().contains(&query.to_lowercase());
-        assert!(
-            text_match,
-            "Bookmark should match text query: {:?}",
-            bookmark
-        );
-    }
+    assert_eq!(ids(&results), HashSet::from([text_and_tag]));
 
     // Compare with results from just tag filter
     let tag_only_results = search_bookmarks(
@@ -210,8 +213,10 @@ fn given_text_query_with_tag_filtering_when_search_bookmarks_then_combines_filte
     )
     .unwrap();
 
-    // Should be fewer or equal results when combining filters
-    assert!(results.len() <= tag_only_results.len());
+    assert_eq!(
+        ids(&tag_only_results),
+        HashSet::from([text_and_tag, tag_only])
+    );
 }
 
 #[test]
@@ -220,8 +225,15 @@ fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only()
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
+    let exact = add(&service, "https://exact.example.com", "exact", "aaa,bbb");
+    let superset = add(
+        &service,
+        "https://superset.example.com",
+        "superset",
+        "aaa,bbb,ccc",
+    );
+    let _subset = add(&service, "https://subset.example.com", "subset", "aaa");
 
-    // Choose a combination that exists in the test data
     let tags_exact = parse_tags("aaa,bbb");
 
     let results = search_bookmarks(
@@ -238,12 +250,8 @@ fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only()
     )
     .unwrap();
 
-    // Check results - each bookmark should have EXACTLY these tags, no more, no less
-    for bookmark in &results {
-        assert_eq!(bookmark.tags.len(), tags_exact.len());
-        assert!(bookmark.tags.contains(&Tag::new("aaa").unwrap()));
-        assert!(bookmark.tags.contains(&Tag::new("bbb").unwrap()));
-    }
+    // Each bookmark must have EXACTLY these tags, no more, no less
+    assert_eq!(ids(&results), HashSet::from([exact]));
 
     // Compare with "all tags" (which allows additional tags)
     let all_tags_results = search_bookmarks(
@@ -260,8 +268,7 @@ fn given_exact_tag_match_when_search_bookmarks_then_returns_exact_matches_only()
     )
     .unwrap();
 
-    // There should be more or equal results with "all tags" than with "exact tags"
-    assert!(all_tags_results.len() >= results.len());
+    assert_eq!(ids(&all_tags_results), HashSet::from([exact, superset]));
 }
 
 #[test]
@@ -270,11 +277,13 @@ fn given_tag_prefix_when_search_bookmarks_then_returns_matching_prefixed_tags() 
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
+    let aaa = add(&service, "https://aaa.example.com", "aaa", "aaa");
+    let abc = add(&service, "https://abc.example.com", "abc", "abc,zzz");
+    let _bbb = add(&service, "https://bbb.example.com", "bbb", "bbb");
+    let _untagged = add(&service, "https://untagged.example.com", "untagged", "");
 
-    // Create a prefix tag - this is artificial since we want to test the feature
-    // (there may not be explicit prefix matches in the test data)
     let mut prefix_tags = HashSet::new();
-    prefix_tags.insert(Tag::new("a").unwrap()); // Should match "aaa"
+    prefix_tags.insert(Tag::new("a").unwrap());
 
     let results = search_bookmarks(
         &service,
@@ -290,15 +299,8 @@ fn given_tag_prefix_when_search_bookmarks_then_returns_matching_prefixed_tags() 
     )
     .unwrap();
 
-    // Check that all results have at least one tag starting with the prefix
-    for bookmark in &results {
-        let has_prefix_match = bookmark.tags.iter().any(|tag| tag.value().starts_with("a"));
-        assert!(
-            has_prefix_match,
-            "Should have at least one tag starting with 'a': {:?}",
-            bookmark
-        );
-    }
+    // Only bookmarks with at least one tag starting with 'a'
+    assert_eq!(ids(&results), HashSet::from([aaa, abc]));
 }
 
 #[test]
@@ -307,9 +309,19 @@ fn given_negated_tag_filters_when_search_bookmarks_then_excludes_correctly() {
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
-
-    // Get all bookmarks
-    let all_bookmarks = service.get_all_bookmarks(None, None).unwrap();
+    let _with_ccc = add(
+        &service,
+        "https://with-ccc.example.com",
+        "With ccc",
+        "aaa,ccc",
+    );
+    let without_ccc = add(
+        &service,
+        "https://without-ccc.example.com",
+        "Without ccc",
+        "aaa,bbb",
+    );
+    let untagged = add(&service, "https://untagged.example.com", "Untagged", "");
 
     // Exclude bookmarks with tag "ccc"
     let tags_any_not = parse_tags("ccc");
@@ -328,25 +340,8 @@ fn given_negated_tag_filters_when_search_bookmarks_then_excludes_correctly() {
     )
     .unwrap();
 
-    // Verify no results have the excluded tag
-    for bookmark in &results {
-        assert!(!bookmark.tags.contains(&Tag::new("ccc").unwrap()));
-    }
-
-    // Should be fewer results than total
-    assert!(
-        results.len() < all_bookmarks.len(),
-        "Should have fewer results after exclusion"
-    );
-
-    // Count bookmarks with tag "ccc" in original data
-    let ccc_count = all_bookmarks
-        .iter()
-        .filter(|b| b.tags.contains(&Tag::new("ccc").unwrap()))
-        .count();
-
-    // Results count should be total minus those with "ccc" tag
-    assert_eq!(results.len(), all_bookmarks.len() - ccc_count);
+    // Assert: only the bookmarks without "ccc" remain, including the untagged one
+    assert_eq!(ids(&results), HashSet::from([without_ccc, untagged]));
 }
 
 #[test]
@@ -355,6 +350,14 @@ fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_a
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
+    for i in 1..=5 {
+        add(
+            &service,
+            &format!("https://sort-{i}.example.com"),
+            "sort",
+            "",
+        );
+    }
 
     // Get all bookmarks sorted descending (newest first)
     let desc_results = search_bookmarks(
@@ -370,6 +373,7 @@ fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_a
         None,
     )
     .unwrap();
+    assert_eq!(desc_results.len(), 5);
 
     // Get all bookmarks sorted ascending (oldest first)
     let _ = search_bookmarks(
@@ -414,7 +418,7 @@ fn given_sort_direction_and_limit_when_search_bookmarks_then_respects_ordering_a
     .unwrap();
 
     // Should respect the limit
-    assert!(limited_results.len() <= limit);
+    assert_eq!(limited_results.len(), limit);
 
     // Limited results should match the first 'limit' items from unlimited results
     for (limited, unlimited) in limited_results.iter().zip(desc_results.iter()) {
@@ -429,12 +433,23 @@ fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_a
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
+    let match_one = add(&service, "https://h1.example.com", "TEST one", "aaa,bbb");
+    let _has_xxx = add(
+        &service,
+        "https://h2.example.com",
+        "TEST two",
+        "aaa,bbb,xxx",
+    );
+    let match_three = add(&service, "https://h3.example.com", "TEST three", "aaa,bbb");
+    let match_four = add(&service, "https://h4.example.com", "TEST four", "aaa,bbb");
+    let _no_text = add(&service, "https://h5.example.com", "Other", "aaa,bbb");
+    let _missing_bbb = add(&service, "https://h6.example.com", "TEST six", "aaa");
 
     // Create a complex filter:
     // - Text contains "TEST"
     // - Must have tags "aaa" AND "bbb"
     // - Must NOT have tag "xxx"
-    // - Limit to top 2 results
+    // - Limit to top 2 results (3 bookmarks match, so the limit applies)
 
     let query = "TEST";
     let tags_all = parse_tags("aaa,bbb");
@@ -455,30 +470,9 @@ fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_a
     )
     .unwrap();
 
-    // Verify all filters were applied
-    for bookmark in &results {
-        // Text filter
-        let text_match = bookmark
-            .title
-            .to_lowercase()
-            .contains(&query.to_lowercase())
-            || bookmark
-                .description
-                .to_lowercase()
-                .contains(&query.to_lowercase())
-            || bookmark.url.to_lowercase().contains(&query.to_lowercase());
-        assert!(text_match);
-
-        // All tags filter
-        assert!(bookmark.tags.contains(&Tag::new("aaa").unwrap()));
-        assert!(bookmark.tags.contains(&Tag::new("bbb").unwrap()));
-
-        // Any not filter
-        assert!(!bookmark.tags.contains(&Tag::new("xxx").unwrap()));
-    }
-
-    // Verify limit
-    assert!(results.len() <= limit);
+    // Verify all filters and the limit were applied
+    assert_eq!(results.len(), limit);
+    assert!(ids(&results).is_subset(&HashSet::from([match_one, match_three, match_four])));
 
     // Also verify we get the same results with filters applied in different order
     // First apply text filter and tag filters
@@ -503,12 +497,9 @@ fn given_highly_specific_filter_combination_when_search_bookmarks_then_filters_a
         .take(limit)
         .collect();
 
-    // Results should match (have same IDs)
-    let result_ids: HashSet<_> = results.iter().filter_map(|b| b.id).collect();
-    let manual_ids: HashSet<_> = manually_filtered.iter().filter_map(|b| b.id).collect();
-
     assert_eq!(
-        result_ids, manual_ids,
+        ids(&results),
+        ids(&manually_filtered),
         "Filters should be applied in a consistent manner"
     );
 }
@@ -519,6 +510,15 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     let _env = init_test_env();
     let _guard = EnvGuard::new();
     let service = create_test_service();
+    let tagged = add(&service, "https://tagged.example.com", "tagged", "aaa");
+    let other_tagged = add(
+        &service,
+        "https://other-tagged.example.com",
+        "other tagged",
+        "bbb,ccc",
+    );
+    let untagged = add(&service, "https://untagged.example.com", "untagged", "");
+    let all_ids = HashSet::from([tagged, other_tagged, untagged]);
 
     // Case 1: All filters None except sort (should return all bookmarks sorted)
     let results_default = search_bookmarks(
@@ -535,11 +535,11 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     )
     .unwrap();
 
-    // Should match get_all_bookmarks
+    assert_eq!(ids(&results_default), all_ids);
     let all_bookmarks = service
         .get_all_bookmarks(Some(SortDirection::Descending), None)
         .unwrap();
-    assert_eq!(results_default.len(), all_bookmarks.len());
+    assert_eq!(ids(&all_bookmarks), all_ids);
 
     // Case 2: Empty text query (should be treated as no text query)
     let results_empty_query = search_bookmarks(
@@ -556,7 +556,7 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     )
     .unwrap();
 
-    assert_eq!(results_empty_query.len(), all_bookmarks.len());
+    assert_eq!(ids(&results_empty_query), all_ids);
 
     // Case 3: Empty tag sets (should be treated as no tag filter)
     let empty_tags = HashSet::new();
@@ -574,5 +574,5 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
     )
     .unwrap();
 
-    assert_eq!(results_empty_tags.len(), all_bookmarks.len());
+    assert_eq!(ids(&results_empty_tags), all_ids);
 }

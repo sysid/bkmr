@@ -62,6 +62,29 @@ impl TestDb {
         self
     }
 
+    /// Load a named dataset from `tests/resources/datasets/<name>.json` without embeddings.
+    /// The same files seed `scripts/test/lib/seed.sh`.
+    pub fn load_dataset(&self, name: &str) -> &Self {
+        let file = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/resources/datasets")
+            .join(format!("{name}.json"));
+        let status = Command::new(BKMR)
+            .env("BKMR_DB_URL", &self.path)
+            .args(["load-json", "--no-embed"])
+            .arg(&file)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("run bkmr load-json");
+        assert!(
+            status.success(),
+            "bkmr load-json failed for {}",
+            file.display()
+        );
+        self
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }

@@ -1,0 +1,155 @@
+[
+  {
+    "url": "https://docs.rs/error-code-8443",
+    "title": "Error Code 8443: TLS handshake failure on port 8443",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "error-code-8443"
+    ],
+    "group": "A",
+    "why": "pure FTS match: exact strings, no semantic similarity"
+  },
+  {
+    "url": "https://github.com/rust-lang/rust/issues/12345",
+    "title": "ICE: internal compiler error in rustc_mir_transform",
+    "description": "Empowering everyone to build reliable and efficient software. - Spellcheck library docs. by huonw · Pull Request #12345 · rust-lang/rust",
+    "tags": [
+      "bugs",
+      "compiler",
+      "rust"
+    ],
+    "group": "A",
+    "why": "pure FTS match: exact strings, no semantic similarity"
+  },
+  {
+    "url": "https://stackoverflow.com/q/999999",
+    "title": "iptables rule for blocking port 5432 on eth0",
+    "description": "",
+    "tags": [
+      "debug",
+      "linux",
+      "networking"
+    ],
+    "group": "A",
+    "why": "pure FTS match: exact strings, no semantic similarity"
+  },
+  {
+    "url": "https://kubernetes.io/docs/tasks/configure-pod-container/",
+    "title": "Configuring liveness and readiness probes for pods",
+    "description": "Perform common configuration tasks for Pods and containers.",
+    "tags": [
+      "containers",
+      "kubernetes",
+      "procedure"
+    ],
+    "group": "B",
+    "why": "semantic match: related concepts, different wording"
+  },
+  {
+    "url": "https://docs.docker.com/engine/security/",
+    "title": "Securing containerized applications with user namespaces",
+    "description": "Review of the Docker Daemon attack surface",
+    "tags": [
+      "containers",
+      "docker",
+      "security"
+    ],
+    "group": "B",
+    "why": "semantic match: related concepts, different wording"
+  },
+  {
+    "url": "https://www.cncf.io/blog/service-mesh/",
+    "title": "Understanding service mesh architecture patterns",
+    "description": "",
+    "tags": [
+      "microservices",
+      "networking"
+    ],
+    "group": "B",
+    "why": "semantic match: related concepts, different wording"
+  },
+  {
+    "url": "https://kubernetes.io/docs/concepts/security/",
+    "title": "Kubernetes cluster security best practices and health checks",
+    "description": "Concepts for keeping your cloud-native workload secure.",
+    "tags": [
+      "kubernetes",
+      "procedure",
+      "security"
+    ],
+    "group": "C",
+    "why": "FTS and semantic match: should rank highest via RRF"
+  },
+  {
+    "url": "https://helm.sh/docs/intro/",
+    "title": "Kubernetes deployment with Helm charts and health check configuration",
+    "description": "Are you new to Helm? This is the place to start!",
+    "tags": [
+      "deployment",
+      "helm",
+      "kubernetes"
+    ],
+    "group": "C",
+    "why": "FTS and semantic match: should rank highest via RRF"
+  },
+  {
+    "url": "https://ansible.com/docs/",
+    "title": "Ansible playbook for server provisioning and health monitoring",
+    "description": "Ansible Collaborative",
+    "tags": [
+      "ansible",
+      "automation",
+      "procedure"
+    ],
+    "group": "D",
+    "why": "tagged entry for filter testing"
+  },
+  {
+    "url": "https://terraform.io/docs/",
+    "title": "Terraform infrastructure as code for cloud deployment",
+    "description": "Terraform enables you to provision infrastructure safely and efficiently. Review Terraform's ecosystem and workflows, including the Terraform CLI, HCP Terraform, and Terraform Enterprise.",
+    "tags": [
+      "iac",
+      "procedure",
+      "terraform"
+    ],
+    "group": "D",
+    "why": "tagged entry for filter testing"
+  },
+  {
+    "url": "https://python.org/docs/",
+    "title": "Python standard library reference documentation",
+    "description": "The official home of the Python Programming Language",
+    "tags": [
+      "_snip_",
+      "language",
+      "python"
+    ],
+    "group": "D",
+    "why": "tagged entry for filter testing"
+  },
+  {
+    "url": "shell::echo 'kubernetes health check running'",
+    "title": "Quick k8s health check shell command",
+    "description": "",
+    "tags": [
+      "_shell_",
+      "kubernetes"
+    ],
+    "group": "E",
+    "why": "non-http content: should still appear in FTS"
+  },
+  {
+    "url": "SELECT * FROM pods WHERE status = 'Running'",
+    "title": "SQL query for kubernetes pod status",
+    "description": "",
+    "tags": [
+      "_snip_",
+      "kubernetes",
+      "sql"
+    ],
+    "group": "E",
+    "why": "non-http content: should still appear in FTS"
+  }
+]

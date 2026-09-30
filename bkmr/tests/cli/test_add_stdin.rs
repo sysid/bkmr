@@ -6,11 +6,7 @@ use bkmr::util::testing::{init_test_env, EnvGuard};
 use std::collections::HashSet;
 
 fn create_test_repository() -> SqliteBookmarkRepository {
-    let repository = bkmr::util::testing::setup_test_db();
-    repository
-        .empty_bookmark_table()
-        .expect("Could not empty bookmark table");
-    repository
+    bkmr::util::testing::setup_test_db()
 }
 
 #[test]

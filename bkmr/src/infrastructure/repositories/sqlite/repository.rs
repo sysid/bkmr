@@ -75,21 +75,6 @@ impl SqliteBookmarkRepository {
             .map_err(|e| e.context("getting database connection from pool"))
     }
 
-    /// Cleans the table by deleting all bookmarks except ID 1
-    #[instrument(skip_all, level = "debug")]
-    pub fn empty_bookmark_table(&self) -> SqliteResult<()> {
-        let mut conn = self.get_connection()?;
-
-        // sql_query("DELETE FROM bookmarks WHERE id != 1;")
-        sql_query("DELETE FROM bookmarks;")
-            .execute(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)
-            .map_err(|e| e.context("executing table cleanup query"))?;
-
-        debug!("Cleaned table.");
-        Ok(())
-    }
-
     /// Convert a database model to a domain entity
     #[instrument(skip_all, level = "trace")]
     fn to_domain_model(&self, db_bookmark: DbBookmark) -> SqliteResult<Bookmark> {
@@ -955,7 +940,6 @@ mod tests {
     #[test]
     fn given_existing_bookmark_when_delete_then_removes_and_reindexes() -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add two bookmarks
         let mut bookmark1 =
@@ -1042,7 +1026,6 @@ mod tests {
     fn given_bookmarks_with_tags_when_get_all_tags_then_returns_unique_tags(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add bookmarks with various tags
         let mut bookmark1 =
@@ -1081,7 +1064,6 @@ mod tests {
     fn given_tag_query_when_get_related_tags_then_returns_cooccurring_tags(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add bookmarks with related tags
         let mut bookmark1 =
@@ -1120,7 +1102,6 @@ mod tests {
     fn given_bookmarks_exist_when_get_random_then_returns_random_selection(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add multiple bookmarks
         for i in 1..=5 {
@@ -1151,7 +1132,6 @@ mod tests {
     fn given_bookmarks_without_embeddings_when_get_then_returns_filtered_list(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add bookmarks (all should have null embeddings in this test)
         for i in 1..=3 {
@@ -1175,7 +1155,6 @@ mod tests {
     #[test]
     fn given_url_when_exists_by_url_then_returns_existence_status() -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add a test bookmark
         let mut bookmark =
@@ -1196,7 +1175,6 @@ mod tests {
     // #[test]
     // fn test_get_oldest_bookmarks() -> Result<(), DomainError> {
     //     let repo = setup_test_db();
-    //     _ = repo.empty_bookmark_table()?;
     //
     //     // Create bookmarks with controlled timestamps
     //     // In a real test we'd control the timestamps more explicitly
@@ -1234,7 +1212,6 @@ mod tests {
     #[test]
     fn given_invalid_id_when_get_by_id_then_returns_none() -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Try to get a bookmark with an invalid ID
         let result = repo.get_by_id(99999)?;
@@ -1249,7 +1226,6 @@ mod tests {
     fn given_tagged_bookmarks_when_get_all_tags_as_vector_then_returns_sorted_tags(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // Add bookmarks with known tags
         let mut bm1 = create_test_bookmark(
@@ -1293,7 +1269,6 @@ mod tests {
     fn given_database_when_check_schema_migrations_then_verifies_existence(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         // We need to use direct SQL to check for the migrations table
         let mut conn = repo.get_connection().map_err(DomainError::from)?;
@@ -1331,7 +1306,6 @@ mod tests {
     fn given_database_when_check_embedding_column_then_verifies_existence(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         let mut conn = repo.get_connection().map_err(DomainError::from)?;
 
@@ -1368,21 +1342,18 @@ mod tests {
     fn given_bookmarks_exist_when_get_all_ids_then_returns_id_list() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
+        let mut first = create_test_bookmark("First", "https://first.example.com", vec![])?;
+        let mut second = create_test_bookmark("Second", "https://second.example.com", vec![])?;
+        repo.add(&mut first)?;
+        repo.add(&mut second)?;
         let mut conn = repo.get_connection()?;
 
         // Act
-        let ids = repo.get_all_bookmark_ids(&mut conn)?;
+        let mut ids = repo.get_all_bookmark_ids(&mut conn)?;
 
         // Assert
-        assert!(!ids.is_empty(), "Should return at least some bookmark IDs");
-
-        // Verify count matches total bookmarks
-        let all_bookmarks = repo.get_all()?;
-        assert_eq!(
-            ids.len(),
-            all_bookmarks.len(),
-            "Number of IDs should match number of bookmarks"
-        );
+        ids.sort();
+        assert_eq!(ids, vec![first.id.unwrap(), second.id.unwrap()]);
 
         Ok(())
     }
@@ -1392,9 +1363,14 @@ mod tests {
     {
         // Arrange
         let repo = setup_test_db();
+        for i in 1..=4 {
+            let mut bookmark =
+                create_test_bookmark("By Id", &format!("https://by-id-{i}.example.com"), vec![])?;
+            repo.add(&mut bookmark)?;
+        }
         let mut conn = repo.get_connection()?;
 
-        // Get a subset of IDs (first 3)
+        // Get a subset of IDs (first 3 of 4)
         let all_ids = repo.get_all_bookmark_ids(&mut conn)?;
         let subset_ids: Vec<i32> = all_ids.into_iter().take(3).collect();
 
@@ -1402,11 +1378,13 @@ mod tests {
         let bookmarks = repo.get_bookmarks_by_ids(&subset_ids)?;
 
         // Assert
+        let returned_ids: HashSet<i32> = bookmarks.iter().filter_map(|b| b.id).collect();
+        let expected_ids: HashSet<i32> = subset_ids.iter().copied().collect();
         assert_eq!(
-            bookmarks.len(),
-            subset_ids.len(),
-            "Should return exactly the number of bookmarks for the provided IDs"
+            returned_ids, expected_ids,
+            "Should return exactly the bookmarks for the provided IDs"
         );
+        assert_eq!(bookmarks.len(), 3);
 
         Ok(())
     }
@@ -1454,9 +1432,17 @@ mod tests {
     ) -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
+        for i in 1..=3 {
+            let mut bookmark = create_test_bookmark(
+                "Mixed Id",
+                &format!("https://mixed-id-{i}.example.com"),
+                vec![],
+            )?;
+            repo.add(&mut bookmark)?;
+        }
         let mut conn = repo.get_connection()?;
 
-        // Get some valid IDs
+        // Get some valid IDs (2 of 3)
         let valid_ids: Vec<i32> = repo
             .get_all_bookmark_ids(&mut conn)?
             .into_iter()
@@ -1471,6 +1457,7 @@ mod tests {
         let bookmarks = repo.get_bookmarks_by_ids(&mixed_ids)?;
 
         // Assert
+        assert_eq!(valid_ids.len(), 2);
         assert_eq!(
             bookmarks.len(),
             valid_ids.len(),
@@ -1493,6 +1480,10 @@ mod tests {
     {
         // Arrange
         let repo = setup_test_db();
+        let mut google = create_test_bookmark("Google", "https://www.google.com", vec![])?;
+        let mut rust = create_test_bookmark("Rust", "https://www.rust-lang.org", vec![])?;
+        repo.add(&mut google)?;
+        repo.add(&mut rust)?;
 
         // Create a query with just a text search
         let query = BookmarkQuery::new().with_text_query(Some("Google"));
@@ -1501,21 +1492,8 @@ mod tests {
         let results = repo.search(&query)?;
 
         // Assert
-        assert!(
-            !results.is_empty(),
-            "Should find bookmarks matching text query"
-        );
-
-        // Every result should contain "Google" somewhere
-        // Note: This is an approximation since FTS might use stemming, etc.
-        let has_match = results
-            .iter()
-            .any(|b| b.title.contains("Google") || b.url.contains("google"));
-
-        assert!(
-            has_match,
-            "At least one result should contain the search text"
-        );
+        assert_eq!(results.len(), 1, "Only the Google bookmark matches");
+        assert_eq!(results[0].id, google.id);
 
         Ok(())
     }
@@ -1524,6 +1502,10 @@ mod tests {
     fn given_empty_text_query_when_search_then_returns_all_results() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
+        let mut first = create_test_bookmark("First", "https://first.example.com", vec![])?;
+        let mut second = create_test_bookmark("Second", "https://second.example.com", vec![])?;
+        repo.add(&mut first)?;
+        repo.add(&mut second)?;
 
         // Create a query with an empty text search
         let query = BookmarkQuery::new().with_text_query(Some(""));
@@ -1532,16 +1514,9 @@ mod tests {
         let results = repo.search(&query)?;
 
         // Assert
-        assert!(
-            !results.is_empty(),
-            "Empty text query should return all bookmarks"
-        );
-
-        // Results should match get_all
-        let all_bookmarks = repo.get_all()?;
         assert_eq!(
             results.len(),
-            all_bookmarks.len(),
+            2,
             "Empty text query should return all bookmarks"
         );
 
@@ -1552,6 +1527,10 @@ mod tests {
     fn given_no_text_query_when_search_then_returns_all_results() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
+        let mut first = create_test_bookmark("First", "https://first.example.com", vec![])?;
+        let mut second = create_test_bookmark("Second", "https://second.example.com", vec![])?;
+        repo.add(&mut first)?;
+        repo.add(&mut second)?;
 
         // Create a query with no text search
         let query = BookmarkQuery::new();
@@ -1560,16 +1539,9 @@ mod tests {
         let results = repo.search(&query)?;
 
         // Assert
-        assert!(
-            !results.is_empty(),
-            "No text query should return all bookmarks"
-        );
-
-        // Results should match get_all
-        let all_bookmarks = repo.get_all()?;
         assert_eq!(
             results.len(),
-            all_bookmarks.len(),
+            2,
             "No text query should return all bookmarks"
         );
 
@@ -1581,8 +1553,29 @@ mod tests {
     ) -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
+        // Empty descriptions: create_test_bookmark's "Test description" would match "TEST"
+        let mut text_and_tag = Bookmark::new(
+            "https://one.example.com",
+            "TEST entry one",
+            "",
+            Tag::parse_tags("aaa")?,
+        )?;
+        let mut text_only = Bookmark::new(
+            "https://two.example.com",
+            "TEST entry two",
+            "",
+            Tag::parse_tags("bbb")?,
+        )?;
+        let mut tag_only = Bookmark::new(
+            "https://three.example.com",
+            "Other",
+            "",
+            Tag::parse_tags("aaa")?,
+        )?;
+        repo.add(&mut text_and_tag)?;
+        repo.add(&mut text_only)?;
+        repo.add(&mut tag_only)?;
 
-        // Create a tag that exists in sample data
         let mut tags = HashSet::new();
         tags.insert(Tag::new("aaa")?);
 
@@ -1594,23 +1587,19 @@ mod tests {
         // Act
         let results = repo.search(&query)?;
 
-        // Assert
-        // Each result should have the specified tag
-        for bookmark in &results {
-            assert!(
-                bookmark.tags.contains(&Tag::new("aaa")?),
-                "Search results should respect tag filtering"
-            );
-        }
+        // Assert: text AND tag must both match
+        let result_ids: HashSet<i32> = results.iter().filter_map(|b| b.id).collect();
+        assert_eq!(result_ids, HashSet::from([text_and_tag.id.unwrap()]));
 
         // Compare with results from a query with just the text
         let text_only_query = BookmarkQuery::new().with_text_query(Some("TEST"));
         let text_only_results = repo.search(&text_only_query)?;
 
-        // The filtered results should be a subset of the text-only results
-        assert!(
-            results.len() <= text_only_results.len(),
-            "Adding tag filters should return same or fewer results"
+        let text_only_ids: HashSet<i32> = text_only_results.iter().filter_map(|b| b.id).collect();
+        assert_eq!(
+            text_only_ids,
+            HashSet::from([text_and_tag.id.unwrap(), text_only.id.unwrap()]),
+            "Adding tag filters should narrow the text-only results"
         );
 
         Ok(())
@@ -1641,6 +1630,46 @@ mod tests {
     fn given_mixed_filters_when_search_then_applies_all_criteria() -> Result<(), DomainError> {
         // Arrange
         let repo = setup_test_db();
+        // Empty descriptions: create_test_bookmark's "Test description" would match "TEST"
+        let mut all_and_bbb = Bookmark::new(
+            "https://r1.example.com",
+            "TEST one",
+            "",
+            Tag::parse_tags("aaa,bbb")?,
+        )?;
+        let mut all_and_xxx = Bookmark::new(
+            "https://r2.example.com",
+            "TEST two",
+            "",
+            Tag::parse_tags("aaa,xxx")?,
+        )?;
+        let mut no_any_tag = Bookmark::new(
+            "https://r3.example.com",
+            "TEST three",
+            "",
+            Tag::parse_tags("aaa")?,
+        )?;
+        let mut no_all_tag = Bookmark::new(
+            "https://r4.example.com",
+            "TEST four",
+            "",
+            Tag::parse_tags("bbb")?,
+        )?;
+        let mut no_text = Bookmark::new(
+            "https://r5.example.com",
+            "Other",
+            "",
+            Tag::parse_tags("aaa,bbb")?,
+        )?;
+        for bookmark in [
+            &mut all_and_bbb,
+            &mut all_and_xxx,
+            &mut no_any_tag,
+            &mut no_all_tag,
+            &mut no_text,
+        ] {
+            repo.add(bookmark)?;
+        }
 
         // Create a complex query with multiple filter types
         let mut all_tags = HashSet::new();
@@ -1663,22 +1692,12 @@ mod tests {
         // Act
         let results = repo.search(&query)?;
 
-        // Assert
-        // Each result should match all filter criteria
-        for bookmark in &results {
-            // Should have the "all" tag
-            assert!(
-                bookmark.tags.contains(&Tag::new("aaa")?),
-                "Results should have the 'all' tag"
-            );
-
-            // Should have at least one of the "any" tags
-            assert!(
-                bookmark.tags.contains(&Tag::new("bbb")?)
-                    || bookmark.tags.contains(&Tag::new("xxx")?),
-                "Results should have at least one of the 'any' tags"
-            );
-        }
+        // Assert: text, "all" tag and one of the "any" tags must match
+        let result_ids: HashSet<i32> = results.iter().filter_map(|b| b.id).collect();
+        assert_eq!(
+            result_ids,
+            HashSet::from([all_and_bbb.id.unwrap(), all_and_xxx.id.unwrap()])
+        );
 
         // Should respect the limit
         assert!(
@@ -1703,7 +1722,6 @@ mod tests {
     fn given_bookmark_with_content_hash_when_clear_all_hashes_then_all_null(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
-        repo.empty_bookmark_table()?;
 
         let mut bookmark =
             create_test_bookmark("Hash Test", "https://hash-test.com", vec!["test"])?;

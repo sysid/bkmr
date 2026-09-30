@@ -44,7 +44,7 @@ check "json sorted" \
 
 # Tag filter works
 check "tag filter" \
-    "$BKMR hsearch 'kubernetes' --tags _procedure_ --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert all(\"_procedure_\" in x[\"tags\"] for x in r)'"
+    "$BKMR hsearch 'kubernetes' --tags procedure --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)==4 and all(\"procedure\" in x[\"tags\"] for x in r)'"
 
 # Empty tag filter returns nothing
 check "empty tag filter" \
@@ -56,15 +56,16 @@ check "exact mode" \
 
 # Limit works
 check "limit" \
-    "$BKMR hsearch 'kubernetes' --limit 2 --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)<=2'"
+    "$BKMR hsearch 'kubernetes' --limit 2 --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)==2'"
 
 # Piped output is tab-delimited
 check "piped output" \
     "$BKMR hsearch 'kubernetes' --np 2>/dev/null | head -1 | python3 -c 'import sys; assert \"\\t\" in sys.stdin.read()'"
 
-# search command still works (regression)
+# search command still works (regression). Piped output is the comma-separated
+# id list; stderr's "Found N bookmarks" also matches on zero hits, so assert ids.
 check "search regression" \
-    "$BKMR search kubernetes --np 2>&1 >/dev/null | grep -q 'bookmarks'"
+    "$BKMR search kubernetes --np 2>/dev/null | grep -Eq '^[0-9]+(,[0-9]+)*$'"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
