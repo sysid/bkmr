@@ -1,5 +1,5 @@
 use super::{LspSession, TestDb};
-use serde_json::json;
+use serde_json::{json, Value};
 
 #[test]
 fn given_initialize_when_server_starts_then_advertises_completion_and_snippet_commands() {
@@ -210,5 +210,61 @@ fn given_fewer_snippets_than_limit_when_completing_then_list_is_complete() {
 
     assert_eq!(result["items"].as_array().expect("items").len(), 1);
     assert_eq!(result["isIncomplete"], false);
+    lsp.shutdown();
+}
+
+#[test]
+fn given_lsp_dataset_when_completing_then_matches_documented_table() {
+    // The expected table is documented in TESTING.md ("Completion sessions"); the same
+    // dataset seeds `make test-env` for manual editor testing.
+    let db = TestDb::new();
+    db.load_dataset("lsp");
+    let mut lsp = LspSession::start(&db, &[]);
+    lsp.initialize();
+
+    let mut complete = |uri: &str, language_id: &str| {
+        lsp.open(uri, language_id, "\n");
+        lsp.request(
+            "textDocument/completion",
+            json!({
+                "textDocument": {"uri": uri},
+                "position": {"line": 0, "character": 0},
+                "context": {"triggerKind": 1}
+            }),
+        )
+    };
+    let labels = |result: &Value| {
+        let mut labels: Vec<String> = result["items"]
+            .as_array()
+            .expect("items")
+            .iter()
+            .map(|i| i["label"].as_str().expect("label").to_string())
+            .collect();
+        labels.sort();
+        labels
+    };
+
+    let rust = complete("file:///tmp/t.rs", "rust");
+    assert_eq!(
+        labels(&rust),
+        ["Render counter", "Rust println", "Universal TODO"]
+    );
+    assert_eq!(rust["isIncomplete"], false);
+
+    let python = complete("file:///tmp/t.py", "python");
+    assert_eq!(python["items"].as_array().expect("items").len(), 50);
+    assert_eq!(python["isIncomplete"], true);
+
+    let javascript = complete("file:///tmp/t.js", "javascript");
+    assert_eq!(
+        labels(&javascript),
+        ["JS alias log", "JS full-name error", "Universal TODO"]
+    );
+    assert_eq!(javascript["isIncomplete"], false);
+
+    let shellscript = complete("file:///tmp/t.sh", "shellscript");
+    assert_eq!(labels(&shellscript), ["Bash echo", "Universal TODO"]);
+    assert_eq!(shellscript["isIncomplete"], false);
+
     lsp.shutdown();
 }
