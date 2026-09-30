@@ -1,7 +1,5 @@
 use assert_cmd::cargo::cargo_bin_cmd;
-use bkmr::util::testing::EnvGuard;
 use predicates::prelude::*;
-use std::fs;
 use tempfile::TempDir;
 
 #[test]
@@ -61,10 +59,61 @@ fn given_pre_fill_when_creating_database_then_contains_only_demo_entries() {
 
 #[test]
 fn given_bookmark_ids_when_showing_then_displays_correct_entries() {
-    // let config = init_test_env();
-    let _guard = EnvGuard::new();
-    fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
+    // Arrange: three bookmarks; show only the first and the third
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("show.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    for (url, title) in [
+        ("https://first.example.com", "First Shown"),
+        ("https://second.example.com", "Second Hidden"),
+        ("https://third.example.com", "Third Shown"),
+    ] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args([
+                "add",
+                url,
+                "show-test",
+                "--title",
+                title,
+                "--no-web",
+                "--no-embed",
+            ])
+            .assert()
+            .success();
+    }
+    let id_of = |title: &str| {
+        search_all(&db)
+            .iter()
+            .find(|b| b["title"] == title)
+            .map(|b| b["id"].to_string())
+            .expect("bookmark added")
+    };
+    let ids = format!("{},{}", id_of("First Shown"), id_of("Third Shown"));
 
-    let mut cmd = cargo_bin_cmd!("bkmr");
-    cmd.args(["-d", "-d", "show", "1,2"]).assert().success();
+    // Act + Assert: JSON output contains exactly the requested bookmarks
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", "--json", &ids])
+        .output()
+        .expect("run bkmr show --json");
+    assert!(output.status.success());
+    let shown: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let mut titles: Vec<&str> = shown.iter().map(|b| b["title"].as_str().unwrap()).collect();
+    titles.sort();
+    assert_eq!(titles, ["First Shown", "Third Shown"]);
+
+    // Act + Assert: detailed output shows the same entries, not the unrequested one
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &ids])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("First Shown"))
+        .stdout(predicate::str::contains("https://third.example.com"))
+        .stdout(predicate::str::contains("Second Hidden").not());
 }
