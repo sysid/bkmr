@@ -86,13 +86,16 @@ for pull requests. Scenario suites are not run in CI (embedding model download).
 
 Datasets:
 
-- **`lsp`** — 7 bookmarks exercising language filtering (aliases, exact tag match,
-  non-snippets, universal); no embeddings.
+- **`lsp`** — 63 bookmarks: 7 exercising language filtering (aliases, exact tag match,
+  non-snippets, universal), a `Render counter` template with a `shell` filter and 55 python
+  fillers exceeding `max_completions` (50); no embeddings. Used by
+  [Completion sessions](#completion-sessions-isincomplete-and-template-rendering).
 - **`hsearch`** — 13 bookmarks in 5 groups for hybrid search; embeds (model download on
   first use). See [hsearch dataset](#hsearch-dataset).
 
-All fixtures default to the repo debug build; set `BKMR_BIN=~/bin/bkmr` (or any other binary)
-to compare against a released version.
+All fixtures default to the repo debug build; set `BKMR_BIN` to another binary (e.g.
+`~/bin/bkmr7.6.8`) to compare against a released version. Check that the "released" binary
+really is one: `ls -l ~/bin/bkmr*` — an `install-debug` symlink points at the debug build.
 
 ## L2 — Scenario suites
 
@@ -123,16 +126,17 @@ the local build and the throwaway database, and every server message lands in
 
 | Buffer | Expected items | Must NOT appear | Checks |
 |---|---|---|---|
-| `t.rs` | Rust println, Universal TODO | Not a snippet (tag `snip`, no `_snip_`), RA clippy setting (tag `rust-analyzer`) | exact tag matching |
+| `t.rs` | Rust println, Render counter, Universal TODO | Not a snippet (tag `snip`, no `_snip_`), RA clippy setting (tag `rust-analyzer`) | exact tag matching |
 | `t.js` | JS alias log (`js`), JS full-name error (`javascript`), Universal TODO | – | language aliases |
 | `t.sh` | Bash echo (`bash`), Universal TODO | – | shell aliases |
+| `t.py` | 50 of Py filler 01–55 + Universal TODO (truncated) | – | `max_completions` limit, see [Completion sessions](#completion-sessions-isincomplete-and-template-rendering) |
 | `listSnippets javascript` | JS alias log, JS full-name error | Universal TODO | shared alias table |
 
-`scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust javascript shellscript`
+`scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust javascript shellscript python`
 prints the same table without an editor.
 
-**Before/after comparison:** run the same steps with `BKMR_BIN=~/bin/bkmr` (nvim) or Binary
-Path pointing to the released binary (IntelliJ).
+**Before/after comparison:** run the same steps with `BKMR_BIN=~/bin/bkmr7.6.8` (nvim) or
+Binary Path pointing to a released binary such as `~/bin/bkmr7.6.8` (IntelliJ).
 
 #### Neovim (bkmr-nvim)
 
@@ -173,6 +177,65 @@ Cleanup: `rm -rf /tmp/bkmr-dev`; reset Binary Path in the sandbox IDE.
 GOTCHA:
 - sandbox IDE config must be put in place completely and then restarted (keeps settings)
 - must point to correct binary
+
+#### Completion sessions (isIncomplete and template rendering)
+
+**Scenario** (LSP assessment B2): a completion list is only marked `isIncomplete` when it
+was truncated at `max_completions` (50). A complete list is filtered by the client while you
+type; only a truncated list is re-requested per keystroke. Every request renders all
+templates in its result — including `shell` filters, which execute commands — so the flag
+decides how often templates run. Released 7.6.8 marked every list incomplete: one request and
+one render per keystroke.
+
+**Data** (dataset `lsp`, seeded by `make test-env`):
+
+| Snippet | Tags | Purpose |
+|---|---|---|
+| Render counter: `// rendered at {{ "date +%H:%M:%S" \| shell }}` | `rust,_snip_` | each render runs `date`: logged as `Executing shell command: date +%H:%M:%S`, fresh timestamp in the completion preview |
+| Py filler 01 … 55 | `python,_snip_` | 55 + Universal TODO = 56 candidates > 50 → truncated list |
+
+**Server-side check (no editor)** — verified 2026-09-30:
+
+```bash
+scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust python javascript
+BKMR_BIN=~/bin/bkmr7.6.8 scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust python javascript
+```
+
+| languageId | Current build | Released 7.6.8 |
+|---|---|---|
+| `rust` | 3 items, `isIncomplete=False` | 5 items (incl. Not a snippet, RA clippy setting), `isIncomplete=True` |
+| `python` | 50 items, `isIncomplete=True` | 50 items, `isIncomplete=True` |
+| `javascript` | 3 items, `isIncomplete=False` | 2 items, `isIncomplete=True` |
+
+Each probe run is a single request, so it renders Render counter exactly once in both
+builds; the difference only shows as re-requests in an editor.
+
+**Editor procedure** (nvim or IntelliJ, set up as in the sections above):
+
+| Step | Action | Expected (current build) | Released 7.6.8 |
+|---|---|---|---|
+| 1 | `: > /tmp/bkmr-dev/lsp.log` | log empty | |
+| 2 | open `t.rs`, empty line, trigger completion (C-P); note the Render counter preview time | popup with 3 items | popup with 5 items |
+| 3 | with the popup open, type `r`, `e`, `n` | popup narrows to Render counter; preview time unchanged | same narrowing, one server request per key |
+| 4 | open `t.py`, empty line, trigger completion, then type `f`, `i`, `l` | one request per key: list stays server-filtered | same |
+
+Counts after step 3:
+
+```bash
+grep -c "Completion request for file://.*/t.rs" /tmp/bkmr-dev/lsp.log   # current: 1   7.6.8: 4 (invoke + 3 keys)
+grep -c "Executing shell command: date" /tmp/bkmr-dev/lsp.log           # current: 1   7.6.8: 4
+```
+
+Counts after step 4:
+
+```bash
+grep -c "Completion request for file://.*/t.py" /tmp/bkmr-dev/lsp.log   # both: 4 (truncated → incomplete)
+```
+
+The server-side flags are verified; the client-side counts follow the LSP contract and have
+not been recorded for every client yet. A client may still re-request on its own (e.g. when
+the word start changes or on a trigger character); more requests than expected in step 3 with
+`isIncomplete=False` point at client behaviour, not at the server.
 
 ### hsearch TC catalogue
 

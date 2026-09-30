@@ -48,6 +48,16 @@ seed_lsp() {
     add 'https://example.com'                     snip,rust            --title "Not a snippet"      --no-embed --no-web
     add 'echo "${1:hello}"'                       bash,_snip_          --title "Bash echo"          --no-embed --no-web
     add '// TODO: ${1:what}'                      universal,_snip_     --title "Universal TODO"     --no-embed --no-web
+
+    # Completion session behaviour (TESTING.md "Completion sessions"):
+    # every render runs the shell filter, which logs "Executing shell command: date …"
+    # and shows a fresh timestamp in the completion preview.
+    add '// rendered at {{ "date +%H:%M:%S" | shell }}' rust,_snip_ --title "Render counter" --no-embed --no-web
+    # More python snippets than max_completions (50): the list is truncated and incomplete.
+    local i
+    for i in $(seq -w 1 55); do
+        add "print(\"filler $i\")" python,_snip_ --title "Py filler $i" --no-embed --no-web
+    done
 }
 
 seed_hsearch() {

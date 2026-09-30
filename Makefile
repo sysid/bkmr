@@ -74,7 +74,7 @@ test-env:  ## L3: seed $(BKMR_DEV_DIR) for manual editor testing (nvim, IntelliJ
 	@mkdir -p $(BKMR_DEV_DIR)/bin $(BKMR_DEV_DIR)/proj
 	@bash scripts/test/lib/seed.sh lsp $(BKMR_DEV_DIR)/test.db
 	@ln -sf $(app_root)/scripts/test/lib/bkmr-dev $(BKMR_DEV_DIR)/bin/bkmr
-	@touch $(BKMR_DEV_DIR)/proj/t.rs $(BKMR_DEV_DIR)/proj/t.js $(BKMR_DEV_DIR)/proj/t.sh
+	@touch $(BKMR_DEV_DIR)/proj/t.rs $(BKMR_DEV_DIR)/proj/t.js $(BKMR_DEV_DIR)/proj/t.sh $(BKMR_DEV_DIR)/proj/t.py
 	@: > $(BKMR_DEV_DIR)/lsp.log
 	@echo ""
 	@echo "nvim:     cd $(BKMR_DEV_DIR)/proj && PATH=$(BKMR_DEV_DIR)/bin:\$$PATH nvim t.rs"

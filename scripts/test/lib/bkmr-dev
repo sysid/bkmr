@@ -4,8 +4,8 @@
 # Editors launch it in place of `bkmr` (nvim: via PATH, IntelliJ: Binary Path), so
 # manual tests never touch the real database and the server log is always captured.
 #
-#   BKMR_BIN      binary to run (default: repo debug build); e.g. ~/bin/bkmr for a
-#                 before/after comparison against the released version
+#   BKMR_BIN      binary to run (default: repo debug build); e.g. ~/bin/bkmr7.6.8 for a
+#                 before/after comparison against a released version
 #   BKMR_DEV_DIR  state directory holding test.db and lsp.log (default: /tmp/bkmr-dev)
 
 set -euo pipefail

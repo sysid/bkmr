@@ -102,8 +102,11 @@ def complete(client: LspClient, languages: list[str], prefix: str) -> None:
                 "context": {"triggerKind": 1},
             },
         )
-        labels = sorted(item["label"] for item in (result or {}).get("items", []))
-        print(f"{lang:16} {labels}")
+        result = result or {}
+        labels = sorted(item["label"] for item in result.get("items", []))
+        incomplete = result.get("isIncomplete")
+        shown = labels if len(labels) <= 10 else labels[:5] + ["…"] + labels[-2:]
+        print(f"{lang:16} {len(labels):>3} items  isIncomplete={incomplete}  {shown}")
 
 
 def main() -> None:
