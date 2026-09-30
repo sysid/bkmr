@@ -18,7 +18,7 @@ procedures. Other documents link here instead of repeating commands.
 
 | Command | Level | What it runs |
 |---|---|---|
-| `make test` | L1 | all Rust unit + integration tests, single-threaded; runs in CI |
+| `make test` | L1 | all Rust unit + integration tests, single-threaded, `--locked` (fails if `Cargo.lock` is stale); runs in CI |
 | `make test-scenarios` | L2 | builds, seeds `/tmp/bkmr_hsearch_test.db`, runs `scripts/test/hsearch/verify.sh` |
 | `make test-all` | L1 + L2 | both |
 | `make test-env` | L3 | builds, seeds `/tmp/bkmr-dev`, prints editor launch lines |

@@ -114,6 +114,8 @@ fn given_valid_input_when_parsing_then_returns_expected_result() {
 1. Version numbers follow [Semantic Versioning](https://semver.org/)
 2. Releases are created from the `main` branch
 3. Each release includes a changelog entry
+4. `make bump-patch|minor|major` bumps `VERSION`, `pyproject.toml`, `bkmr/Cargo.toml` and
+   `bkmr/Cargo.lock` in one commit, so the tag builds with `cargo build --locked`
 
 ## Finding Tasks to Work On
 

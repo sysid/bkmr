@@ -71,3 +71,17 @@ filename = "pyproject.toml"
 
 [[tool.bumpversion.files]]
 filename = "bkmr/Cargo.toml"
+
+# Without this the tagged release ships a stale lockfile and `cargo build --locked`
+# (Homebrew, distro packagers) fails. The name line keeps the match on bkmr itself.
+[[tool.bumpversion.files]]
+filename = "bkmr/Cargo.lock"
+search = """
+name = "bkmr"
+version = "{current_version}"
+"""
+replace = """
+name = "bkmr"
+version = "{new_version}"
+"""
+regex = false

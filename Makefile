@@ -54,7 +54,7 @@ init:  ## init
 .PHONY: test
 test:  ## L1: unit + integration tests incl. LSP over stdio, single-threaded (see TESTING.md)
 	@rm -f $(app_root)/db/bkmr.db $(app_root)/db/bkmr.db-shm $(app_root)/db/bkmr.db-wal
-	pushd $(pkg_src) && RUST_LOG=error BKMR_DB_URL=../db/bkmr.db cargo test -- --test-threads=1 --quiet
+	pushd $(pkg_src) && RUST_LOG=error BKMR_DB_URL=../db/bkmr.db cargo test --locked -- --test-threads=1 --quiet
 
 .PHONY: test-scenarios
 test-scenarios:  ## L2: black-box scenarios (hsearch; downloads the embedding model on first run)
