@@ -141,6 +141,7 @@ mod tests {
     use crate::util::testing::{init_test_env, EnvGuard};
     use std::collections::HashSet;
     use std::sync::Arc;
+    use tempfile::TempDir;
 
     // Mock action for testing
     #[derive(Debug)]
@@ -187,13 +188,16 @@ mod tests {
         }
     }
 
-    fn create_test_repository() -> Arc<SqliteBookmarkRepository> {
-        // Use a unique in-memory database for ActionService tests to avoid interfering with other tests
-        let db_url = ":memory:".to_string();
-        let repository =
-            SqliteBookmarkRepository::from_url(&db_url).expect("Could not create test repository");
+    // A private file DB per test: isolated from the shared test DB, and unlike `:memory:`
+    // every pooled connection sees the same database.
+    // The returned TempDir must stay alive as long as the repository is used.
+    fn create_test_repository() -> (Arc<SqliteBookmarkRepository>, TempDir) {
+        let dir = TempDir::new().expect("Could not create temp dir");
+        let db_url = dir.path().join("action_service.db");
+        let repository = SqliteBookmarkRepository::from_url(db_url.to_str().unwrap())
+            .expect("Could not create test repository");
 
-        Arc::new(repository)
+        (Arc::new(repository), dir)
     }
 
     fn create_test_bookmark_with_shell_tag() -> Bookmark {
@@ -250,7 +254,7 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
 
-        let repository = create_test_repository();
+        let (repository, _db_dir) = create_test_repository();
         let mock_action = Arc::new(MockAction::new("Mock action"));
         let resolver = Arc::new(MockActionResolver::new(Arc::clone(&mock_action)));
         let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
@@ -260,7 +264,12 @@ mod tests {
         // Add bookmark to repository for access recording
         let mut bookmark_copy = bookmark.clone();
         repository.add(&mut bookmark_copy).unwrap();
-        let stored_bookmark = repository.get_by_id(1).unwrap().unwrap();
+        let bookmark_id = bookmark_copy.id.unwrap();
+        let stored_bookmark = repository.get_by_id(bookmark_id).unwrap().unwrap();
+        assert_eq!(
+            stored_bookmark.url, "echo 'test script'",
+            "Test must act on the shell bookmark it added"
+        );
 
         // Act
         let result = service.execute_default_action_with_options(&stored_bookmark, true, &[]);
@@ -269,7 +278,7 @@ mod tests {
         assert!(result.is_ok(), "Should execute successfully with no-edit");
 
         // Verify access was recorded
-        let updated_bookmark = repository.get_by_id(1).unwrap().unwrap();
+        let updated_bookmark = repository.get_by_id(bookmark_id).unwrap().unwrap();
         assert_eq!(
             updated_bookmark.access_count, 1,
             "Access count should be incremented"
@@ -283,7 +292,7 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
 
-        let repository = create_test_repository();
+        let (repository, _db_dir) = create_test_repository();
         let mock_action = Arc::new(MockAction::new("Mock action"));
         let resolver = Arc::new(MockActionResolver::new(Arc::clone(&mock_action)));
         let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
@@ -317,7 +326,7 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
 
-        let repository = create_test_repository();
+        let (repository, _db_dir) = create_test_repository();
         let mock_action = Arc::new(MockAction::new("Mock action"));
         let resolver = Arc::new(MockActionResolver::new(Arc::clone(&mock_action)));
         let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
@@ -327,7 +336,12 @@ mod tests {
         // Add bookmark to repository for access recording
         let mut bookmark_copy = bookmark.clone();
         repository.add(&mut bookmark_copy).unwrap();
-        let stored_bookmark = repository.get_by_id(1).unwrap().unwrap();
+        let bookmark_id = bookmark_copy.id.unwrap();
+        let stored_bookmark = repository.get_by_id(bookmark_id).unwrap().unwrap();
+        assert_eq!(
+            stored_bookmark.url, "echo 'test script'",
+            "Test must act on the shell bookmark it added"
+        );
 
         // Act
         let result = service.execute_default_action_with_options(&stored_bookmark, false, &[]);
@@ -339,7 +353,7 @@ mod tests {
         );
 
         // Verify access was recorded
-        let updated_bookmark = repository.get_by_id(1).unwrap().unwrap();
+        let updated_bookmark = repository.get_by_id(bookmark_id).unwrap().unwrap();
         assert_eq!(
             updated_bookmark.access_count, 1,
             "Access count should be incremented"
@@ -352,7 +366,7 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
 
-        let repository = create_test_repository();
+        let (repository, _db_dir) = create_test_repository();
         let mock_action = Arc::new(MockAction::new("Mock action"));
         let resolver = Arc::new(MockActionResolver::new(Arc::clone(&mock_action)));
         let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
