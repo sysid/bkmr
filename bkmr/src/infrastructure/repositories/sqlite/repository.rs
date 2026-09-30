@@ -75,21 +75,6 @@ impl SqliteBookmarkRepository {
             .map_err(|e| e.context("getting database connection from pool"))
     }
 
-    /// Cleans the table by deleting all bookmarks except ID 1
-    #[instrument(skip_all, level = "debug")]
-    pub fn empty_bookmark_table(&self) -> SqliteResult<()> {
-        let mut conn = self.get_connection()?;
-
-        // sql_query("DELETE FROM bookmarks WHERE id != 1;")
-        sql_query("DELETE FROM bookmarks;")
-            .execute(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)
-            .map_err(|e| e.context("executing table cleanup query"))?;
-
-        debug!("Cleaned table.");
-        Ok(())
-    }
-
     /// Convert a database model to a domain entity
     #[instrument(skip_all, level = "trace")]
     fn to_domain_model(&self, db_bookmark: DbBookmark) -> SqliteResult<Bookmark> {
@@ -1190,7 +1175,6 @@ mod tests {
     // #[test]
     // fn test_get_oldest_bookmarks() -> Result<(), DomainError> {
     //     let repo = setup_test_db();
-    //     _ = repo.empty_bookmark_table()?;
     //
     //     // Create bookmarks with controlled timestamps
     //     // In a real test we'd control the timestamps more explicitly

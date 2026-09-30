@@ -2,6 +2,7 @@ use assert_cmd::cargo::cargo_bin_cmd;
 use bkmr::util::testing::EnvGuard;
 use predicates::prelude::*;
 use std::fs;
+use tempfile::TempDir;
 
 #[test]
 fn given_debug_flag_when_running_then_enables_debug_mode() {
@@ -14,17 +15,48 @@ fn given_debug_flag_when_running_then_enables_debug_mode() {
     //     .stderr(predicate::str::contains("Debug mode: debug"));
 }
 
-#[test]
-#[ignore = "not implemented"]
-fn given_path_when_creating_database_then_creates_successfully() {
-    // let config = init_test_env();
-    // let _guard = EnvGuard::new();
-    fs::remove_file("/tmp/bkmr_test.db").unwrap_or_default();
+/// Runs `bkmr search` against `db` and returns all bookmarks as JSON.
+fn search_all(db: &std::path::Path) -> Vec<serde_json::Value> {
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args(["search", "--np", "--json", ""])
+        .output()
+        .expect("run bkmr search");
+    assert!(output.status.success(), "bkmr search failed");
+    serde_json::from_slice(&output.stdout).expect("search --json returns a JSON array")
+}
 
-    let mut cmd = cargo_bin_cmd!("bkmr");
-    cmd.args(["-d", "-d", "create-db", "/tmp/bkmr_test.db"])
+#[test]
+fn given_path_when_creating_database_then_creates_empty_database() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("new.db");
+
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
         .assert()
-        .stdout(predicate::str::contains("Database created"));
+        .success()
+        .stderr(predicate::str::contains("Database created"));
+
+    assert!(db.exists());
+    assert_eq!(search_all(&db), Vec::<serde_json::Value>::new());
+}
+
+#[test]
+fn given_pre_fill_when_creating_database_then_contains_only_demo_entries() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("prefilled.db");
+
+    cargo_bin_cmd!("bkmr")
+        .args(["create-db", "--pre-fill"])
+        .arg(&db)
+        .assert()
+        .success();
+
+    // pre_fill_database (cli/bookmark_commands.rs) defines 20 demo entries
+    let bookmarks = search_all(&db);
+    assert_eq!(bookmarks.len(), 20);
+    assert!(bookmarks.iter().any(|b| b["url"] == "https://github.com"));
 }
 
 #[test]
