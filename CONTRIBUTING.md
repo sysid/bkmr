@@ -79,6 +79,8 @@ How to run, structure and extend tests is described in [TESTING.md](TESTING.md).
 
 - Write unit tests for all public functions
 - Follow the Arrange/Act/Assert pattern
+- Declare test data in the test; never rely on pre-existing rows or literal ids
+  (see [Test data](TESTING.md#test-data))
 
 Example test structure:
 ```rust

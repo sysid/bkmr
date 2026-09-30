@@ -13,7 +13,8 @@ procedures. Other documents link here instead of repeating commands.
  LSP over stdio                                          system-ort build
    (tests/lsp)                                           Homebrew formula
 
- shared fixtures: scripts/test/lib/seed.sh (datasets), scripts/test/lib/bkmr-dev (wrapper)
+ shared fixtures: bkmr/tests/resources/datasets/*.json (datasets), loaded by
+                  scripts/test/lib/seed.sh and tests/lsp; scripts/test/lib/bkmr-dev (wrapper)
 ```
 
 | Command | Level | What it runs |
@@ -51,8 +52,19 @@ Conventions:
 - Tests read like specifications (DAMP over DRY).
 - Never `ServiceContainer::new()` in tests — use `TestServiceContainer::new()`.
 - Isolate environment changes with `EnvGuard`.
-- Tests needing their own data create it; black-box tests use a `TempDir` database seeded
-  with `bkmr add --no-embed --no-web` (offline, no model download).
+
+### Test data
+
+Every test starts from an empty database — the migrations insert no rows — and declares
+the data it needs:
+
+- **Inline** (most tests): create 1–5 rows in the test through the service or repository
+  under test. Use the id it returns, never a literal id.
+- **Named dataset** (only where the data *is* the scenario): see [Datasets](#datasets).
+- Assert exact result sets. An assertion only inside `for b in &results` (or `<=`/`>=`
+  against another query) passes on an empty result and proves nothing.
+- Black-box tests use a `TempDir` database seeded with `bkmr add --no-embed --no-web` or
+  `TestDb::load_dataset` (offline, no model download).
 
 ### Ignored tests
 
@@ -69,7 +81,6 @@ env BKMR_DB_URL=../db/bkmr.db cargo test --manifest-path bkmr/Cargo.toml <name> 
 | `given_bookmark_when_edit_with_template_then_returns_modified_bookmark` (`template_service.rs`) | manual editor interaction |
 | `given_markdown_*_when_execute_then_renders_*` (3×, `markdown_action.rs`) | opens a browser |
 | `given_bookmarks_when_write_as_json_then_creates_valid_file` (`infrastructure/json.rs`) | visual stdout check |
-| `given_path_when_creating_database_then_creates_successfully` (`tests/test_main.rs`) | not implemented |
 
 ### CI
 
@@ -80,18 +91,26 @@ for pull requests. Scenario suites are not run in CI (embedding model download).
 
 | Script | Purpose |
 |---|---|
-| `scripts/test/lib/seed.sh <lsp\|hsearch> <db>` | fresh database with a named dataset; `BKMR_BIN` selects the binary |
+| `scripts/test/lib/seed.sh <lsp\|hsearch> <db>` | fresh database: `bkmr create-db` + `bkmr load-json` of the named dataset; `BKMR_BIN` selects the binary |
 | `scripts/test/lib/bkmr-dev` | runs bkmr with `-dd` against `$BKMR_DEV_DIR/test.db` (default `/tmp/bkmr-dev`), stderr → `lsp.log`; `BKMR_BIN` selects the binary |
 | `scripts/test/lsp_probe.py` | ad-hoc LSP client (uv script): `capabilities`, `complete <lang…> [--prefix]`, `list [lang]`, `get <id>` |
 
-Datasets:
+### Datasets
 
-- **`lsp`** — 63 bookmarks: 7 exercising language filtering (aliases, exact tag match,
-  non-snippets, universal), a `Render counter` template with a `shell` filter and 55 python
-  fillers exceeding `max_completions` (50); no embeddings. Used by
-  [Completion sessions](#completion-sessions-isincomplete-and-template-rendering).
-- **`hsearch`** — 13 bookmarks in 5 groups for hybrid search; embeds (model download on
-  first use). See [hsearch dataset](#hsearch-dataset).
+One JSON file per dataset in `bkmr/tests/resources/datasets/`, the single source for all
+levels: `seed.sh` (L2, L3) and `TestDb::load_dataset` in `bkmr/tests/lsp` (L1). Format is
+the `bkmr load-json` format (`url`, `title`, `description`, `tags`); each entry also carries
+`group` and `why` documenting its purpose, which the importer ignores. Load one by hand:
+
+```bash
+bkmr create-db /tmp/x.db
+BKMR_DB_URL=/tmp/x.db bkmr load-json --no-embed bkmr/tests/resources/datasets/lsp.json
+```
+
+| Dataset | Content | Used by |
+|---|---|---|
+| `lsp.json` | 63 bookmarks: 7 exercising language filtering (aliases, exact tag match, non-snippets, universal), a `Render counter` template with a `shell` filter, 55 python fillers exceeding `max_completions` (50); loaded without embeddings | `make test-env`; [Completion sessions](#completion-sessions-isincomplete-and-template-rendering) — its table is asserted by `given_lsp_dataset_when_completing_then_matches_documented_table` |
+| `hsearch.json` | 13 bookmarks in 5 groups for hybrid search; descriptions frozen from the pages they link to (no network); embeds (model download on first use) | `make test-scenarios`; [hsearch dataset](#hsearch-dataset) |
 
 All fixtures default to the repo debug build; set `BKMR_BIN` to another binary (e.g.
 `~/bin/bkmr7.6.8`) to compare against a released version. Check that the "released" binary
@@ -247,25 +266,25 @@ Setup: `bash scripts/test/hsearch/setup.sh && export BKMR_DB_URL=/tmp/bkmr_hsear
 |-------|-----|---------|------|
 | A: FTS-only | 1-3 | Exact strings, port numbers — no semantic match | mixed |
 | B: Semantic-only | 4-6 | Related concepts, different wording — no exact FTS hit | kubernetes, containers |
-| C: Both engines | 7-8 | Match FTS + semantic — should rank highest via RRF | kubernetes, _procedure_ |
-| D: Tag testing | 9-11 | Various tags for filter testing | _procedure_, _snip_ |
-| E: Non-embeddable | 12-13 | Shell/snippet — FTS only, no embeddings | kubernetes, _shell_, _snip_ |
+| C: Both engines | 7-8 | Match FTS + semantic — boosted via RRF | kubernetes, procedure |
+| D: Tag testing | 9-11 | Various tags for filter testing | procedure, _snip_ |
+| E: Non-URL content | 12-13 | Shell command / SQL snippet (embedded like the rest) | kubernetes, _shell_, _snip_ |
 
 | TC | Command | Expected |
 |---|---|---|
-| 01 Basic hybrid | `bkmr hsearch "kubernetes health check" --np` | ordered by RRF score; group C (IDs 7, 8) highest; group B/E also appear |
+| 01 Basic hybrid | `bkmr hsearch "kubernetes health check" --np` | ordered by RRF score; ID 12 (verbatim "kubernetes health check") first, then group C (IDs 7, 8); group B/E also appear |
 | 02 RRF boosting | `bkmr hsearch "kubernetes health check" --json --np \| python3 -c "import json,sys; [print(r['id'], round(r['rrf_score'],6), r['title'][:60]) for r in json.load(sys.stdin)[:5]]"` | top results ~2× the score of single-engine matches |
 | 03 FTS boosted by semantic | `bkmr hsearch "port 8443 TLS" --np` | ID 1 first with ~2× score; others lower (semantic-only); `--mode exact` isolates the FTS hit |
 | 04 Semantic-only | `bkmr hsearch "container application isolation" --np` | Docker/Kubernetes security entries appear without verbatim match |
-| 05 Tag filter (all) | `bkmr hsearch "kubernetes" --tags _procedure_ --json --np` | every result has `_procedure_` |
+| 05 Tag filter (all) | `bkmr hsearch "kubernetes" --tags procedure --json --np` | exactly the 4 entries tagged `procedure` |
 | 06 Tag filter (exclude) | `bkmr hsearch "kubernetes" --Tags _snip_ --np` | no `_snip_` results; other kubernetes entries remain |
 | 07 Filter excludes all | `bkmr hsearch "kubernetes" --tags nonexistenttag --np` | "No bookmarks found", clean exit |
 | 08 Exact mode | `time bkmr hsearch "iptables" --mode exact --np` vs `--mode hybrid` | exact noticeably faster; both return the iptables entry |
 | 09 No embeddings | `D=/tmp/bkmr_hsearch_noembeddings.db; rm -f $D; BKMR_DB_URL=$D bkmr create-db $D --pre-fill; BKMR_DB_URL=$D bkmr hsearch "rust" --np` | FTS-only results, no error |
 | 10 JSON `rrf_score` | `bkmr hsearch "deployment" --json --np` | every result has float `rrf_score`, sorted descending |
 | 11 Piped output | `bkmr hsearch "kubernetes" --np 2>/dev/null \| head -3` | tab-separated `id title url rrf_score`, no color codes |
-| 12 Limit | `bkmr hsearch "kubernetes" --limit 2 --json --np` | ≤ 2 results |
-| 13 `search` regression | `bkmr search kubernetes --np`; `bkmr search --tags _procedure_ --np` | ordered by ID ascending, tag filter works, format unchanged |
+| 12 Limit | `bkmr hsearch "kubernetes" --limit 2 --json --np` | exactly 2 results |
+| 13 `search` regression | `bkmr search kubernetes --np`; `bkmr search --tags procedure --np` | ordered by ID ascending, tag filter works, format unchanged |
 | 14 Over-fetching quality | `bkmr hsearch "deployment automation" --limit 3 --json --np` | cross-engine boosted results in top 3 |
 
 TC-05, 07, 08, 10, 11, 12 and 13 are also covered automatically by `verify.sh`.
