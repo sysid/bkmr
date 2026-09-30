@@ -53,6 +53,7 @@ init:  ## init
 
 .PHONY: test
 test:  ## L1: unit + integration tests incl. LSP over stdio, single-threaded (see TESTING.md)
+	@set -euo pipefail
 	@rm -f $(app_root)/db/bkmr.db $(app_root)/db/bkmr.db-shm $(app_root)/db/bkmr.db-wal
 	pushd $(pkg_src) && RUST_LOG=error BKMR_DB_URL=../db/bkmr.db cargo test --locked -- --test-threads=1 --quiet
 

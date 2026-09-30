@@ -62,9 +62,10 @@ check "limit" \
 check "piped output" \
     "$BKMR hsearch 'kubernetes' --np 2>/dev/null | head -1 | python3 -c 'import sys; assert \"\\t\" in sys.stdin.read()'"
 
-# search command still works (regression)
+# search command still works (regression). Piped output is the comma-separated
+# id list; stderr's "Found N bookmarks" also matches on zero hits, so assert ids.
 check "search regression" \
-    "$BKMR search kubernetes --np 2>&1 >/dev/null | grep -q 'bookmarks'"
+    "$BKMR search kubernetes --np 2>/dev/null | grep -Eq '^[0-9]+(,[0-9]+)*$'"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
