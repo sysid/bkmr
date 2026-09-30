@@ -1496,11 +1496,6 @@ mod tests {
         let _guard = EnvGuard::new();
         let repository = setup_test_db();
 
-        // Make sure we start with an empty database
-        repository
-            .empty_bookmark_table()
-            .expect("Failed to empty bookmark table");
-
         // Verify database is initially empty
         let initial_bookmarks = repository.get_all().expect("Failed to get bookmarks");
         assert_eq!(

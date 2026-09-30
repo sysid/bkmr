@@ -1068,16 +1068,31 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
+        let added = service
+            .add_bookmark(
+                "https://get-by-id.example.com",
+                Some("Get By Id"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
+        let id = added.id.unwrap();
 
         // Act
-        let bookmark = service.get_bookmark(1).unwrap();
+        let bookmark = service.get_bookmark(id).unwrap();
 
         // Assert
-        assert!(bookmark.is_some(), "Should find bookmark with ID 1");
+        assert!(
+            bookmark.is_some(),
+            "Should find the added bookmark by its ID"
+        );
         let bookmark = bookmark.unwrap();
-        assert_eq!(bookmark.id, Some(1));
-        assert_eq!(bookmark.url, "https://www.google.com");
-        assert_eq!(bookmark.title, "Google");
+        assert_eq!(bookmark.id, Some(id));
+        assert_eq!(bookmark.url, "https://get-by-id.example.com");
+        assert_eq!(bookmark.title, "Get By Id");
     }
 
     #[test]
@@ -1123,17 +1138,28 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
+        service
+            .add_bookmark(
+                "https://get-by-url.example.com",
+                Some("Get By Url"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
 
         // Act
         let result = service
-            .get_bookmark_by_url("https://www.google.com")
+            .get_bookmark_by_url("https://get-by-url.example.com")
             .unwrap();
 
         // Assert
         assert!(result.is_some(), "Should find bookmark with URL");
         let bookmark = result.unwrap();
-        assert_eq!(bookmark.url, "https://www.google.com");
-        assert_eq!(bookmark.title, "Google");
+        assert_eq!(bookmark.url, "https://get-by-url.example.com");
+        assert_eq!(bookmark.title, "Get By Url");
     }
 
     #[test]
@@ -1230,7 +1256,10 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
-        let existing_url = "https://www.google.com";
+        let existing_url = "https://duplicate.example.com";
+        service
+            .add_bookmark(existing_url, Some("First"), None, None, false, true, None)
+            .unwrap();
 
         // Act
         let result = service.add_bookmark(
@@ -1262,7 +1291,19 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
-        let id = 1; // Existing ID from test database
+        let id = service
+            .add_bookmark(
+                "https://before-update.example.com",
+                Some("Before Update"),
+                Some("Before"),
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
 
         // Act: fetch, mutate title/description/url, save
         let mut bookmark = service.get_bookmark(id).unwrap().unwrap();
@@ -1313,7 +1354,21 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
-        let id = 1; // Using an existing ID from the test database
+        let mut original_tags = HashSet::new();
+        original_tags.insert(Tag::new("original").unwrap());
+        let id = service
+            .add_bookmark(
+                "https://add-tags.example.com",
+                Some("Add Tags"),
+                None,
+                Some(&original_tags),
+                false,
+                true,
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
         let mut tags = HashSet::new();
         tags.insert(Tag::new("newtag").unwrap());
 
@@ -1339,31 +1394,39 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
-
-        // Find a bookmark with known tags
-        let bookmark = service.get_bookmark(1).unwrap().unwrap();
-        let tag_to_remove = bookmark.tags.iter().next().unwrap().clone();
-        let original_tag_count = bookmark.tags.len();
-
-        // Skip test if no tags to remove
-        if original_tag_count == 0 {
-            return;
-        }
+        let mut original_tags = HashSet::new();
+        original_tags.insert(Tag::new("keep").unwrap());
+        original_tags.insert(Tag::new("remove").unwrap());
+        let id = service
+            .add_bookmark(
+                "https://remove-tags.example.com",
+                Some("Remove Tags"),
+                None,
+                Some(&original_tags),
+                false,
+                true,
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
+        let tag_to_remove = Tag::new("remove").unwrap();
 
         let mut tags_to_remove = HashSet::new();
         tags_to_remove.insert(tag_to_remove.clone());
 
         // Act
         let updated = service
-            .remove_tags_from_bookmark(1, &tags_to_remove)
+            .remove_tags_from_bookmark(id, &tags_to_remove)
             .unwrap();
 
         // Assert
         assert!(!updated.tags.contains(&tag_to_remove));
-        assert_eq!(updated.tags.len(), original_tag_count - 1);
+        assert!(updated.tags.contains(&Tag::new("keep").unwrap()));
+        assert_eq!(updated.tags.len(), 1);
 
         // Verify changes were persisted
-        let retrieved = service.get_bookmark(1).unwrap().unwrap();
+        let retrieved = service.get_bookmark(id).unwrap().unwrap();
         assert!(!retrieved.tags.contains(&tag_to_remove));
     }
 
@@ -1373,7 +1436,21 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
-        let id = 1;
+        let mut original_tags = HashSet::new();
+        original_tags.insert(Tag::new("original").unwrap());
+        let id = service
+            .add_bookmark(
+                "https://replace-tags.example.com",
+                Some("Replace Tags"),
+                None,
+                Some(&original_tags),
+                false,
+                true,
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
 
         let mut new_tags = HashSet::new();
         new_tags.insert(Tag::new("replaced1").unwrap());
@@ -1400,7 +1477,19 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
-        let id = 1;
+        let id = service
+            .add_bookmark(
+                "https://record-access.example.com",
+                Some("Record Access"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
 
         // Get original access count
         let original = service.get_bookmark(id).unwrap().unwrap();
@@ -1522,26 +1611,35 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
+        service
+            .add_bookmark(
+                "https://www.google.com",
+                Some("Google"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
+        service
+            .add_bookmark(
+                "https://www.rust-lang.org",
+                Some("Rust"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
 
         // Act
         let results = service.search_bookmarks_by_text("Google").unwrap();
 
         // Assert
-        assert!(
-            !results.is_empty(),
-            "Should find bookmarks containing the text"
-        );
-
-        // At least one result should contain the search text
-        let has_match = results.iter().any(|b| {
-            b.title.contains("Google")
-                || b.description.contains("Google")
-                || b.url.contains("Google")
-        });
-        assert!(
-            has_match,
-            "At least one result should match the search text"
-        );
+        assert_eq!(results.len(), 1, "Only the Google bookmark matches");
+        assert_eq!(results[0].title, "Google");
     }
 
     #[test]
@@ -1550,21 +1648,24 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
+        for url in [
+            "https://all-1.example.com",
+            "https://all-2.example.com",
+            "https://all-3.example.com",
+        ] {
+            service
+                .add_bookmark(url, Some("All"), None, None, false, true, None)
+                .unwrap();
+        }
 
         // Act
         let bookmarks = service.get_all_bookmarks(None, None).unwrap();
 
         // Assert
-        assert!(
-            !bookmarks.is_empty(),
-            "Should return all bookmarks from test database"
-        );
-
-        // Check that we get the expected number based on up.sql
-        // The test database from up.sql has 11 sample bookmarks
-        assert!(
-            bookmarks.len() >= 11,
-            "Should return at least the bookmarks from up.sql"
+        assert_eq!(
+            bookmarks.len(),
+            3,
+            "Should return exactly the added bookmarks"
         );
     }
 
@@ -1574,6 +1675,20 @@ mod tests {
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
+        // More rows than 3 * count, so the "selections differ" check below is active
+        for i in 1..=20 {
+            service
+                .add_bookmark(
+                    &format!("https://random-{i}.example.com"),
+                    Some("Random"),
+                    None,
+                    None,
+                    false,
+                    true,
+                    None,
+                )
+                .unwrap();
+        }
         let count = 3;
 
         // Act
@@ -1606,16 +1721,41 @@ mod tests {
     }
 
     #[test]
-    fn given_test_database_when_get_bookmarks_without_embeddings_then_returns_correct_bookmarks() {
+    fn given_embeddable_and_non_embeddable_bookmarks_when_get_bookmarks_without_embeddings_then_returns_only_embeddable(
+    ) {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
         let service = create_test_service();
+        let embeddable = service
+            .add_bookmark(
+                "https://embeddable.example.com",
+                Some("Embeddable"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
+        service
+            .add_bookmark(
+                "https://not-embeddable.example.com",
+                Some("Not Embeddable"),
+                None,
+                None,
+                false,
+                false,
+                None,
+            )
+            .unwrap();
 
         // Act
         let results = service.get_bookmarks_without_embeddings().unwrap();
 
         // Assert
+        let result_ids: Vec<i32> = results.iter().filter_map(|b| b.id).collect();
+        assert_eq!(result_ids, vec![embeddable.id.unwrap()]);
         // Verify that all returned bookmarks actually don't have embeddings
         for bookmark in &results {
             assert!(
