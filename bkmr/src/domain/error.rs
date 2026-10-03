@@ -5,6 +5,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DomainError {
+    /// Existing presentation with the original native failure retained once.
+    #[error("{presentation}")]
+    Caused {
+        presentation: Box<DomainError>,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
 
@@ -54,6 +62,14 @@ pub enum DomainError {
 // New repository error enum to represent generic repository errors
 #[derive(Error, Debug)]
 pub enum RepositoryError {
+    /// Existing presentation with the original native failure retained once.
+    #[error("{presentation}")]
+    Caused {
+        presentation: Box<RepositoryError>,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
     #[error("Entity not found: {0}")]
     NotFound(String),
 
@@ -75,8 +91,32 @@ pub enum RepositoryError {
 
 // Add a context method to DomainError for better error context
 impl DomainError {
+    /// Attach an actual failure without reconstructing it from display text.
+    pub fn with_source<E>(self, source: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Caused {
+            presentation: Box::new(self),
+            source: Box::new(source),
+        }
+    }
+
+    /// Inspect the existing presentation category, not the original cause.
+    pub fn presentation(&self) -> &Self {
+        let mut current = self;
+        while let Self::Caused { presentation, .. } = current {
+            current = presentation;
+        }
+        current
+    }
+
     pub fn context<C: Into<String>>(self, context: C) -> Self {
         match self {
+            Self::Caused { presentation, source } => Self::Caused {
+                presentation: Box::new((*presentation).context(context)),
+                source,
+            },
             DomainError::Other(msg) => DomainError::Other(format!("{}: {}", context.into(), msg)),
             DomainError::BookmarkOperationFailed(msg) => {
                 DomainError::BookmarkOperationFailed(format!("{}: {}", context.into(), msg))
@@ -101,8 +141,32 @@ impl DomainError {
 
 // Add a context method to RepositoryError
 impl RepositoryError {
+    /// Attach an actual failure without reconstructing it from display text.
+    pub fn with_source<E>(self, source: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Caused {
+            presentation: Box::new(self),
+            source: Box::new(source),
+        }
+    }
+
+    /// Inspect the existing presentation category, not the original cause.
+    pub fn presentation(&self) -> &Self {
+        let mut current = self;
+        while let Self::Caused { presentation, .. } = current {
+            current = presentation;
+        }
+        current
+    }
+
     pub fn context<C: Into<String>>(self, context: C) -> Self {
         match self {
+            Self::Caused { presentation, source } => Self::Caused {
+                presentation: Box::new((*presentation).context(context)),
+                source,
+            },
             RepositoryError::Other(msg) => {
                 RepositoryError::Other(format!("{}: {}", context.into(), msg))
             }

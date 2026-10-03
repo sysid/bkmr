@@ -6,6 +6,14 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SqliteRepositoryError {
+    /// Existing presentation with the original native failure retained once.
+    #[error("{presentation}")]
+    Caused {
+        presentation: Box<SqliteRepositoryError>,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] DieselError),
 
@@ -38,8 +46,32 @@ pub type SqliteResult<T> = Result<T, SqliteRepositoryError>;
 
 // Add a context method to SqliteRepositoryError
 impl SqliteRepositoryError {
+    /// Attach an actual failure without reconstructing it from display text.
+    pub fn with_source<E>(self, source: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        Self::Caused {
+            presentation: Box::new(self),
+            source: Box::new(source),
+        }
+    }
+
+    /// Inspect the existing presentation category, not the original cause.
+    pub fn presentation(&self) -> &Self {
+        let mut current = self;
+        while let Self::Caused { presentation, .. } = current {
+            current = presentation;
+        }
+        current
+    }
+
     pub fn context<C: Into<String>>(self, context: C) -> Self {
         match self {
+            Self::Caused { presentation, source } => Self::Caused {
+                presentation: Box::new((*presentation).context(context)),
+                source,
+            },
             SqliteRepositoryError::OperationFailed(msg) => {
                 SqliteRepositoryError::OperationFailed(format!("{}: {}", context.into(), msg))
             }
@@ -61,6 +93,10 @@ impl From<r2d2::Error> for SqliteRepositoryError {
 impl From<SqliteRepositoryError> for RepositoryError {
     fn from(err: SqliteRepositoryError) -> Self {
         match err {
+            SqliteRepositoryError::Caused { presentation, source } => RepositoryError::Caused {
+                presentation: Box::new((*presentation).into()),
+                source,
+            },
             SqliteRepositoryError::BookmarkNotFound(id) => {
                 RepositoryError::NotFound(format!("Bookmark with ID {}", id))
             }

@@ -112,7 +112,7 @@ impl ServiceContainer {
             crate::application::error::ApplicationError::Other(format!(
                 "Failed to create SQLite bookmark repository: {}",
                 e
-            ))
+            )).with_source(e)
         })?;
 
         Ok(Arc::new(repository))
@@ -141,14 +141,14 @@ impl ServiceContainer {
             crate::application::error::ApplicationError::Other(format!(
                 "Failed to create vector repository: {}",
                 e
-            ))
+            )).with_source(e)
         })?;
         // Initialize the virtual table with the embedder's dimensions
         repo.init_vec_table(embedder.dimensions()).map_err(|e| {
             crate::application::error::ApplicationError::Other(format!(
                 "Failed to initialize vec_bookmarks table: {}",
                 e
-            ))
+            )).with_source(e)
         })?;
         Ok(Arc::new(repo))
     }
@@ -253,5 +253,68 @@ impl std::fmt::Debug for ServiceContainer {
             .field("interpolation_service", &"Arc<dyn InterpolationService>")
             .field("template_service", &"Arc<dyn TemplateService>")
             .finish()
+    }
+}
+
+
+#[cfg(test)]
+mod native_cause_tests {
+    use super::*;
+    use crate::application::error::ApplicationError;
+    use crate::domain::error::{DomainError, RepositoryError};
+    use crate::infrastructure::repositories::sqlite::error::SqliteRepositoryError;
+    use std::path::PathBuf;
+
+    #[test]
+    fn given_corrupt_owned_sqlite_file_when_native_repository_is_created_then_original_wal_cause_reaches_application() {
+        let root = match std::env::var_os("BKMR_NATIVE_TEST_ROOT") {
+            Some(root) => {
+                let root = PathBuf::from(root);
+                assert!(root.is_absolute());
+                root.canonicalize().expect("existing explicit native Run root")
+            }
+            None => {
+                let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ProjectCentral/now/tmp");
+                std::fs::create_dir_all(&root).unwrap();
+                root.canonicalize().unwrap()
+            }
+        };
+        assert!(root.is_dir());
+        let owned = tempfile::Builder::new().prefix("bkmr-native-wal-").tempdir_in(root).unwrap();
+        let path = owned.path().join("corrupt.db");
+        let before = vec![0x63u8; 4096];
+        std::fs::write(&path, &before).unwrap();
+        // Invoke the exact production repository leg used by new(), not the
+        // whole container or a dummy embedder/clipboard/model composition.
+        let failure = ServiceContainer::create_repository(path.to_str().unwrap()).unwrap_err();
+        let repository = std::error::Error::source(&failure).unwrap()
+            .downcast_ref::<SqliteRepositoryError>().expect("actual SQLite repository-to-application cause");
+        let sqlite = std::error::Error::source(repository).unwrap()
+            .downcast_ref::<rusqlite::Error>().expect("actual WAL bootstrap rusqlite error");
+        assert_eq!(sqlite.sqlite_error_code(), Some(rusqlite::ErrorCode::NotADatabase));
+        let native_pointer = sqlite as *const rusqlite::Error;
+        let before_display = failure.to_string();
+        assert!(before_display.contains("Failed to set WAL journal mode"));
+        assert!(matches!(failure.presentation(), ApplicationError::Other(_)));
+        let contextual = failure.context("actual native DI context");
+        assert_eq!(contextual.to_string(), format!("actual native DI context: {before_display}"));
+        let repository = std::error::Error::source(&contextual).unwrap().downcast_ref::<SqliteRepositoryError>().unwrap();
+        let sqlite = std::error::Error::source(repository).unwrap().downcast_ref::<rusqlite::Error>().unwrap();
+        assert_eq!(sqlite as *const rusqlite::Error, native_pointer);
+        // A second real owner call checks the existing SQLite -> domain
+        // conversion independently; it is not the same observation as above.
+        let repository = SqliteBookmarkRepository::from_url(path.to_str().unwrap()).unwrap_err();
+        let sqlite = std::error::Error::source(&repository).unwrap().downcast_ref::<rusqlite::Error>().unwrap();
+        let converted_pointer = sqlite as *const rusqlite::Error;
+        let repository: RepositoryError = repository.into();
+        assert_eq!(std::error::Error::source(&repository).unwrap().downcast_ref::<rusqlite::Error>().unwrap()
+            as *const rusqlite::Error, converted_pointer);
+        let domain = DomainError::from(repository).context("native converted repository");
+        let repository = std::error::Error::source(&domain).unwrap().downcast_ref::<RepositoryError>().unwrap();
+        let sqlite = std::error::Error::source(repository).unwrap().downcast_ref::<rusqlite::Error>().unwrap();
+        assert_eq!(sqlite as *const rusqlite::Error, converted_pointer);
+        assert_eq!(sqlite.sqlite_error_code(), Some(rusqlite::ErrorCode::NotADatabase));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        owned.close().expect("actual native WAL fixture retirement");
     }
 }

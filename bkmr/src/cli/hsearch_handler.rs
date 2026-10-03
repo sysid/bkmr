@@ -37,6 +37,7 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     let mut stderr = std::io::stderr();
     if let Commands::HSearch {
         query,
+        literal_fts,
         tags_all,
         tags_all_not,
         tags_any,
@@ -52,6 +53,7 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     {
         // Build the hybrid search query
         let mut search = HybridSearch::new(query);
+        search.literal_fts = literal_fts;
         search.limit = limit.map(|l| l as usize);
         search.mode = if mode == "exact" {
             SearchMode::Exact
@@ -73,8 +75,13 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             .cli_context("performing hybrid search on bookmarks")?;
 
         if results.is_empty() {
-            writeln!(stderr, "{}", "No bookmarks found".yellow())
-                .cli_context("writing empty search result to stderr")?;
+            if is_json {
+                writeln!(std::io::stdout(), "[]")
+                    .cli_context("writing empty search result to stdout")?;
+            } else {
+                writeln!(stderr, "{}", "No bookmarks found".yellow())
+                    .cli_context("writing empty search result to stderr")?;
+            }
             return Ok(());
         }
 
