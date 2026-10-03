@@ -33,11 +33,11 @@ EXPECTED_SOURCE = {
     "bkmr/src/domain/error.rs": "56a70295e65da0d4a50024f034471aef5def6d443362a227afaff6c82c0fdc60",
     "bkmr/src/domain/search.rs": "5e38f05331b8b5acec83216f31aca1eb97d3704ecfbc3fd8b47d5bc70df980da",
     "bkmr/src/infrastructure/di/service_container.rs": "53a0946baad01a607f69a4e3c418c9fcc2c3b83ce3235768f69bfc639de18ec3",
-    "bkmr/src/infrastructure/repositories/sqlite/connection.rs": "3eabb3842789062089583dc7d62fa1ebaba2946d7ced034c5ea22f79bf3681b5",
+    "bkmr/src/infrastructure/repositories/sqlite/connection.rs": "20a48b6687ce0c58b3e2387e4912bc2e0c969bb7677dbe91e097d938c1a49d7e",
     "bkmr/src/infrastructure/repositories/sqlite/error.rs": "34b7331b080d044331dde8a55d4e5a449db91148cefa7cc769192a671b7add4e",
     "bkmr/src/infrastructure/repositories/sqlite/vector_repository.rs": "8e87dac85d6e2200aeb8cb94b7f4a8f6a0b2022c839e58582cc9176436326613",
     "bkmr/src/main.rs": "5abe532bcfa9b2811a8d01ec79da776a98952d356096422aa59fdad7f00622ea",
-    "bkmr/tests/test_hybrid_literal_fts.rs": "dc89d0027ef854241e4c6b94b4e3da3c1c1cd8853f37cc9ceb546458c43ff40d",
+    "bkmr/tests/test_hybrid_literal_fts.rs": "18a6f24bb493b70154b1b6c77f47341c7e49f8712f8b8bd1b70f3f80b7c2cc13",
     "bkmr/Cargo.toml": "dc0500b057de4ceb9a70209ed739bd1477275c9f2f288d7320f9d6c69eba2ecc",
     "bkmr/Cargo.lock": "ef84de82354e697d36a903381a8df4e644d3af737da081e364eda2d0ec05fcdd",
 }

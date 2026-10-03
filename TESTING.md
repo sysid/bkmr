@@ -538,3 +538,25 @@ or maintainer source route. A read-only repository account or an immutable
 T-only proposal does not establish that writable route. Before-source INIT and
 cause characterization remains required separately; incompatible old Rust
 APIs cannot be represented as a manufactured before-test success.
+
+## Current qualification after the first hosted test compilation
+
+The first hosted contribution run compiled the actual native CLI, then failed
+compiling the selected tests on both supported hosts. No selected native case
+executed in that run. The current test-only correction gives the private Diesel
+cause helper an explicit borrowed lifetime and encodes the old executable's
+actual SHA-256 bytes with the existing byte encoder. It preserves all case
+identities and native assertions, including the real old-image comparison.
+
+The earlier original-eight byte-preservation statement above records the
+historical source before this compiler correction. For the current candidate it
+is superseded only for that digest expression; the exact original expression
+remains in the historical source receipt. The source-check helper pins the
+corrected current Rust bytes. The first 24,973 historical TESTING bytes remain
+unchanged with SHA-256
+`8ef5858cbb0c5ce54e38b4a347e09691f1445e2d23c0eab8dec5e1815ee8aa96`;
+this retained document basis is distinct from the current appended qualification.
+The existing twenty-four-definition selection, native failure/retention oracles
+and mandatory old-binary/model prerequisites are unchanged. The corrected
+source-check, locked compiler and actual native replay still require hosted
+qualification; this clause confers no compiler, case or installation success.

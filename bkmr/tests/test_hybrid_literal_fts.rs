@@ -258,7 +258,7 @@ fn given_actual_old_native_binary_when_literal_flag_requested_then_unsupported_i
         assert!(observed_bytes <= 512 * 1024 * 1024, "explicit native before-artifact observation capacity");
         digest.update(&buffer[..count]);
     }
-    assert_eq!(format!("{:x}", digest.finalize()), expected_sha.to_ascii_lowercase());
+    assert_eq!(hex::encode(&digest.finalize()[..]), expected_sha.to_ascii_lowercase());
     let version = Command::new(&old).arg("--version").timeout(Duration::from_secs(20)).output().unwrap();
     assert!(version.status.success());
     assert_eq!(String::from_utf8(version.stdout).unwrap().trim(), "bkmr 7.6.7");

@@ -315,7 +315,7 @@ mod backup_observation_tests {
         }
     }
 
-    fn original_diesel(error: &(dyn Error + 'static)) -> &diesel::result::Error {
+    fn original_diesel<'a>(error: &'a (dyn Error + 'static)) -> &'a diesel::result::Error {
         let mut current = Some(error);
         while let Some(cause) = current {
             if let Some(original) = cause.downcast_ref::<diesel::result::Error>() {
