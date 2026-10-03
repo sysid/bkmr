@@ -1,6 +1,7 @@
 // src/domain/search.rs
 use crate::domain::bookmark::Bookmark;
 use crate::domain::tag::Tag;
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
 /// Represents a semantic search query and parameters.
@@ -99,6 +100,8 @@ pub struct RankedResult {
 pub struct HybridSearch {
     /// The search query text
     pub query: String,
+    /// Quote whitespace-delimited terms only for FTS; false preserves raw FTS grammar.
+    pub literal_fts: bool,
     /// All-of tag filter (pre-filter)
     pub tags_all: Option<HashSet<Tag>>,
     /// Exclude-all tag filter
@@ -122,6 +125,7 @@ impl HybridSearch {
     pub fn new(query: impl Into<String>) -> Self {
         Self {
             query: query.into(),
+            literal_fts: false,
             tags_all: None,
             tags_all_not: None,
             tags_any: None,
@@ -131,6 +135,22 @@ impl HybridSearch {
             limit: None,
             mode: SearchMode::default(),
         }
+    }
+
+    /// Render the lexical branch without changing the semantic query text.
+    /// SQLite still owns tokenization and implicit AND between quoted terms.
+    /// The service rejects an empty literal subject before executing either branch.
+    pub fn fts_query(&self) -> Cow<'_, str> {
+        if !self.literal_fts {
+            return Cow::Borrowed(&self.query);
+        }
+        Cow::Owned(
+            self.query
+                .split_whitespace()
+                .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
     }
 
     /// Returns true if any tag filters are set

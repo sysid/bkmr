@@ -48,7 +48,8 @@ fn query_dimensions(conn: &Connection) -> DomainResult<Option<usize>> {
         Err(e) => Err(DomainError::BookmarkOperationFailed(format!(
             "Failed to detect vec_bookmarks dimensions: {}",
             e
-        ))),
+        ))
+        .with_source(e)),
     }
 }
 
@@ -61,7 +62,7 @@ impl SqliteVectorRepository {
         let conn = Connection::open(db_url).map_err(|e| {
             DomainError::RepositoryError(crate::domain::error::RepositoryError::Connection(
                 format!("Failed to open rusqlite connection for vector repo: {}", e),
-            ))
+            )).with_source(e)
         })?;
         // busy_timeout is per-connection — set it so this connection retries
         // under contention instead of failing immediately.
@@ -69,7 +70,7 @@ impl SqliteVectorRepository {
             .map_err(|e| {
                 DomainError::RepositoryError(crate::domain::error::RepositoryError::Connection(
                     format!("Failed to configure vector repo connection: {}", e),
-                ))
+                )).with_source(e)
             })?;
         Ok(Self {
             conn: Mutex::new(conn),
@@ -88,7 +89,12 @@ impl VectorRepository for SqliteVectorRepository {
                 [],
                 |row| row.get(0),
             )
-            .unwrap_or(false);
+            .map_err(|e| {
+                DomainError::BookmarkOperationFailed(format!(
+                    "Failed to check vec_bookmarks table: {}",
+                    e
+                )).with_source(e)
+            })?;
 
         if table_exists {
             match query_dimensions(&conn)? {
@@ -107,7 +113,7 @@ impl VectorRepository for SqliteVectorRepository {
                             DomainError::BookmarkOperationFailed(format!(
                                 "Failed to drop vec_bookmarks for dimension change: {}",
                                 e
-                            ))
+                            )).with_source(e)
                         })?;
                 }
                 Some(dims) => {
@@ -129,7 +135,7 @@ impl VectorRepository for SqliteVectorRepository {
             DomainError::BookmarkOperationFailed(format!(
                 "Failed to create vec_bookmarks table: {}",
                 e
-            ))
+            )).with_source(e)
         })?;
         debug!("vec_bookmarks table created with {} dimensions", dimensions);
         Ok(())
@@ -147,7 +153,7 @@ impl VectorRepository for SqliteVectorRepository {
             DomainError::BookmarkOperationFailed(format!(
                 "Failed to delete old embedding for bookmark {}: {}",
                 bookmark_id, e
-            ))
+            )).with_source(e)
         })?;
 
         conn.execute(
@@ -158,7 +164,7 @@ impl VectorRepository for SqliteVectorRepository {
             DomainError::BookmarkOperationFailed(format!(
                 "Failed to insert embedding for bookmark {}: {}",
                 bookmark_id, e
-            ))
+            )).with_source(e)
         })?;
 
         debug!("Upserted embedding for bookmark {}", bookmark_id);
@@ -176,7 +182,7 @@ impl VectorRepository for SqliteVectorRepository {
             DomainError::BookmarkOperationFailed(format!(
                 "Failed to delete embedding for bookmark {}: {}",
                 bookmark_id, e
-            ))
+            )).with_source(e)
         })?;
         Ok(())
     }
@@ -200,7 +206,7 @@ impl VectorRepository for SqliteVectorRepository {
                 DomainError::BookmarkOperationFailed(format!(
                     "Failed to prepare vector search query: {}",
                     e
-                ))
+                )).with_source(e)
             })?;
 
         let results = stmt
@@ -209,14 +215,14 @@ impl VectorRepository for SqliteVectorRepository {
                 |row| Ok((row.get::<_, i32>(0)?, row.get::<_, f64>(1)?)),
             )
             .map_err(|e| {
-                DomainError::BookmarkOperationFailed(format!("Vector search query failed: {}", e))
+                DomainError::BookmarkOperationFailed(format!("Vector search query failed: {}", e)).with_source(e)
             })?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
                     "Failed to collect vector search results: {}",
                     e
-                ))
+                )).with_source(e)
             })?;
 
         debug!("Vector search returned {} results", results.len());
@@ -231,7 +237,7 @@ impl VectorRepository for SqliteVectorRepository {
                 DomainError::BookmarkOperationFailed(format!(
                     "Failed to check vec_bookmarks count: {}",
                     e
-                ))
+                )).with_source(e)
             })?;
         Ok(count > 0)
     }
@@ -245,7 +251,7 @@ impl VectorRepository for SqliteVectorRepository {
     fn clear_all(&self) -> DomainResult<()> {
         let conn = lock_conn(&self.conn)?;
         conn.execute("DELETE FROM vec_bookmarks", []).map_err(|e| {
-            DomainError::BookmarkOperationFailed(format!("Failed to clear vec_bookmarks: {}", e))
+            DomainError::BookmarkOperationFailed(format!("Failed to clear vec_bookmarks: {}", e)).with_source(e)
         })?;
         debug!("Cleared all embeddings from vec_bookmarks");
         Ok(())
@@ -256,7 +262,7 @@ impl VectorRepository for SqliteVectorRepository {
         let mut stmt = conn
             .prepare("SELECT rowid FROM vec_bookmarks")
             .map_err(|e| {
-                DomainError::BookmarkOperationFailed(format!("Failed to query embedded IDs: {}", e))
+                DomainError::BookmarkOperationFailed(format!("Failed to query embedded IDs: {}", e)).with_source(e)
             })?;
         let ids = stmt
             .query_map([], |row| row.get::<_, i32>(0))
@@ -264,14 +270,14 @@ impl VectorRepository for SqliteVectorRepository {
                 DomainError::BookmarkOperationFailed(format!(
                     "Failed to collect embedded IDs: {}",
                     e
-                ))
+                )).with_source(e)
             })?
             .collect::<Result<HashSet<_>, _>>()
             .map_err(|e| {
                 DomainError::BookmarkOperationFailed(format!(
                     "Failed to collect embedded IDs: {}",
                     e
-                ))
+                )).with_source(e)
             })?;
         Ok(ids)
     }
@@ -392,5 +398,64 @@ mod tests {
 
         let ids = repo.get_embedded_ids().unwrap();
         assert_eq!(ids.len(), 1);
+    }
+}
+
+
+#[cfg(test)]
+mod native_readonly_tests {
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn given_actual_readonly_sqlite_connection_when_missing_table_is_created_then_original_cause_is_retained() {
+        let root = match std::env::var_os("BKMR_NATIVE_TEST_ROOT") {
+            Some(root) => {
+                let root = PathBuf::from(root);
+                assert!(root.is_absolute(), "explicit native Run root must be absolute");
+                root.canonicalize().expect("existing explicit native Run root")
+            }
+            None => {
+                let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../ProjectCentral/now/tmp");
+                std::fs::create_dir_all(&root).unwrap();
+                root.canonicalize().unwrap()
+            }
+        };
+        assert!(root.is_dir());
+        let owned = tempfile::Builder::new().prefix("bkmr-native-readonly-")
+            .tempdir_in(root).unwrap();
+        let path = owned.path().join("readonly.db");
+        let write = Connection::open(&path).unwrap();
+        write.execute_batch("CREATE TABLE retained_source(value TEXT); INSERT INTO retained_source VALUES ('actual retained source');").unwrap();
+        drop(write);
+        super::super::register_sqlite_vec();
+        let before = std::fs::read(&path).unwrap();
+        // This is an actual native READ_ONLY connection, not an injected error
+        // or a fabricated SQL result. The same production init method owns SQL.
+        let readonly = Connection::open_with_flags(&path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let repository = SqliteVectorRepository { conn: Mutex::new(readonly) };
+        let failure = repository.init_vec_table(384).unwrap_err();
+        assert!(failure.to_string().contains("Failed to create vec_bookmarks table: "));
+        let cause = std::error::Error::source(&failure).unwrap()
+            .downcast_ref::<rusqlite::Error>().expect("actual readonly SQLite error");
+        assert_eq!(cause.sqlite_error_code(), Some(rusqlite::ErrorCode::ReadOnly));
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+        {
+            let connection = lock_conn(&repository.conn).unwrap();
+            let source: String = connection.query_row("SELECT value FROM retained_source", [], |row| row.get(0)).unwrap();
+            assert_eq!(source, "actual retained source");
+            let exists: bool = connection.query_row("SELECT COUNT(*) > 0 FROM sqlite_master WHERE name='vec_bookmarks'", [], |row| row.get(0)).unwrap();
+            assert!(!exists);
+        }
+        drop(repository);
+        let writable = SqliteVectorRepository::new(path.to_str().unwrap()).unwrap();
+        writable.init_vec_table(384).unwrap();
+        assert!(!writable.has_embeddings().unwrap());
+        drop(writable);
+        let restarted = SqliteVectorRepository::new(path.to_str().unwrap()).unwrap();
+        restarted.init_vec_table(384).unwrap();
+        assert!(!restarted.has_embeddings().unwrap());
+        drop(restarted);
+        owned.close().expect("actual native readonly fixture retirement");
     }
 }

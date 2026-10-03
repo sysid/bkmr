@@ -162,6 +162,12 @@ pub enum Commands {
         query: String,
 
         #[arg(
+            long = "literal-fts",
+            help = "quote literal text terms for FTS only; keep the original embedding query"
+        )]
+        literal_fts: bool,
+
+        #[arg(
             short = 't',
             long = "tags",
             help = "must have ALL these tags (comma-separated)"

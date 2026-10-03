@@ -218,13 +218,32 @@ fn handle_completion_command(shell: String) -> Result<(), Box<dyn std::error::Er
     }
 }
 
+#[derive(Debug)]
+struct CommandExecutionError(bkmr::cli::error::CliError);
+
+impl std::fmt::Display for CommandExecutionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "Command execution failed: {}", self.0)
+    }
+}
+
+impl std::error::Error for CommandExecutionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.0)
+    }
+}
+
+fn command_execution_error(error: bkmr::cli::error::CliError) -> Box<dyn std::error::Error> {
+    Box::new(CommandExecutionError(error))
+}
+
 fn execute_command_with_services(
     cli: Cli,
     services: ServiceContainer,
     settings: Settings,
 ) -> Result<(), Box<dyn std::error::Error>> {
     bkmr::cli::execute_command_with_services(cli, services, &settings)
-        .map_err(|e| format!("Command execution failed: {}", e).into())
+        .map_err(command_execution_error)
 }
 
 fn setup_logging(verbosity: u8, no_color: bool) {
@@ -282,4 +301,31 @@ mod tests {
         use clap::CommandFactory;
         Cli::command().debug_assert()
     }
+
+    #[test]
+    fn given_actual_native_vector_failure_when_main_wraps_then_display_and_original_source_are_preserved() {
+        use bkmr::domain::repositories::vector_repository::VectorRepository;
+        use bkmr::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
+        use bkmr::application::error::ApplicationError;
+        use bkmr::domain::error::DomainError;
+        use bkmr::cli::error::CliError;
+
+        // SQLite itself executes this real missing-table query. This material
+        // is in-memory; no filesystem source or persistent authority is claimed.
+        let repository = SqliteVectorRepository::new(":memory:").unwrap();
+        let failure = repository.has_embeddings().unwrap_err();
+        let native = std::error::Error::source(&failure).unwrap().downcast_ref::<rusqlite::Error>().unwrap();
+        let pointer = native as *const rusqlite::Error;
+        let cli = CliError::from(failure).context("actual native main context");
+        let expected = format!("Command execution failed: {cli}");
+        let wrapped = command_execution_error(cli);
+        assert_eq!(wrapped.to_string(), expected);
+        let cli = wrapped.source().unwrap().downcast_ref::<CliError>().unwrap();
+        let application = std::error::Error::source(cli).unwrap().downcast_ref::<ApplicationError>().unwrap();
+        let domain = std::error::Error::source(application).unwrap().downcast_ref::<DomainError>().unwrap();
+        let native = std::error::Error::source(domain).unwrap().downcast_ref::<rusqlite::Error>().unwrap();
+        assert_eq!(native as *const rusqlite::Error, pointer);
+        assert_eq!(native.sqlite_error_code(), Some(rusqlite::ErrorCode::Unknown));
+    }
+
 }

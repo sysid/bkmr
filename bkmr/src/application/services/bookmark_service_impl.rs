@@ -406,6 +406,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>> {
         use crate::domain::search::{RankedResult, SearchMode};
 
+        if search.literal_fts && search.query.split_whitespace().next().is_none() {
+            return Err(ApplicationError::Validation(
+                "literal FTS search requires at least one non-whitespace term".to_string(),
+            ));
+        }
+
         let limit = search.effective_limit();
         let internal_limit = std::cmp::max(limit * 4, 20);
         let k = 60.0;
@@ -427,12 +433,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         // Step 1: FTS ranked search (always runs)
         let fts_ranked = self
             .repository
-            .get_bookmarks_fts_ranked(&search.query, filter_ids.as_ref())?;
+            .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?;
 
         // Step 2: Semantic search (skip if exact mode or no embeddings)
         let sem_ranked = if search.mode == SearchMode::Exact
             || self.embedder.dimensions() == 0
-            || !self.vector_repository.has_embeddings().unwrap_or(false)
+            || !self.vector_repository.has_embeddings()?
         {
             vec![]
         } else {

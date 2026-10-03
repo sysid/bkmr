@@ -18,11 +18,269 @@ jobs:
       matrix:
         runner: [ubuntu-24.04, macos-14]
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: bkmr
+      - name: Prepare owned native Run and exact source prerequisite
+        id: native_run
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=all)"
+          python3 scripts/test/verify-native-hybrid-results.py prepare
+      - name: Retain current source and native host tools
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD HEAD^{tree} > "$BKMR_EVIDENCE/current-source-ids.txt"
+          git ls-tree -r -z HEAD > "$BKMR_EVIDENCE/current-source-tree.nul"
+          git archive --format=tar HEAD > "$BKMR_EVIDENCE/current-source.tar"
+          git status --porcelain --untracked-files=no > "$BKMR_EVIDENCE/tracked-status-before.txt"
+          rustc --version --verbose > "$BKMR_EVIDENCE/rustc.txt"
+          cargo --version --verbose > "$BKMR_EVIDENCE/cargo.txt"
+          python3 --version > "$BKMR_EVIDENCE/python.txt"
+          uname -a > "$BKMR_EVIDENCE/os.txt"
+          if [ "$RUNNER_OS" = macOS ]; then sw_vers > "$BKMR_EVIDENCE/macos.txt"; fi
+      - name: Compile same-source native executable and all three test targets
+        id: native_compile
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          cargo build --locked --manifest-path bkmr/Cargo.toml --bin bkmr --message-format=json > "$BKMR_EVIDENCE/candidate-cli-compiler.jsonl" 2> "$BKMR_EVIDENCE/candidate-cli-compiler.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/candidate-cli-compiler.status"
+          set -e
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          set +e
+          cargo test --locked --manifest-path bkmr/Cargo.toml --test test_hybrid_literal_fts --lib --bin bkmr --no-run --message-format=json > "$BKMR_EVIDENCE/candidate-compiler.jsonl" 2> "$BKMR_EVIDENCE/candidate-compiler.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/candidate-compiler.status"
+          set -e
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          python3 scripts/test/verify-native-hybrid-results.py compiler candidate
+      # Keep this original native make test invocation unchanged. Its actual
+      # job log/step outcome remains separate from the exact24 selected cases.
       - name: make test
+        timeout-minutes: 30
         run: make test
+      - name: Build and qualify actual unmodified native7.6.7 prerequisite
+        id: native_before
+        if: ${{ !cancelled() && steps.native_run.outcome == 'success' }}
+        timeout-minutes: 45
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          curl --fail --location --connect-timeout 20 --max-time 120 --max-filesize 1048576 'https://files.pythonhosted.org/packages/5b/4e/2c7796f45b7fadeb80562286b02b18c7cabe06a6210b0db0c6af804c3e2b/bkmr-7.6.7.tar.gz' -o "$BKMR_NATIVE_TEST_ROOT/bkmr-7.6.7.tar.gz" > "$BKMR_EVIDENCE/old-download.stdout" 2> "$BKMR_EVIDENCE/old-download.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/old-download.status"
+          set -e
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          python3 scripts/test/verify-native-hybrid-results.py old-source
+          # GITHUB_ENV applies to subsequent steps; this exact pinned archive
+          # root is also needed by the current native build step.
+          export BKMR_OLD_PROJECT="$BKMR_NATIVE_TEST_ROOT/old-source/bkmr-7.6.7"
+          set +e
+          cargo build --locked --manifest-path "$BKMR_OLD_PROJECT/bkmr/Cargo.toml" --target-dir "$BKMR_NATIVE_TEST_ROOT/old-target" --bin bkmr --message-format=json > "$BKMR_EVIDENCE/old-compiler.jsonl" 2> "$BKMR_EVIDENCE/old-compiler.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/old-compiler.status"
+          set -e
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          python3 scripts/test/verify-native-hybrid-results.py compiler old
+      - name: Observe exact old binary and current native version
+        if: ${{ !cancelled() && steps.native_before.outcome == 'success' && steps.native_compile.outcome == 'success' }}
+        timeout-minutes: 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          "$BKMR_LITERAL_FTS_BEFORE_BIN" --version > "$BKMR_EVIDENCE/old-version.stdout" 2> "$BKMR_EVIDENCE/old-version.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/old-version.status"
+          "$BKMR_NATIVE_BIN" --version > "$BKMR_EVIDENCE/candidate-version.stdout" 2> "$BKMR_EVIDENCE/candidate-version.stderr"
+          current_status=$?
+          printf '%s\n' "$current_status" > "$BKMR_EVIDENCE/candidate-version.status"
+          set -e
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          if [ "$current_status" -ne 0 ]; then exit "$current_status"; fi
+      - name: Genuine selected native model warm and current database observation
+        if: ${{ !cancelled() && steps.native_compile.outcome == 'success' }}
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          configuration="$BKMR_NATIVE_TEST_ROOT/warm/config.toml"
+          database="$BKMR_NATIVE_TEST_ROOT/warm/native.db"
+          first=0
+          set +e
+          "$BKMR_NATIVE_BIN" --config "$configuration" --db "$database" create-db "$database" > "$BKMR_EVIDENCE/warm-create.stdout" 2> "$BKMR_EVIDENCE/warm-create.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/warm-create.status"
+          if [ "$status" -ne 0 ]; then first=$status; fi
+          "$BKMR_NATIVE_BIN" --config "$configuration" --db "$database" add --no-web --title 'declared native qualification source' --description 'physical source branches' 'https://literal-fts.invalid/model-warm' 'native-proof' > "$BKMR_EVIDENCE/warm-add.stdout" 2> "$BKMR_EVIDENCE/warm-add.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/warm-add.status"
+          if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+          "$BKMR_NATIVE_BIN" --config "$configuration" --db "$database" info --schema > "$BKMR_EVIDENCE/warm-info.stdout" 2> "$BKMR_EVIDENCE/warm-info.stderr"
+          status=$?
+          printf '%s\n' "$status" > "$BKMR_EVIDENCE/warm-info.status"
+          if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+          exit "$first"
+      - name: Retain and validate complete compiled native rosters
+        id: native_rosters
+        if: ${{ !cancelled() && steps.native_compile.outcome == 'success' }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          first=0
+          for role in hybrid lib bin; do
+            case "$role" in hybrid) executable="$HYBRID_TEST_BIN";; lib) executable="$LIB_TEST_BIN";; bin) executable="$BIN_TEST_BIN";; esac
+            set +e
+            "$executable" --list --color never > "$BKMR_EVIDENCE/$role-roster.stdout" 2> "$BKMR_EVIDENCE/$role-roster.stderr"
+            status=$?
+            printf '%s\n' "$status" > "$BKMR_EVIDENCE/$role-roster.status"
+            set -e
+            if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+          done
+          if [ "$first" -ne 0 ]; then exit "$first"; fi
+          python3 scripts/test/verify-native-hybrid-results.py rosters
+      - name: Explicit21 default native SQLite/CLI/backup/lib/bin cases
+        if: ${{ !cancelled() && steps.native_rosters.outcome == 'success' }}
+        timeout-minutes: 15
+        shell: bash
+        run: |
+          set -euo pipefail
+          first=0
+          while IFS=$'\t' read -r number role ignored name; do
+            case "$role" in hybrid) executable="$HYBRID_TEST_BIN";; lib) executable="$LIB_TEST_BIN";; bin) executable="$BIN_TEST_BIN";; *) exit 1;; esac
+            flags=(--exact "$name" --nocapture --test-threads=1 --color never)
+            if [ "$ignored" = 1 ]; then flags+=(--ignored); fi
+            python3 scripts/test/verify-native-hybrid-results.py case-start "$number"
+            set +e
+            "$executable" "${flags[@]}" > "$BKMR_EVIDENCE/case-$number.stdout" 2> "$BKMR_EVIDENCE/case-$number.stderr"
+            status=$?
+            printf '%s\n' "$status" > "$BKMR_EVIDENCE/case-$number.status"
+            python3 scripts/test/verify-native-hybrid-results.py case-result "$number"
+            audit_status=$?
+            set -e
+            if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+            if [ "$audit_status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$audit_status; fi
+          done < "$BKMR_EVIDENCE/default.tsv"
+          exit "$first"
+      - name: Mandatory actual old native binary compatibility case
+        if: ${{ !cancelled() && steps.native_rosters.outcome == 'success' }}
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          first=0
+          while IFS=$'\t' read -r number role ignored name; do
+            case "$role" in hybrid) executable="$HYBRID_TEST_BIN";; lib) executable="$LIB_TEST_BIN";; bin) executable="$BIN_TEST_BIN";; *) exit 1;; esac
+            flags=(--exact "$name" --nocapture --test-threads=1 --color never)
+            if [ "$ignored" = 1 ]; then flags+=(--ignored); fi
+            python3 scripts/test/verify-native-hybrid-results.py case-start "$number"
+            set +e
+            "$executable" "${flags[@]}" > "$BKMR_EVIDENCE/case-$number.stdout" 2> "$BKMR_EVIDENCE/case-$number.stderr"
+            status=$?
+            printf '%s\n' "$status" > "$BKMR_EVIDENCE/case-$number.status"
+            python3 scripts/test/verify-native-hybrid-results.py case-result "$number"
+            audit_status=$?
+            set -e
+            if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+            if [ "$audit_status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$audit_status; fi
+          done < "$BKMR_EVIDENCE/before.tsv"
+          exit "$first"
+      - name: Mandatory genuine native inference/storage/RRF case
+        if: ${{ !cancelled() && steps.native_rosters.outcome == 'success' }}
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          first=0
+          while IFS=$'\t' read -r number role ignored name; do
+            case "$role" in hybrid) executable="$HYBRID_TEST_BIN";; lib) executable="$LIB_TEST_BIN";; bin) executable="$BIN_TEST_BIN";; *) exit 1;; esac
+            flags=(--exact "$name" --nocapture --test-threads=1 --color never)
+            if [ "$ignored" = 1 ]; then flags+=(--ignored); fi
+            python3 scripts/test/verify-native-hybrid-results.py case-start "$number"
+            set +e
+            "$executable" "${flags[@]}" > "$BKMR_EVIDENCE/case-$number.stdout" 2> "$BKMR_EVIDENCE/case-$number.stderr"
+            status=$?
+            printf '%s\n' "$status" > "$BKMR_EVIDENCE/case-$number.status"
+            python3 scripts/test/verify-native-hybrid-results.py case-result "$number"
+            audit_status=$?
+            set -e
+            if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+            if [ "$audit_status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$audit_status; fi
+          done < "$BKMR_EVIDENCE/model-hybrid.tsv"
+          exit "$first"
+      - name: Mandatory genuine native repository-refusal/recovery/model case
+        if: ${{ !cancelled() && steps.native_rosters.outcome == 'success' }}
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          set -euo pipefail
+          first=0
+          while IFS=$'\t' read -r number role ignored name; do
+            case "$role" in hybrid) executable="$HYBRID_TEST_BIN";; lib) executable="$LIB_TEST_BIN";; bin) executable="$BIN_TEST_BIN";; *) exit 1;; esac
+            flags=(--exact "$name" --nocapture --test-threads=1 --color never)
+            if [ "$ignored" = 1 ]; then flags+=(--ignored); fi
+            python3 scripts/test/verify-native-hybrid-results.py case-start "$number"
+            set +e
+            "$executable" "${flags[@]}" > "$BKMR_EVIDENCE/case-$number.stdout" 2> "$BKMR_EVIDENCE/case-$number.stderr"
+            status=$?
+            printf '%s\n' "$status" > "$BKMR_EVIDENCE/case-$number.status"
+            python3 scripts/test/verify-native-hybrid-results.py case-result "$number"
+            audit_status=$?
+            set -e
+            if [ "$status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$status; fi
+            if [ "$audit_status" -ne 0 ] && [ "$first" -eq 0 ]; then first=$audit_status; fi
+          done < "$BKMR_EVIDENCE/model-error.tsv"
+          exit "$first"
+      - name: Retain exact binaries/material and report actual cleanup/partial qualification
+        id: native_retention
+        if: ${{ always() && steps.native_run.outputs.owned_root != '' }}
+        timeout-minutes: 8
+        env:
+          BKMR_NATIVE_QUALIFICATION_ROOT: ${{ steps.native_run.outputs.owned_root }}
+          BKMR_NATIVE_ROOT_CUSTODY: ${{ steps.native_run.outputs.owned_custody }}
+          BKMR_EVIDENCE: ${{ steps.native_run.outputs.evidence_path || steps.native_run.outputs.owned_root }}
+          BKMR_NATIVE_PREPARATION_OUTCOME: ${{ steps.native_run.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test/verify-native-hybrid-results.py retention-start
+          set +e
+          git status --porcelain --untracked-files=no > "$BKMR_EVIDENCE/tracked-status-after.txt" 2> "$BKMR_EVIDENCE/tracked-status-after.stderr"
+          status_observation=$?
+          printf '%s\n' "$status_observation" > "$BKMR_EVIDENCE/tracked-status-after.status"
+          git diff --exit-code HEAD -- > "$BKMR_EVIDENCE/tracked-source.diff"
+          source_status=$?
+          printf '%s\n' "$source_status" > "$BKMR_EVIDENCE/tracked-source.status"
+          python3 scripts/test/verify-native-hybrid-results.py finish
+          audit_status=$?
+          set -e
+          if [ "$status_observation" -ne 0 ]; then exit "$status_observation"; fi
+          if [ "$source_status" -ne 0 ]; then exit "$source_status"; fi
+          exit "$audit_status"
+      - name: Upload actual native proof even when prerequisites/cases failed
+        if: ${{ always() && steps.native_retention.outputs.retained_path != '' }}
+        timeout-minutes: 8
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-hybrid-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.native_retention.outputs.retained_path }}
+            ${{ steps.native_retention.outputs.retained_root }}/ownership.json
+            ${{ steps.native_retention.outputs.retained_root }}/prepare-error.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14
