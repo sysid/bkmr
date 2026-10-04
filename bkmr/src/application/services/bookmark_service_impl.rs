@@ -406,6 +406,13 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>> {
         use crate::domain::search::{RankedResult, SearchMode};
 
+        if search.query.trim().is_empty() {
+            return Err(ApplicationError::Validation(
+                "hybrid search query must not be empty (use `search` to browse by tags)"
+                    .to_string(),
+            ));
+        }
+
         let limit = search.effective_limit();
         let internal_limit = std::cmp::max(limit * 4, 20);
         let k = 60.0;
