@@ -92,3 +92,26 @@ fn test_search_command_with_tags() {
         output_line
     );
 }
+
+#[test]
+fn given_no_matching_bookmarks_when_hsearch_json_then_stdout_is_empty_array() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+
+    let mut cmd = cargo_bin_cmd!("bkmr");
+    cmd.env("BKMR_DB_URL", "../db/bkmr.db");
+
+    // Exact mode keeps the embedding model out of the test; the term matches nothing.
+    let result = cmd
+        .args(["hsearch", "--json", "--np", "--mode", "exact"])
+        .arg("zzqxnomatchterm")
+        .assert()
+        .success();
+
+    let stdout = String::from_utf8_lossy(&result.get_output().stdout);
+    assert_eq!(
+        stdout.trim(),
+        "[]",
+        "JSON consumers need valid JSON on zero hits"
+    );
+}

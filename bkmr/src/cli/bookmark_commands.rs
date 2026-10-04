@@ -972,7 +972,8 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             println!("    {} ({})", tag.value(), count);
         }
 
-        // Embedding statistics
+        // Embedding statistics — display only: a vector store failure shows as
+        // "no embeddings" here rather than hiding the rest of the info output.
         let embeddable_count = bookmarks.iter().filter(|b| b.embeddable).count();
         let vec_has_embeddings = services.vector_repository.has_embeddings().unwrap_or(false);
         let vec_dims = services.vector_repository.get_dimensions().unwrap_or(None);

@@ -158,7 +158,7 @@ pub enum Commands {
     /// Hybrid search combining full-text and semantic search with RRF fusion
     #[command(name = "hsearch")]
     HSearch {
-        /// Search query text
+        /// Search query text, matched literally (use `search` for FTS5 syntax)
         query: String,
 
         #[arg(

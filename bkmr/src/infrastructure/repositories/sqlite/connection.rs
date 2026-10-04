@@ -84,40 +84,6 @@ pub fn init_pool(database_url: &str) -> SqliteResult<ConnectionPool> {
     Ok(pool)
 }
 
-/// Check if the database has meaningful user data
-/// A database is considered empty for backup purposes if it has no bookmark records
-fn is_database_empty_for_backup(conn: &mut SqliteConnection) -> SqliteResult<bool> {
-    use diesel::prelude::*;
-    use diesel::sql_types::Integer;
-
-    #[derive(QueryableByName, Debug)]
-    struct BookmarkCount {
-        #[diesel(sql_type = Integer)]
-        count: i32,
-    }
-
-    // Check if the bookmarks table exists and has data
-    // If it doesn't exist or has no records, consider it empty for backup purposes
-    let result: Result<BookmarkCount, diesel::result::Error> =
-        diesel::sql_query("SELECT COUNT(*) as count FROM bookmarks")
-            .get_result::<BookmarkCount>(conn);
-
-    match result {
-        Ok(bookmark_count) => {
-            debug!(
-                "Database contains {} bookmark records",
-                bookmark_count.count
-            );
-            Ok(bookmark_count.count == 0)
-        }
-        Err(e) => {
-            // If bookmarks table doesn't exist, definitely empty for backup purposes
-            debug!("Bookmarks table doesn't exist or query failed: {}", e);
-            Ok(true)
-        }
-    }
-}
-
 /// Run any pending database migrations
 #[instrument(level = "info")]
 pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> SqliteResult<()> {
@@ -157,40 +123,35 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
         let is_likely_empty = file_size < 16384; // 16KB threshold
 
         if !is_likely_empty {
-            // Additional check: verify the database actually has user data
-            let is_empty = is_database_empty_for_backup(&mut conn)?;
+            // ponytail: size gate only, no bookmark row count. A count that fails
+            // (lock, corruption) must never be read as "empty" and skip the backup;
+            // backing up a large-but-empty DB is harmless.
+            let date_suffix = Local::now().format("%Y%m%d").to_string();
 
-            if !is_empty {
-                // Create backup with date suffix for non-empty databases
-                let date_suffix = Local::now().format("%Y%m%d").to_string();
-
-                if let Some(file_name) = db_path.file_name() {
-                    let file_name_str = file_name.to_string_lossy();
-                    let backup_name = if let Some(ext_pos) = file_name_str.rfind('.') {
-                        let (name, ext) = file_name_str.split_at(ext_pos);
-                        format!("{}_backup_{}{}", name, date_suffix, ext)
-                    } else {
-                        format!("{}_backup_{}", file_name_str, date_suffix)
-                    };
-
-                    let backup_path = db_path.with_file_name(backup_name);
-
-                    // Copy the database file and fail if backup creation fails
-                    fs::copy(db_path, &backup_path).map_err(|e| {
-                        SqliteRepositoryError::IoError(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Failed to create backup: {}", e),
-                        ))
-                    })?;
-
-                    eprintln!("Backup created at: {}", backup_path.display());
+            if let Some(file_name) = db_path.file_name() {
+                let file_name_str = file_name.to_string_lossy();
+                let backup_name = if let Some(ext_pos) = file_name_str.rfind('.') {
+                    let (name, ext) = file_name_str.split_at(ext_pos);
+                    format!("{}_backup_{}{}", name, date_suffix, ext)
                 } else {
-                    return Err(SqliteRepositoryError::OperationFailed(
-                        "Could not determine database filename for backup".to_string(),
-                    ));
-                }
+                    format!("{}_backup_{}", file_name_str, date_suffix)
+                };
+
+                let backup_path = db_path.with_file_name(backup_name);
+
+                // Copy the database file and fail if backup creation fails
+                fs::copy(db_path, &backup_path).map_err(|e| {
+                    SqliteRepositoryError::IoError(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to create backup: {}", e),
+                    ))
+                })?;
+
+                eprintln!("Backup created at: {}", backup_path.display());
             } else {
-                debug!("Skipping backup for database with no user data");
+                return Err(SqliteRepositoryError::OperationFailed(
+                    "Could not determine database filename for backup".to_string(),
+                ));
             }
         } else {
             debug!("Skipping backup for small/empty database file");
@@ -207,4 +168,76 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
     info!("Migrations completed successfully");
     eprintln!("Migrations completed successfully.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use diesel::Connection;
+
+    fn backups_in(dir: &Path) -> Vec<String> {
+        fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.contains("_backup_"))
+            .collect()
+    }
+
+    fn pool_for(url: &str) -> ConnectionPool {
+        r2d2::Pool::builder()
+            .max_size(1)
+            .build(ConnectionManager::<SqliteConnection>::new(url))
+            .unwrap()
+    }
+
+    #[test]
+    fn given_db_over_16kb_with_failing_bookmarks_count_when_migrating_then_backup_is_created() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let url = db.to_str().unwrap();
+
+        // A real user database one migration behind, whose bookmarks relation
+        // can no longer be counted (stand-in for corruption or lock failure).
+        let mut conn = SqliteConnection::establish(url).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        conn.revert_last_migration(MIGRATIONS).unwrap();
+        conn.batch_execute(
+            "DROP TABLE bookmarks;
+             CREATE TABLE gone (x INTEGER);
+             CREATE VIEW bookmarks AS SELECT * FROM gone;
+             DROP TABLE gone;",
+        )
+        .unwrap();
+        assert!(
+            conn.batch_execute("SELECT COUNT(*) FROM bookmarks")
+                .is_err(),
+            "fixture must make the bookmarks count fail"
+        );
+        drop(conn);
+        assert!(
+            fs::metadata(&db).unwrap().len() >= 16384,
+            "fixture must exceed size gate"
+        );
+
+        // The migration itself may fail on the broken schema; the backup must exist regardless.
+        let _ = run_pending_migrations(&pool_for(url), url);
+
+        assert_eq!(
+            backups_in(dir.path()).len(),
+            1,
+            "user DB must be backed up before migrating"
+        );
+    }
+
+    #[test]
+    fn given_db_under_16kb_when_migrating_then_no_backup_is_created() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let url = db.to_str().unwrap();
+        fs::File::create(&db).unwrap();
+
+        run_pending_migrations(&pool_for(url), url).unwrap();
+
+        assert!(backups_in(dir.path()).is_empty());
+    }
 }

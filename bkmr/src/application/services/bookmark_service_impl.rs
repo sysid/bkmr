@@ -427,12 +427,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         // Step 1: FTS ranked search (always runs)
         let fts_ranked = self
             .repository
-            .get_bookmarks_fts_ranked(&search.query, filter_ids.as_ref())?;
+            .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?;
 
         // Step 2: Semantic search (skip if exact mode or no embeddings)
         let sem_ranked = if search.mode == SearchMode::Exact
             || self.embedder.dimensions() == 0
-            || !self.vector_repository.has_embeddings().unwrap_or(false)
+            || !self.vector_repository.has_embeddings()?
         {
             vec![]
         } else {
