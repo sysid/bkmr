@@ -432,7 +432,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         // Step 2: Semantic search (skip if exact mode or no embeddings)
         let sem_ranked = if search.mode == SearchMode::Exact
             || self.embedder.dimensions() == 0
-            || !self.vector_repository.has_embeddings().unwrap_or(false)
+            || !self.vector_repository.has_embeddings()?
         {
             vec![]
         } else {

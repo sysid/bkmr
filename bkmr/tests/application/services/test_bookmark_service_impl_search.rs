@@ -576,3 +576,86 @@ fn given_empty_filters_when_search_bookmarks_then_returns_expected_defaults() {
 
     assert_eq!(ids(&results_empty_tags), all_ids);
 }
+
+// --- hybrid_search: vector repository failure must surface ---
+
+/// Vector store whose availability probe fails, as with a locked or corrupt database.
+#[derive(Debug)]
+struct FailingVectorRepository;
+
+impl bkmr::domain::repositories::vector_repository::VectorRepository for FailingVectorRepository {
+    fn init_vec_table(&self, _dimensions: usize) -> bkmr::domain::error::DomainResult<()> {
+        unimplemented!()
+    }
+    fn upsert_embedding(&self, _id: i32, _e: &[f32]) -> bkmr::domain::error::DomainResult<()> {
+        unimplemented!()
+    }
+    fn delete_embedding(&self, _id: i32) -> bkmr::domain::error::DomainResult<()> {
+        unimplemented!()
+    }
+    fn search_nearest(
+        &self,
+        _q: &[f32],
+        _limit: usize,
+    ) -> bkmr::domain::error::DomainResult<Vec<(i32, f64)>> {
+        unimplemented!()
+    }
+    fn has_embeddings(&self) -> bkmr::domain::error::DomainResult<bool> {
+        Err(bkmr::domain::error::DomainError::BookmarkOperationFailed(
+            "vec_bookmarks probe failed: database is locked".to_string(),
+        ))
+    }
+    fn get_dimensions(&self) -> bkmr::domain::error::DomainResult<Option<usize>> {
+        unimplemented!()
+    }
+    fn clear_all(&self) -> bkmr::domain::error::DomainResult<()> {
+        unimplemented!()
+    }
+    fn get_embedded_ids(&self) -> bkmr::domain::error::DomainResult<HashSet<i32>> {
+        unimplemented!()
+    }
+    fn search_nearest_filtered(
+        &self,
+        _q: &[f32],
+        _limit: usize,
+        _filter_ids: Option<&HashSet<i32>>,
+    ) -> bkmr::domain::error::DomainResult<Vec<(i32, f64)>> {
+        unimplemented!()
+    }
+}
+
+/// Embedder with real dimensions so hybrid search does not skip the vector branch.
+#[derive(Debug)]
+struct FixedDimensionEmbedder;
+
+impl bkmr::domain::embedding::Embedder for FixedDimensionEmbedder {
+    fn embed_document(&self, _text: &str) -> bkmr::domain::error::DomainResult<Option<Vec<f32>>> {
+        unimplemented!()
+    }
+    fn embed_query(&self, _text: &str) -> bkmr::domain::error::DomainResult<Option<Vec<f32>>> {
+        unimplemented!()
+    }
+    fn dimensions(&self) -> usize {
+        384
+    }
+}
+
+#[test]
+fn given_vector_repository_fails_when_hybrid_search_then_error_is_returned() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let service = BookmarkServiceImpl::new(
+        Arc::new(setup_test_db()),
+        Arc::new(FixedDimensionEmbedder),
+        Arc::new(FailingVectorRepository),
+        Arc::new(JsonImportRepository::new()),
+    );
+
+    let result = service.hybrid_search(&bkmr::domain::search::HybridSearch::new("rust"));
+
+    let error = result.expect_err("vector store failure must not degrade to FTS-only results");
+    assert!(
+        error.to_string().contains("database is locked"),
+        "error should carry the store's cause, got: {error}"
+    );
+}
