@@ -69,7 +69,8 @@ pub enum RepositoryError {
     #[error("Constraint violation: {0}")]
     Constraint(String),
 
-    #[error("Repository error: {0}")]
+    // No prefix: always displayed inside DomainError::RepositoryError, which adds it.
+    #[error("{0}")]
     Other(String),
 }
 
@@ -129,5 +130,35 @@ impl From<BookmarkBuilderError> for DomainError {
 impl From<crate::lsp::services::SnippetError> for DomainError {
     fn from(e: crate::lsp::services::SnippetError) -> Self {
         DomainError::Other(e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn given_query_error_with_context_when_displayed_then_repository_prefix_appears_once() {
+        let error = DomainError::RepositoryError(RepositoryError::Query(
+            "fts5: syntax error near \"+\"".to_string(),
+        ))
+        .context("performing hybrid search on bookmarks");
+
+        assert_eq!(
+            error.to_string(),
+            "Repository error: performing hybrid search on bookmarks: Query error: fts5: syntax error near \"+\""
+        );
+    }
+
+    #[test]
+    fn given_other_repository_error_when_wrapped_in_domain_error_then_prefix_appears_once() {
+        let error = DomainError::RepositoryError(RepositoryError::Other(
+            "performing FTS search: Database error: no such column: bar".to_string(),
+        ));
+
+        assert_eq!(
+            error.to_string(),
+            "Repository error: performing FTS search: Database error: no such column: bar"
+        );
     }
 }

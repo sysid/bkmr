@@ -685,3 +685,26 @@ fn given_query_with_fts_operator_characters_when_hybrid_search_then_matches_lite
         );
     }
 }
+
+// --- hybrid_search: blank query is a validation error ---
+
+#[test]
+fn given_blank_query_when_hybrid_search_then_validation_error() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let service = create_test_service();
+
+    for query in ["", "   "] {
+        let error = service
+            .hybrid_search(&bkmr::domain::search::HybridSearch::new(query))
+            .expect_err("blank query must be rejected before reaching FTS5");
+
+        assert!(
+            matches!(
+                error,
+                bkmr::application::error::ApplicationError::Validation(_)
+            ),
+            "query {query:?} should fail validation, got: {error}"
+        );
+    }
+}
