@@ -72,7 +72,8 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             .hybrid_search(&search)
             .cli_context("performing hybrid search on bookmarks")?;
 
-        if results.is_empty() {
+        // JSON mode falls through so zero hits serialize as `[]`, matching `search --json`.
+        if results.is_empty() && !is_json {
             writeln!(stderr, "{}", "No bookmarks found".yellow())
                 .cli_context("writing empty search result to stderr")?;
             return Ok(());
