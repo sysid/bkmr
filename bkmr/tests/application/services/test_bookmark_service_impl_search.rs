@@ -659,3 +659,29 @@ fn given_vector_repository_fails_when_hybrid_search_then_error_is_returned() {
         "error should carry the store's cause, got: {error}"
     );
 }
+
+// --- hybrid_search: query text is literal on the FTS side ---
+
+#[test]
+fn given_query_with_fts_operator_characters_when_hybrid_search_then_matches_literally() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let service = create_test_service();
+    let id = add(
+        &service,
+        "https://literal-fts.example.com",
+        "C++ and node.js: foo-bar tips",
+        "",
+    );
+
+    for query in ["c++", "node.js", "foo-bar", "AND", "tips:"] {
+        let results = service
+            .hybrid_search(&bkmr::domain::search::HybridSearch::new(query))
+            .unwrap_or_else(|e| panic!("query {query:?} must not be parsed as FTS5 syntax: {e}"));
+
+        assert!(
+            results.iter().any(|r| r.bookmark.id == Some(id)),
+            "query {query:?} should find the bookmark"
+        );
+    }
+}

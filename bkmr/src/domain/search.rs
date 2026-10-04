@@ -133,6 +133,18 @@ impl HybridSearch {
         }
     }
 
+    /// FTS side of the query: every whitespace-separated term becomes a quoted
+    /// FTS5 string, so `c++`, `node.js`, `foo-bar` or `AND` match as text instead
+    /// of failing as syntax. FTS5 power syntax belongs to `search`; in hybrid mode
+    /// the same raw text is also embedded, where operators would only add noise.
+    pub fn fts_query(&self) -> String {
+        self.query
+            .split_whitespace()
+            .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     /// Returns true if any tag filters are set
     pub fn has_tag_filters(&self) -> bool {
         self.tags_all.is_some()
@@ -420,5 +432,30 @@ mod tests {
         };
 
         assert_eq!(result.similarity_percentage(), "75.6%");
+    }
+
+    #[test]
+    fn given_terms_with_fts_operators_when_fts_query_then_each_term_is_quoted() {
+        let search = HybridSearch::new("c++ node.js foo-bar title:rust AND deploy*");
+
+        assert_eq!(
+            search.fts_query(),
+            r#""c++" "node.js" "foo-bar" "title:rust" "AND" "deploy*""#
+        );
+    }
+
+    #[test]
+    fn given_term_containing_double_quote_when_fts_query_then_quote_is_escaped() {
+        let search = HybridSearch::new(r#"say"hi"#);
+
+        assert_eq!(search.fts_query(), r#""say""hi""#);
+    }
+
+    #[test]
+    fn given_literal_fts_query_when_rendered_then_semantic_query_is_unchanged() {
+        let search = HybridSearch::new("  c++   tips ");
+
+        assert_eq!(search.fts_query(), r#""c++" "tips""#);
+        assert_eq!(search.query, "  c++   tips ");
     }
 }

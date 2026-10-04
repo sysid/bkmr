@@ -104,6 +104,9 @@ how well the memory is found — make them descriptive.
 Use **one** `hsearch` call per lookup. Do not run both `hsearch` and `search` for the same
 query — the results overlap heavily and waste context.
 
+`hsearch` matches every term literally — `c++`, `node.js`, `foo-bar` need no quoting.
+FTS5 syntax (phrases, `AND`/`OR`/`NOT`, `prefix*`) only works in `search`.
+
 ```bash
 # Standard query — handles keywords and conceptual matches
 bkmr hsearch "database connection pooling" -t _mem_ --json --np
