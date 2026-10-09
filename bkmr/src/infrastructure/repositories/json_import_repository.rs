@@ -62,16 +62,8 @@ impl ImportRepository for JsonImportRepository {
             let mut tags = HashSet::new();
             for tag_str in &bookmark.tags {
                 match Tag::new(tag_str) {
+                    // Unknown `_x_` tags are kept: the domain allows them, same as `bkmr add`.
                     Ok(tag) => {
-                        if tag.is_system_tag() && !tag.is_known_system_tag() {
-                            warn!(tag = %tag.value(), "Unknown system tag ignored");
-                            eprintln!(
-                                "{} Unknown system tag '{}' ignored",
-                                "Warning".yellow(),
-                                tag.value()
-                            );
-                            continue;
-                        }
                         tags.insert(tag);
                     }
                     Err(e) => {
@@ -144,6 +136,28 @@ mod tests {
         assert_eq!(imports[1].content, "Another Test");
         assert_eq!(imports[1].tags.len(), 1);
         assert!(imports[1].tags.iter().any(|t| t.value() == "test2"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn given_unknown_system_tag_when_import_bookmarks_then_keeps_tag_like_add() -> DomainResult<()>
+    {
+        // `bkmr add` keeps unknown `_x_` tags (the domain allows them), so import must too.
+        let mut temp_file = NamedTempFile::new()?;
+        write!(
+            temp_file,
+            r#"[{{"url": "https://example.com/x", "title": "X", "description": "", "tags": ["foo", "_x_"]}}]"#
+        )
+        .expect("Failed to write to temp file");
+
+        let repo = JsonImportRepository::new();
+        let imports = repo.import_json_bookmarks(temp_file.path().to_str().unwrap())?;
+
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].tags.len(), 2);
+        assert!(imports[0].tags.iter().any(|t| t.value() == "foo"));
+        assert!(imports[0].tags.iter().any(|t| t.value() == "_x_"));
 
         Ok(())
     }
