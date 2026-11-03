@@ -21,7 +21,7 @@ pub fn build_embedding_content(tags: &HashSet<Tag>, title: &str, content: &str) 
 
 /// Represents a bookmark domain entity
 #[derive(Builder, Clone, PartialEq)]
-#[builder(setter(into))]
+#[builder(setter(into), build_fn(validate = "Self::validate"))]
 pub struct Bookmark {
     pub id: Option<i32>,
     pub url: String,
@@ -45,6 +45,16 @@ pub struct Bookmark {
     pub opener: Option<String>,
     #[builder(default)]
     pub accessed_at: Option<DateTime<Utc>>,
+}
+
+impl BookmarkBuilder {
+    /// Runs on `build()`, so the template edit and file import paths enforce the invariant too.
+    fn validate(&self) -> Result<(), String> {
+        match &self.tags {
+            Some(tags) => Bookmark::validate_single_system_tag(tags).map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
+    }
 }
 
 /// Methods for the Bookmark entity
@@ -143,6 +153,12 @@ impl Bookmark {
             )));
         }
         Ok(())
+    }
+
+    /// Check the entity invariants. `tags` is a public field, so code that mutates it directly
+    /// bypasses `add_tag`/`set_tags`; the repository calls this before every write.
+    pub fn validate(&self) -> DomainResult<()> {
+        Self::validate_single_system_tag(&self.tags)
     }
 
     /// Add a tag to the bookmark
@@ -307,6 +323,7 @@ impl Bookmark {
             && !self.is_system_tag(SystemTag::Shell)
             && !self.is_system_tag(SystemTag::Markdown)
             && !self.is_system_tag(SystemTag::Env)
+            && !self.is_system_tag(SystemTag::Memory)
     }
 
     /// Check if this bookmark is a shell script
@@ -993,5 +1010,79 @@ mod tests {
 
         let result = Bookmark::new("content", "title", "desc", tags);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn given_multiple_known_system_tags_when_builder_build_then_returns_error() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+        tags.insert(Tag::new("_mem_").unwrap());
+
+        let result = BookmarkBuilder::default()
+            .id(None)
+            .url("# memory")
+            .title("title")
+            .description("")
+            .tags(tags)
+            .access_count(0)
+            .created_at(None)
+            .updated_at(Utc::now())
+            .embedding(None)
+            .content_hash(None)
+            .embeddable(true)
+            .build();
+
+        assert!(result.is_err());
+        let err = result.err().unwrap().to_string();
+        assert!(err.contains("at most one system tag"), "got: {err}");
+    }
+
+    #[test]
+    fn given_single_system_tag_when_builder_build_then_ok() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_mem_").unwrap());
+        tags.insert(Tag::new("fact").unwrap());
+
+        let result = BookmarkBuilder::default()
+            .id(None)
+            .url("memory")
+            .title("title")
+            .description("")
+            .tags(tags)
+            .access_count(0)
+            .created_at(None)
+            .updated_at(Utc::now())
+            .embedding(None)
+            .content_hash(None)
+            .embeddable(true)
+            .build();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn given_memory_bookmark_when_is_uri_then_false() {
+        let _ = init_test_env();
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_mem_").unwrap());
+
+        let bookmark = Bookmark::new("remembered fact", "title", "", tags).unwrap();
+
+        assert!(bookmark.is_memory());
+        assert!(!bookmark.is_uri());
+    }
+
+    #[test]
+    fn given_field_mutated_to_multiple_system_tags_when_validate_then_returns_error() {
+        let _ = init_test_env();
+        let mut bookmark = Bookmark::new("content", "title", "", HashSet::new()).unwrap();
+        bookmark.tags.insert(Tag::new("_md_").unwrap());
+        bookmark.tags.insert(Tag::new("_mem_").unwrap());
+
+        let result = bookmark.validate();
+
+        assert!(result.is_err());
     }
 }

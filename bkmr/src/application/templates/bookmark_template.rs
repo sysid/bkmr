@@ -381,6 +381,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn given_template_with_two_system_tags_when_to_bookmark_then_returns_error() {
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+        tags.insert(Tag::new("_mem_").unwrap());
+        let template = BookmarkTemplate {
+            id: Some(1),
+            url: "# memory".to_string(),
+            title: "title".to_string(),
+            tags,
+            comments: String::new(),
+            embeddable: true,
+            opener: None,
+        };
+
+        let result = template.to_bookmark(None);
+
+        assert!(result.is_err());
+        let err = result.err().unwrap().to_string();
+        assert!(err.contains("at most one system tag"), "got: {err}");
+    }
+
+    #[test]
     fn given_bookmark_when_convert_to_template_and_back_then_preserves_data() {
         // Create a template
         let mut tags = HashSet::new();
