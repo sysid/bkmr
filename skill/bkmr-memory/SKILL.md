@@ -26,7 +26,7 @@ them, memories are unfindable or uncategorized noise.
 
 **READING — every query must include `-t _mem_`:**
 ```bash
-bkmr hsearch "query" -t _mem_ --json --np       # default: hybrid (FTS + semantic)
+bkmr hsearch 'query' -t _mem_ --json --np       # default: hybrid (FTS + semantic)
 ```
 The `-t _mem_` flag scopes results to agent memories only. Without it, you search the entire
 bookmark database (personal bookmarks, snippets, shells, etc.) — guaranteed noise.
@@ -39,7 +39,7 @@ query text (`-t _mem_ -n gotcha`).
 
 **WRITING — every memory must use `-t mem` AND exactly one classification tag:**
 ```bash
-bkmr add "content" "CLASSIFICATION,topic1,topic2" --title "Title" -t mem --no-web
+bkmr add 'content' 'CLASSIFICATION,topic1,topic2' --title 'Title' -t mem --no-web
 #                    ^^^^^^^^^^^^^^
 #                    REQUIRED: exactly one of: fact, procedure, preference, episode, gotcha
 ```
@@ -109,13 +109,13 @@ FTS5 syntax (phrases, `AND`/`OR`/`NOT`, `prefix*`) only works in `search`.
 
 ```bash
 # Standard query — handles keywords and conceptual matches
-bkmr hsearch "database connection pooling" -t _mem_ --json --np
+bkmr hsearch 'database connection pooling' -t _mem_ --json --np
 
 # With a classification filter — narrows results to a category
-bkmr hsearch "deployment steps" -t _mem_ -n procedure --json --np
+bkmr hsearch 'deployment steps' -t _mem_ -n procedure --json --np
 
 # Limit results when you only need top matches
-bkmr hsearch "auth middleware" -t _mem_ --json --np -l 5
+bkmr hsearch 'auth middleware' -t _mem_ --json --np -l 5
 ```
 
 **FTS-only fallback** — use `search` instead of `hsearch` only for these three cases:
@@ -159,11 +159,11 @@ Note: `search --json` returns a slightly different shape (tags as array, include
 
 | Situation | Query |
 |-----------|-------|
-| Starting work on a project | `bkmr hsearch "project-name overview" -t _mem_ --json --np -l 5` |
-| Before changing architecture | `bkmr hsearch "architecture decisions" -t _mem_ -n gotcha --json --np` |
-| Checking user preferences | `bkmr hsearch "conventions style" -t _mem_ -n preference --json --np` |
-| Recalling a past debugging session | `bkmr hsearch "debugged auth issue" -t _mem_ -n episode --json --np` |
-| Looking up a deployment procedure | `bkmr hsearch "deploy staging" -t _mem_ -n procedure --json --np` |
+| Starting work on a project | `bkmr hsearch 'project-name overview' -t _mem_ --json --np -l 5` |
+| Before changing architecture | `bkmr hsearch 'architecture decisions' -t _mem_ -n gotcha --json --np` |
+| Checking user preferences | `bkmr hsearch 'conventions style' -t _mem_ -n preference --json --np` |
+| Recalling a past debugging session | `bkmr hsearch 'debugged auth issue' -t _mem_ -n episode --json --np` |
+| Looking up a deployment procedure | `bkmr hsearch 'deploy staging' -t _mem_ -n procedure --json --np` |
 | Browse all gotchas (no query) | `bkmr search -t _mem_ -n gotcha --json --np` |
 
 ---
@@ -213,45 +213,77 @@ Every memory gets exactly **one** classification tag:
 ### How to Store
 
 ```bash
-bkmr add "CONTENT" "CLASSIFICATION,TOPIC_TAGS" --title "TITLE" -t mem --no-web
+bkmr add 'CONTENT' 'CLASSIFICATION,TOPIC_TAGS' --title 'TITLE' -t mem --no-web
 ```
+
+### Shell Quoting (Critical)
+
+Memory content routinely contains backticks, `$`, and `!`. Inside **double quotes** the shell
+rewrites them *before bkmr sees the text* — and it fails silently:
+
+```bash
+bkmr add "Run `date +%Y` first; costs $5" ...   # stored: "Run 2026 first; costs "  ← corrupted, and `date` was EXECUTED
+```
+
+Rules — they apply to `add`, `update --url`, `--title`, and queries alike:
+
+1. **Default: single quotes.** Nothing inside `'...'` is expanded.
+2. **Content contains an apostrophe** (`don't`, `'5s'`): use a quoted heredoc via command
+   substitution. The quoted delimiter `'EOF'` disables all expansion, and the substitution result
+   is not re-parsed:
+   ```bash
+   bkmr add "$(cat <<'EOF'
+   Don't run `make clean` before deploy; it wipes $CACHE_DIR.
+   EOF
+   )" 'gotcha,deployment' --title 'make clean wipes the deploy cache' -t mem --no-web
+
+   bkmr update --url "$(cat <<'EOF'
+   ...new content...
+   EOF
+   )" 42
+   ```
+3. **Never** use double quotes around content, and never use `--stdin` with a positional content
+   argument: `bkmr add --stdin 'fact,x'` parses `'fact,x'` as the URL slot, discards it, and
+   silently drops every tag except `_mem_`.
 
 **Concrete examples:**
 
 ```bash
 # Fact
 bkmr add \
-  "Production PostgreSQL 15 runs on db-prod-1.internal:5433. Read replicas on ports 5434-5436. Connection pool max is 50." \
-  "fact,infrastructure,database" \
-  --title "Production database connection details" \
+  'Production PostgreSQL 15 runs on db-prod-1.internal:5433. Read replicas on ports 5434-5436. Connection pool max is 50.' \
+  'fact,infrastructure,database' \
+  --title 'Production database connection details' \
   -t mem --no-web
 
 # Procedure
 bkmr add \
-  "Deploy to staging: 1) Run 'make deploy-staging' 2) Wait for health check at /api/health 3) Verify logs in Grafana dashboard 'staging-deploys' 4) Run smoke tests with 'make test-smoke'" \
-  "procedure,deployment,staging" \
-  --title "Staging deployment procedure" \
+  'Deploy to staging: 1) Run `make deploy-staging` 2) Wait for health check at /api/health 3) Verify logs in Grafana dashboard `staging-deploys` 4) Run smoke tests with `make test-smoke`' \
+  'procedure,deployment,staging' \
+  --title 'Staging deployment procedure' \
   -t mem --no-web
 
 # Preference
 bkmr add \
-  "User prefers pytest over unittest. Test files go in tests/ not __tests__/. Always use fixtures, never setUp/tearDown classes. Parametrize over duplicate test functions." \
-  "preference,testing,python" \
-  --title "Python testing conventions" \
+  'User prefers pytest over unittest. Test files go in tests/ not __tests__/. Always use fixtures, never setUp/tearDown classes. Parametrize over duplicate test functions.' \
+  'preference,testing,python' \
+  --title 'Python testing conventions' \
   -t mem --no-web
 
-# Episode
-bkmr add \
-  "2026-04-04: Debugged auth middleware timeout. Root cause: JWT expiry was set to 5 seconds (not 5 minutes) in config/auth.yml. The 's' suffix was interpreted as seconds, not minutes. Fix: changed '5s' to '5m'. See commit abc123." \
-  "episode,auth,debugging" \
-  --title "Auth middleware JWT expiry bug — 5s vs 5m" \
+# Episode (content has apostrophes -> quoted heredoc)
+bkmr add "$(cat <<'EOF'
+2026-04-04: Debugged auth middleware timeout. Root cause: JWT expiry was set to 5 seconds (not 5 minutes) in config/auth.yml. The 's' suffix was interpreted as seconds, not minutes. Fix: changed '5s' to '5m'. See commit abc123.
+EOF
+)" \
+  'episode,auth,debugging' \
+  --title 'Auth middleware JWT expiry bug — 5s vs 5m' \
   -t mem --no-web
 
 # Gotcha
 bkmr add \
-  "bkmr integration tests MUST run single-threaded (--test-threads=1) because they share a SQLite DB file. Parallel execution causes SQLITE_BUSY errors that look like test failures but are actually lock contention." \
-  "project:bkmr,gotcha,testing" \
-  --title "bkmr tests require single-threaded execution" \
+  'bkmr integration tests MUST run single-threaded (--test-threads=1) because they share a SQLite DB file. Parallel execution causes SQLITE_BUSY errors that look like test failures but are actually lock contention.' \
+  'project:bkmr,gotcha,testing' \
+  --title 'bkmr tests require single-threaded execution' \
   -t mem --no-web
 ```
 
@@ -263,6 +295,12 @@ Since embeddings are built from content + title + tags, write memories that are 
 - **Content**: Lead with the key fact. Add context after. Use concrete names, not pronouns.
 - **Tags**: Include topic keywords beyond the classification (e.g., `fact,database,postgres,production`)
 - **References over copies**: Instead of pasting code, write `"The retry logic in src/http/client.rs:45-60 uses exponential backoff with jitter. Max 3 retries, base delay 100ms."`
+- **Markdown: light is fine, structure is not.** Inline code and a few bullets cost nothing in
+  retrieval. Headings/tables/links nearly double the embedding tokens for no gain, and a table
+  pushing content past the 512-token embedding window silently drops the tail (a buried fact fell
+  from rank 1 to 22). If a memory needs `##` sections, it is several memories — split it: merging 4
+  facts into one sectioned doc cut paraphrase-query R@1 from 0.75 to 0.58
+  (`evals/markdown_retrieval.py`).
 
 ### Deduplication (Critical)
 
@@ -270,12 +308,12 @@ Before storing any memory, check if a similar one already exists:
 
 ```bash
 # Search for similar memories
-bkmr hsearch "your proposed memory content keywords" -t _mem_ --json --np -l 3
+bkmr hsearch 'your proposed memory content keywords' -t _mem_ --json --np -l 3
 ```
 
 **Decision logic:**
 - **No match** → create new memory
-- **Outdated match** → update content with `bkmr update --url "..." <id>`
+- **Outdated match** → update content with `bkmr update --url '...' <id>`
 - **Same content exists** → skip, don't duplicate
 - **Related but adds info** → update to merge both facts
 
@@ -285,35 +323,35 @@ bkmr hsearch "your proposed memory content keywords" -t _mem_ --json --np -l 3
 
 ```bash
 # Step 1: Search finds existing memory
-bkmr hsearch "production database" -t _mem_ -n fact --json --np -l 3
+bkmr hsearch 'production database' -t _mem_ -n fact --json --np -l 3
 # Returns: id=42, url="Prod DB on port 5432", title="Production database config"
 
 # Step 2: Update the content (port changed)
-bkmr update --url "Production PostgreSQL 15 on port 5433. Pool max 50." 42
+bkmr update --url 'Production PostgreSQL 15 on port 5433. Pool max 50.' 42
 ```
 
 **Scenario 2: Enriching a memory** — adding new info to existing memory
 
 ```bash
 # Step 1: Search finds a thin memory
-bkmr hsearch "auth service" -t _mem_ --json --np -l 3
+bkmr hsearch 'auth service' -t _mem_ --json --np -l 3
 # Returns: id=87, url="Auth uses JWT with 24h expiry", title="Auth token config"
 
 # Step 2: Enrich with more detail
-bkmr update --url "Auth uses JWT with 24h expiry. Refresh tokens in Redis (not DB). Token rotation enabled. JWKS endpoint at /api/.well-known/jwks.json." 87
+bkmr update --url 'Auth uses JWT with 24h expiry. Refresh tokens in Redis (not DB). Token rotation enabled. JWKS endpoint at /api/.well-known/jwks.json.' 87
 ```
 
 **Scenario 3: Fixing a bad title** — improving searchability
 
 ```bash
-bkmr update --title "Auth service: JWT expiry, refresh tokens, JWKS endpoint" 87
+bkmr update --title 'Auth service: JWT expiry, refresh tokens, JWKS endpoint' 87
 ```
 
 **Scenario 4: Reclassifying a memory** — was stored as fact, should be gotcha
 
 ```bash
 # Replace all tags (must include _mem_ and new classification)
-bkmr update 87 -t "_mem_,gotcha,auth,jwt" -f
+bkmr update 87 -t '_mem_,gotcha,auth,jwt' -f
 ```
 
 **Scenario 5: Adding topic tags** — make memory more discoverable
@@ -344,7 +382,7 @@ Did I learn something new?
     │       │       │       │   ├── Yes → Don't store (re-derivation is cheaper than stale memory)
     │       │       │       │   └── No
     │       │       │       │       ├── Does a similar memory already exist?
-    │       │       │       │       │   ├── Yes → Update existing (bkmr update --url "..." <id>)
+    │       │       │       │       │   ├── Yes → Update existing (bkmr update --url '...' <id>)
     │       │       │       │       │   └── No → Create new memory
     │       │       │       │       └── Done
     │       │       │       └── Done
@@ -364,6 +402,9 @@ Did I learn something new?
 | Missing classification tag | Unfilterable, breaks taxonomy | Always include exactly one of: fact/procedure/preference/episode/gotcha |
 | Missing `-t _mem_` on queries | Searches entire DB, returns noise | Every read query needs `-t _mem_` |
 | Storing full file contents | Exceeds token limit, stale immediately | Store summary + file path reference |
+| Double-quoting content (`bkmr add "..."`) | Backticks run as commands, `$VAR` expands — memory silently corrupted | Single quotes; quoted heredoc if content has `'` |
+| `bkmr add --stdin 'tags'` | Tags land in the URL slot and are discarded | Use `"$(cat <<'EOF' ... EOF)"` as the content argument |
+| Multi-section markdown memory (`##`, tables) | One blurred embedding for many facts; tail truncated past 512 tokens | One fact per memory; at most inline code + short bullets |
 | Storing git history | `git log` is authoritative and current | Only store *interpretations* ("we chose X because Y") |
 | Storing TODO items | Ephemeral, belongs in issue tracker | Store the *decision* or *reason*, not the task |
 | Vague titles like "note" | Unsearchable, useless embeddings | Use specific descriptive titles |
@@ -387,16 +428,16 @@ Query for relevant memories before writing code, making plans, or answering ques
 A single well-crafted hsearch is usually enough — don't run multiple overlapping queries.
 ```bash
 # Primary query — combine project name + task keywords for best recall
-bkmr hsearch "<project-name> <current-task-keywords>" -t _mem_ --json --np -l 5
+bkmr hsearch '<project-name> <current-task-keywords>' -t _mem_ --json --np -l 5
 
 # Only add a second query if the task involves a specific risk area
-bkmr hsearch "<area-of-work>" -t _mem_ -n gotcha --json --np
+bkmr hsearch '<area-of-work>' -t _mem_ -n gotcha --json --np
 ```
 
 ### During Work (BEFORE decisions, AT strange bugs)
 ```bash
 # Before architectural decisions, check for prior decisions/gotchas
-bkmr hsearch "<decision topic>" -t _mem_ --json --np
+bkmr hsearch '<decision topic>' -t _mem_ --json --np
 ```
 
 ### At Task End or Session End (BEFORE signing off)
@@ -405,9 +446,9 @@ from section 3. If something qualifies, dedup and store:
 ```bash
 # 1. Reflect: did I learn anything non-trivial that isn't in code/docs/git?
 # 2. If yes, dedup check:
-bkmr hsearch "<summary of what I learned>" -t _mem_ --json --np -l 3
+bkmr hsearch '<summary of what I learned>' -t _mem_ --json --np -l 3
 # 3. If no duplicate, store it:
-bkmr add "concise memory content" "classification,topic1,topic2" \
-  --title "Descriptive title" -t mem --no-web
+bkmr add 'concise memory content' 'classification,topic1,topic2' \
+  --title 'Descriptive title' -t mem --no-web
 # 4. If nothing worth storing, that's fine — but you must have evaluated.
 ```

@@ -87,6 +87,31 @@
           "type": "required"
         }
       ]
+    },
+    {
+      "id": 3,
+      "name": "shell-quoting",
+      "prompt": "Remember this gotcha: don't run `make clean` before deploying, it wipes $CACHE_DIR and the next build takes 40 minutes.",
+      "expected_output": "Agent stores a gotcha memory whose stored url contains the literal text `make clean` (with backticks) and $CACHE_DIR, plus the apostrophe in don't. Because the content has an apostrophe, it uses the quoted-heredoc form \"$(cat <<'EOF' ... EOF)\" rather than double quotes.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Does NOT pass the content inside double quotes (\"...\") without a quoted heredoc",
+          "type": "required"
+        },
+        {
+          "text": "Stored url (verified via bkmr show <id> --json) contains the literal backtick-quoted `make clean` and the literal string $CACHE_DIR",
+          "type": "required"
+        },
+        {
+          "text": "Does NOT use --stdin together with a positional tags argument",
+          "type": "required"
+        },
+        {
+          "text": "Uses 'gotcha' as the classification tag",
+          "type": "required"
+        }
+      ]
     }
   ]
 }

@@ -1,0 +1,313 @@
+{
+  "_comment": "Corpus for markdown_retrieval.py. Each fact carries the same information in three renderings: plain prose, light markdown (bullets + inline code), heavy markdown (headings, bold, table, links). Themes group 4 deliberately confusable facts so ranking is non-trivial.",
+  "themes": {
+    "db": "Database operations",
+    "deploy": "Deployment and Kubernetes",
+    "auth": "Authentication",
+    "ci": "CI and testing",
+    "rust": "Rust build tooling",
+    "shell": "Shell and editor environment"
+  },
+  "facts": [
+    {
+      "id": "db-port",
+      "theme": "db",
+      "title": "Production PostgreSQL connection details",
+      "tags": ["fact", "postgres", "database"],
+      "plain": "Production PostgreSQL 15 runs on db-prod-1.internal port 5433, not the default 5432. Read replicas listen on ports 5434 to 5436. Connection pool maximum is 50.",
+      "md_light": "Production PostgreSQL 15:\n- host `db-prod-1.internal`, port `5433` (not default `5432`)\n- read replicas on ports `5434`-`5436`\n- connection pool max: 50",
+      "md_heavy": "## Production PostgreSQL\n\n**Version:** 15\n\n| Role | Host | Port |\n|------|------|------|\n| primary | `db-prod-1.internal` | `5433` |\n| replicas | `db-prod-1.internal` | `5434`-`5436` |\n\n> Not the default `5432`!\n\n**Connection pool max:** 50 — see [pool docs](https://wiki.internal.example.com/db/pooling)"
+    },
+    {
+      "id": "db-migrate-lock",
+      "theme": "db",
+      "title": "Migrations take an exclusive lock on the orders table",
+      "tags": ["gotcha", "postgres", "migrations"],
+      "plain": "Running schema migrations against the orders table takes an ACCESS EXCLUSIVE lock and blocks checkout for minutes. Always add columns with a default in two steps and run migrations outside business hours.",
+      "md_light": "Schema migrations on `orders` take an `ACCESS EXCLUSIVE` lock and block checkout for minutes.\n- add columns with a default in two steps\n- run migrations outside business hours",
+      "md_heavy": "## ⚠️ Migration lock on `orders`\n\nSchema migrations on the **orders** table take an `ACCESS EXCLUSIVE` lock.\n\n### Impact\n- Checkout is **blocked for minutes**\n\n### Mitigation\n1. Add columns with a default in **two steps**\n2. Run migrations **outside business hours**\n\nRef: [Postgres lock docs](https://www.postgresql.org/docs/current/explicit-locking.html)"
+    },
+    {
+      "id": "db-backup",
+      "theme": "db",
+      "title": "Nightly database backup procedure",
+      "tags": ["procedure", "postgres", "backup"],
+      "plain": "Nightly backups use pg_dump in custom format to the S3 bucket acme-db-backups, retained for 30 days. Restore with pg_restore --jobs 8 into a fresh database, then run ANALYZE before switching traffic.",
+      "md_light": "Nightly backups:\n- `pg_dump` custom format to S3 bucket `acme-db-backups`, kept 30 days\n- restore: `pg_restore --jobs 8` into a fresh DB\n- run `ANALYZE` before switching traffic",
+      "md_heavy": "## Nightly Backup\n\n| Setting | Value |\n|---|---|\n| Tool | `pg_dump` (custom format) |\n| Target | `s3://acme-db-backups` |\n| Retention | **30 days** |\n\n## Restore\n\n```bash\npg_restore --jobs 8 -d fresh_db dump.custom\npsql -c 'ANALYZE'\n```\n\nRun `ANALYZE` **before** switching traffic. See [runbook](https://wiki.internal.example.com/db/restore)."
+    },
+    {
+      "id": "db-timezone",
+      "theme": "db",
+      "title": "Reporting database stores timestamps in local time",
+      "tags": ["gotcha", "database", "timezone"],
+      "plain": "The legacy reporting database stores timestamps as timestamp without time zone in Europe/Berlin local time, not UTC. Joins with the event stream, which is UTC, are off by one or two hours depending on daylight saving.",
+      "md_light": "Legacy reporting DB stores `timestamp without time zone` in **Europe/Berlin** local time, not UTC.\n- joins with the UTC event stream are off by 1-2h depending on DST",
+      "md_heavy": "## 🕐 Reporting DB timezone trap\n\n| System | Timezone |\n|---|---|\n| Reporting DB | `Europe/Berlin` (local, `timestamp without time zone`) |\n| Event stream | **UTC** |\n\n### Symptom\nJoins are off by **1–2 hours** depending on daylight saving.\n\nSee [tz database](https://www.iana.org/time-zones)."
+    },
+    {
+      "id": "deploy-staging",
+      "theme": "deploy",
+      "title": "Staging deployment procedure",
+      "tags": ["procedure", "deployment", "staging"],
+      "plain": "Deploy to staging by running make deploy-staging, waiting for the health check at /api/health to return ok, checking the staging-deploys Grafana dashboard, then running make test-smoke.",
+      "md_light": "Deploy to staging:\n1. `make deploy-staging`\n2. wait for `/api/health` to return ok\n3. check Grafana dashboard `staging-deploys`\n4. `make test-smoke`",
+      "md_heavy": "# Staging Deployment\n\n## Steps\n\n```bash\nmake deploy-staging\ncurl -f https://staging.example.com/api/health\nmake test-smoke\n```\n\n## Verification\n- [ ] Health check `/api/health` returns **ok**\n- [ ] Grafana [staging-deploys](https://grafana.example.com/d/staging-deploys)\n- [ ] Smoke tests green"
+    },
+    {
+      "id": "deploy-oom",
+      "theme": "deploy",
+      "title": "Worker pods OOMKilled because JVM ignores cgroup limit",
+      "tags": ["episode", "kubernetes", "jvm"],
+      "plain": "Worker pods were repeatedly OOMKilled. Root cause: the JVM sized its heap from host memory instead of the container limit because MaxRAMPercentage was unset. Fix was setting -XX:MaxRAMPercentage=75 in the worker deployment.",
+      "md_light": "Worker pods repeatedly **OOMKilled**.\n- root cause: JVM sized heap from host memory, not the container limit (`MaxRAMPercentage` unset)\n- fix: `-XX:MaxRAMPercentage=75` in the worker deployment",
+      "md_heavy": "## Incident: Worker OOMKilled\n\n### Symptom\nWorker pods repeatedly `OOMKilled`.\n\n### Root cause\n| Expected | Actual |\n|---|---|\n| heap sized from container limit | heap sized from **host memory** |\n\n`MaxRAMPercentage` was unset.\n\n### Fix\n```yaml\nenv:\n  - name: JAVA_TOOL_OPTIONS\n    value: -XX:MaxRAMPercentage=75\n```\nSee [JDK docs](https://docs.oracle.com/en/java/javase/21/docs/specs/man/java.html)."
+    },
+    {
+      "id": "deploy-helm-rollback",
+      "theme": "deploy",
+      "title": "Helm rollback does not revert database migrations",
+      "tags": ["gotcha", "helm", "deployment"],
+      "plain": "helm rollback only reverts Kubernetes manifests; the pre-upgrade migration job has already changed the schema. Rolling back the app to an older image against a newer schema crashes on startup. Use forward fixes instead of rollback after a migration.",
+      "md_light": "`helm rollback` only reverts Kubernetes manifests — the pre-upgrade migration job already changed the schema.\n- old image + new schema = crash on startup\n- after a migration, use forward fixes, not rollback",
+      "md_heavy": "## ⚠️ `helm rollback` ≠ schema rollback\n\n**What reverts:** Kubernetes manifests\n**What does NOT revert:** the `pre-upgrade` migration job\n\n| App image | Schema | Result |\n|---|---|---|\n| old | new | 💥 crash on startup |\n\n**Rule:** after a migration, use **forward fixes** only. See [Helm hooks](https://helm.sh/docs/topics/charts_hooks/)."
+    },
+    {
+      "id": "deploy-ingress-timeout",
+      "theme": "deploy",
+      "title": "Ingress proxy timeout cuts long report downloads",
+      "tags": ["gotcha", "kubernetes", "nginx"],
+      "plain": "The nginx ingress default proxy-read-timeout of 60 seconds cuts off large report downloads, and the client sees a truncated file with status 200. The reports ingress needs the annotation nginx.ingress.kubernetes.io/proxy-read-timeout set to 600.",
+      "md_light": "nginx ingress default `proxy-read-timeout` (60s) cuts off large report downloads; client sees a truncated file with status 200.\n- reports ingress needs `nginx.ingress.kubernetes.io/proxy-read-timeout: \"600\"`",
+      "md_heavy": "## Ingress timeout truncates downloads\n\n**Default:** `proxy-read-timeout` = 60s\n**Symptom:** truncated report file, but HTTP **200**\n\n### Fix\n```yaml\nmetadata:\n  annotations:\n    nginx.ingress.kubernetes.io/proxy-read-timeout: \"600\"\n```\nSee [ingress-nginx annotations](https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/annotations/)."
+    },
+    {
+      "id": "auth-jwt-expiry",
+      "theme": "auth",
+      "title": "JWT expiry configured as 5s instead of 5m",
+      "tags": ["episode", "auth", "jwt"],
+      "plain": "Users were logged out every few seconds. The JWT expiry in config/auth.yml was 5s, interpreted as five seconds, where five minutes was intended. Changed it to 5m.",
+      "md_light": "Users logged out every few seconds.\n- JWT expiry in `config/auth.yml` was `5s` (seconds), intended `5m`\n- fix: changed to `5m`",
+      "md_heavy": "## Incident: constant logouts\n\n| Setting | File | Was | Should be |\n|---|---|---|---|\n| JWT expiry | `config/auth.yml` | `5s` | `5m` |\n\n**Root cause:** unit suffix `s` = seconds.\n\n**Fix:** `expiry: 5m`"
+    },
+    {
+      "id": "auth-refresh-redis",
+      "theme": "auth",
+      "title": "Refresh tokens live in Redis, not the database",
+      "tags": ["fact", "auth", "redis"],
+      "plain": "Refresh tokens are stored in Redis with a 14 day TTL, not in PostgreSQL. Flushing Redis logs out every user. Token rotation is enabled, so a reused refresh token revokes the whole session family.",
+      "md_light": "Refresh tokens are stored in **Redis** (14 day TTL), not PostgreSQL.\n- flushing Redis logs out every user\n- token rotation on: a reused refresh token revokes the whole session family",
+      "md_heavy": "## Refresh token storage\n\n| Property | Value |\n|---|---|\n| Store | **Redis** (not PostgreSQL) |\n| TTL | 14 days |\n| Rotation | enabled |\n\n> ⚠️ `FLUSHALL` on Redis logs out **every** user.\n\nReuse of a refresh token revokes the whole session family ([RFC 6819](https://datatracker.ietf.org/doc/html/rfc6819))."
+    },
+    {
+      "id": "auth-clock-skew",
+      "theme": "auth",
+      "title": "Token validation fails on hosts with clock skew",
+      "tags": ["gotcha", "auth", "ntp"],
+      "plain": "Token validation rejects freshly issued tokens with 'token used before issued' on build agents whose clock drifts. The validator has zero leeway. Fix chrony on the host or allow 30 seconds leeway in the validator.",
+      "md_light": "Token validation rejects fresh tokens with `token used before issued` on build agents with clock drift.\n- validator has zero leeway\n- fix `chrony` on the host, or allow 30s leeway",
+      "md_heavy": "## Clock skew breaks token validation\n\n**Error:** `token used before issued`\n**Where:** build agents with drifting clocks\n\n### Cause\nValidator `leeway = 0`.\n\n### Fix options\n| Option | Where |\n|---|---|\n| fix `chrony` | host |\n| `leeway: 30s` | validator config |\n\nSee [chrony docs](https://chrony-project.org/documentation.html)."
+    },
+    {
+      "id": "auth-sso-pref",
+      "theme": "auth",
+      "title": "User prefers OIDC over SAML for new integrations",
+      "tags": ["preference", "auth", "sso"],
+      "plain": "For new single sign-on integrations the user prefers OIDC with PKCE over SAML, because SAML metadata rotation caused two outages. Only use SAML when the identity provider offers nothing else.",
+      "md_light": "New SSO integrations: prefer **OIDC + PKCE** over SAML.\n- reason: SAML metadata rotation caused two outages\n- use SAML only when the IdP offers nothing else",
+      "md_heavy": "## SSO protocol preference\n\n| Protocol | Use? |\n|---|---|\n| **OIDC + PKCE** | ✅ default |\n| SAML | ⚠️ only if IdP has nothing else |\n\n**Why:** SAML metadata rotation caused **two outages**.\n\nRef: [OAuth PKCE](https://oauth.net/2/pkce/)"
+    },
+    {
+      "id": "ci-registry-silent",
+      "theme": "ci",
+      "title": "CI reports success when the Docker registry is unreachable",
+      "tags": ["gotcha", "ci", "docker"],
+      "plain": "The CI pipeline reports success even when the Docker registry is unreachable; the image is never pushed. Adding --push-verify to the docker build step in the Makefile makes the job fail properly.",
+      "md_light": "CI pipeline reports success when the Docker registry is unreachable; the image never gets pushed.\n- fix: add `--push-verify` to the docker build step in the `Makefile`",
+      "md_heavy": "## 🚨 Silent CI success\n\n**Symptom:** pipeline green, image **never pushed**\n**Trigger:** Docker registry unreachable\n\n### Fix (`Makefile`)\n```make\nbuild:\n\tdocker build --push-verify .\n```\n\nSee [CI docs](https://ci.example.com/docs/docker)."
+    },
+    {
+      "id": "ci-single-thread",
+      "theme": "ci",
+      "title": "Integration tests must run single-threaded",
+      "tags": ["gotcha", "testing", "sqlite"],
+      "plain": "Integration tests must run with --test-threads=1 because they share one SQLite database file. Parallel runs produce SQLITE_BUSY errors that look like test failures but are lock contention.",
+      "md_light": "Integration tests must run with `--test-threads=1` — they share one SQLite DB file.\n- parallel runs give `SQLITE_BUSY` errors that look like failures but are lock contention",
+      "md_heavy": "## Test parallelism\n\n```bash\ncargo test -- --test-threads=1\n```\n\n| Mode | Result |\n|---|---|\n| parallel | ❌ `SQLITE_BUSY` (lock contention, **not** real failures) |\n| single-threaded | ✅ |\n\n**Why:** all tests share **one SQLite file**. See [SQLite locking](https://www.sqlite.org/lockingv3.html)."
+    },
+    {
+      "id": "ci-flaky-port",
+      "theme": "ci",
+      "title": "Flaky tests caused by hardcoded port 8080",
+      "tags": ["episode", "testing", "flaky"],
+      "plain": "Intermittent test failures with 'address already in use' were caused by two test suites binding the hardcoded port 8080. Switched to binding port 0 and reading the assigned port back from the listener.",
+      "md_light": "Intermittent test failures `address already in use`:\n- two suites bound hardcoded port `8080`\n- fix: bind port `0`, read assigned port from the listener",
+      "md_heavy": "## Flaky: `address already in use`\n\n### Cause\nTwo suites bind **hardcoded** `8080`.\n\n### Fix\n```rust\nlet listener = TcpListener::bind(\"127.0.0.1:0\")?;\nlet port = listener.local_addr()?.port();\n```\nSee [std::net](https://doc.rust-lang.org/std/net/struct.TcpListener.html)."
+    },
+    {
+      "id": "ci-pytest-pref",
+      "theme": "ci",
+      "title": "Python testing conventions",
+      "tags": ["preference", "testing", "python"],
+      "plain": "The user prefers pytest over unittest, tests in tests/ not __tests__/, fixtures instead of setUp and tearDown classes, and parametrize instead of duplicated test functions.",
+      "md_light": "Python testing conventions:\n- `pytest` over `unittest`\n- tests in `tests/`, not `__tests__/`\n- fixtures, not `setUp`/`tearDown`\n- `@pytest.mark.parametrize` over duplicated tests",
+      "md_heavy": "## Python Testing Conventions\n\n| Do | Don't |\n|---|---|\n| `pytest` | `unittest` |\n| `tests/` | `__tests__/` |\n| fixtures | `setUp`/`tearDown` |\n| `@pytest.mark.parametrize` | copy-pasted tests |\n\nSee [pytest docs](https://docs.pytest.org/)."
+    },
+    {
+      "id": "rust-linker",
+      "theme": "rust",
+      "title": "Use mold linker to speed up Rust debug builds",
+      "tags": ["preference", "rust", "build"],
+      "plain": "Debug builds link with mold via .cargo/config.toml, which cut incremental build time from 14 seconds to 3 seconds. Do not remove the rustflags entry when cleaning up config.",
+      "md_light": "Debug builds link with **mold** via `.cargo/config.toml` — incremental build 14s → 3s.\n- don't remove the `rustflags` entry when cleaning up config",
+      "md_heavy": "## Linker: mold\n\n```toml\n# .cargo/config.toml\n[target.x86_64-unknown-linux-gnu]\nrustflags = [\"-C\", \"link-arg=-fuse-ld=mold\"]\n```\n\n| Linker | Incremental build |\n|---|---|\n| default | 14s |\n| **mold** | **3s** |\n\n⚠️ Don't remove `rustflags`. See [mold](https://github.com/rui314/mold)."
+    },
+    {
+      "id": "rust-onnx-sandbox",
+      "theme": "rust",
+      "title": "ONNX runtime download blocked inside sandbox",
+      "tags": ["gotcha", "rust", "onnx"],
+      "plain": "The ort crate downloads the ONNX runtime at build time, which fails inside the sandbox with a network error. Pre-populate the cache by building once outside the sandbox, or set ORT_LIB_LOCATION to a local copy.",
+      "md_light": "The `ort` crate downloads ONNX Runtime at build time — fails in the sandbox with a network error.\n- build once outside the sandbox to fill the cache, or\n- set `ORT_LIB_LOCATION` to a local copy",
+      "md_heavy": "## `ort` build fails in sandbox\n\n**Cause:** ONNX Runtime downloaded at **build time** → network blocked.\n\n### Workarounds\n| Option | How |\n|---|---|\n| warm cache | build once **outside** sandbox |\n| local lib | `export ORT_LIB_LOCATION=/opt/onnxruntime` |\n\nSee [ort docs](https://ort.pyke.io/setup/linking)."
+    },
+    {
+      "id": "rust-feature-unify",
+      "theme": "rust",
+      "title": "Cargo feature unification pulls in openssl",
+      "tags": ["gotcha", "rust", "cargo"],
+      "plain": "Even with reqwest configured for rustls, a dev-dependency enables native-tls and Cargo feature unification links openssl into the release binary. Resolver 2 in the workspace Cargo.toml prevents dev-dependency features leaking into normal builds.",
+      "md_light": "With `reqwest` on rustls, a dev-dependency enables `native-tls` and feature unification links **openssl** into the release binary.\n- fix: `resolver = \"2\"` in the workspace `Cargo.toml`",
+      "md_heavy": "## Feature unification leaks openssl\n\n| Dependency | Feature | Kind |\n|---|---|---|\n| `reqwest` | `rustls-tls` | normal |\n| dev-dep | `native-tls` | **dev** |\n\n**Result:** openssl linked into release binary.\n\n```toml\n[workspace]\nresolver = \"2\"\n```\nSee [Cargo resolver](https://doc.rust-lang.org/cargo/reference/resolver.html)."
+    },
+    {
+      "id": "rust-release-process",
+      "theme": "rust",
+      "title": "Release procedure for the CLI crate",
+      "tags": ["procedure", "rust", "release"],
+      "plain": "To release the CLI crate: bump the version with bump-my-version, run the full test suite single-threaded, push the tag, and let the GitHub workflow publish to crates.io. Never run cargo publish locally.",
+      "md_light": "Release the CLI crate:\n1. `bump-my-version bump minor`\n2. full test suite, single-threaded\n3. push the tag\n4. GitHub workflow publishes to crates.io — **never** `cargo publish` locally",
+      "md_heavy": "# Release Procedure\n\n## Steps\n```bash\nbump-my-version bump minor\nmake test\ngit push --tags\n```\n\n## Publishing\n| Who | Action |\n|---|---|\n| GitHub workflow | publishes to [crates.io](https://crates.io) |\n| you | ❌ **never** `cargo publish` locally |"
+    },
+    {
+      "id": "shell-history-bang",
+      "theme": "shell",
+      "title": "Bash history expansion breaks commands containing exclamation marks",
+      "tags": ["gotcha", "bash", "shell"],
+      "plain": "In interactive bash, an exclamation mark inside double quotes triggers history expansion and the command fails with 'event not found'. Use single quotes or set +H.",
+      "md_light": "Interactive bash: `!` inside double quotes triggers history expansion → `event not found`.\n- use single quotes, or `set +H`",
+      "md_heavy": "## `!` in bash double quotes\n\n**Error:** `bash: !foo: event not found`\n\n| Quoting | Safe? |\n|---|---|\n| `\"...!...\"` | ❌ |\n| `'...!...'` | ✅ |\n| `set +H` | ✅ disables expansion |\n\nSee [bash manual](https://www.gnu.org/software/bash/manual/html_node/History-Interaction.html)."
+    },
+    {
+      "id": "shell-direnv",
+      "theme": "shell",
+      "title": "direnv does not load in non-interactive agent shells",
+      "tags": ["gotcha", "direnv", "shell"],
+      "plain": "Agent shells are non-interactive, so the direnv hook never runs and project environment variables from .envrc are missing. Prefix commands with direnv exec . to load them.",
+      "md_light": "Agent shells are non-interactive → the `direnv` hook never runs, `.envrc` vars are missing.\n- prefix commands with `direnv exec .`",
+      "md_heavy": "## direnv in agent shells\n\n| Shell | Hook runs? | `.envrc` loaded? |\n|---|---|---|\n| interactive | ✅ | ✅ |\n| agent (non-interactive) | ❌ | ❌ |\n\n### Fix\n```bash\ndirenv exec . make test\n```\nSee [direnv](https://direnv.net/)."
+    },
+    {
+      "id": "shell-editor-pref",
+      "theme": "shell",
+      "title": "User edits in Neovim with LSP snippets from bkmr",
+      "tags": ["preference", "neovim", "editor"],
+      "plain": "The user edits in Neovim and pulls code snippets through the bkmr LSP server, triggered with a colon prefix. Do not suggest VS Code specific workflows.",
+      "md_light": "User edits in **Neovim**, pulls snippets via the bkmr LSP server (colon prefix trigger).\n- don't suggest VS Code-specific workflows",
+      "md_heavy": "## Editor setup\n\n| Aspect | Value |\n|---|---|\n| Editor | **Neovim** |\n| Snippets | bkmr LSP server |\n| Trigger | `:` prefix |\n\n❌ No VS Code-specific workflows. See [bkmr-nvim](https://github.com/sysid/bkmr-nvim)."
+    },
+    {
+      "id": "shell-mac-sed",
+      "theme": "shell",
+      "title": "sed -i needs an empty suffix argument on macOS",
+      "tags": ["gotcha", "macos", "sed"],
+      "plain": "On macOS the BSD sed requires an explicit backup suffix after -i, so sed -i 's/a/b/' file fails with 'invalid command code'. Use sed -i '' on macOS or gsed from Homebrew.",
+      "md_light": "macOS BSD `sed` needs a suffix after `-i`: `sed -i 's/a/b/' file` fails with `invalid command code`.\n- use `sed -i ''` or `gsed` from Homebrew",
+      "md_heavy": "## BSD vs GNU `sed -i`\n\n| Platform | Command | Works? |\n|---|---|---|\n| Linux (GNU) | `sed -i 's/a/b/' f` | ✅ |\n| macOS (BSD) | `sed -i 's/a/b/' f` | ❌ `invalid command code` |\n| macOS (BSD) | `sed -i '' 's/a/b/' f` | ✅ |\n\nOr `brew install gnu-sed`. See [man sed](https://ss64.com/mac/sed.html)."
+    }
+  ],
+  "distractors": [
+    {"title": "Redis cluster memory limit", "tags": ["fact", "redis", "infrastructure"], "url": "The cache Redis cluster has a 4 GB maxmemory with allkeys-lru eviction. Session data is in a separate Redis instance."},
+    {"title": "MySQL legacy billing database", "tags": ["fact", "mysql", "database"], "url": "Billing still runs on MySQL 5.7 on billing-db.internal port 3306. It is read-only for everything except the invoice service."},
+    {"title": "Database index naming convention", "tags": ["preference", "database", "naming"], "url": "Index names follow idx_table_column pattern. Unique constraints use uq_ prefix. Foreign keys use fk_ prefix."},
+    {"title": "Elasticsearch reindex procedure", "tags": ["procedure", "elasticsearch", "search"], "url": "Reindex by creating a new index with the alias pattern, running the reindex API, then swapping the alias atomically."},
+    {"title": "Terraform state lives in S3 with DynamoDB lock", "tags": ["fact", "terraform", "aws"], "url": "Terraform state is in the acme-tf-state bucket with DynamoDB table tf-lock for locking. Never run terraform apply from a laptop."},
+    {"title": "Kubernetes namespace per team", "tags": ["fact", "kubernetes", "namespaces"], "url": "Each team owns one namespace named team-name. Resource quotas are set to 16 CPU and 64 GB memory per namespace."},
+    {"title": "Production deploy freeze on Fridays", "tags": ["preference", "deployment", "process"], "url": "No production deploys after Friday noon. Hotfixes need approval from the on-call lead."},
+    {"title": "Docker image base is distroless", "tags": ["fact", "docker", "security"], "url": "All service images use gcr distroless base images. Debugging requires an ephemeral debug container because there is no shell."},
+    {"title": "API rate limit is per tenant", "tags": ["fact", "api", "ratelimit"], "url": "The public API rate limit is 100 requests per second per tenant, enforced at the gateway with a token bucket."},
+    {"title": "Password hashing uses argon2id", "tags": ["fact", "security", "passwords"], "url": "Password hashes use argon2id with memory cost 64 MB and 3 iterations. Old bcrypt hashes are upgraded on next login."},
+    {"title": "OAuth client secrets rotated quarterly", "tags": ["procedure", "oauth", "security"], "url": "OAuth client secrets are rotated every quarter through the vault rotation job. Services pick up new secrets on restart."},
+    {"title": "Mutation testing with cargo-mutants", "tags": ["preference", "rust", "testing"], "url": "Run cargo-mutants on core domain modules before release. Surviving mutants in business logic must be addressed."},
+    {"title": "Snapshot tests use insta", "tags": ["preference", "rust", "testing"], "url": "Snapshot tests use the insta crate. Review changes with cargo insta review, never accept blindly."},
+    {"title": "Coverage threshold", "tags": ["fact", "ci", "coverage"], "url": "CI enforces 80 percent line coverage on the domain crate only. Infrastructure code is excluded."},
+    {"title": "Clippy pedantic is off", "tags": ["preference", "rust", "lint"], "url": "Clippy runs with default lints plus deny warnings. Pedantic lints are disabled because they were too noisy."},
+    {"title": "Cross compilation via cross", "tags": ["procedure", "rust", "cross"], "url": "Linux ARM binaries are built with the cross tool using the docker backend. Native cross toolchains are not installed."},
+    {"title": "Tmux prefix is Ctrl-a", "tags": ["preference", "tmux", "terminal"], "url": "The user's tmux prefix is Ctrl-a, not Ctrl-b. Window splits use pipe and minus."},
+    {"title": "Fish is not used", "tags": ["preference", "shell", "bash"], "url": "Scripts must target bash 5. The user does not use fish or zsh specific syntax."},
+    {"title": "Homebrew prefix on Apple Silicon", "tags": ["fact", "macos", "homebrew"], "url": "Homebrew lives in /opt/homebrew on Apple Silicon machines, not /usr/local. Scripts must not hardcode /usr/local/bin."},
+    {"title": "Git commits by user only", "tags": ["preference", "git", "workflow"], "url": "The agent never commits. The user reviews and commits all changes personally."},
+    {"title": "Grafana alert routing", "tags": ["fact", "monitoring", "grafana"], "url": "Grafana alerts route to the team-oncall Slack channel during business hours and PagerDuty otherwise."},
+    {"title": "Log retention period", "tags": ["fact", "logging", "compliance"], "url": "Application logs are retained for 90 days in Loki. Audit logs go to S3 with 7 year retention."},
+    {"title": "Feature flags via Unleash", "tags": ["fact", "featureflags", "unleash"], "url": "Feature flags are managed in Unleash. Flags older than 90 days get flagged for removal in the weekly cleanup."},
+    {"title": "Frontend build uses pnpm", "tags": ["preference", "javascript", "pnpm"], "url": "The frontend uses pnpm workspaces. Do not commit package-lock.json or yarn.lock."}
+  ],
+  "queries": [
+    {"q": "what port does the production postgres database use", "target": "db-port", "kind": "kw"},
+    {"q": "connecting to the main relational database in prod", "target": "db-port", "kind": "para"},
+    {"q": "migration blocks checkout orders table lock", "target": "db-migrate-lock", "kind": "kw"},
+    {"q": "why did adding a column freeze the shop", "target": "db-migrate-lock", "kind": "para"},
+    {"q": "pg_restore backup retention S3", "target": "db-backup", "kind": "kw"},
+    {"q": "how do I recover data after losing the database", "target": "db-backup", "kind": "para"},
+    {"q": "reporting timestamps timezone UTC off by an hour", "target": "db-timezone", "kind": "kw"},
+    {"q": "numbers shift around daylight saving changes when joining reports", "target": "db-timezone", "kind": "para"},
+    {"q": "deploy staging health check smoke tests", "target": "deploy-staging", "kind": "kw"},
+    {"q": "steps to ship a build to the pre-production environment", "target": "deploy-staging", "kind": "para"},
+    {"q": "worker pods OOMKilled JVM heap", "target": "deploy-oom", "kind": "kw"},
+    {"q": "java containers keep getting killed for using too much RAM", "target": "deploy-oom", "kind": "para"},
+    {"q": "helm rollback migration schema", "target": "deploy-helm-rollback", "kind": "kw"},
+    {"q": "is it safe to go back to the previous release after an upgrade", "target": "deploy-helm-rollback", "kind": "para"},
+    {"q": "ingress proxy-read-timeout truncated download", "target": "deploy-ingress-timeout", "kind": "kw"},
+    {"q": "big files arrive incomplete even though the server says OK", "target": "deploy-ingress-timeout", "kind": "para"},
+    {"q": "JWT expiry auth.yml", "target": "auth-jwt-expiry", "kind": "kw"},
+    {"q": "users get kicked out of their session almost immediately", "target": "auth-jwt-expiry", "kind": "para"},
+    {"q": "where are refresh tokens stored redis", "target": "auth-refresh-redis", "kind": "kw"},
+    {"q": "what happens to logged in users if we wipe the cache", "target": "auth-refresh-redis", "kind": "para"},
+    {"q": "token used before issued clock skew", "target": "auth-clock-skew", "kind": "kw"},
+    {"q": "freshly minted credentials rejected on some build machines", "target": "auth-clock-skew", "kind": "para"},
+    {"q": "OIDC SAML preference single sign-on", "target": "auth-sso-pref", "kind": "kw"},
+    {"q": "which federation protocol should a new login integration use", "target": "auth-sso-pref", "kind": "para"},
+    {"q": "CI success docker registry unreachable push-verify", "target": "ci-registry-silent", "kind": "kw"},
+    {"q": "pipeline is green but the container image is missing", "target": "ci-registry-silent", "kind": "para"},
+    {"q": "SQLITE_BUSY test-threads", "target": "ci-single-thread", "kind": "kw"},
+    {"q": "tests fail randomly with database locked when run in parallel", "target": "ci-single-thread", "kind": "para"},
+    {"q": "address already in use port 8080 flaky", "target": "ci-flaky-port", "kind": "kw"},
+    {"q": "test suites collide on a network socket", "target": "ci-flaky-port", "kind": "para"},
+    {"q": "pytest fixtures parametrize conventions", "target": "ci-pytest-pref", "kind": "kw"},
+    {"q": "how should I structure python unit tests", "target": "ci-pytest-pref", "kind": "para"},
+    {"q": "mold linker rustflags build time", "target": "rust-linker", "kind": "kw"},
+    {"q": "speeding up slow compile and link times", "target": "rust-linker", "kind": "para"},
+    {"q": "ort ONNX runtime download sandbox ORT_LIB_LOCATION", "target": "rust-onnx-sandbox", "kind": "kw"},
+    {"q": "machine learning runtime build fails without internet", "target": "rust-onnx-sandbox", "kind": "para"},
+    {"q": "openssl native-tls feature unification resolver", "target": "rust-feature-unify", "kind": "kw"},
+    {"q": "why does the release binary depend on a TLS library we did not ask for", "target": "rust-feature-unify", "kind": "para"},
+    {"q": "release crates.io bump-my-version tag", "target": "rust-release-process", "kind": "kw"},
+    {"q": "how do we publish a new version of the command line tool", "target": "rust-release-process", "kind": "para"},
+    {"q": "event not found exclamation mark history expansion", "target": "shell-history-bang", "kind": "kw"},
+    {"q": "command breaks when the text contains a bang character", "target": "shell-history-bang", "kind": "para"},
+    {"q": "direnv envrc non-interactive", "target": "shell-direnv", "kind": "kw"},
+    {"q": "project environment variables missing when the agent runs commands", "target": "shell-direnv", "kind": "para"},
+    {"q": "neovim LSP snippets editor", "target": "shell-editor-pref", "kind": "kw"},
+    {"q": "which IDE does the user work in", "target": "shell-editor-pref", "kind": "para"},
+    {"q": "sed -i invalid command code macOS", "target": "shell-mac-sed", "kind": "kw"},
+    {"q": "in-place text replacement breaks on the Mac", "target": "shell-mac-sed", "kind": "para"}
+  ],
+  "truncation_probe": {
+    "_comment": "Same key fact, once short, once buried after a large markdown table. Tests whether the 512-token embedding window drops the tail.",
+    "title": "Payment provider webhook settings",
+    "tags": ["fact", "payments", "webhooks"],
+    "key_fact": "Webhook signatures from the payment provider must be verified against the raw request body before JSON parsing, otherwise HMAC validation fails.",
+    "filler_rows": 60,
+    "query": "HMAC signature verification fails after parsing JSON body"
+  }
+}
