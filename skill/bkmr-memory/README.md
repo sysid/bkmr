@@ -8,6 +8,8 @@ Teaches AI agents (Claude Code, Copilot CLI, pi-mono) how to use [bkmr](https://
 - **WRITE**: Store non-trivial learnings with proper taxonomy and deduplication
 - **UPDATE**: Enrich or correct existing memories with `bkmr update --url`
 - **DEDUP**: Check for existing memories before creating new ones
+- **FORMAT**: Store content as light markdown that also reads well for humans (lead line, prose
+  wrapped at 100 columns, fenced commands, `1.` lists); no headings or tables, which hurt retrieval
 
 Memories use the `_mem_` system tag and one of five classification tags: `fact`, `procedure`, `preference`, `episode`, `gotcha`. Optional `project:foo` tags scope memories to a project.
 

@@ -54,7 +54,23 @@
           "type": "required"
         },
         {
-          "text": "Content is a concise summary under 1000 tokens, not a full file dump",
+          "text": "Content is a concise summary under 500 tokens, not a full file dump",
+          "type": "required"
+        },
+        {
+          "text": "Stored content starts with a lead sentence stating the key fact",
+          "type": "desired"
+        },
+        {
+          "text": "No stored line outside code fences exceeds 100 columns",
+          "type": "desired"
+        },
+        {
+          "text": "Commands in the stored content are in fenced code blocks or inline code, not bare text",
+          "type": "desired"
+        },
+        {
+          "text": "Stored content adds no claims beyond what the user stated",
           "type": "required"
         }
       ]
@@ -109,6 +125,63 @@
         },
         {
           "text": "Uses 'gotcha' as the classification tag",
+          "type": "required"
+        },
+        {
+          "text": "Stored content adds no claims beyond what the user stated",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "formatted-procedure-write",
+      "prompt": "Save this for future sessions: rotating the Kafka TLS certs on the los cluster. You have to 1) convert the new cert with keytool -importkeystore -srckeystore new.p12 -srcstoretype PKCS12 -destkeystore kafka.jks, 2) copy kafka.jks to /etc/kafka/ssl on all three brokers, 3) restart the brokers one at a time with systemctl restart kafka and wait until kafka-topics --describe --under-replicated-partitions --bootstrap-server localhost:9093 prints nothing before doing the next one. If you restart two at once, producers with acks=all stall.",
+      "expected_output": "Agent dedups, then stores one procedure memory (project:los or kafka topic tags) whose content has a lead sentence, a numbered list for the three steps, the keytool and kafka-topics commands in fenced bash blocks (or inline code), the acks=all stall warning as its own paragraph, and prose lines wrapped at 100 columns. Content stored byte-exact via a quoted heredoc.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Performs dedup check before storing (hsearch or search with _mem_ tag)",
+          "type": "required"
+        },
+        {
+          "text": "Uses 'procedure' as the classification tag",
+          "type": "required"
+        },
+        {
+          "text": "Stored content starts with a lead sentence stating what the memory is about",
+          "type": "required"
+        },
+        {
+          "text": "The three steps are a markdown numbered list (1. 2. 3.), one step per line",
+          "type": "required"
+        },
+        {
+          "text": "The keytool and kafka-topics commands appear in fenced code blocks",
+          "type": "required"
+        },
+        {
+          "text": "No stored line outside code fences exceeds 100 columns",
+          "type": "required"
+        },
+        {
+          "text": "Paragraphs and list blocks are separated by blank lines",
+          "type": "required"
+        },
+        {
+          "text": "Stored content has no markdown headings (#) and no tables",
+          "type": "required"
+        },
+        {
+          "text": "Stored content is intact: keytool command, /etc/kafka/ssl and acks=all appear verbatim",
+          "type": "required"
+        },
+        {
+          "text": "Stored content adds no claims beyond what the user stated",
+          "type": "required"
+        },
+        {
+          "text": "Code fences inside numbered list items are indented to the item text",
           "type": "required"
         }
       ]
