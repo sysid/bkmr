@@ -242,3 +242,56 @@ fn given_bookmark_when_show_or_search_json_then_includes_all_metadata() {
         }
     }
 }
+
+/// Reads `has_embedding` of bookmark `id` through `show --json`.
+fn has_embedding(db: &std::path::Path, id: i64) -> bool {
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args(["show", "--json", &id.to_string()])
+        .output()
+        .expect("run bkmr show --json");
+    assert!(output.status.success(), "bkmr show failed");
+    let shown: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    shown[0]["has_embedding"]
+        .as_bool()
+        .expect("embedding lookup succeeds")
+}
+
+#[test]
+fn given_stored_vector_when_backfill_force_dry_run_then_keeps_vector() {
+    use bkmr::domain::repositories::vector_repository::VectorRepository;
+    use bkmr::infrastructure::repositories::sqlite::register_sqlite_vec;
+    use bkmr::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
+
+    // Arrange: one bookmark whose vector is written directly, so the model is not needed
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("backfill.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["add", "https://backfill.example.com", "t", "--title", "Backfill"])
+        .args(["--no-web", "--no-embed"])
+        .assert()
+        .success();
+    let id = search_all(&db)[0]["id"].as_i64().expect("bookmark added");
+    register_sqlite_vec();
+    let vectors = SqliteVectorRepository::new(db.to_str().unwrap()).unwrap();
+    vectors.init_vec_table(768).unwrap();
+    vectors.upsert_embedding(id as i32, &vec![0.1; 768]).unwrap();
+    drop(vectors);
+    assert!(has_embedding(&db, id));
+
+    // Act
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--force", "--dry-run"])
+        .assert()
+        .success();
+
+    // Assert: a dry run changes nothing
+    assert!(has_embedding(&db, id), "dry run deleted the vector");
+}

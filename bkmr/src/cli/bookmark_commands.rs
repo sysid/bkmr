@@ -839,8 +839,9 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         }
         let bookmark_service = services.bookmark_service.clone();
 
-        // For force mode, clear all existing embeddings and content hashes first
-        if force {
+        // For force mode, clear all existing embeddings and content hashes first.
+        // A dry run must not touch them.
+        if force && !dry_run {
             eprintln!("Force mode: clearing all existing embeddings and content hashes...");
             purge_all_embeddings(services)?;
         }
