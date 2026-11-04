@@ -1,3 +1,4 @@
+use crate::domain::embedding_policy::EmbeddingPolicy;
 use crate::domain::error::{DomainError, DomainResult};
 use crate::util::path::expand_path;
 use serde::{Deserialize, Serialize};
@@ -81,6 +82,10 @@ pub struct EmbeddingOpts {
     /// fastembed model name (e.g., "NomicEmbedTextV15", "AllMiniLML6V2")
     #[serde(default = "default_embedding_model")]
     pub model: String,
+
+    /// Embedding mode per bookmark type
+    #[serde(default)]
+    pub policy: EmbeddingPolicy,
 }
 
 fn default_embedding_model() -> String {
@@ -91,6 +96,7 @@ impl Default for EmbeddingOpts {
     fn default() -> Self {
         Self {
             model: default_embedding_model(),
+            policy: EmbeddingPolicy::default(),
         }
     }
 }
@@ -375,6 +381,7 @@ pub fn create_file_path_with_base(base_path_name: &str, relative_path: &str) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::embedding_policy::EmbeddingMode;
     use crate::util::testing::EnvGuard;
     use std::env;
     use std::fs;
@@ -387,6 +394,53 @@ mod tests {
         let config_path = temp_dir.path().join("config.toml");
         fs::write(&config_path, content).unwrap();
         (temp_dir, config_path)
+    }
+
+    #[test]
+    fn given_partial_policy_when_parsing_config_then_keeps_defaults_for_the_rest() {
+        // Act
+        let settings: Settings =
+            toml::from_str("[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
+
+        // Assert
+        let policy = settings.embeddings.policy;
+        assert_eq!(policy.snippet, EmbeddingMode::Off);
+        assert_eq!(policy.memory, EmbeddingMode::Always);
+        assert_eq!(policy.uri, EmbeddingMode::On);
+        assert_eq!(settings.embeddings.model, "NomicEmbedTextV15");
+    }
+
+    #[test]
+    fn given_no_policy_when_parsing_config_then_uses_default_policy() {
+        // Act
+        let settings: Settings = toml::from_str("[embeddings]\nmodel = \"BGEM3\"\n").unwrap();
+
+        // Assert
+        assert_eq!(settings.embeddings.policy, EmbeddingPolicy::default());
+    }
+
+    #[test]
+    fn given_mistyped_policy_key_when_parsing_config_then_fails() {
+        // A silently ignored key would leave the user with the wrong behaviour
+        let result = toml::from_str::<Settings>("[embeddings.policy]\n_snp_ = \"off\"\n");
+
+        assert!(result.unwrap_err().to_string().contains("_snp_"));
+    }
+
+    #[test]
+    fn given_invalid_policy_mode_when_parsing_config_then_fails() {
+        let result = toml::from_str::<Settings>("[embeddings.policy]\n_snip_ = \"never\"\n");
+
+        assert!(result.unwrap_err().to_string().contains("never"));
+    }
+
+    #[test]
+    fn given_generated_default_config_when_parsing_then_matches_default_policy() {
+        // Act
+        let settings: Settings = toml::from_str(&generate_default_config()).unwrap();
+
+        // Assert
+        assert_eq!(settings.embeddings.policy, EmbeddingPolicy::default());
     }
 
     #[test]

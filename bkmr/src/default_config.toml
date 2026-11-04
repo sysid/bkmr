@@ -32,3 +32,21 @@ interactive = true
 # DOCS_HOME = "$HOME/documents"
 # WORK_SCRIPTS = "/work/automation/scripts"
 # PROJECT_NOTES = "$HOME/projects/notes"
+
+# Embedding model and behaviour per bookmark type
+[embeddings]
+# model = "NomicEmbedTextV15"
+
+# Decides whether a bookmark is embedded for semantic search when it is written.
+#   on      embedded, unless requested otherwise (--no-embed, EMBEDDABLE=false in the editor)
+#   off     not embedded, unless requested (--embed, EMBEDDABLE=true in the editor)
+#   always  embedded; a request to disable it is overridden with a warning
+# Changes do not touch existing bookmarks, except that "always" applies on their next write.
+[embeddings.policy]
+uri = "on" # bookmarks without a system tag
+_snip_ = "on"
+_imported_ = "on"
+_shell_ = "on"
+_md_ = "on"
+_env_ = "on"
+_mem_ = "always"
