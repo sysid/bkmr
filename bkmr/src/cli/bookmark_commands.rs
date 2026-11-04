@@ -849,7 +849,12 @@ pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()>
 
 #[instrument(skip(cli, services), level = "debug")]
 pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
-    if let Commands::Backfill { dry_run, force } = cli.command.unwrap() {
+    if let Commands::Backfill {
+        dry_run,
+        force,
+        prune,
+    } = cli.command.unwrap()
+    {
         // Check if real embeddings are available
         if services.embedder.dimensions() == 0 {
             eprintln!(
@@ -861,6 +866,16 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             ));
         }
         let bookmark_service = services.bookmark_service.clone();
+
+        if prune {
+            let pruned = bookmark_service.prune_embeddings(dry_run)?;
+            let action = if dry_run { "Would remove" } else { "Removed" };
+            for id in &pruned {
+                eprintln!("{} vector (ID: {})", action, id);
+            }
+            eprintln!("{} {} stale vectors", action, pruned.len());
+            return Ok(());
+        }
 
         // For force mode, clear all existing embeddings and content hashes first.
         // A dry run must not touch them.

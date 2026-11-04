@@ -382,9 +382,17 @@ pub enum Commands {
         #[arg(
             short = 'f',
             long = "force",
-            help = "force recompute of all embeddings (except _imported_)"
+            help = "force recompute of all embeddings"
         )]
         force: bool,
+
+        #[arg(
+            short = 'p',
+            long = "prune",
+            conflicts_with = "force",
+            help = "only remove vectors of bookmarks that are not embeddable, without embedding anything"
+        )]
+        prune: bool,
     },
     /// Clear all embeddings and content hashes (clean slate for backfill)
     ClearEmbeddings {},
