@@ -1071,7 +1071,7 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 mod tests {
     use super::*;
     use crate::domain::embedding_policy::EmbeddingMode;
-    use crate::domain::error::DomainResult;
+    use crate::domain::error::{DomainError, DomainResult};
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
     use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
@@ -1101,6 +1101,7 @@ mod tests {
     #[derive(Debug, Default)]
     struct RecordingVectorRepository {
         ids: Mutex<HashSet<i32>>,
+        fail_delete: std::sync::atomic::AtomicBool,
     }
 
     impl RecordingVectorRepository {
@@ -1123,6 +1124,11 @@ mod tests {
         }
 
         fn delete_embedding(&self, bookmark_id: i32) -> DomainResult<()> {
+            if self.fail_delete.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(DomainError::BookmarkOperationFailed(
+                    "vector store unavailable".to_string(),
+                ));
+            }
             self.ids
                 .lock()
                 .expect("lock not poisoned")
@@ -1499,6 +1505,104 @@ mod tests {
                 .unwrap()
                 .embeddable
         );
+    }
+
+    #[test]
+    fn given_type_set_to_always_when_updating_snippet_through_lsp_then_embeds_opted_out_row() {
+        use crate::lsp::services::command_service::CommandService;
+
+        // Arrange: the snippet was opted out while the policy still allowed that
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = Arc::new(setup_test_db());
+        let vectors = Arc::new(RecordingVectorRepository::default());
+        let service_with_policy = |policy: EmbeddingPolicy| {
+            Arc::new(
+                BookmarkServiceImpl::new(
+                    repository.clone(),
+                    Arc::new(StubEmbedder),
+                    vectors.clone(),
+                    Arc::new(JsonImportRepository::new()),
+                )
+                .with_embedding_policy(policy),
+            )
+        };
+        let before = service_with_policy(policy_with_snippets_off());
+        let created = CommandService::with_service(before)
+            .create_snippet("always snippet", "Always", None, vec!["rust".to_string()])
+            .unwrap();
+        let id = created["id"].as_i64().unwrap() as i32;
+        assert!(!vectors.has_vector(id));
+        let after = service_with_policy(EmbeddingPolicy {
+            snippet: EmbeddingMode::Always,
+            ..EmbeddingPolicy::default()
+        });
+
+        // Act
+        CommandService::with_service(after.clone())
+            .update_snippet(id, Some("always snippet changed"), None, None, None)
+            .unwrap();
+
+        // Assert
+        assert!(after.get_bookmark(id).unwrap().unwrap().embeddable);
+        assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_opted_out_snippet_when_updating_through_lsp_then_stays_without_vector() {
+        use crate::lsp::services::command_service::CommandService;
+
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(policy_with_snippets_off());
+        let service = Arc::new(service);
+        let commands = CommandService::with_service(service.clone());
+        let created = commands
+            .create_snippet("off snippet", "Off", None, vec!["rust".to_string()])
+            .unwrap();
+        let id = created["id"].as_i64().unwrap() as i32;
+
+        // Act
+        commands
+            .update_snippet(id, Some("off snippet changed"), None, None, None)
+            .unwrap();
+
+        // Assert
+        let updated = service.get_bookmark(id).unwrap().unwrap();
+        assert_eq!(updated.url, "off snippet changed");
+        assert!(!updated.embeddable);
+        assert!(!vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_vector_delete_fails_when_updating_snippet_through_lsp_then_error_and_row_unchanged() {
+        use crate::lsp::services::command_service::CommandService;
+
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(policy_with_snippets_off());
+        let service = Arc::new(service);
+        let commands = CommandService::with_service(service.clone());
+        let created = commands
+            .create_snippet("fragile snippet", "Fragile", None, vec!["rust".to_string()])
+            .unwrap();
+        let id = created["id"].as_i64().unwrap() as i32;
+        vectors
+            .fail_delete
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // Act
+        let result = commands.update_snippet(id, None, Some("Changed"), None, None);
+
+        // Assert
+        let error = result.expect_err("a stale vector must not be ignored");
+        assert!(
+            error.to_string().contains("vector store unavailable"),
+            "got: {error}"
+        );
+        assert_eq!(service.get_bookmark(id).unwrap().unwrap().title, "Fragile");
     }
 
     #[test]
