@@ -90,7 +90,8 @@ unsearchable and displays as empty. Keep memories concise.
 
 Embeddings for semantic search are computed from **content (url) + title + visible tags** (system
 tags like `_mem_` are excluded from embeddings). This means your title and tags directly affect
-how well the memory is found — make them descriptive.
+how well the memory is found — make them descriptive. Memories are always embedded by default
+(`_mem_ = "always"` in `[embeddings.policy]`); `--no-embed` is overridden with a warning.
 
 ---
 
