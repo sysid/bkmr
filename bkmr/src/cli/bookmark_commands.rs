@@ -8,6 +8,7 @@ use crate::application::services::tag_service::TagService;
 use crate::application::services::template_service::TemplateService;
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
+use crate::cli::display::lookup_embedded_ids;
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::get_config_file_path;
@@ -24,10 +25,10 @@ use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
 };
 use crate::util::argument_processor::ArgumentProcessor;
-use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped};
+use crate::util::helper::{confirm, ensure_int_vector, is_stdout_piped, should_use_color};
 use crate::util::helper::{format_file_path, format_mtime};
 use chrono;
-use crossterm::style::Stylize;
+use crossterm::style::{Color, Stylize};
 use std::collections::HashSet;
 use std::io::Write;
 use std::path::Path;
@@ -633,7 +634,7 @@ pub fn edit(
 }
 
 #[instrument(skip(cli))]
-pub fn show(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     if let Commands::Show { ids, is_json } = cli.command.unwrap() {
         let bookmark_service = services.bookmark_service.clone();
 
@@ -641,22 +642,31 @@ pub fn show(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         let mut bookmarks = Vec::new();
 
         for id in id_list {
-            if let Some(_bookmark) = bookmark_service.get_bookmark(id)? {
-                let updated_bookmark = bookmark_service.record_bookmark_access(id)?;
-                bookmarks.push(updated_bookmark);
+            if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+                // Report the state before this access: otherwise "last accessed" always reads "now"
+                bookmark_service.record_bookmark_access(id)?;
+                bookmarks.push(bookmark);
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }
         }
 
+        let embedded_ids = lookup_embedded_ids(&*bookmark_service);
+
         if is_json {
             // Output bookmarks as JSON
-            let json_views = JsonBookmarkView::from_domain_collection(&bookmarks);
+            let json_views =
+                JsonBookmarkView::from_domain_collection(&bookmarks, embedded_ids.as_ref());
             write_bookmarks_as_json(&json_views)?;
         } else {
+            let use_color = should_use_color(settings.no_color, !is_stdout_piped());
+
             // Output bookmarks in detailed format (existing behavior)
             for bookmark in &bookmarks {
-                print!("{}", show_bookmark_details(bookmark, services));
+                print!(
+                    "{}",
+                    show_bookmark_details(bookmark, embedded_ids.as_ref(), use_color, services)
+                );
             }
         }
     }
@@ -665,7 +675,12 @@ pub fn show(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 
 /// Shows detailed information about a bookmark, can be used by both show command and FZF CTRL-P
 #[instrument(level = "debug")]
-pub fn show_bookmark_details(bookmark: &Bookmark, services: &ServiceContainer) -> String {
+pub fn show_bookmark_details(
+    bookmark: &Bookmark,
+    embedded_ids: Option<&HashSet<i32>>,
+    use_color: bool,
+    services: &ServiceContainer,
+) -> String {
     // Get the action service
     let action_service = services.action_service.clone();
 
@@ -673,22 +688,55 @@ pub fn show_bookmark_details(bookmark: &Bookmark, services: &ServiceContainer) -
     let base_description = action_service.get_default_action_description(bookmark);
     let action_description = format_action_description(base_description, bookmark.opener.as_ref());
 
+    format_bookmark_details(
+        bookmark,
+        &action_description,
+        bookmark.has_embedding_in(embedded_ids),
+        use_color,
+    )
+}
+
+/// `has_embedding` is `None` when the lookup failed.
+fn format_bookmark_details(
+    bookmark: &Bookmark,
+    action_description: &str,
+    has_embedding: Option<bool>,
+    use_color: bool,
+) -> String {
+    // Styling must be skipped, not just disabled: crossterm writes reset codes even with
+    // colors turned off, which would end up in piped output.
+    let paint = |text: String, color: Color| {
+        if use_color {
+            text.with(color).to_string()
+        } else {
+            text
+        }
+    };
+
     // Format all the bookmark details
     let mut details = format!(
-        "{} {} [{}] ({})\n  URL/Content: {}\n  Description: {}\n  Access count: {}\n  Created: {}\n  Updated: {}\n  Has embedding: {}\n  Default Action: {}",
-        bookmark
-            .id
-            .map_or("?".to_string(), |id| id.to_string())
-            .blue(),
-        bookmark.title.clone().green(),
-        bookmark.formatted_tags().yellow(),
-        action_description.as_str().cyan(),
+        "{} {} [{}] ({})\n  URL/Content: {}\n{}\n  Opener: {}\n  Access count: {}\n  Last accessed: {}\n  Created: {}\n  Updated: {}\n  Embeddable: {}\n  Has embedding: {}\n  Content hash: {}\n  Default Action: {}",
+        paint(
+            bookmark.id.map_or("?".to_string(), |id| id.to_string()),
+            Color::Blue
+        ),
+        paint(bookmark.title.clone(), Color::Green),
+        paint(bookmark.formatted_tags(), Color::Yellow),
+        paint(action_description.to_string(), Color::Cyan),
         bookmark.url,
-        bookmark.description,
+        // Colored as a whole: URL/Content can span many lines, so the label alone is easy to miss
+        paint(
+            format!("  Description: {}", bookmark.description),
+            Color::Magenta
+        ),
+        bookmark.opener.as_deref().unwrap_or("N/A"),
         bookmark.access_count,
+        bookmark.accessed_at.map_or("never".to_string(), |dt| dt.to_string()),
         bookmark.created_at.map_or("N/A".to_string(), |dt| dt.to_string()),
         bookmark.updated_at,
-        bookmark.embedding.is_some(),
+        bookmark.embeddable,
+        has_embedding.map_or("unknown".to_string(), |has| has.to_string()),
+        bookmark.content_hash_hex().unwrap_or_else(|| "N/A".to_string()),
         action_description
     );
 
@@ -700,6 +748,9 @@ pub fn show_bookmark_details(bookmark: &Bookmark, services: &ServiceContainer) -
             "\n  Source File: {} (modified: {})",
             formatted_path, formatted_time
         ));
+    }
+    if let Some(file_hash) = &bookmark.file_hash {
+        details.push_str(&format!("\n  File hash: {}", file_hash));
     }
 
     details.push('\n');
@@ -1393,6 +1444,101 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
+
+    #[test]
+    fn given_stored_bookmark_when_format_details_then_shows_all_metadata() {
+        use chrono::{TimeZone, Utc};
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("alpha").unwrap());
+        let mut bookmark =
+            Bookmark::new("https://example.com", "Example", "Some text", tags).unwrap();
+        bookmark.id = Some(42);
+        bookmark.access_count = 7;
+        bookmark.created_at = Some(Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap());
+        bookmark.updated_at = Utc.with_ymd_and_hms(2026, 2, 3, 4, 5, 6).unwrap();
+        bookmark.accessed_at = Some(Utc.with_ymd_and_hms(2026, 3, 4, 5, 6, 7).unwrap());
+        bookmark.content_hash = Some(vec![0xab, 0x01]);
+        bookmark.embeddable = false;
+        bookmark.opener = Some("vim".to_string());
+        bookmark.file_path = Some("/notes/a.md".to_string());
+        bookmark.file_mtime = Some(0);
+        bookmark.file_hash = Some("cafe".to_string());
+
+        let details = format_bookmark_details(&bookmark, "Open with vim", Some(true), false);
+
+        assert!(details.contains("URL/Content: https://example.com"));
+        assert!(details.contains("Access count: 7"));
+        assert!(details.contains("Last accessed: 2026-03-04 05:06:07 UTC"));
+        assert!(details.contains("Created: 2026-01-02 03:04:05 UTC"));
+        assert!(details.contains("Updated: 2026-02-03 04:05:06 UTC"));
+        assert!(details.contains("Opener: vim"));
+        assert!(details.contains("Embeddable: false"));
+        assert!(details.contains("Has embedding: true"));
+        assert!(details.contains("Content hash: ab01"));
+        assert!(details.contains("Default Action: Open with vim"));
+        assert!(details.contains("Source File: /notes/a.md"));
+        assert!(details.contains("File hash: cafe"));
+    }
+
+    #[test]
+    fn given_sparse_bookmark_when_format_details_then_marks_missing_values() {
+        let mut bookmark =
+            Bookmark::new("https://example.com", "Example", "", HashSet::new()).unwrap();
+        bookmark.created_at = None;
+
+        let details = format_bookmark_details(&bookmark, "Open in browser", Some(false), false);
+
+        assert!(details.contains("Last accessed: never"));
+        assert!(details.contains("Created: N/A"));
+        assert!(details.contains("Opener: N/A"));
+        assert!(details.contains("Content hash: N/A"));
+        assert!(details.contains("Has embedding: false"));
+        assert!(!details.contains("Source File"));
+        assert!(!details.contains("File hash"));
+    }
+
+    #[test]
+    fn given_failed_embedding_lookup_when_format_details_then_says_unknown() {
+        // A failed lookup must not read as "this bookmark has no embedding"
+        let bookmark = Bookmark::new("https://example.com", "Example", "", HashSet::new()).unwrap();
+
+        let details = format_bookmark_details(&bookmark, "Open in browser", None, false);
+
+        assert!(details.contains("Has embedding: unknown"));
+    }
+
+    #[test]
+    fn given_description_when_format_details_then_colors_it_unlike_the_url() {
+        let bookmark = Bookmark::new(
+            "https://example.com",
+            "Example",
+            "Some text",
+            HashSet::new(),
+        )
+        .unwrap();
+
+        let details = format_bookmark_details(&bookmark, "Open in browser", Some(false), true);
+
+        let colored_description = "  Description: Some text".magenta().to_string();
+        assert!(details.contains(&colored_description));
+        assert!(details.contains("\n  URL/Content: https://example.com\n"));
+    }
+
+    #[test]
+    fn given_color_off_when_format_details_then_writes_no_escape_codes() {
+        let bookmark = Bookmark::new(
+            "https://example.com",
+            "Example",
+            "Some text",
+            HashSet::new(),
+        )
+        .unwrap();
+
+        let details = format_bookmark_details(&bookmark, "Open in browser", Some(false), false);
+
+        assert!(!details.contains('\u{1b}'));
+        assert!(details.contains("\n  Description: Some text\n"));
+    }
 
     #[test]
     fn given_valid_id_string_when_get_ids_then_returns_id_vector() {

@@ -117,3 +117,128 @@ fn given_bookmark_ids_when_showing_then_displays_correct_entries() {
         .stdout(predicate::str::contains("https://third.example.com"))
         .stdout(predicate::str::contains("Second Hidden").not());
 }
+
+#[test]
+fn given_repeated_show_when_showing_then_reports_state_before_current_access() {
+    // `show` records an access itself; reporting the state after that would make
+    // "last accessed" always read "now".
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("show-access.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args([
+            "add",
+            "https://example.com",
+            "show-test",
+            "--title",
+            "Example",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+    let id = search_all(&db)[0]["id"].to_string();
+
+    // First show: never accessed before
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Last accessed: never"))
+        .stdout(predicate::str::contains("Access count: 0"));
+
+    // Second show: reports the first show
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Last accessed: never").not())
+        .stdout(predicate::str::contains("Access count: 1"));
+
+    // JSON output follows the same rule: two shows so far
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", "--json", &id])
+        .output()
+        .expect("run bkmr show --json");
+    assert!(output.status.success());
+    let shown: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(shown[0]["access_count"], 2);
+}
+
+/// Creates a database at `db` holding one bookmark without an embedding.
+fn create_db_with_one_bookmark(db: &std::path::Path) {
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args([
+            "add",
+            "https://example.com",
+            "show-test",
+            "--title",
+            "Example",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn given_piped_stdout_when_showing_then_writes_no_color_codes() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("show-color.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    // assert_cmd captures stdout through a pipe
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .env_remove("NO_COLOR")
+        .args(["show", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\u{1b}").not())
+        .stdout(predicate::str::contains("  Description: "));
+}
+
+#[test]
+fn given_bookmark_when_show_or_search_json_then_includes_all_metadata() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("show-json.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", "--json", &id])
+        .output()
+        .expect("run bkmr show --json");
+    assert!(output.status.success());
+    let shown: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+
+    for bookmark in [&shown[0], &search_all(&db)[0]] {
+        assert_eq!(bookmark["embeddable"], false);
+        assert_eq!(bookmark["has_embedding"], false);
+        for key in [
+            "opener",
+            "content_hash",
+            "file_path",
+            "file_mtime",
+            "file_hash",
+        ] {
+            assert!(bookmark.get(key).is_some(), "missing JSON field: {}", key);
+        }
+    }
+}

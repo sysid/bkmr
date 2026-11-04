@@ -88,6 +88,9 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Check if bookmarks need embedding backfilling
     fn get_bookmarks_without_embeddings(&self) -> ApplicationResult<Vec<Bookmark>>;
 
+    /// Get the IDs of all bookmarks that have an embedding
+    fn get_embedded_ids(&self) -> ApplicationResult<HashSet<i32>>;
+
     /// Record that a bookmark was accessed
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark>;
 

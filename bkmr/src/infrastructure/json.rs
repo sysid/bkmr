@@ -5,6 +5,7 @@ use crate::domain::error::{DomainError, DomainResult};
 use crate::domain::tag::Tag;
 use crate::util::path::extract_filename;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
@@ -27,11 +28,19 @@ pub struct JsonBookmarkView {
     pub created_at: Option<String>,
     pub updated_at: String,
     pub accessed_at: Option<String>,
+    pub opener: Option<String>,
+    pub embeddable: bool,
+    /// `null` when the embedding lookup failed
+    pub has_embedding: Option<bool>,
+    pub content_hash: Option<String>,
+    pub file_path: Option<String>,
+    pub file_mtime: Option<String>,
+    pub file_hash: Option<String>,
 }
 
 impl JsonBookmarkView {
     /// Create from a domain `Bookmark`
-    pub fn from_domain(bookmark: &Bookmark) -> Self {
+    pub fn from_domain(bookmark: &Bookmark, embedded_ids: Option<&HashSet<i32>>) -> Self {
         Self {
             id: bookmark.id,
             url: bookmark.url.to_string(),
@@ -46,12 +55,28 @@ impl JsonBookmarkView {
             created_at: bookmark.created_at.map(|dt| dt.to_rfc3339()),
             updated_at: bookmark.updated_at.to_rfc3339(),
             accessed_at: bookmark.accessed_at.map(|dt| dt.to_rfc3339()),
+            opener: bookmark.opener.clone(),
+            embeddable: bookmark.embeddable,
+            has_embedding: bookmark.has_embedding_in(embedded_ids),
+            content_hash: bookmark.content_hash_hex(),
+            file_path: bookmark.file_path.clone(),
+            file_mtime: bookmark
+                .file_mtime
+                .and_then(|mtime| chrono::DateTime::from_timestamp(mtime as i64, 0))
+                .map(|dt| dt.to_rfc3339()),
+            file_hash: bookmark.file_hash.clone(),
         }
     }
 
     /// Convert a slice of bookmarks into a vector of JSON views
-    pub fn from_domain_collection(bookmarks: &[Bookmark]) -> Vec<Self> {
-        bookmarks.iter().map(Self::from_domain).collect()
+    pub fn from_domain_collection(
+        bookmarks: &[Bookmark],
+        embedded_ids: Option<&HashSet<i32>>,
+    ) -> Vec<Self> {
+        bookmarks
+            .iter()
+            .map(|bookmark| Self::from_domain(bookmark, embedded_ids))
+            .collect()
     }
 }
 
@@ -221,7 +246,7 @@ mod tests {
         let bookmark = Bookmark::new("https://example.com", "Example", "A test bookmark", tags)?;
 
         // Convert to JSON views
-        let views = vec![JsonBookmarkView::from_domain(&bookmark)];
+        let views = vec![JsonBookmarkView::from_domain(&bookmark, None)];
 
         // This is a visual test that would output to stdout
         // We're just checking that it executes without errors

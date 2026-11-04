@@ -10,7 +10,9 @@ use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation_service::InterpolationService;
 use crate::application::services::template_service::TemplateService;
 use crate::cli::bookmark_commands::format_action_description;
-use crate::cli::display::{show_bookmarks, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS};
+use crate::cli::display::{
+    lookup_embedded_ids, show_bookmarks, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS,
+};
 use crate::cli::error::{CliError, CliResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::services::clipboard::ClipboardService;
@@ -306,7 +308,10 @@ fn touch_bookmarks_by_indices(
                     // Display the updated bookmark
                     if let Ok(Some(updated)) = bookmark_service.get_bookmark(id) {
                         show_bookmarks(
-                            &[DisplayBookmark::from_domain(&updated)],
+                            &[DisplayBookmark::from_domain(
+                                &updated,
+                                lookup_embedded_ids(&*bookmark_service).as_ref(),
+                            )],
                             ALL_FIELDS,
                             settings,
                         );
@@ -477,9 +482,10 @@ pub fn edit_bookmarks(
     }
 
     // Display bookmarks before editing
+    let embedded_ids = lookup_embedded_ids(&*bookmark_service);
     let display_bookmarks: Vec<_> = bookmarks_to_edit
         .iter()
-        .map(DisplayBookmark::from_domain)
+        .map(|bookmark| DisplayBookmark::from_domain(bookmark, embedded_ids.as_ref()))
         .collect();
 
     show_bookmarks(&display_bookmarks, DEFAULT_FIELDS, settings);
@@ -555,10 +561,14 @@ pub fn delete_bookmarks(
     settings: &crate::config::Settings,
 ) -> CliResult<()> {
     // Display bookmarks to be deleted
+    let embedded_ids = lookup_embedded_ids(&*bookmark_service);
     let mut bookmarks_to_display = Vec::new();
     for id in &ids {
         if let Ok(Some(bookmark)) = bookmark_service.get_bookmark(*id) {
-            bookmarks_to_display.push(DisplayBookmark::from_domain(&bookmark));
+            bookmarks_to_display.push(DisplayBookmark::from_domain(
+                &bookmark,
+                embedded_ids.as_ref(),
+            ));
         }
     }
 

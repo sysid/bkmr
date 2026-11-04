@@ -208,6 +208,19 @@ impl Bookmark {
         self.updated_at = Utc::now();
     }
 
+    /// Content hash as lowercase hex
+    pub fn content_hash_hex(&self) -> Option<String> {
+        self.content_hash
+            .as_ref()
+            .map(|hash| hash.iter().map(|byte| format!("{:02x}", byte)).collect())
+    }
+
+    /// Whether this bookmark is among `embedded_ids`; `None` if those are unknown.
+    /// Embeddings live in `vec_bookmarks`: the legacy `embedding` field is never set.
+    pub fn has_embedding_in(&self, embedded_ids: Option<&HashSet<i32>>) -> Option<bool> {
+        embedded_ids.map(|ids| self.id.is_some_and(|id| ids.contains(&id)))
+    }
+
     /// Get formatted tag string in the format ",tag1,tag2,"
     pub fn formatted_tags(&self) -> String {
         Tag::format_tags(&self.tags)

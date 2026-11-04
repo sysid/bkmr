@@ -1,5 +1,5 @@
 use crate::cli::args::{Cli, Commands};
-use crate::cli::display::{show_bookmarks, DisplayBookmark, DisplayField};
+use crate::cli::display::{lookup_embedded_ids, show_bookmarks, DisplayBookmark, DisplayField};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::fzf::fzf_process;
 use crate::cli::process::execute_bookmark_default_action;
@@ -183,7 +183,9 @@ impl SearchCommandHandler {
                 fzf_process(bookmarks, style, &self.services, &self.settings, stdout)?;
             }
             (_, true) => {
-                let json_views = JsonBookmarkView::from_domain_collection(bookmarks);
+                let embedded_ids = lookup_embedded_ids(&*self.services.bookmark_service);
+                let json_views =
+                    JsonBookmarkView::from_domain_collection(bookmarks, embedded_ids.as_ref());
                 write_bookmarks_as_json(&json_views)?;
             }
             _ => {
@@ -214,8 +216,11 @@ impl SearchCommandHandler {
         }
 
         // Convert to display bookmarks
-        let display_bookmarks: Vec<DisplayBookmark> =
-            bookmarks.iter().map(DisplayBookmark::from_domain).collect();
+        let embedded_ids = lookup_embedded_ids(&*self.services.bookmark_service);
+        let display_bookmarks: Vec<DisplayBookmark> = bookmarks
+            .iter()
+            .map(|bookmark| DisplayBookmark::from_domain(bookmark, embedded_ids.as_ref()))
+            .collect();
 
         show_bookmarks(&display_bookmarks, fields, &self.settings);
         eprintln!("Found {} bookmarks", bookmarks.len());

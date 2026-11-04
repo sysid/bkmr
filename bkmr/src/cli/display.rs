@@ -1,13 +1,16 @@
 // src/cli/display.rs
 
+use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::search::SemanticSearchResult;
 use crate::util::helper::{format_file_path, format_mtime};
 use chrono::{DateTime, Utc};
 use crossterm::style::Stylize;
 use derive_builder::Builder;
+use std::collections::HashSet;
 use std::fmt;
 use std::io::{self, IsTerminal, Write};
+use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DisplayField {
@@ -36,6 +39,20 @@ impl fmt::Display for DisplayField {
             DisplayField::Similarity => write!(f, "Similarity"),
             DisplayField::Embedding => write!(f, "Embedding"),
             DisplayField::Embeddable => write!(f, "Embeddable"),
+        }
+    }
+}
+
+/// IDs of all embedded bookmarks; `None` if the lookup failed, so that callers can report
+/// "unknown" instead of claiming that a bookmark has no embedding.
+// ponytail: loads all IDs once per command (O(n)); add VectorRepository::has_embedding if
+// `show` or the FZF preview ever gets slow on large databases.
+pub fn lookup_embedded_ids(bookmark_service: &dyn BookmarkService) -> Option<HashSet<i32>> {
+    match bookmark_service.get_embedded_ids() {
+        Ok(ids) => Some(ids),
+        Err(e) => {
+            warn!("Failed to look up embeddings: {}", e);
+            None
         }
     }
 }
@@ -107,7 +124,7 @@ pub struct DisplayBookmark {
 }
 
 impl DisplayBookmark {
-    pub fn from_domain(bookmark: &Bookmark) -> Self {
+    pub fn from_domain(bookmark: &Bookmark, embedded_ids: Option<&HashSet<i32>>) -> Self {
         let url = bookmark.url.clone();
 
         DisplayBookmarkBuilder::default()
@@ -119,12 +136,11 @@ impl DisplayBookmark {
             .access_count(bookmark.access_count)
             .created_at(bookmark.created_at) // Pass through the Option<DateTime<Utc>>
             .last_update_ts(bookmark.updated_at)
-            .embedding(
-                bookmark
-                    .embedding
-                    .as_ref()
-                    .map_or_else(String::new, |_| "yes".to_string()),
-            )
+            .embedding(match bookmark.has_embedding_in(embedded_ids) {
+                Some(true) => "yes",
+                Some(false) => "",
+                None => "unknown",
+            })
             .embeddable(bookmark.embeddable)
             .file_path(bookmark.file_path.clone())
             .file_mtime(bookmark.file_mtime)
@@ -146,11 +162,14 @@ impl DisplayBookmark {
             DisplayField::Embedding => self.embedding.clone(),
         }
     }
-    pub fn from_semantic_result(result: &SemanticSearchResult) -> Self {
+    pub fn from_semantic_result(
+        result: &SemanticSearchResult,
+        embedded_ids: Option<&HashSet<i32>>,
+    ) -> Self {
         let mut builder = DisplayBookmarkBuilder::default();
 
         // Start with the base bookmark fields
-        let base = Self::from_domain(&result.bookmark);
+        let base = Self::from_domain(&result.bookmark, embedded_ids);
 
         // Build with all the base fields plus similarity
         builder
@@ -289,7 +308,7 @@ pub fn show_bookmarks(
             let embed_status = if bm.embedding.is_empty() {
                 "null"
             } else {
-                "yes"
+                bm.embedding.as_str()
             };
             if !flags_and_embedding_line.is_empty() {
                 flags_and_embedding_line.push_str(" | ");
@@ -422,6 +441,28 @@ mod display_tests {
                 file_mtime: None,
             },
         ]
+    }
+
+    #[test]
+    fn given_embedded_ids_when_from_domain_then_reports_embedding_status() {
+        let mut bookmark = Bookmark::new(
+            "https://example.com",
+            "Example",
+            "",
+            std::collections::HashSet::new(),
+        )
+        .unwrap();
+        bookmark.id = Some(42);
+        let with_id: HashSet<i32> = [42].into_iter().collect();
+        let without_id: HashSet<i32> = [7].into_iter().collect();
+
+        let embedded = DisplayBookmark::from_domain(&bookmark, Some(&with_id));
+        let not_embedded = DisplayBookmark::from_domain(&bookmark, Some(&without_id));
+        let unknown = DisplayBookmark::from_domain(&bookmark, None);
+
+        assert_eq!(embedded.get_value(&DisplayField::Embedding), "yes");
+        assert_eq!(not_embedded.get_value(&DisplayField::Embedding), "");
+        assert_eq!(unknown.get_value(&DisplayField::Embedding), "unknown");
     }
 
     #[test]

@@ -146,6 +146,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         });
 
+        // Same hash as update_bookmark, so that an unchanged bookmark is not embedded again
+        if bookmark.embeddable {
+            bookmark.content_hash = Some(calc_content_hash(&bookmark.get_content_for_embedding()));
+        }
+
         self.repository
             .add(&mut bookmark)
             .app_context("saving new bookmark to repository")?;
@@ -534,6 +539,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
+    fn get_embedded_ids(&self) -> ApplicationResult<HashSet<i32>> {
+        Ok(self.vector_repository.get_embedded_ids()?)
+    }
+
+    #[instrument(skip(self), level = "debug")]
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
@@ -582,6 +592,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             let mut bookmark =
                 Bookmark::new(&import.url, &import.title, &import.content, import.tags)?;
             bookmark.set_embeddable(embeddable);
+
+            // Same hash as update_bookmark, so that an unchanged bookmark is not embedded again
+            if bookmark.embeddable {
+                bookmark.content_hash =
+                    Some(calc_content_hash(&bookmark.get_content_for_embedding()));
+            }
 
             self.repository.add(&mut bookmark)?;
 
@@ -1476,6 +1492,53 @@ mod tests {
         assert_eq!(retrieved.tags.len(), 2);
         assert!(retrieved.tags.contains(&Tag::new("replaced1").unwrap()));
         assert!(retrieved.tags.contains(&Tag::new("replaced2").unwrap()));
+    }
+
+    #[test]
+    fn given_embeddable_bookmark_when_add_bookmark_then_stores_content_hash() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let service = create_test_service();
+
+        let bookmark = service
+            .add_bookmark(
+                "https://content-hash.example.com",
+                Some("Content Hash"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
+
+        let stored = service.get_bookmark(bookmark.id.unwrap()).unwrap().unwrap();
+        assert_eq!(
+            stored.content_hash,
+            Some(calc_content_hash(&stored.get_content_for_embedding()))
+        );
+    }
+
+    #[test]
+    fn given_non_embeddable_bookmark_when_add_bookmark_then_stores_no_content_hash() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let service = create_test_service();
+
+        let bookmark = service
+            .add_bookmark(
+                "https://no-content-hash.example.com",
+                Some("No Content Hash"),
+                None,
+                None,
+                false,
+                false,
+                None,
+            )
+            .unwrap();
+
+        let stored = service.get_bookmark(bookmark.id.unwrap()).unwrap().unwrap();
+        assert_eq!(stored.content_hash, None);
     }
 
     #[test]
