@@ -273,7 +273,13 @@ fn given_stored_vector_when_backfill_force_dry_run_then_keeps_vector() {
         .success();
     cargo_bin_cmd!("bkmr")
         .env("BKMR_DB_URL", &db)
-        .args(["add", "https://backfill.example.com", "t", "--title", "Backfill"])
+        .args([
+            "add",
+            "https://backfill.example.com",
+            "t",
+            "--title",
+            "Backfill",
+        ])
         .args(["--no-web", "--no-embed"])
         .assert()
         .success();
@@ -281,7 +287,9 @@ fn given_stored_vector_when_backfill_force_dry_run_then_keeps_vector() {
     register_sqlite_vec();
     let vectors = SqliteVectorRepository::new(db.to_str().unwrap()).unwrap();
     vectors.init_vec_table(768).unwrap();
-    vectors.upsert_embedding(id as i32, &vec![0.1; 768]).unwrap();
+    vectors
+        .upsert_embedding(id as i32, &vec![0.1; 768])
+        .unwrap();
     drop(vectors);
     assert!(has_embedding(&db, id));
 
@@ -334,4 +342,75 @@ fn given_invalid_default_config_when_generating_config_then_still_succeeds() {
         .arg("--generate-config")
         .assert()
         .success();
+}
+
+#[test]
+fn given_config_with_snippets_off_when_adding_through_binary_then_not_embedded() {
+    // Arrange: no flag and no model, so a wrongly embedded snippet would load the model
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("policy.db");
+    let config = dir.path().join("config.toml");
+    std::fs::write(&config, "[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+
+    // Act
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .arg("--config")
+        .arg(&config)
+        .args(["add", "echo hi", "t", "--title", "Hi", "-t", "snip"])
+        .assert()
+        .success();
+
+    // Assert
+    let bookmark = &search_all(&db)[0];
+    assert_eq!(bookmark["embeddable"], false);
+    assert_eq!(bookmark["has_embedding"], false);
+}
+
+#[test]
+fn given_config_with_policy_when_showing_info_then_prints_effective_policy() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("info.db");
+    let config = dir.path().join("config.toml");
+    std::fs::write(&config, "[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+
+    // Act + Assert
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .arg("--config")
+        .arg(&config)
+        .arg("info")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("_snip_=off"))
+        .stdout(predicate::str::contains("_mem_=always"));
+}
+
+#[test]
+fn given_invalid_policy_when_running_then_fails_naming_the_value() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let config = dir.path().join("config.toml");
+    std::fs::write(&config, "[embeddings.policy]\n_snip_ = \"never\"\n").unwrap();
+
+    // Act + Assert
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", dir.path().join("unused.db"))
+        .arg("--config")
+        .arg(&config)
+        .arg("info")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("never"));
 }

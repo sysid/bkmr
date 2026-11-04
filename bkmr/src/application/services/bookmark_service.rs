@@ -22,9 +22,13 @@ pub trait BookmarkService: Send + Sync + Debug {
         description: Option<&str>,
         tags: Option<&HashSet<Tag>>,
         fetch_metadata: bool,
-        embeddable: bool,
+        embed: Option<bool>,
         opener: Option<&str>,
     ) -> ApplicationResult<Bookmark>;
+
+    /// Decide the `embeddable` flag for a bookmark with these tags. `requested` is an explicit
+    /// wish of the user; `None` applies the mode of the embedding policy.
+    fn resolve_embeddable(&self, tags: &HashSet<Tag>, requested: Option<bool>) -> bool;
 
     /// Delete a bookmark by ID
     fn delete_bookmark(&self, id: i32) -> ApplicationResult<bool>;
@@ -101,7 +105,7 @@ pub trait BookmarkService: Send + Sync + Debug {
         &self,
         path: &str,
         dry_run: bool,
-        embeddable: bool,
+        embed: Option<bool>,
     ) -> ApplicationResult<usize>;
 
     /// Import files from directories with frontmatter metadata. Stores full content AND
@@ -116,6 +120,6 @@ pub trait BookmarkService: Send + Sync + Debug {
         dry_run: bool,
         verbose: bool,
         base_path_name: Option<&str>,
-        embeddable: bool,
+        embed: Option<bool>,
     ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
 }

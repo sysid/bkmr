@@ -296,8 +296,14 @@ pub enum Commands {
         )]
         open_with: Option<String>,
         #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "generate embedding for semantic search, overriding [embeddings.policy]"
+        )]
+        embed: bool,
+        #[arg(
             long = "no-embed",
-            help = "do not generate embedding for semantic search"
+            help = "do not generate embedding for semantic search, overriding [embeddings.policy] unless the type is set to \"always\""
         )]
         no_embed: bool,
     },
@@ -392,8 +398,14 @@ pub enum Commands {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
         #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "generate embeddings for semantic search, overriding [embeddings.policy]"
+        )]
+        embed: bool,
+        #[arg(
             long = "no-embed",
-            help = "do not generate embedding for semantic search"
+            help = "do not generate embeddings for semantic search, overriding [embeddings.policy] unless a type is set to \"always\""
         )]
         no_embed: bool,
     },
@@ -452,8 +464,14 @@ pub enum Commands {
         )]
         base_path: Option<String>,
         #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "generate embeddings for new files, overriding [embeddings.policy]; existing bookmarks keep their setting"
+        )]
+        embed: bool,
+        #[arg(
             long = "no-embed",
-            help = "do not generate embedding for semantic search"
+            help = "do not generate embeddings for new files, overriding [embeddings.policy] unless a type is set to \"always\"; existing bookmarks keep their setting"
         )]
         no_embed: bool,
     },
@@ -523,7 +541,10 @@ mod tests {
             .expect("--help exits through clap's error path")
             .to_string();
 
-        assert!(help.contains("mem"), "add --help must list the mem type:\n{help}");
+        assert!(
+            help.contains("mem"),
+            "add --help must list the mem type:\n{help}"
+        );
     }
 
     #[test]
@@ -549,8 +570,14 @@ mod tests {
 
         // clap wraps long help lines, so compare with whitespace collapsed.
         let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
-        assert!(help.contains("possible values: uri, snip, text, shell, md, env, mem]"), "{help}");
-        assert!(!help.contains("markdown") && !help.contains("memory"), "{help}");
+        assert!(
+            help.contains("possible values: uri, snip, text, shell, md, env, mem]"),
+            "{help}"
+        );
+        assert!(
+            !help.contains("markdown") && !help.contains("memory"),
+            "{help}"
+        );
     }
 
     #[test]

@@ -25,7 +25,7 @@ fn test_search_command_with_tags() {
             None,
             Some(&tag_set),
             false,
-            true,
+            Some(true),
             None,
         )
         .unwrap();
@@ -37,7 +37,7 @@ fn test_search_command_with_tags() {
             None,
             Some(&tag_set),
             false,
-            true,
+            Some(true),
             None,
         )
         .unwrap();

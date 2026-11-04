@@ -62,7 +62,7 @@ impl CommandService {
                 description,
                 Some(&tag_set),
                 false, // Don't fetch metadata for snippets
-                true,  // embeddable by default
+                None,  // the embedding policy decides
                 None,  // snippets don't use a custom opener
             )
             .map_err(LspError::from)
@@ -543,7 +543,7 @@ mod tests {
                 None,
                 Some(&tags),
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();

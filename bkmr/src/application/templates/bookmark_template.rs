@@ -107,7 +107,6 @@ impl BookmarkTemplate {
                 builder
                 .url("# New Markdown Document\n\n## Introduction\n\nWrite your markdown content here.\n\n## Features\n\n- Lists\n- **Bold text**\n- *Italic text*\n- [Links](https://example.com)\n- Code blocks\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```")
                 .title("New Markdown Document")
-                .embeddable(true)
                 .comments("Description of the markdown document");
 
                 // Build template first to get the tags
@@ -140,8 +139,7 @@ impl BookmarkTemplate {
                 builder
                     .url("Enter memory content here")
                     .title("Memory Title")
-                    .comments("")
-                    .embeddable(true);
+                    .comments("");
 
                 let mut template = builder.build().unwrap();
 
@@ -175,6 +173,7 @@ impl BookmarkTemplate {
             "# Bookmark Template\n\
             # Lines starting with '#' are comments and will be ignored.\n\
             # Section markers (=== SECTION_NAME ===) are required and must not be removed.\n\
+            # EMBEDDABLE: true or false; a type set to \"always\" in [embeddings.policy] stays true.\n\
             \n\
             === ID ===\n\
             {}\n\

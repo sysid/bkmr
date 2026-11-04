@@ -286,11 +286,7 @@ fn read_config_file(path: &Path) -> DomainResult<Settings> {
         ))
     })?;
     let mut settings: Settings = toml::from_str(&config_text).map_err(|e| {
-        DomainError::ConfigurationError(format!(
-            "Invalid config file {}: {}",
-            path.display(),
-            e
-        ))
+        DomainError::ConfigurationError(format!("Invalid config file {}: {}", path.display(), e))
     })?;
     settings.config_source = ConfigSource::ConfigFile;
     expand_db_url(&mut settings);
@@ -399,8 +395,7 @@ mod tests {
     #[test]
     fn given_partial_policy_when_parsing_config_then_keeps_defaults_for_the_rest() {
         // Act
-        let settings: Settings =
-            toml::from_str("[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
+        let settings: Settings = toml::from_str("[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
 
         // Assert
         let policy = settings.embeddings.policy;
@@ -432,6 +427,15 @@ mod tests {
         let result = toml::from_str::<Settings>("[embeddings.policy]\n_snip_ = \"never\"\n");
 
         assert!(result.unwrap_err().to_string().contains("never"));
+    }
+
+    #[test]
+    fn given_documented_default_config_when_parsing_then_matches_default_policy() {
+        // Act
+        let settings: Settings = toml::from_str(include_str!("default_config.toml")).unwrap();
+
+        // Assert
+        assert_eq!(settings.embeddings.policy, EmbeddingPolicy::default());
     }
 
     #[test]

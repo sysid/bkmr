@@ -294,6 +294,15 @@ fn process_content_for_type(content: &str, system_tag: SystemTag) -> String {
     }
 }
 
+/// The explicit embedding request of the `--embed` and `--no-embed` flags (mutually exclusive).
+fn embed_request(embed: bool, no_embed: bool) -> Option<bool> {
+    match (embed, no_embed) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    }
+}
+
 #[instrument(skip(cli, bookmark_service, template_service))]
 pub fn add(
     cli: Cli,
@@ -311,9 +320,12 @@ pub fn add(
         clone_id,
         stdin,
         open_with,
+        embed,
         no_embed,
     } = cli.command.unwrap()
     {
+        let requested = embed_request(embed, no_embed);
+
         // Convert bookmark_type string to SystemTag
         let system_tag = match bookmark_type.to_lowercase().as_str() {
             "snip" => SystemTag::Snippet,
@@ -381,14 +393,6 @@ pub fn add(
             template.tags.insert(tag.clone());
         }
 
-        // Seed the value the template shows. A clone keeps the flag of its source.
-        if clone_id.is_none() {
-            template.embeddable = true;
-        }
-        if no_embed {
-            template.embeddable = false;
-        }
-
         // If URL is provided, edit flag is not set, and we're not cloning,
         // use the simple add path without opening editor
         if final_url.is_some() && !edit && clone_id.is_none() {
@@ -401,7 +405,7 @@ pub fn add(
                 desc.as_deref(),
                 Some(&tag_set),
                 !no_web,
-                !no_embed,
+                requested,
                 open_with.as_deref(),
             )?;
 
@@ -412,6 +416,11 @@ pub fn add(
             );
             return Ok(());
         }
+
+        // Seed the value the template shows. A clone keeps the flag of its source.
+        let source_flag = clone_id.map(|_| template.embeddable);
+        template.embeddable =
+            bookmark_service.resolve_embeddable(&template.tags, requested.or(source_flag));
 
         // Otherwise, open in editor
         // Convert template to a temporary bookmark for editing
@@ -439,7 +448,7 @@ pub fn add(
                     Some(&edited_bookmark.tags),
                     false, // Don't fetch metadata since we've already edited it
                     // The saved template is the last explicit statement of intent
-                    edited_bookmark.embeddable,
+                    Some(edited_bookmark.embeddable),
                     effective_opener,
                 ) {
                     Ok(bookmark) => {
@@ -528,9 +537,14 @@ pub fn update(
                 // Handle embedding flag changes
                 if embed || no_embed {
                     let updated = bookmark_service.set_bookmark_embeddable(id, embed)?;
+                    // The policy can override the request, so report the outcome
                     eprintln!(
                         "Embedding {}: {}",
-                        if embed { "enabled" } else { "disabled" },
+                        if updated.embeddable {
+                            "enabled"
+                        } else {
+                            "disabled"
+                        },
                         updated.title
                     );
                 }
@@ -908,15 +922,17 @@ pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     if let Commands::LoadJson {
         path,
         dry_run,
+        embed,
         no_embed,
     } = cli.command.unwrap()
     {
         eprintln!("Loading bookmarks from JSON array: {}", path);
+        let requested = embed_request(embed, no_embed);
 
         let bookmark_service = services.bookmark_service.clone();
 
         if dry_run {
-            let count = bookmark_service.load_json_bookmarks(&path, true, !no_embed)?;
+            let count = bookmark_service.load_json_bookmarks(&path, true, requested)?;
             eprintln!(
                 "Dry run completed - would process {} bookmark entries",
                 count
@@ -925,7 +941,7 @@ pub fn load_json(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         }
 
         // Process the bookmarks
-        let processed_count = bookmark_service.load_json_bookmarks(&path, false, !no_embed)?;
+        let processed_count = bookmark_service.load_json_bookmarks(&path, false, requested)?;
         info!(count = processed_count, path = %path, "JSON load complete");
         eprintln!(
             "Successfully processed {} bookmark entries",
@@ -1069,6 +1085,14 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             "  Embedded: {} of {} embeddable bookmarks",
             vec_embedded_count, embeddable_count
         );
+        let policy: Vec<String> = settings
+            .embeddings
+            .policy
+            .entries()
+            .iter()
+            .map(|(key, mode)| format!("{}={}", key, mode))
+            .collect();
+        println!("  Policy: {}", policy.join(", "));
         if let Some(dims) = vec_dims {
             println!(
                 "  Vector table: vec_bookmarks ({} dims, {} rows)",
@@ -1365,6 +1389,7 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         dry_run,
         verbose,
         base_path,
+        embed,
         no_embed,
     }) = cli.command
     {
@@ -1402,7 +1427,7 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             dry_run,
             verbose,
             base_path.as_deref(),
-            !no_embed,
+            embed_request(embed, no_embed),
         ) {
             Ok((added, updated, deleted)) => {
                 if dry_run {

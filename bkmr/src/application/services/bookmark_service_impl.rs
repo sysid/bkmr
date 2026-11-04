@@ -6,6 +6,7 @@ use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
+use crate::domain::embedding_policy::EmbeddingPolicy;
 use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::repositories::import_repository::{FileImportData, ImportRepository};
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
@@ -27,6 +28,7 @@ pub struct BookmarkServiceImpl<R: BookmarkRepository> {
     embedder: Arc<dyn Embedder>,
     vector_repository: Arc<dyn VectorRepository>,
     import_repository: Arc<dyn ImportRepository>,
+    embedding_policy: EmbeddingPolicy,
 }
 
 impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
@@ -41,7 +43,14 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             embedder,
             vector_repository,
             import_repository,
+            embedding_policy: EmbeddingPolicy::default(),
         }
+    }
+
+    /// Replace the built-in embedding policy with the configured one.
+    pub fn with_embedding_policy(mut self, embedding_policy: EmbeddingPolicy) -> Self {
+        self.embedding_policy = embedding_policy;
+        self
     }
 
     /// Generate and store embedding for a bookmark if content produces one.
@@ -84,7 +93,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         description: Option<&str>,
         tags: Option<&HashSet<Tag>>,
         fetch_metadata: bool,
-        embeddable: bool,
+        embed: Option<bool>,
         opener: Option<&str>,
     ) -> ApplicationResult<Bookmark> {
         // Check if bookmark with URL already exists
@@ -136,7 +145,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         );
         let mut bookmark = Bookmark::new(url, &title_str, &desc_str, all_tags)
             .app_context("creating new bookmark from provided data")?;
-        bookmark.set_embeddable(embeddable);
+        bookmark.set_embeddable(self.resolve_embeddable(&bookmark.tags, embed));
         bookmark.opener = opener.and_then(|s| {
             let trimmed = s.trim();
             if trimmed.is_empty() {
@@ -165,6 +174,16 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         info!(bookmark_id = ?bookmark.id, title = %bookmark.title, "Bookmark created");
         Ok(bookmark)
+    }
+
+    fn resolve_embeddable(&self, tags: &HashSet<Tag>, requested: Option<bool>) -> bool {
+        let embeddable = self.embedding_policy.resolve(tags, requested);
+        if requested == Some(false) && embeddable {
+            warn!(
+                "Embedding forced on: the embedding policy sets this bookmark type to \"always\""
+            );
+        }
+        embeddable
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -231,6 +250,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             ApplicationError::Validation("Bookmark ID is required for update".to_string())
         })?)
         .app_context("validating bookmark ID for update operation")?;
+
+        // Every write goes through here, tag changes included, so "always" cannot be escaped
+        bookmark.embeddable = self.resolve_embeddable(&bookmark.tags, Some(bookmark.embeddable));
 
         let content = bookmark.get_content_for_embedding();
         let new_hash = calc_content_hash(&content);
@@ -550,7 +572,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         &self,
         path: &str,
         dry_run: bool,
-        embeddable: bool,
+        embed: Option<bool>,
     ) -> ApplicationResult<usize> {
         let imports = self
             .import_repository
@@ -579,7 +601,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             // Create the bookmark
             let mut bookmark =
                 Bookmark::new(&import.url, &import.title, &import.content, import.tags)?;
-            bookmark.set_embeddable(embeddable);
+            bookmark.set_embeddable(self.resolve_embeddable(&bookmark.tags, embed));
 
             // Same hash as update_bookmark, so that an unchanged bookmark is not embedded again
             if bookmark.embeddable {
@@ -617,7 +639,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         dry_run: bool,
         verbose: bool,
         base_path_name: Option<&str>,
-        embeddable: bool,
+        embed: Option<bool>,
     ) -> ApplicationResult<(usize, usize, usize)> {
         use crate::domain::repositories::import_repository::ImportOptions;
 
@@ -714,12 +736,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             } else {
                 // Create new bookmark
                 if !dry_run {
-                    self.create_bookmark_from_file(
-                        file_data,
-                        &settings,
-                        base_path_name,
-                        embeddable,
-                    )?;
+                    self.create_bookmark_from_file(file_data, &settings, base_path_name, embed)?;
                 }
                 added_count += 1;
                 println!("Added bookmark: {}", file_data.name);
@@ -783,24 +800,18 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         file_data: &FileImportData,
         settings: &crate::config::Settings,
         base_path_name: Option<&str>,
-        embeddable: bool,
+        embed: Option<bool>,
     ) -> ApplicationResult<Bookmark> {
         use crate::domain::system_tag::SystemTag;
 
         // Convert content type to system tag
-        let system_tag = match file_data.content_type.as_str() {
-            "_snip_" => SystemTag::Snippet,
-            "_imported_" => SystemTag::Text,
-            "_shell_" => SystemTag::Shell,
-            "_md_" => SystemTag::Markdown,
-            "_env_" => SystemTag::Env,
-            "_mem_" => SystemTag::Memory,
-            _ => SystemTag::Shell, // Default for unknown types
-        };
+        let system_tag =
+            SystemTag::from_tag_value(&file_data.content_type).unwrap_or(SystemTag::Shell); // Default for unknown types
 
         // Prepare tags (including system tag)
         let mut all_tags = file_data.tags.clone();
         all_tags.insert(system_tag.to_tag()?);
+        let embeddable = self.resolve_embeddable(&all_tags, embed);
 
         // Store file content in URL column as required
         let mut bookmark = BookmarkBuilder::default()
@@ -929,6 +940,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             }
         }
         updated.tags = new_tags;
+        // The flag of an existing bookmark is sticky, except that "always" applies
+        updated.embeddable = self.resolve_embeddable(&updated.tags, Some(updated.embeddable));
 
         // Same hash as update_bookmark (after tags are set); only embeddable bookmarks carry one
         let embedding_content = updated.get_content_for_embedding();
@@ -1057,8 +1070,9 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
+    use crate::domain::embedding_policy::EmbeddingMode;
     use crate::domain::error::DomainResult;
+    use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
     use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
@@ -1101,12 +1115,18 @@ mod tests {
         }
 
         fn upsert_embedding(&self, bookmark_id: i32, _embedding: &[f32]) -> DomainResult<()> {
-            self.ids.lock().expect("lock not poisoned").insert(bookmark_id);
+            self.ids
+                .lock()
+                .expect("lock not poisoned")
+                .insert(bookmark_id);
             Ok(())
         }
 
         fn delete_embedding(&self, bookmark_id: i32) -> DomainResult<()> {
-            self.ids.lock().expect("lock not poisoned").remove(&bookmark_id);
+            self.ids
+                .lock()
+                .expect("lock not poisoned")
+                .remove(&bookmark_id);
             Ok(())
         }
 
@@ -1149,14 +1169,336 @@ mod tests {
         BookmarkServiceImpl<SqliteBookmarkRepository>,
         Arc<RecordingVectorRepository>,
     ) {
+        create_service_with_policy(EmbeddingPolicy::default())
+    }
+
+    fn create_service_with_policy(
+        policy: EmbeddingPolicy,
+    ) -> (
+        BookmarkServiceImpl<SqliteBookmarkRepository>,
+        Arc<RecordingVectorRepository>,
+    ) {
         let vectors = Arc::new(RecordingVectorRepository::default());
         let service = BookmarkServiceImpl::new(
             Arc::new(setup_test_db()),
             Arc::new(StubEmbedder),
             vectors.clone(),
             Arc::new(JsonImportRepository::new()),
-        );
+        )
+        .with_embedding_policy(policy);
         (service, vectors)
+    }
+
+    fn policy_with_snippets_off() -> EmbeddingPolicy {
+        EmbeddingPolicy {
+            snippet: EmbeddingMode::Off,
+            ..EmbeddingPolicy::default()
+        }
+    }
+
+    fn tag_set(values: &[&str]) -> HashSet<Tag> {
+        values.iter().map(|v| Tag::new(v).unwrap()).collect()
+    }
+
+    #[test]
+    fn given_type_set_to_off_when_adding_without_request_then_not_embedded() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(policy_with_snippets_off());
+        let tags = tag_set(&["_snip_"]);
+
+        // Act
+        let bookmark = service
+            .add_bookmark(
+                "echo off",
+                Some("Off"),
+                None,
+                Some(&tags),
+                false,
+                None,
+                None,
+            )
+            .unwrap();
+
+        // Assert
+        assert!(!bookmark.embeddable);
+        assert_eq!(bookmark.content_hash, None);
+        assert!(!vectors.has_vector(bookmark.id.unwrap()));
+    }
+
+    #[test]
+    fn given_type_set_to_off_when_adding_with_request_then_embedded_and_survives_update() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(policy_with_snippets_off());
+        let tags = tag_set(&["_snip_"]);
+
+        // Act: opt in
+        let bookmark = service
+            .add_bookmark(
+                "echo in",
+                Some("In"),
+                None,
+                Some(&tags),
+                false,
+                Some(true),
+                None,
+            )
+            .unwrap();
+        let id = bookmark.id.unwrap();
+
+        // Assert
+        assert!(bookmark.embeddable);
+        assert!(vectors.has_vector(id));
+
+        // Act + Assert: the opt-in is sticky, the policy only decides new bookmarks
+        let updated = service.update_bookmark(bookmark, false).unwrap();
+        assert!(updated.embeddable);
+        assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_type_set_to_always_when_adding_with_opt_out_then_still_embedded() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let tags = tag_set(&["_mem_"]);
+
+        // Act
+        let bookmark = service
+            .add_bookmark(
+                "a fact",
+                Some("Fact"),
+                None,
+                Some(&tags),
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap();
+
+        // Assert
+        assert!(bookmark.embeddable);
+        assert!(vectors.has_vector(bookmark.id.unwrap()));
+    }
+
+    #[test]
+    fn given_type_set_to_always_when_disabling_embedding_then_stays_embedded() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let tags = tag_set(&["_mem_"]);
+        let id = service
+            .add_bookmark("kept", Some("Kept"), None, Some(&tags), false, None, None)
+            .unwrap()
+            .id
+            .unwrap();
+
+        // Act
+        let updated = service.set_bookmark_embeddable(id, false).unwrap();
+
+        // Assert
+        assert!(updated.embeddable);
+        assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_non_embeddable_bookmark_when_retagged_to_always_type_then_gets_embedded() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let id = service
+            .add_bookmark("retag", Some("Retag"), None, None, false, Some(false), None)
+            .unwrap()
+            .id
+            .unwrap();
+        assert!(!vectors.has_vector(id));
+
+        // Act
+        let updated = service
+            .add_tags_to_bookmark(id, &tag_set(&["_mem_"]))
+            .unwrap();
+
+        // Assert
+        assert!(updated.embeddable);
+        assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_non_embeddable_bookmark_when_tags_replaced_with_always_type_then_gets_embedded() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let id = service
+            .add_bookmark(
+                "replace",
+                Some("Replace"),
+                None,
+                None,
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
+
+        // Act
+        let updated = service
+            .replace_bookmark_tags(id, &tag_set(&["_mem_", "fact"]))
+            .unwrap();
+
+        // Assert
+        assert!(updated.embeddable);
+        assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_policy_when_loading_json_then_applies_it_per_bookmark() {
+        // Arrange: a file mixing an "off" and an "always" type
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(policy_with_snippets_off());
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("mixed.json");
+        std::fs::write(
+            &path,
+            r#"[{"url":"json snippet","title":"S","description":"","tags":["_snip_"]},
+                {"url":"json memory","title":"M","description":"","tags":["_mem_"]}]"#,
+        )
+        .unwrap();
+
+        // Act: --no-embed cannot switch off the "always" type
+        service
+            .load_json_bookmarks(path.to_str().unwrap(), false, Some(false))
+            .unwrap();
+
+        // Assert
+        let all = service.get_all_bookmarks(None, None).unwrap();
+        let find = |url: &str| all.iter().find(|b| b.url == url).expect("loaded");
+        assert!(!find("json snippet").embeddable);
+        assert!(find("json memory").embeddable);
+        assert!(vectors.has_vector(find("json memory").id.unwrap()));
+
+        // Arrange + Act + Assert: without a request the "off" mode applies as well
+        std::fs::write(
+            &path,
+            r#"[{"url":"json snippet 2","title":"S2","description":"","tags":["_snip_"]}]"#,
+        )
+        .unwrap();
+        service
+            .load_json_bookmarks(path.to_str().unwrap(), false, None)
+            .unwrap();
+        let all = service.get_all_bookmarks(None, None).unwrap();
+        assert!(
+            !all.iter()
+                .find(|b| b.url == "json snippet 2")
+                .unwrap()
+                .embeddable
+        );
+    }
+
+    #[test]
+    fn given_policy_when_importing_files_then_applies_it_and_always_reaches_existing_rows() {
+        use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
+
+        // Arrange: _mem_ is not yet "always" when the file is first imported with --no-embed
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = Arc::new(setup_test_db());
+        let vectors = Arc::new(RecordingVectorRepository::default());
+        let service_with_policy = |policy: EmbeddingPolicy| {
+            BookmarkServiceImpl::new(
+                repository.clone(),
+                Arc::new(StubEmbedder),
+                vectors.clone(),
+                Arc::new(FileImportRepository::new()),
+            )
+            .with_embedding_policy(policy)
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let memory_file = dir.path().join("memory.sh");
+        std::fs::write(
+            &memory_file,
+            "#!/bin/bash\n# name: imported-memory\n# type: _mem_\necho one\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("snippet.sh"),
+            "#!/bin/bash\n# name: imported-snippet\n# type: _snip_\necho snip\n",
+        )
+        .unwrap();
+        let paths = vec![dir.path().to_string_lossy().to_string()];
+        let before = service_with_policy(EmbeddingPolicy {
+            memory: EmbeddingMode::On,
+            ..policy_with_snippets_off()
+        });
+
+        // Act
+        before
+            .import_files(&paths, false, false, false, false, None, Some(false))
+            .unwrap();
+
+        // Assert
+        let stored = |title: &str| {
+            repository
+                .get_all()
+                .unwrap()
+                .into_iter()
+                .find(|b| b.title == title)
+                .expect("file imported")
+        };
+        assert!(!stored("imported-memory").embeddable);
+        assert!(!stored("imported-snippet").embeddable);
+
+        // Act: the file changes, and _mem_ is "always" by now
+        std::fs::write(
+            &memory_file,
+            "#!/bin/bash\n# name: imported-memory\n# type: _mem_\necho two\n",
+        )
+        .unwrap();
+        service_with_policy(policy_with_snippets_off())
+            .import_files(&paths, true, false, false, false, None, None)
+            .unwrap();
+
+        // Assert: "always" reaches the existing row, the sticky snippet is untouched
+        let memory = stored("imported-memory");
+        assert!(memory.embeddable);
+        assert!(memory.content_hash.is_some());
+        assert!(vectors.has_vector(memory.id.unwrap()));
+        assert!(!stored("imported-snippet").embeddable);
+    }
+
+    #[test]
+    fn given_type_set_to_off_when_creating_snippet_through_lsp_then_not_embedded() {
+        use crate::lsp::services::command_service::CommandService;
+
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_policy(policy_with_snippets_off());
+        let service = Arc::new(service);
+        let commands = CommandService::with_service(service.clone());
+
+        // Act
+        commands
+            .create_snippet("lsp snippet", "LSP", None, vec!["rust".to_string()])
+            .unwrap();
+
+        // Assert
+        let all = service.get_all_bookmarks(None, None).unwrap();
+        assert!(
+            !all.iter()
+                .find(|b| b.url == "lsp snippet")
+                .unwrap()
+                .embeddable
+        );
     }
 
     #[test]
@@ -1172,7 +1514,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1215,7 +1557,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1285,7 +1627,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1322,7 +1664,7 @@ mod tests {
                 Some(description),
                 Some(&tags),
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1358,7 +1700,7 @@ mod tests {
                 Some(""),
                 None,
                 false,
-                true,
+                Some(true),
                 Some(opener),
             )
             .unwrap();
@@ -1381,7 +1723,7 @@ mod tests {
                 Some(""),
                 None,
                 false,
-                true,
+                Some(true),
                 Some("   "),
             )
             .unwrap();
@@ -1398,7 +1740,15 @@ mod tests {
         let service = create_test_service();
         let existing_url = "https://duplicate.example.com";
         service
-            .add_bookmark(existing_url, Some("First"), None, None, false, true, None)
+            .add_bookmark(
+                existing_url,
+                Some("First"),
+                None,
+                None,
+                false,
+                Some(true),
+                None,
+            )
             .unwrap();
 
         // Act
@@ -1408,7 +1758,7 @@ mod tests {
             Some("Description"),
             None,
             false,
-            true,
+            Some(true),
             None,
         );
 
@@ -1438,7 +1788,7 @@ mod tests {
                 Some("Before"),
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap()
@@ -1503,7 +1853,7 @@ mod tests {
                 None,
                 Some(&original_tags),
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap()
@@ -1544,7 +1894,7 @@ mod tests {
                 None,
                 Some(&original_tags),
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap()
@@ -1585,7 +1935,7 @@ mod tests {
                 None,
                 Some(&original_tags),
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap()
@@ -1624,7 +1974,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1649,7 +1999,7 @@ mod tests {
                 None,
                 None,
                 false,
-                false,
+                Some(false),
                 None,
             )
             .unwrap();
@@ -1671,7 +2021,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap()
@@ -1709,7 +2059,7 @@ mod tests {
                 Some("Description"),
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1805,7 +2155,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1816,7 +2166,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1841,7 +2191,7 @@ mod tests {
             "https://all-3.example.com",
         ] {
             service
-                .add_bookmark(url, Some("All"), None, None, false, true, None)
+                .add_bookmark(url, Some("All"), None, None, false, Some(true), None)
                 .unwrap();
         }
 
@@ -1871,7 +2221,7 @@ mod tests {
                     None,
                     None,
                     false,
-                    true,
+                    Some(true),
                     None,
                 )
                 .unwrap();
@@ -1921,7 +2271,7 @@ mod tests {
                 None,
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();
@@ -1932,7 +2282,7 @@ mod tests {
                 None,
                 None,
                 false,
-                false,
+                Some(false),
                 None,
             )
             .unwrap();
@@ -1968,7 +2318,7 @@ mod tests {
                 Some("Description"),
                 None,
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();

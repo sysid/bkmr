@@ -12,7 +12,7 @@ fn given_embeddable_import_when_load_json_bookmarks_then_stores_content_hash(
     test_container.bookmark_service.load_json_bookmarks(
         "tests/resources/bookmarks.ndjson",
         false,
-        true,
+        Some(true),
     )?;
 
     let bookmarks = test_container.bookmark_repository.get_all()?;
@@ -46,7 +46,8 @@ fn given_valid_ndjson_file_when_load_json_bookmarks_then_adds_bookmarks_to_datab
         .to_string();
 
     // Act
-    let processed_count = bookmark_service.load_json_bookmarks(&test_file_path, false, true)?;
+    let processed_count =
+        bookmark_service.load_json_bookmarks(&test_file_path, false, Some(true))?;
 
     // Assert
     // Verify that the correct number of bookmarks were processed
