@@ -577,9 +577,70 @@ impl BookmarkAction for MarkdownAction {
         let toc_html = self.generate_toc_html(&toc_entries);
         let metadata_footer = self.render_metadata_footer(bookmark);
 
-        // Wrap the HTML content in a proper HTML document with enhanced styling
-        let full_html = format!(
-            r#"<!DOCTYPE html>
+        let full_html = render_html_document(
+            &bookmark.title,
+            &toc_html,
+            &processed_html,
+            &metadata_footer,
+        );
+
+        // Create a temporary HTML file with explicit .html extension
+        let temp_dir = tempfile::Builder::new()
+            .prefix("bkmr-markdown-")
+            .tempdir()
+            .map_err(|e| {
+                DomainError::Other(format!("Failed to create temporary directory: {}", e))
+            })?;
+
+        // Copy local resources to temp directory if content came from a file
+        if let Some(source_path) = self.get_source_file_path(bookmark) {
+            debug!("Copying resources for file: {:?}", source_path);
+            self.copy_resources_to_temp(&full_html, &source_path, temp_dir.path())?;
+        } else {
+            debug!("Content is not from a file, skipping resource copying");
+        }
+
+        // Create a file path with .html extension
+        let safe_title = bookmark
+            .title
+            .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
+        let file_name = format!("{}.html", safe_title);
+        let file_path = temp_dir.path().join(file_name);
+
+        // Create and write to the file (HTML paths stay relative)
+        let mut file = File::create(&file_path)
+            .map_err(|e| DomainError::Other(format!("Failed to create HTML file: {}", e)))?;
+
+        file.write_all(full_html.as_bytes())
+            .map_err(|e| DomainError::Other(format!("Failed to write HTML to file: {}", e)))?;
+
+        debug!("Opening HTML file in browser: {:?}", file_path);
+
+        // Open the HTML file in the default browser
+        open::that(&file_path)
+            .map_err(|e| DomainError::Other(format!("Failed to open HTML in browser: {}", e)))?;
+
+        // Keep the temporary directory around until the program exits
+        // This prevents the file from being deleted while the browser is using it
+        std::mem::forget(temp_dir);
+
+        Ok(())
+    }
+
+    fn description(&self) -> &'static str {
+        "Render markdown and open in browser"
+    }
+}
+
+/// Wrap the HTML content in a proper HTML document with enhanced styling
+fn render_html_document(
+    title: &str,
+    toc_html: &str,
+    body_html: &str,
+    metadata_footer: &str,
+) -> String {
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
     <title>{}</title>
@@ -1092,55 +1153,11 @@ impl BookmarkAction for MarkdownAction {
     </div>
 </body>
 </html>"#,
-            bookmark.title, toc_html, processed_html, metadata_footer
-        );
-
-        // Create a temporary HTML file with explicit .html extension
-        let temp_dir = tempfile::Builder::new()
-            .prefix("bkmr-markdown-")
-            .tempdir()
-            .map_err(|e| {
-                DomainError::Other(format!("Failed to create temporary directory: {}", e))
-            })?;
-
-        // Copy local resources to temp directory if content came from a file
-        if let Some(source_path) = self.get_source_file_path(bookmark) {
-            debug!("Copying resources for file: {:?}", source_path);
-            self.copy_resources_to_temp(&full_html, &source_path, temp_dir.path())?;
-        } else {
-            debug!("Content is not from a file, skipping resource copying");
-        }
-
-        // Create a file path with .html extension
-        let safe_title = bookmark
-            .title
-            .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-        let file_name = format!("{}.html", safe_title);
-        let file_path = temp_dir.path().join(file_name);
-
-        // Create and write to the file (HTML paths stay relative)
-        let mut file = File::create(&file_path)
-            .map_err(|e| DomainError::Other(format!("Failed to create HTML file: {}", e)))?;
-
-        file.write_all(full_html.as_bytes())
-            .map_err(|e| DomainError::Other(format!("Failed to write HTML to file: {}", e)))?;
-
-        debug!("Opening HTML file in browser: {:?}", file_path);
-
-        // Open the HTML file in the default browser
-        open::that(&file_path)
-            .map_err(|e| DomainError::Other(format!("Failed to open HTML in browser: {}", e)))?;
-
-        // Keep the temporary directory around until the program exits
-        // This prevents the file from being deleted while the browser is using it
-        std::mem::forget(temp_dir);
-
-        Ok(())
-    }
-
-    fn description(&self) -> &'static str {
-        "Render markdown and open in browser"
-    }
+        escape_html(title),
+        toc_html,
+        body_html,
+        metadata_footer
+    )
 }
 
 #[cfg(test)]
@@ -2209,6 +2226,31 @@ mod tests {
         // Should succeed with no operations
         let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
         assert!(result.is_ok());
+    }
+
+    // Tests for render_html_document()
+    #[test]
+    fn given_html_in_title_when_render_document_then_escapes_it() {
+        let html = render_html_document("</title><script>alert(1)</script>", "", "", "");
+
+        assert!(html.contains("<title>&lt;/title&gt;&lt;script&gt;alert(1)&lt;/script&gt;</title>"));
+        assert!(!html.contains("<script>alert(1)"));
+    }
+
+    #[test]
+    fn given_footer_when_render_document_then_places_it_after_content_inside_main() {
+        let html = render_html_document(
+            "Notes",
+            "",
+            "<p>body</p>",
+            r#"<footer class="bookmark-meta">meta</footer>"#,
+        );
+
+        let main_start = html.find(r#"<main class="main-content">"#).unwrap();
+        let body = html.find("<p>body</p>").unwrap();
+        let footer = html.find(r#"<footer class="bookmark-meta">"#).unwrap();
+        let main_end = html.find("</main>").unwrap();
+        assert!(main_start < body && body < footer && footer < main_end);
     }
 
     // Tests for render_metadata_footer()
