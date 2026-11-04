@@ -1,4 +1,4 @@
-use crate::domain::error::DomainResult;
+use crate::domain::error::{DomainError, DomainResult};
 use crate::util::path::expand_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -226,22 +226,8 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
         if path.exists() {
             trace!("Loading config from specified file: {:?}", path);
 
-            if let Ok(config_text) = std::fs::read_to_string(path) {
-                if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
-                    // Mark as loaded from file
-                    file_settings.config_source = ConfigSource::ConfigFile;
-                    settings = file_settings;
-
-                    // Expand db_url path after loading from file
-                    expand_db_url(&mut settings);
-
-                    debug!("Settings loaded from specified file: {:?}", path);
-                } else {
-                    warn!("Failed to parse config file: {:?}", path);
-                }
-            } else {
-                warn!("Failed to read config file: {:?}", path);
-            }
+            settings = read_config_file(path)?;
+            debug!("Settings loaded from specified file: {:?}", path);
 
             // Apply environment variable overrides
             apply_env_overrides(&mut settings);
@@ -266,19 +252,9 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
         if config_path.exists() {
             trace!("Loading config from: {:?}", config_path);
 
-            if let Ok(config_text) = std::fs::read_to_string(config_path) {
-                if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
-                    // Update settings with values from file and mark as loaded
-                    file_settings.config_source = ConfigSource::ConfigFile;
-                    settings = file_settings;
-
-                    // Expand db_url path after loading from file
-                    expand_db_url(&mut settings);
-
-                    // found_config = true;
-                    break; // Use the first found configuration file
-                }
-            }
+            settings = read_config_file(config_path)?;
+            // found_config = true;
+            break; // Use the first found configuration file
         }
     }
 
@@ -290,6 +266,28 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
     }
 
     trace!("Settings loaded: {:?}", settings);
+    Ok(settings)
+}
+
+/// Read an existing config file. A file that cannot be used is an error: falling back to
+/// defaults would silently switch to another database.
+fn read_config_file(path: &Path) -> DomainResult<Settings> {
+    let config_text = std::fs::read_to_string(path).map_err(|e| {
+        DomainError::ConfigurationError(format!(
+            "Cannot read config file {}: {}",
+            path.display(),
+            e
+        ))
+    })?;
+    let mut settings: Settings = toml::from_str(&config_text).map_err(|e| {
+        DomainError::ConfigurationError(format!(
+            "Invalid config file {}: {}",
+            path.display(),
+            e
+        ))
+    })?;
+    settings.config_source = ConfigSource::ConfigFile;
+    expand_db_url(&mut settings);
     Ok(settings)
 }
 
@@ -389,6 +387,22 @@ mod tests {
         let config_path = temp_dir.path().join("config.toml");
         fs::write(&config_path, content).unwrap();
         (temp_dir, config_path)
+    }
+
+    #[test]
+    fn given_invalid_config_file_when_load_settings_then_returns_error_naming_file() {
+        // Arrange
+        let _guard = EnvGuard::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("broken.toml");
+        std::fs::write(&path, "[fzf_opts]\nheight = 5\n").unwrap();
+
+        // Act
+        let error = load_settings(Some(&path)).unwrap_err().to_string();
+
+        // Assert
+        assert!(error.contains("broken.toml"), "error was: {error}");
+        assert!(error.contains("height"), "error was: {error}");
     }
 
     #[test]

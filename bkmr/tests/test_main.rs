@@ -295,3 +295,43 @@ fn given_stored_vector_when_backfill_force_dry_run_then_keeps_vector() {
     // Assert: a dry run changes nothing
     assert!(has_embedding(&db, id), "dry run deleted the vector");
 }
+
+#[test]
+fn given_invalid_default_config_when_running_then_fails_instead_of_using_another_db() {
+    // Arrange: a usable database in the default location, the one a silent fallback would open
+    let home = TempDir::new().unwrap();
+    let config_dir = home.path().join(".config/bkmr");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    cargo_bin_cmd!("bkmr")
+        .env("HOME", home.path())
+        .arg("create-db")
+        .arg(config_dir.join("bkmr.db"))
+        .assert()
+        .success();
+    std::fs::write(config_dir.join("config.toml"), "[fzf_opts]\nheight = 5\n").unwrap();
+
+    // Act + Assert
+    cargo_bin_cmd!("bkmr")
+        .env("HOME", home.path())
+        .env_remove("BKMR_DB_URL")
+        .args(["search", "--np", "--json", ""])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("config.toml"));
+}
+
+#[test]
+fn given_invalid_default_config_when_generating_config_then_still_succeeds() {
+    // Arrange
+    let home = TempDir::new().unwrap();
+    let config_dir = home.path().join(".config/bkmr");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(config_dir.join("config.toml"), "[fzf_opts]\nheight = 5\n").unwrap();
+
+    // Act + Assert: generating a fresh config is how users recover from a broken one
+    cargo_bin_cmd!("bkmr")
+        .env("HOME", home.path())
+        .arg("--generate-config")
+        .assert()
+        .success();
+}

@@ -35,8 +35,12 @@ fn main() {
     // Load configuration with CLI overrides
     let config_path_ref = cli.config.as_deref();
     let mut settings = load_settings(config_path_ref).unwrap_or_else(|e| {
-        debug!("Failed to load settings: {}. Using defaults.", e);
-        Settings::default()
+        // A broken config must not block generating a fresh one
+        if cli.generate_config {
+            return Settings::default();
+        }
+        eprintln!("{}", format!("Error: {}", e).red());
+        std::process::exit(exitcode::USAGE);
     });
 
     // CLI --db flag takes highest priority
