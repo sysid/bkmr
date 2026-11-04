@@ -1,5 +1,6 @@
 // tests/test_import.rs
 
+use bkmr::domain::repositories::repository::BookmarkRepository;
 use bkmr::util::test_context::TestContext;
 use std::fs;
 use tempfile::TempDir;
@@ -267,4 +268,38 @@ This is snippet content that should be tagged as _snip_, not _shell_.
         !bookmark.tags.contains(&Tag::new("_shell_").unwrap()),
         "Bookmark should NOT have _shell_ tag"
     );
+}
+
+#[test]
+fn given_no_embed_when_importing_and_updating_file_then_stores_no_content_hash() {
+    // Arrange
+    let ctx = TestContext::new();
+    let service = ctx.bookmark_service();
+    let temp_dir = TempDir::new().unwrap();
+    let file = temp_dir.path().join("no_hash.sh");
+    fs::write(&file, "#!/bin/bash\n# name: no-hash\n# type: _shell_\necho one\n").unwrap();
+    let paths = vec![temp_dir.path().to_string_lossy().to_string()];
+    let stored = || {
+        ctx.repository()
+            .get_all()
+            .unwrap()
+            .into_iter()
+            .find(|b| b.title == "no-hash")
+            .expect("file imported")
+    };
+
+    // Act + Assert: a non-embeddable bookmark has no hash after the first import
+    service
+        .import_files(&paths, false, false, false, false, None, false)
+        .unwrap();
+    assert!(!stored().embeddable);
+    assert_eq!(stored().content_hash, None);
+
+    // Act + Assert: nor after the file changed
+    fs::write(&file, "#!/bin/bash\n# name: no-hash\n# type: _shell_\necho two\n").unwrap();
+    service
+        .import_files(&paths, true, false, false, false, None, false)
+        .unwrap();
+    assert!(stored().url.contains("echo two"));
+    assert_eq!(stored().content_hash, None);
 }

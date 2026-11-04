@@ -215,26 +215,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         bookmark.set_embeddable(embeddable);
 
-        // If embeddable is being turned off, explicitly clear the embeddings
-        if !embeddable {
-            debug!("Setting bookmark {} to non-embeddable", id);
-            bookmark.embedding = None;
-            bookmark.content_hash = None;
-
-            // Remove from vector store
-            if let Err(e) = self.vector_repository.delete_embedding(id) {
-                debug!(
-                    "Could not delete embedding for bookmark {}: {} (may not exist)",
-                    id, e
-                );
-            }
-
-            // No need to force embedding creation since we're turning it off
-            self.update_bookmark(bookmark, false)
-        } else {
-            // If embeddable is being turned on, force the creation of embeddings
-            self.update_bookmark(bookmark, true)
-        }
+        // Turning embedding on forces creation; turning it off is handled by update_bookmark
+        self.update_bookmark(bookmark, embeddable)
     }
 
     // Note: This embedding logic could be moved to a dedicated domain service
@@ -273,9 +255,15 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 debug!("Skipping embedding generation - content unchanged and not forced");
             }
         } else {
-            // Clear embedding if not embeddable
+            // Clear embedding if not embeddable. The vector store must follow the flag, or
+            // the bookmark stays findable through semantic search.
             bookmark.embedding = None;
             bookmark.content_hash = None;
+            if let Some(id) = bookmark.id {
+                self.vector_repository
+                    .delete_embedding(id)
+                    .with_app_context(|| format!("deleting embedding of bookmark {}", id))?;
+            }
         }
 
         self.repository
@@ -865,9 +853,11 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         bookmark.file_mtime = Some(file_data.file_mtime as i32);
         bookmark.file_hash = Some(file_data.file_hash.clone());
 
-        // Calculate content hash from the same string that gets embedded
+        // Same hash as update_bookmark; only embeddable bookmarks carry one
         let embedding_content = bookmark.get_content_for_embedding();
-        bookmark.content_hash = Some(calc_content_hash(&embedding_content));
+        bookmark.content_hash = bookmark
+            .embeddable
+            .then(|| calc_content_hash(&embedding_content));
 
         bookmark.embedding = None;
 
@@ -940,9 +930,11 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         }
         updated.tags = new_tags;
 
-        // Calculate content hash from the same string that gets embedded (after tags are set)
+        // Same hash as update_bookmark (after tags are set); only embeddable bookmarks carry one
         let embedding_content = updated.get_content_for_embedding();
-        updated.content_hash = Some(calc_content_hash(&embedding_content));
+        updated.content_hash = updated
+            .embeddable
+            .then(|| calc_content_hash(&embedding_content));
 
         updated.embedding = None;
 
@@ -1066,9 +1058,134 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 mod tests {
     use super::*;
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
+    use crate::domain::error::DomainResult;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
+    use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
     use std::collections::HashSet;
+    use std::sync::Mutex;
+
+    /// Embedder returning a fixed vector, so that tests can see whether embedding happened.
+    #[derive(Debug)]
+    struct StubEmbedder;
+
+    impl Embedder for StubEmbedder {
+        fn embed_document(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
+            Ok(Some(vec![0.1; 4]))
+        }
+
+        fn embed_query(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
+            Ok(Some(vec![0.1; 4]))
+        }
+
+        fn dimensions(&self) -> usize {
+            4
+        }
+    }
+
+    /// In-memory vector store recording which bookmarks currently have a vector.
+    #[derive(Debug, Default)]
+    struct RecordingVectorRepository {
+        ids: Mutex<HashSet<i32>>,
+    }
+
+    impl RecordingVectorRepository {
+        fn has_vector(&self, id: i32) -> bool {
+            self.ids.lock().expect("lock not poisoned").contains(&id)
+        }
+    }
+
+    impl VectorRepository for RecordingVectorRepository {
+        fn init_vec_table(&self, _dimensions: usize) -> DomainResult<()> {
+            Ok(())
+        }
+
+        fn upsert_embedding(&self, bookmark_id: i32, _embedding: &[f32]) -> DomainResult<()> {
+            self.ids.lock().expect("lock not poisoned").insert(bookmark_id);
+            Ok(())
+        }
+
+        fn delete_embedding(&self, bookmark_id: i32) -> DomainResult<()> {
+            self.ids.lock().expect("lock not poisoned").remove(&bookmark_id);
+            Ok(())
+        }
+
+        fn search_nearest(
+            &self,
+            _query_embedding: &[f32],
+            _limit: usize,
+        ) -> DomainResult<Vec<(i32, f64)>> {
+            Ok(vec![])
+        }
+
+        fn has_embeddings(&self) -> DomainResult<bool> {
+            Ok(!self.ids.lock().expect("lock not poisoned").is_empty())
+        }
+
+        fn get_dimensions(&self) -> DomainResult<Option<usize>> {
+            Ok(Some(4))
+        }
+
+        fn clear_all(&self) -> DomainResult<()> {
+            self.ids.lock().expect("lock not poisoned").clear();
+            Ok(())
+        }
+
+        fn get_embedded_ids(&self) -> DomainResult<HashSet<i32>> {
+            Ok(self.ids.lock().expect("lock not poisoned").clone())
+        }
+
+        fn search_nearest_filtered(
+            &self,
+            _query_embedding: &[f32],
+            _limit: usize,
+            _filter_ids: Option<&HashSet<i32>>,
+        ) -> DomainResult<Vec<(i32, f64)>> {
+            Ok(vec![])
+        }
+    }
+
+    fn create_service_with_recorded_vectors() -> (
+        BookmarkServiceImpl<SqliteBookmarkRepository>,
+        Arc<RecordingVectorRepository>,
+    ) {
+        let vectors = Arc::new(RecordingVectorRepository::default());
+        let service = BookmarkServiceImpl::new(
+            Arc::new(setup_test_db()),
+            Arc::new(StubEmbedder),
+            vectors.clone(),
+            Arc::new(JsonImportRepository::new()),
+        );
+        (service, vectors)
+    }
+
+    #[test]
+    fn given_embedded_bookmark_when_updated_as_non_embeddable_then_removes_vector() {
+        // Arrange: `bkmr edit` saving EMBEDDABLE=false reaches the service as a plain update
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let mut bookmark = service
+            .add_bookmark(
+                "https://stale-vector.example.com",
+                Some("Stale Vector"),
+                None,
+                None,
+                false,
+                true,
+                None,
+            )
+            .unwrap();
+        let id = bookmark.id.unwrap();
+        assert!(vectors.has_vector(id));
+
+        // Act
+        bookmark.set_embeddable(false);
+        service.update_bookmark(bookmark, false).unwrap();
+
+        // Assert
+        assert!(!vectors.has_vector(id), "vector must not outlive the flag");
+    }
 
     // Helper function to create a BookmarkServiceImpl with a test repository
     fn create_test_service() -> impl BookmarkService {
