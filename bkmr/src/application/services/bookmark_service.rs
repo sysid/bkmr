@@ -82,7 +82,7 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Get random bookmarks
     fn get_random_bookmarks(&self, count: usize) -> ApplicationResult<Vec<Bookmark>>;
 
-    /// Get bookmarks for forced backfill (all embeddable bookmarks except those with _imported_ tag)
+    /// Get bookmarks for forced backfill (all embeddable bookmarks)
     fn get_bookmarks_for_forced_backfill(&self) -> ApplicationResult<Vec<Bookmark>>;
 
     /// Check if bookmarks need embedding backfilling

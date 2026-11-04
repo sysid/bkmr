@@ -854,7 +854,7 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         };
 
         if bookmarks.is_empty() {
-            eprintln!("No embeddable bookmarks found that need embeddings (excluding bookmarks with '_imported_' tag)");
+            eprintln!("No embeddable bookmarks found that need embeddings");
             return Ok(());
         }
 
