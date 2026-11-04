@@ -269,8 +269,21 @@ pub enum Commands {
         #[arg(
             short = 't',
             long = "type",
-            help = "bookmark type (uri, snip, text, shell, md, env)",
-            default_value = "uri"
+            help = "bookmark type",
+            default_value = "uri",
+            ignore_case = true,
+            // Must match the type mapping in bookmark_commands::add. Listing the values here
+            // makes --help show them and rejects typos that would otherwise become URI bookmarks.
+            // The long forms are accepted but hidden: md/mem are the documented names.
+            value_parser = clap::builder::PossibleValuesParser::new([
+                clap::builder::PossibleValue::new("uri"),
+                clap::builder::PossibleValue::new("snip"),
+                clap::builder::PossibleValue::new("text"),
+                clap::builder::PossibleValue::new("shell"),
+                clap::builder::PossibleValue::new("md").alias("markdown"),
+                clap::builder::PossibleValue::new("env"),
+                clap::builder::PossibleValue::new("mem").alias("memory"),
+            ])
         )]
         bookmark_type: String,
         #[arg(short = 'c', long = "clone", help = "clone an existing bookmark by ID")]
@@ -283,8 +296,14 @@ pub enum Commands {
         )]
         open_with: Option<String>,
         #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "generate embedding for semantic search, overriding [embeddings.policy]"
+        )]
+        embed: bool,
+        #[arg(
             long = "no-embed",
-            help = "do not generate embedding for semantic search"
+            help = "do not generate embedding for semantic search, overriding [embeddings.policy] unless the type is set to \"always\""
         )]
         no_embed: bool,
     },
@@ -379,8 +398,14 @@ pub enum Commands {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
         #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "generate embeddings for semantic search, overriding [embeddings.policy]"
+        )]
+        embed: bool,
+        #[arg(
             long = "no-embed",
-            help = "do not generate embedding for semantic search"
+            help = "do not generate embeddings for semantic search, overriding [embeddings.policy] unless a type is set to \"always\""
         )]
         no_embed: bool,
     },
@@ -439,8 +464,14 @@ pub enum Commands {
         )]
         base_path: Option<String>,
         #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "generate embeddings for new files, overriding [embeddings.policy]; existing bookmarks keep their setting"
+        )]
+        embed: bool,
+        #[arg(
             long = "no-embed",
-            help = "do not generate embedding for semantic search"
+            help = "do not generate embeddings for new files, overriding [embeddings.policy] unless a type is set to \"always\"; existing bookmarks keep their setting"
         )]
         no_embed: bool,
     },
@@ -493,5 +524,77 @@ mod tests {
     fn given_no_no_color_flag_when_parsing_then_flag_is_unset() {
         let cli = Cli::try_parse_from(["bkmr", "search"]).unwrap();
         assert!(!cli.no_color);
+    }
+
+    fn parsed_add_type(args: &[&str]) -> Result<String, clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        match cli.command {
+            Some(Commands::Add { bookmark_type, .. }) => Ok(bookmark_type),
+            _ => panic!("expected the add subcommand"),
+        }
+    }
+
+    #[test]
+    fn given_add_help_when_rendered_then_lists_mem_type() {
+        let help = Cli::try_parse_from(["bkmr", "add", "--help"])
+            .err()
+            .expect("--help exits through clap's error path")
+            .to_string();
+
+        assert!(
+            help.contains("mem"),
+            "add --help must list the mem type:\n{help}"
+        );
+    }
+
+    #[test]
+    fn given_every_supported_type_when_add_then_parses() {
+        for t in ["uri", "snip", "text", "shell", "md", "env", "mem"] {
+            assert_eq!(parsed_add_type(&["bkmr", "add", "x", "-t", t]).unwrap(), t);
+        }
+    }
+
+    #[test]
+    fn given_long_type_alias_when_add_then_accepted() {
+        // clap passes the alias through as typed; bookmark_commands::add maps both forms.
+        assert!(parsed_add_type(&["bkmr", "add", "x", "-t", "markdown"]).is_ok());
+        assert!(parsed_add_type(&["bkmr", "add", "x", "-t", "memory"]).is_ok());
+    }
+
+    #[test]
+    fn given_add_help_when_rendered_then_hides_long_type_aliases() {
+        let help = Cli::try_parse_from(["bkmr", "add", "--help"])
+            .err()
+            .expect("--help exits through clap's error path")
+            .to_string();
+
+        // clap wraps long help lines, so compare with whitespace collapsed.
+        let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(
+            help.contains("possible values: uri, snip, text, shell, md, env, mem]"),
+            "{help}"
+        );
+        assert!(
+            !help.contains("markdown") && !help.contains("memory"),
+            "{help}"
+        );
+    }
+
+    #[test]
+    fn given_uppercase_type_when_add_then_parses_case_insensitively() {
+        // The type match lowercases its input, so `-t MD` has always worked.
+        assert!(parsed_add_type(&["bkmr", "add", "x", "-t", "MD"]).is_ok());
+    }
+
+    #[test]
+    fn given_misspelled_type_when_add_then_rejected_instead_of_becoming_uri() {
+        let err = parsed_add_type(&["bkmr", "add", "x", "-t", "memo"]).unwrap_err();
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn given_no_type_when_add_then_defaults_to_uri() {
+        assert_eq!(parsed_add_type(&["bkmr", "add", "x"]).unwrap(), "uri");
     }
 }

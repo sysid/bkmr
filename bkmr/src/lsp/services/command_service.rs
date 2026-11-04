@@ -62,7 +62,7 @@ impl CommandService {
                 description,
                 Some(&tag_set),
                 false, // Don't fetch metadata for snippets
-                true,  // embeddable by default
+                None,  // the embedding policy decides
                 None,  // snippets don't use a custom opener
             )
             .map_err(LspError::from)
@@ -274,7 +274,8 @@ impl CommandService {
             new_text: comment_text,
         };
 
-        let uri = file_uri.parse::<Uri>()
+        let uri = file_uri
+            .parse::<Uri>()
             .map_err(|e| DomainError::Other(format!("Parse file URI for workspace edit: {}", e)))?;
 
         let mut changes = HashMap::new();
@@ -289,7 +290,8 @@ impl CommandService {
 
     /// Get the relative path from project root
     fn get_relative_path(file_uri: &str) -> DomainResult<String> {
-        let url = file_uri.parse::<Uri>()
+        let url = file_uri
+            .parse::<Uri>()
             .map_err(|e| DomainError::Other(format!("Parse file URI: {}", e)))?;
 
         // ls-types `to_file_path` returns `Option<Cow<Path>>` (url::Url returned
@@ -336,6 +338,93 @@ mod tests {
     use crate::infrastructure::repositories::null_vector_repository::NullVectorRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
     use std::sync::Arc;
+
+    #[test]
+    fn given_row_with_two_system_tags_when_updating_snippet_then_rejected_and_still_readable() {
+        use diesel::RunQueryDsl;
+
+        // Arrange: such rows predate the invariant, so only raw SQL can still create one
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = Arc::new(setup_test_db());
+        let bookmark_service = Arc::new(BookmarkServiceImpl::new(
+            repository.clone(),
+            Arc::new(crate::infrastructure::embeddings::DummyEmbedding),
+            Arc::new(NullVectorRepository),
+            Arc::new(JsonImportRepository::new()),
+        ));
+        let service = CommandService::with_service(bookmark_service);
+        let created = service
+            .create_snippet(
+                "legacy violating row",
+                "Legacy",
+                None,
+                vec!["rust".to_string()],
+            )
+            .unwrap();
+        let id = created["id"].as_i64().unwrap() as i32;
+        let mut conn = repository.get_connection().unwrap();
+        diesel::sql_query(format!(
+            "UPDATE bookmarks SET tags = ',_md_,_snip_,rust,' WHERE id = {id}"
+        ))
+        .execute(&mut conn)
+        .unwrap();
+        drop(conn);
+
+        // Act
+        let result = service.update_snippet(id, None, Some("Changed"), None, None);
+
+        // Assert
+        let error = result.expect_err("update must not persist a second system tag");
+        assert!(
+            error.to_string().contains("at most one system tag"),
+            "got: {error}"
+        );
+        let unchanged = service.get_snippet(id).expect("row stays readable");
+        assert_eq!(unchanged["title"], "Legacy");
+    }
+
+    #[test]
+    fn given_second_system_tag_in_request_when_updating_snippet_then_rejected_and_tags_kept() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let bookmark_service = Arc::new(BookmarkServiceImpl::new(
+            Arc::new(setup_test_db()),
+            Arc::new(crate::infrastructure::embeddings::DummyEmbedding),
+            Arc::new(NullVectorRepository),
+            Arc::new(JsonImportRepository::new()),
+        ));
+        let service = CommandService::with_service(bookmark_service);
+        let created = service
+            .create_snippet(
+                "tag request snippet",
+                "Tags",
+                None,
+                vec!["rust".to_string()],
+            )
+            .unwrap();
+        let id = created["id"].as_i64().unwrap() as i32;
+
+        // Act
+        let result =
+            service.update_snippet(id, None, None, None, Some(vec!["_shell_".to_string()]));
+
+        // Assert
+        assert!(result.is_err());
+        let tags = service.get_snippet(id).unwrap()["tags"].clone();
+        let tags: Vec<&str> = tags
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t.as_str())
+            .collect();
+        assert!(
+            tags.contains(&"_snip_") && tags.contains(&"rust"),
+            "got: {tags:?}"
+        );
+        assert!(!tags.contains(&"_shell_"), "got: {tags:?}");
+    }
 
     #[test]
     fn given_snippet_tagged_with_full_language_name_when_listing_by_language_then_included() {
@@ -541,7 +630,7 @@ mod tests {
                 None,
                 Some(&tags),
                 false,
-                true,
+                Some(true),
                 None,
             )
             .unwrap();

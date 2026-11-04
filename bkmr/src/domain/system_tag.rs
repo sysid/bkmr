@@ -30,11 +30,21 @@ impl SystemTag {
         Tag::new(self.as_str())
     }
 
+    /// The system tag with this value. `Uri` has no tag value, so it is never returned.
+    pub fn from_tag_value(tag_str: &str) -> Option<Self> {
+        match tag_str {
+            "_snip_" => Some(Self::Snippet),
+            "_imported_" => Some(Self::Text),
+            "_shell_" => Some(Self::Shell),
+            "_md_" => Some(Self::Markdown),
+            "_env_" => Some(Self::Env),
+            "_mem_" => Some(Self::Memory),
+            _ => None,
+        }
+    }
+
     pub fn is_known_system_tag(tag_str: &str) -> bool {
-        matches!(
-            tag_str,
-            "_snip_" | "_imported_" | "_shell_" | "_md_" | "_env_" | "_mem_"
-        )
+        Self::from_tag_value(tag_str).is_some()
     }
 }
 

@@ -153,7 +153,9 @@ mod integration_tests {
         use crate::lsp::services::LanguageTranslator;
 
         // Arrange
-        let uri = "file:///path/to/example.rs".parse::<Uri>().expect("parse URI");
+        let uri = "file:///path/to/example.rs"
+            .parse::<Uri>()
+            .expect("parse URI");
         let content = "// File: {{ filename }}";
 
         // Act

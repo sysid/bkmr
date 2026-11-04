@@ -310,7 +310,7 @@ mod tests {
                 None,
                 Some(&tags),
                 false,
-                false,
+                Some(false),
                 None,
             )
             .expect("add bookmark");

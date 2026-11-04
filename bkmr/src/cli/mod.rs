@@ -55,7 +55,7 @@ pub fn execute_command_with_services(
             services.template_service.clone(),
             settings,
         ),
-        Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services),
+        Some(Commands::Show { .. }) => bookmark_commands::show(cli, &services, settings),
         Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
         Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli, &services),

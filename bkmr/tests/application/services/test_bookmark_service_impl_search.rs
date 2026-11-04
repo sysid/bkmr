@@ -72,7 +72,7 @@ fn add(service: &impl BookmarkService, url: &str, title: &str, tags: &str) -> i3
             None,
             Some(&parse_tags(tags)),
             false,
-            true,
+            Some(true),
             None,
         )
         .unwrap()

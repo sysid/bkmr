@@ -31,7 +31,7 @@ fn given_shell_bookmark_when_open_with_no_edit_then_executes_without_interaction
             None,
             Some(&tag_set),
             false,
-            true,
+            Some(true),
             None,
         )
         .unwrap();
@@ -75,7 +75,7 @@ fn given_non_shell_bookmark_when_no_edit_then_resolves_to_correct_action() {
             None,
             Some(&tag_set),
             false,
-            true,
+            Some(true),
             None,
         )
         .unwrap();

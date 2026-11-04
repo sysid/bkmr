@@ -1,5 +1,6 @@
 // src/cli/fzf.rs
 
+use crate::cli::display::lookup_embedded_ids;
 use std::borrow::Cow;
 use std::io::Write;
 
@@ -570,7 +571,13 @@ pub fn fzf_process(
         (KeyCode::Char('p'), m) if m.contains(KeyModifiers::CONTROL) => {
             if let Some(bookmark) = selected_bookmarks.first() {
                 let _ = execute!(std::io::stdout(), Clear(ClearType::FromCursorDown));
-                let details = bookmark_commands::show_bookmark_details(bookmark, services);
+                let embedded_ids = lookup_embedded_ids(&*services.bookmark_service);
+                let details = bookmark_commands::show_bookmark_details(
+                    bookmark,
+                    embedded_ids.as_ref(),
+                    !settings.no_color,
+                    services,
+                );
                 print!("{}", details);
             }
         }

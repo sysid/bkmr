@@ -58,12 +58,15 @@ impl ServiceContainer {
         let template_service = Self::create_template_service();
 
         // Application services with explicit DI
-        let bookmark_service = Arc::new(BookmarkServiceImpl::new(
-            bookmark_repository.clone(),
-            embedder.clone(),
-            vector_repository.clone(),
-            Arc::new(FileImportRepository::new()),
-        ));
+        let bookmark_service = Arc::new(
+            BookmarkServiceImpl::new(
+                bookmark_repository.clone(),
+                embedder.clone(),
+                vector_repository.clone(),
+                Arc::new(FileImportRepository::new()),
+            )
+            .with_embedding_policy(config.embeddings.policy),
+        );
 
         let tag_service = Arc::new(TagServiceImpl::new(bookmark_repository.clone()));
 

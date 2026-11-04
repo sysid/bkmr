@@ -33,6 +33,7 @@ injection.
 - DB-independent commands (`--generate-config`, `completion`, `create-db`) are routed before `ServiceContainer` creation in `main.rs` and must not require a database.
 - Tag filter flags are easy to misread: `-t` must have ALL, `-T` exclude if has ALL, `-n` must have ANY, `-N` exclude if has ANY.
 - Test function naming convention: `given_X_when_Y_then_Z()`.
+- `embeddable` is decided by `[embeddings.policy]` in `BookmarkServiceImpl`: pass `None` to `add_bookmark` and friends unless the user made an explicit request, never a hardcoded `true`. A policy change does not touch existing rows, except that `always` applies on their next write.
 
 ## Domain glossary
 - `_snip_`, `_shell_`, `_md_`, `_env_`, `_imported_`, `_mem_` — known system tags marking content type; a bookmark has at most one. Unknown `_x_` tags are allowed and don't count toward that limit.

@@ -1,4 +1,5 @@
-use crate::domain::error::DomainResult;
+use crate::domain::embedding_policy::EmbeddingPolicy;
+use crate::domain::error::{DomainError, DomainResult};
 use crate::util::path::expand_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -81,6 +82,10 @@ pub struct EmbeddingOpts {
     /// fastembed model name (e.g., "NomicEmbedTextV15", "AllMiniLML6V2")
     #[serde(default = "default_embedding_model")]
     pub model: String,
+
+    /// Embedding mode per bookmark type
+    #[serde(default)]
+    pub policy: EmbeddingPolicy,
 }
 
 fn default_embedding_model() -> String {
@@ -91,6 +96,7 @@ impl Default for EmbeddingOpts {
     fn default() -> Self {
         Self {
             model: default_embedding_model(),
+            policy: EmbeddingPolicy::default(),
         }
     }
 }
@@ -226,22 +232,8 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
         if path.exists() {
             trace!("Loading config from specified file: {:?}", path);
 
-            if let Ok(config_text) = std::fs::read_to_string(path) {
-                if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
-                    // Mark as loaded from file
-                    file_settings.config_source = ConfigSource::ConfigFile;
-                    settings = file_settings;
-
-                    // Expand db_url path after loading from file
-                    expand_db_url(&mut settings);
-
-                    debug!("Settings loaded from specified file: {:?}", path);
-                } else {
-                    warn!("Failed to parse config file: {:?}", path);
-                }
-            } else {
-                warn!("Failed to read config file: {:?}", path);
-            }
+            settings = read_config_file(path)?;
+            debug!("Settings loaded from specified file: {:?}", path);
 
             // Apply environment variable overrides
             apply_env_overrides(&mut settings);
@@ -266,19 +258,9 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
         if config_path.exists() {
             trace!("Loading config from: {:?}", config_path);
 
-            if let Ok(config_text) = std::fs::read_to_string(config_path) {
-                if let Ok(mut file_settings) = toml::from_str::<Settings>(&config_text) {
-                    // Update settings with values from file and mark as loaded
-                    file_settings.config_source = ConfigSource::ConfigFile;
-                    settings = file_settings;
-
-                    // Expand db_url path after loading from file
-                    expand_db_url(&mut settings);
-
-                    // found_config = true;
-                    break; // Use the first found configuration file
-                }
-            }
+            settings = read_config_file(config_path)?;
+            // found_config = true;
+            break; // Use the first found configuration file
         }
     }
 
@@ -290,6 +272,24 @@ pub fn load_settings(config_file: Option<&Path>) -> DomainResult<Settings> {
     }
 
     trace!("Settings loaded: {:?}", settings);
+    Ok(settings)
+}
+
+/// Read an existing config file. A file that cannot be used is an error: falling back to
+/// defaults would silently switch to another database.
+fn read_config_file(path: &Path) -> DomainResult<Settings> {
+    let config_text = std::fs::read_to_string(path).map_err(|e| {
+        DomainError::ConfigurationError(format!(
+            "Cannot read config file {}: {}",
+            path.display(),
+            e
+        ))
+    })?;
+    let mut settings: Settings = toml::from_str(&config_text).map_err(|e| {
+        DomainError::ConfigurationError(format!("Invalid config file {}: {}", path.display(), e))
+    })?;
+    settings.config_source = ConfigSource::ConfigFile;
+    expand_db_url(&mut settings);
     Ok(settings)
 }
 
@@ -377,6 +377,7 @@ pub fn create_file_path_with_base(base_path_name: &str, relative_path: &str) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::embedding_policy::EmbeddingMode;
     use crate::util::testing::EnvGuard;
     use std::env;
     use std::fs;
@@ -389,6 +390,77 @@ mod tests {
         let config_path = temp_dir.path().join("config.toml");
         fs::write(&config_path, content).unwrap();
         (temp_dir, config_path)
+    }
+
+    #[test]
+    fn given_partial_policy_when_parsing_config_then_keeps_defaults_for_the_rest() {
+        // Act
+        let settings: Settings = toml::from_str("[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
+
+        // Assert
+        let policy = settings.embeddings.policy;
+        assert_eq!(policy.snippet, EmbeddingMode::Off);
+        assert_eq!(policy.memory, EmbeddingMode::Always);
+        assert_eq!(policy.uri, EmbeddingMode::On);
+        assert_eq!(settings.embeddings.model, "NomicEmbedTextV15");
+    }
+
+    #[test]
+    fn given_no_policy_when_parsing_config_then_uses_default_policy() {
+        // Act
+        let settings: Settings = toml::from_str("[embeddings]\nmodel = \"BGEM3\"\n").unwrap();
+
+        // Assert
+        assert_eq!(settings.embeddings.policy, EmbeddingPolicy::default());
+    }
+
+    #[test]
+    fn given_mistyped_policy_key_when_parsing_config_then_fails() {
+        // A silently ignored key would leave the user with the wrong behaviour
+        let result = toml::from_str::<Settings>("[embeddings.policy]\n_snp_ = \"off\"\n");
+
+        assert!(result.unwrap_err().to_string().contains("_snp_"));
+    }
+
+    #[test]
+    fn given_invalid_policy_mode_when_parsing_config_then_fails() {
+        let result = toml::from_str::<Settings>("[embeddings.policy]\n_snip_ = \"never\"\n");
+
+        assert!(result.unwrap_err().to_string().contains("never"));
+    }
+
+    #[test]
+    fn given_documented_default_config_when_parsing_then_matches_default_policy() {
+        // Act
+        let settings: Settings = toml::from_str(include_str!("default_config.toml")).unwrap();
+
+        // Assert
+        assert_eq!(settings.embeddings.policy, EmbeddingPolicy::default());
+    }
+
+    #[test]
+    fn given_generated_default_config_when_parsing_then_matches_default_policy() {
+        // Act
+        let settings: Settings = toml::from_str(&generate_default_config()).unwrap();
+
+        // Assert
+        assert_eq!(settings.embeddings.policy, EmbeddingPolicy::default());
+    }
+
+    #[test]
+    fn given_invalid_config_file_when_load_settings_then_returns_error_naming_file() {
+        // Arrange
+        let _guard = EnvGuard::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("broken.toml");
+        std::fs::write(&path, "[fzf_opts]\nheight = 5\n").unwrap();
+
+        // Act
+        let error = load_settings(Some(&path)).unwrap_err().to_string();
+
+        // Assert
+        assert!(error.contains("broken.toml"), "error was: {error}");
+        assert!(error.contains("height"), "error was: {error}");
     }
 
     #[test]

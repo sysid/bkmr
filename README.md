@@ -16,7 +16,7 @@
 - Web URLs with automatic metadata extraction
 - Code snippets for quick access and reuse
 - Shell commands with immediate execution capabilities
-- Markdown documents with live rendering, incl. TOC
+- Markdown documents with live rendering, incl. TOC and bookmark metadata footer
 - Plain text with Jinja template interpolation
 - Local files and directories integration
 

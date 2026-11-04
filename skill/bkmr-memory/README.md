@@ -8,6 +8,8 @@ Teaches AI agents (Claude Code, Copilot CLI, pi-mono) how to use [bkmr](https://
 - **WRITE**: Store non-trivial learnings with proper taxonomy and deduplication
 - **UPDATE**: Enrich or correct existing memories with `bkmr update --url`
 - **DEDUP**: Check for existing memories before creating new ones
+- **FORMAT**: Store content as light markdown that also reads well for humans (lead line, prose
+  wrapped at 100 columns, fenced commands, `1.` lists); no headings or tables, which hurt retrieval
 
 Memories use the `_mem_` system tag and one of five classification tags: `fact`, `procedure`, `preference`, `episode`, `gotcha`. Optional `project:foo` tags scope memories to a project.
 
@@ -25,7 +27,9 @@ bkmr-memory/
 ├── SKILL.md           # The skill itself (loaded into agent context)
 ├── README.md          # This file
 └── evals/
-    └── evals.json     # Test case definitions with assertions
+    ├── evals.json              # Agent-behaviour test cases with assertions
+    ├── markdown_retrieval.py   # Deterministic retrieval eval (markdown vs plain)
+    └── markdown_corpus.json    # Corpus + queries for markdown_retrieval.py
 ```
 
 Eval workspace (created at runtime, not checked in):
@@ -57,7 +61,7 @@ Eval workspace (created at runtime, not checked in):
 
 ### Quick Regression Test
 
-Run from Claude Code. The eval spawns 6 subagents (3 test cases x 2 configurations):
+Run from Claude Code. The eval spawns 8 subagents (4 test cases x 2 configurations):
 
 ```
 You: Run the bkmr-memory skill evals. Use the test cases in 
@@ -83,6 +87,35 @@ You: For each test case in ~/.claude/skills/bkmr-memory/evals/evals.json,
 | 0 | session-start-query | READ workflow | Uses `-t _mem_`, checks gotchas/preferences, does NOT write |
 | 1 | post-task-memory-write | WRITE workflow | Dedup first, `-t mem --no-web`, classification tag, content in url field |
 | 2 | dedup-scenario | Dedup logic | Searches before writing, uses `_mem_` filter, updates or skips if match exists |
+| 3 | shell-quoting | WRITE safety | No double-quoted content; backticks/`$`/apostrophes stored verbatim; no `--stdin` + positional tags |
+
+### Retrieval Eval: Markdown vs. Plain Content
+
+Deterministic, no LLM involved. `evals/markdown_retrieval.py` loads the same 24 facts
+(`evals/markdown_corpus.json`) plus 24 distractors into throwaway DBs in four renderings and
+ranks the target for 48 queries (half keyword, half paraphrase). Never touches the real DB.
+
+```bash
+./evals/markdown_retrieval.py                 # ~4 min, prints tables
+./evals/markdown_retrieval.py --keep /tmp/x --json /tmp/x/results.json
+```
+
+Results (2026-11-03, NomicEmbedTextV15, bkmr 7.8.0):
+
+| Variant | hsearch MRR | R@1 (paraphrase) | Embedding tokens (mean) |
+|---|---|---|---|
+| plain | 0.924 | 0.75 | 83 |
+| md_light (inline code, bullets) | 0.914 | 0.71 | 85 |
+| md_heavy (headings, tables, links) | 0.912 | 0.75 | 150 |
+| consolidated (4 facts per `##` doc) | 0.864 | 0.58 | — |
+
+Truncation probe: a key fact after a 60-row table (1540 tokens > 512 window) ranks 22 instead of 1.
+
+Takeaways: markdown syntax itself is neutral (plain/light/heavy differ by ~1 query out of 48,
+within noise; FTS5 `unicode61` drops the punctuation). What hurts is what markdown invites:
+multi-fact documents and content long enough to be truncated. Keyword queries scored 1.0 for
+hsearch in every variant; FTS hit 0% of paraphrase queries because `hsearch` ANDs all terms,
+so paraphrase recall is carried entirely by the semantic arm.
 
 ### Grading
 
@@ -144,14 +177,15 @@ The skill body is loaded whenever Claude triggers it. Key constraints:
 - **url field IS the memory** -- first positional arg to `bkmr add`, used for embeddings and display
 - **`-t mem`** on write automatically adds `_mem_` system tag
 - **`-t _mem_`** on read filters to memory bookmarks only
-- **`bkmr update --url "new content" <id>`** updates memory content without opening an editor
-- **`bkmr update --title "new title" <id>`** fixes titles for better searchability
+- **`bkmr update --url 'new content' <id>`** updates memory content without opening an editor
+- **`bkmr update --title 'new title' <id>`** fixes titles for better searchability
+- **Single quotes, never double** around content -- backticks/`$` in double quotes are executed/expanded by the shell; use `"$(cat <<'EOF' ... EOF)"` when content contains `'`
 - **`project:foo`** tag structure scopes memories to a project
 
 ### Iteration Loop
 
 1. Edit `SKILL.md`
-2. Run all 3 eval test cases (with and without skill)
+2. Run all 4 agent eval test cases (with and without skill)
 3. Grade against assertions
 4. Compare to previous iteration's benchmark
 5. Repeat until pass rate holds or improves

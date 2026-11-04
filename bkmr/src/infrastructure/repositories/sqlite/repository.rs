@@ -339,6 +339,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
     #[instrument(skip_all, level = "debug")]
     fn add(&self, bookmark: &mut Bookmark) -> Result<(), DomainError> {
+        bookmark.validate()?;
         let mut conn = self
             .get_connection()
             .map_err(|e| DomainError::RepositoryError(e.into()))
@@ -389,6 +390,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
 
     #[instrument(skip_all, level = "debug")]
     fn update(&self, bookmark: &Bookmark) -> Result<(), DomainError> {
+        bookmark.validate()?;
         let mut conn = self.get_connection()?;
 
         let id = bookmark.id.ok_or_else(|| {
@@ -897,6 +899,42 @@ mod tests {
         let not_found = repo.get_by_url("https://nonexistent.com")?;
         assert!(not_found.is_none());
 
+        Ok(())
+    }
+
+    #[test]
+    fn given_multiple_system_tags_when_add_then_rejected_and_not_persisted(
+    ) -> Result<(), DomainError> {
+        let repo = setup_test_db();
+        let mut bookmark =
+            create_test_bookmark("Two types", "two-types-add-content", vec!["_mem_"])?;
+        // Bypass the domain setters, as the template edit and file sync paths used to
+        bookmark.tags.insert(Tag::new("_md_")?);
+
+        let result = repo.add(&mut bookmark);
+
+        assert!(result.is_err());
+        assert!(bookmark.id.is_none());
+        assert!(repo.get_by_url("two-types-add-content")?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn given_multiple_system_tags_when_update_then_rejected_and_tags_unchanged(
+    ) -> Result<(), DomainError> {
+        let repo = setup_test_db();
+        let mut bookmark =
+            create_test_bookmark("Memory", "two-types-update-content", vec!["_mem_"])?;
+        repo.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+
+        let mut tampered = bookmark.clone();
+        tampered.tags.insert(Tag::new("_md_")?);
+        let result = repo.update(&tampered);
+
+        assert!(result.is_err());
+        let stored = repo.get_by_id(id)?.unwrap();
+        assert!(!stored.tags.contains(&Tag::new("_md_")?));
         Ok(())
     }
 
