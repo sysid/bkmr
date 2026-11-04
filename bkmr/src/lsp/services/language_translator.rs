@@ -271,7 +271,9 @@ block comment
     #[test]
     fn given_filename_template_when_translating_then_replaces_correctly() {
         // Arrange
-        let uri = "file:///path/to/example.rs".parse::<Uri>().expect("parse URI");
+        let uri = "file:///path/to/example.rs"
+            .parse::<Uri>()
+            .expect("parse URI");
         let content = "// File: {{ filename }}";
 
         // Act

@@ -274,7 +274,8 @@ impl CommandService {
             new_text: comment_text,
         };
 
-        let uri = file_uri.parse::<Uri>()
+        let uri = file_uri
+            .parse::<Uri>()
             .map_err(|e| DomainError::Other(format!("Parse file URI for workspace edit: {}", e)))?;
 
         let mut changes = HashMap::new();
@@ -289,7 +290,8 @@ impl CommandService {
 
     /// Get the relative path from project root
     fn get_relative_path(file_uri: &str) -> DomainResult<String> {
-        let url = file_uri.parse::<Uri>()
+        let url = file_uri
+            .parse::<Uri>()
             .map_err(|e| DomainError::Other(format!("Parse file URI: {}", e)))?;
 
         // ls-types `to_file_path` returns `Option<Cow<Path>>` (url::Url returned
