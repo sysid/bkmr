@@ -381,6 +381,14 @@ pub fn add(
             template.tags.insert(tag.clone());
         }
 
+        // Seed the value the template shows. A clone keeps the flag of its source.
+        if clone_id.is_none() {
+            template.embeddable = true;
+        }
+        if no_embed {
+            template.embeddable = false;
+        }
+
         // If URL is provided, edit flag is not set, and we're not cloning,
         // use the simple add path without opening editor
         if final_url.is_some() && !edit && clone_id.is_none() {
@@ -430,7 +438,8 @@ pub fn add(
                     Some(&edited_bookmark.description),
                     Some(&edited_bookmark.tags),
                     false, // Don't fetch metadata since we've already edited it
-                    !no_embed,
+                    // The saved template is the last explicit statement of intent
+                    edited_bookmark.embeddable,
                     effective_opener,
                 ) {
                     Ok(bookmark) => {
