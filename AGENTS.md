@@ -28,15 +28,17 @@ injection.
 
 ## Gotchas
 - File-import content is stored in the `url` column, not `description`.
-- Embeddings live in the sqlite-vec `vec_bookmarks` virtual table, NOT `bookmarks.embedding`. Regenerate with `bkmr backfill --force`.
+- Embeddings live in the sqlite-vec `vec_bookmarks` virtual table, NOT `bookmarks.embedding`. Regenerate with `bkmr backfill --force`; remove stale vectors without re-embedding with `bkmr backfill --prune`.
 - Two SQLite connections hit the same file: a Diesel r2d2 pool (CRUD) and one mutex-guarded rusqlite connection (sqlite-vec). WAL is set once in `init_pool()`; `busy_timeout` is per-connection. Keep pragmas consistent when adding connections.
 - DB-independent commands (`--generate-config`, `completion`, `create-db`) are routed before `ServiceContainer` creation in `main.rs` and must not require a database.
 - Tag filter flags are easy to misread: `-t` must have ALL, `-T` exclude if has ALL, `-n` must have ANY, `-N` exclude if has ANY.
 - Test function naming convention: `given_X_when_Y_then_Z()`.
+- An unreadable or invalid config file is fatal in `main.rs` (exit 64), since falling back to defaults would open another database. Only `--generate-config` bypasses this.
+- Print fatal errors with `print_error` in `main.rs`, not `.red()`: crossterm's opt-out still writes an empty escape sequence, which ends up in LSP client logs.
 - `embeddable` is decided by `[embeddings.policy]` in `BookmarkServiceImpl`: pass `None` to `add_bookmark` and friends unless the user made an explicit request, never a hardcoded `true`. A policy change does not touch existing rows, except that `always` applies on their next write.
 
 ## Domain glossary
-- `_snip_`, `_shell_`, `_md_`, `_env_`, `_imported_`, `_mem_` — known system tags marking content type; a bookmark has at most one. Unknown `_x_` tags are allowed and don't count toward that limit.
+- `_snip_`, `_shell_`, `_md_`, `_env_`, `_imported_`, `_mem_` — known system tags marking content type; a bookmark has at most one, validated in the domain setters, `BookmarkBuilder` and the repository's `add`/`update`. `update_access` skips the check so existing violating rows stay openable. Unknown `_x_` tags are allowed and don't count toward that limit.
 - `hsearch` — hybrid search fusing FTS5 and semantic vectors via Reciprocal Rank Fusion.
 
 ## Other Instructions

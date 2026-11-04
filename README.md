@@ -1,4 +1,4 @@
-<img src="docs/bkmr-logo.png" alt="rsenv logo" width="240">
+<img src="docs/bkmr-logo.png" alt="bkmr logo" width="240">
 
 ![Crates.io](https://img.shields.io/crates/v/bkmr)
 ![Crates.io](https://img.shields.io/crates/d/bkmr)
@@ -37,8 +37,8 @@ Persistent long-term memory for AI agents. The `_mem_` system tag and `hsearch` 
 
 ```bash
 # Agent stores memory:
-bkmr add "Prod DB is PostgreSQL 15 on port 5433" fact,database \
-  --title "Production database config" -t mem --no-web
+bkmr add 'Prod DB is PostgreSQL 15 on port 5433' fact,database \
+  --title 'Production database config' -t mem --no-web
 
 # Agent queries memories with natural language (hybrid search)
 bkmr hsearch "database configuration" -t _mem_ --json --np
@@ -73,10 +73,6 @@ bkmr import-files ~/scripts/ --base-path SCRIPTS_HOME
 
 # Local semantic search (no API keys needed)
 bkmr sem-search "containerized application security"
-
-# Agent memory: store and retrieve knowledge
-bkmr add "Prod DB on port 5433" fact,database --title "Prod DB config" -t mem --no-web
-bkmr hsearch "database config" -t _mem_ --json --np
 ```
 
 ### Screenshots
@@ -111,7 +107,7 @@ brew install bkmr
 export ORT_DYLIB_PATH=/opt/homebrew/lib/libonnxruntime.dylib
 ```
 
-See **[Installation Guide](https://github.com/sysid/bkmr/wiki/Installation)** for detailed instructions and troubleshooting.
+See **[Getting Started](https://github.com/sysid/bkmr/wiki/Getting-Started#installation)** for details and **[Troubleshooting](https://github.com/sysid/bkmr/wiki/Troubleshooting#installation-issues)** if it fails.
 
 ### Initial Setup
 
@@ -139,7 +135,7 @@ bkmr search github
 bkmr search --fzf
 ```
 
-**Quick Start Guide**: See the **[Quick Start](https://github.com/sysid/bkmr/wiki/Quick-Start)** for a 5-minute tutorial.
+**5-minute tutorial**: **[Getting Started](https://github.com/sysid/bkmr/wiki/Getting-Started)**.
 
 ## Command Reference
 
@@ -151,13 +147,15 @@ bkmr search --fzf
 | `add` | Add bookmarks (URLs, snippets, scripts, markdown, env vars) |
 | `open` | Smart action dispatch based on content type |
 | `edit` | Edit bookmarks (smart: opens source file for imports) |
-| `update` | Modify tags and custom openers |
+| `update` | Change tags, title, description, content, opener or embedding, non-interactively |
 | `delete` | Delete bookmarks by ID |
 | `show` | Display bookmark details |
 | `import-files` | Import files/directories with frontmatter parsing |
+| `load-json` | Bulk-create bookmarks from a JSON array |
 | `tags` | View tag taxonomy with usage counts |
 | `info` | Show configuration, database path, embedding status |
-| `backfill` | Generate missing embeddings |
+| `create-db` | Initialize a bookmark database |
+| `backfill` | Generate missing embeddings; `--prune` removes vectors of non-embeddable bookmarks |
 | `clear-embeddings` | Clear all embeddings and content hashes |
 | `lsp` | Start LSP server for editor snippet completion |
 | `completion` | Generate shell completions (bash, zsh, fish) |
@@ -187,30 +185,11 @@ Learn more: **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)*
 
 Comprehensive documentation is available in the **[bkmr Wiki](https://github.com/sysid/bkmr/wiki)**:
 
-### Getting Started
-- **[Home](https://github.com/sysid/bkmr/wiki/Home)** - Wiki overview and navigation
-- **[Quick Start](https://github.com/sysid/bkmr/wiki/Quick-Start)** - 5-minute introduction
-- **[Installation](https://github.com/sysid/bkmr/wiki/Installation)** - Installation methods and troubleshooting
-- **[Core Concepts](https://github.com/sysid/bkmr/wiki/Core-Concepts)** - Understanding tags, system tags, and bookmarks
-
-### Core Features
-- **[Basic Usage](https://github.com/sysid/bkmr/wiki/Basic-Usage)** - Common daily operations
-- **[Search and Discovery](https://github.com/sysid/bkmr/wiki/Search-and-Discovery)** - FTS, tags, fuzzy finder, semantic search
-- **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)** - URLs, snippets, shell scripts, markdown, environment variables
-- **[Shell Scripts](https://github.com/sysid/bkmr/wiki/Shell-Scripts)** - Interactive execution and shell function stubs
-
-### Advanced Topics
-- **[Configuration](https://github.com/sysid/bkmr/wiki/Configuration)** - Complete configuration reference
-- **[Template Interpolation](https://github.com/sysid/bkmr/wiki/Template-Interpolation)** - Jinja2 dynamic content
-- **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)** - AI agent memory, JSON API, bulk import
-- **[File Import and Editing](https://github.com/sysid/bkmr/wiki/File-Import-and-Editing)** - Frontmatter, base paths, smart editing
-- **[Semantic Search](https://github.com/sysid/bkmr/wiki/Semantic-Search)** - Local offline semantic search with fastembed
-- **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)** - LSP server and editor plugins
-- **[Advanced Workflows](https://github.com/sysid/bkmr/wiki/Advanced-Workflows)** - Power user techniques
-
-### Reference
-- **[Troubleshooting](https://github.com/sysid/bkmr/wiki/Troubleshooting)** - Common issues and solutions
-- **[Development](https://github.com/sysid/bkmr/wiki/Development)** - Contributing and building from source
+- **[Getting Started](https://github.com/sysid/bkmr/wiki/Getting-Started)** and **[Core Concepts](https://github.com/sysid/bkmr/wiki/Core-Concepts)**
+- **[Basic Usage](https://github.com/sysid/bkmr/wiki/Basic-Usage)**, **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)**, **[Search and Discovery](https://github.com/sysid/bkmr/wiki/Search-and-Discovery)**
+- **[Configuration](https://github.com/sysid/bkmr/wiki/Configuration)**, **[Template Interpolation](https://github.com/sysid/bkmr/wiki/Template-Interpolation)**, **[Advanced Workflows](https://github.com/sysid/bkmr/wiki/Advanced-Workflows)**
+- **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)**, **[Editor Integration](https://github.com/sysid/bkmr/wiki/Editor-Integration)**
+- **[Troubleshooting](https://github.com/sysid/bkmr/wiki/Troubleshooting)**, **[Development](https://github.com/sysid/bkmr/wiki/Development)**
 
 ## Editor Integrations
 
