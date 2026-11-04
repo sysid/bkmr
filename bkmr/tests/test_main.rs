@@ -345,6 +345,53 @@ fn given_invalid_default_config_when_generating_config_then_still_succeeds() {
 }
 
 #[test]
+fn given_invalid_config_when_starting_lsp_then_exits_with_plain_error_for_client_logs() {
+    // Arrange: editors capture the server's stderr into their LSP log, which shows raw bytes
+    let dir = TempDir::new().unwrap();
+    let config = dir.path().join("broken.toml");
+    std::fs::write(&config, "[embeddings.policy]\n_snip_ = \"offf\"\n").unwrap();
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env_remove("NO_COLOR")
+        .arg("--config")
+        .arg(&config)
+        .arg("lsp")
+        .output()
+        .expect("run bkmr lsp");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(64), "expected EX_USAGE");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("broken.toml"), "got: {stderr}");
+    assert!(stderr.contains("offf"), "got: {stderr}");
+    assert!(!stderr.contains('\x1b'), "ANSI escape in: {stderr:?}");
+}
+
+#[test]
+fn given_no_color_flag_when_config_is_invalid_then_error_has_no_ansi_escapes() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let config = dir.path().join("broken.toml");
+    std::fs::write(&config, "[embeddings.policy]\n_snip_ = \"offf\"\n").unwrap();
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env_remove("NO_COLOR")
+        .arg("--no-color")
+        .arg("--config")
+        .arg(&config)
+        .args(["search", "--np", "--json", ""])
+        .output()
+        .expect("run bkmr search");
+
+    // Assert
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains('\x1b'), "ANSI escape in: {stderr:?}");
+}
+
+#[test]
 fn given_config_with_snippets_off_when_adding_through_binary_then_not_embedded() {
     // Arrange: no flag and no model, so a wrongly embedded snippet would load the model
     let dir = TempDir::new().unwrap();

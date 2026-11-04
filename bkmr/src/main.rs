@@ -5,10 +5,11 @@ use bkmr::config::{load_settings, ConfigSource, Settings};
 use bkmr::exitcode;
 use bkmr::infrastructure::di::ServiceContainer;
 use bkmr::infrastructure::repositories::sqlite::{migration, repository::SqliteBookmarkRepository};
-use bkmr::util::helper::confirm;
+use bkmr::util::helper::{confirm, should_use_color};
 use clap::Parser;
 use crossterm::style::Stylize;
 use std::fs;
+use std::io::IsTerminal;
 use std::path::Path;
 use tracing::{debug, info, instrument};
 use tracing_subscriber::{
@@ -39,7 +40,7 @@ fn main() {
         if cli.generate_config {
             return Settings::default();
         }
-        eprintln!("{}", format!("Error: {}", e).red());
+        print_error(&format!("Error: {}", e), no_color);
         std::process::exit(exitcode::USAGE);
     });
 
@@ -57,7 +58,7 @@ fn main() {
     // Handle all database-independent operations first
     if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
         if let Err(e) = result {
-            eprintln!("{}", format!("Error: {}", e).red());
+            print_error(&format!("Error: {}", e), no_color);
             std::process::exit(exitcode::USAGE);
         }
         return;
@@ -67,15 +68,28 @@ fn main() {
     let service_container = match ServiceContainer::new(&settings) {
         Ok(container) => container,
         Err(e) => {
-            eprintln!("{}: {}", "Failed to create service container".red(), e);
+            print_error(
+                &format!("Failed to create service container: {}", e),
+                no_color,
+            );
             std::process::exit(exitcode::USAGE);
         }
     };
 
     // Execute CLI command with services
     if let Err(e) = execute_command_with_services(cli, service_container, settings) {
-        eprintln!("{}", format!("Error: {}", e).red());
+        print_error(&format!("Error: {}", e), no_color);
         std::process::exit(exitcode::USAGE);
+    }
+}
+
+/// Print a fatal error to stderr. Goes through `should_use_color` because crossterm's own
+/// opt-out still writes an empty escape sequence, which LSP clients show in their logs.
+fn print_error(message: &str, no_color: bool) {
+    if should_use_color(no_color, std::io::stderr().is_terminal()) {
+        eprintln!("{}", message.red());
+    } else {
+        eprintln!("{}", message);
     }
 }
 
