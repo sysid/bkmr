@@ -274,8 +274,15 @@ pub enum Commands {
             ignore_case = true,
             // Must match the type mapping in bookmark_commands::add. Listing the values here
             // makes --help show them and rejects typos that would otherwise become URI bookmarks.
+            // The long forms are accepted but hidden: md/mem are the documented names.
             value_parser = clap::builder::PossibleValuesParser::new([
-                "uri", "snip", "text", "shell", "md", "markdown", "env", "mem", "memory",
+                clap::builder::PossibleValue::new("uri"),
+                clap::builder::PossibleValue::new("snip"),
+                clap::builder::PossibleValue::new("text"),
+                clap::builder::PossibleValue::new("shell"),
+                clap::builder::PossibleValue::new("md").alias("markdown"),
+                clap::builder::PossibleValue::new("env"),
+                clap::builder::PossibleValue::new("mem").alias("memory"),
             ])
         )]
         bookmark_type: String,
@@ -521,11 +528,29 @@ mod tests {
 
     #[test]
     fn given_every_supported_type_when_add_then_parses() {
-        for t in [
-            "uri", "snip", "text", "shell", "md", "markdown", "env", "mem", "memory",
-        ] {
+        for t in ["uri", "snip", "text", "shell", "md", "env", "mem"] {
             assert_eq!(parsed_add_type(&["bkmr", "add", "x", "-t", t]).unwrap(), t);
         }
+    }
+
+    #[test]
+    fn given_long_type_alias_when_add_then_accepted() {
+        // clap passes the alias through as typed; bookmark_commands::add maps both forms.
+        assert!(parsed_add_type(&["bkmr", "add", "x", "-t", "markdown"]).is_ok());
+        assert!(parsed_add_type(&["bkmr", "add", "x", "-t", "memory"]).is_ok());
+    }
+
+    #[test]
+    fn given_add_help_when_rendered_then_hides_long_type_aliases() {
+        let help = Cli::try_parse_from(["bkmr", "add", "--help"])
+            .err()
+            .expect("--help exits through clap's error path")
+            .to_string();
+
+        // clap wraps long help lines, so compare with whitespace collapsed.
+        let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(help.contains("possible values: uri, snip, text, shell, md, env, mem]"), "{help}");
+        assert!(!help.contains("markdown") && !help.contains("memory"), "{help}");
     }
 
     #[test]
