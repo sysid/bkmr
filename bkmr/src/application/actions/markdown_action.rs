@@ -7,6 +7,7 @@ use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::util::helper::calc_content_hash;
 use crate::util::path::{abspath, is_file_path};
+use chrono::{DateTime, Utc};
 use markdown::{to_html_with_options, Options};
 use regex::Regex;
 use std::fs::{self, File};
@@ -478,6 +479,62 @@ impl MarkdownAction {
 
         toc_html
     }
+
+    /// Generate the footer showing the bookmark's metadata.
+    ///
+    /// Bookmarks without an id are not stored (`bkmr open --file`), so they get no footer:
+    /// their metadata would be made up.
+    ///
+    /// `bookmark` is a snapshot taken before the action service recorded this access, so
+    /// "Last accessed" and "Accesses" exclude the current view.
+    fn render_metadata_footer(&self, bookmark: &Bookmark) -> String {
+        let Some(id) = bookmark.id else {
+            return String::new();
+        };
+
+        let format_time = |time: DateTime<Utc>| time.format("%Y-%m-%d %H:%M UTC").to_string();
+        let mut tags: Vec<_> = bookmark.tags.iter().map(|tag| tag.value()).collect();
+        tags.sort();
+
+        let mut fields = vec![
+            format!("ID: {}", id),
+            format!("Tags: {}", escape_html(&tags.join(", "))),
+            format!(
+                "Created: {}",
+                bookmark
+                    .created_at
+                    .map_or("unknown".to_string(), format_time)
+            ),
+            format!("Updated: {}", format_time(bookmark.updated_at)),
+            format!(
+                "Last accessed: {}",
+                bookmark
+                    .accessed_at
+                    .map_or("never".to_string(), format_time)
+            ),
+            format!("Accesses: {}", bookmark.access_count),
+        ];
+
+        let source_file = bookmark.file_path.clone().or_else(|| {
+            self.get_source_file_path(bookmark)
+                .map(|path| path.display().to_string())
+        });
+        if let Some(path) = source_file {
+            fields.push(format!("File: {}", escape_html(&path)));
+        }
+
+        format!(
+            r#"<footer class="bookmark-meta">{}</footer>"#,
+            fields.join(" · ")
+        )
+    }
+}
+
+/// Escape text for use as HTML element content
+fn escape_html(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 impl BookmarkAction for MarkdownAction {
@@ -518,6 +575,7 @@ impl BookmarkAction for MarkdownAction {
         // Extract headers and generate TOC
         let (processed_html, toc_entries) = self.extract_and_process_headers(&html_content);
         let toc_html = self.generate_toc_html(&toc_entries);
+        let metadata_footer = self.render_metadata_footer(bookmark);
 
         // Wrap the HTML content in a proper HTML document with enhanced styling
         let full_html = format!(
@@ -581,6 +639,14 @@ impl BookmarkAction for MarkdownAction {
 
         .main-content.toc-visible {{
             margin-left: 320px;
+        }}
+
+        .bookmark-meta {{
+            margin-top: 40px;
+            padding-top: 10px;
+            border-top: 1px solid var(--table-border);
+            color: var(--blockquote-color);
+            font-size: 0.7em;
         }}
 
         /* TOC Sidebar Styling */
@@ -1021,11 +1087,12 @@ impl BookmarkAction for MarkdownAction {
     <div class="container">
         <main class="main-content">
             {}
+            {}
         </main>
     </div>
 </body>
 </html>"#,
-            bookmark.title, toc_html, processed_html
+            bookmark.title, toc_html, processed_html, metadata_footer
         );
 
         // Create a temporary HTML file with explicit .html extension
@@ -2142,5 +2209,90 @@ mod tests {
         // Should succeed with no operations
         let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
         assert!(result.is_ok());
+    }
+
+    // Tests for render_metadata_footer()
+    #[test]
+    fn given_stored_bookmark_when_render_footer_then_shows_metadata() {
+        use chrono::{TimeZone, Utc};
+        let action =
+            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("_md_").unwrap());
+        tags.insert(Tag::new("zebra").unwrap());
+        tags.insert(Tag::new("alpha").unwrap());
+        let mut bookmark = Bookmark::new("# Notes", "Notes", "", tags).unwrap();
+        bookmark.id = Some(42);
+        bookmark.access_count = 7;
+        bookmark.created_at = Some(Utc.with_ymd_and_hms(2026, 1, 2, 3, 4, 5).unwrap());
+        bookmark.updated_at = Utc.with_ymd_and_hms(2026, 2, 3, 4, 5, 6).unwrap();
+        bookmark.accessed_at = Some(Utc.with_ymd_and_hms(2026, 3, 4, 5, 6, 7).unwrap());
+
+        let footer = action.render_metadata_footer(&bookmark);
+
+        assert!(footer.contains(r#"<footer class="bookmark-meta">"#));
+        assert!(footer.contains("ID: 42"));
+        assert!(footer.contains("Tags: _md_, alpha, zebra"));
+        assert!(footer.contains("Created: 2026-01-02 03:04 UTC"));
+        assert!(footer.contains("Updated: 2026-02-03 04:05 UTC"));
+        assert!(footer.contains("Last accessed: 2026-03-04 05:06 UTC"));
+        assert!(footer.contains("Accesses: 7"));
+    }
+
+    #[test]
+    fn given_never_accessed_bookmark_when_render_footer_then_says_never() {
+        let action =
+            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+
+        let mut bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
+        bookmark.id = Some(1);
+        bookmark.created_at = None;
+
+        let footer = action.render_metadata_footer(&bookmark);
+
+        assert!(footer.contains("Last accessed: never"));
+        assert!(footer.contains("Created: unknown"));
+    }
+
+    #[test]
+    fn given_unstored_bookmark_when_render_footer_then_returns_empty() {
+        // `bkmr open --file` renders a temporary bookmark: its metadata would be made up
+        let action =
+            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+
+        let bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
+
+        assert_eq!(action.render_metadata_footer(&bookmark), "");
+    }
+
+    #[test]
+    fn given_imported_bookmark_when_render_footer_then_shows_escaped_source_file() {
+        let action =
+            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+
+        let mut bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
+        bookmark.id = Some(1);
+        bookmark.file_path = Some("/notes/a&b<c>.md".to_string());
+
+        let footer = action.render_metadata_footer(&bookmark);
+
+        assert!(footer.contains("File: /notes/a&amp;b&lt;c&gt;.md"));
+    }
+
+    #[test]
+    fn given_html_in_tag_when_render_footer_then_escapes_it() {
+        let action =
+            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+
+        let mut tags = HashSet::new();
+        tags.insert(Tag::new("<script>").unwrap());
+        let mut bookmark = Bookmark::new("# Notes", "Notes", "", tags).unwrap();
+        bookmark.id = Some(1);
+
+        let footer = action.render_metadata_footer(&bookmark);
+
+        assert!(footer.contains("&lt;script&gt;"));
+        assert!(!footer.contains("<script>"));
     }
 }
