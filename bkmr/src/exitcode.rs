@@ -6,11 +6,14 @@
 /// Successful termination
 pub const SUCCESS: i32 = 0;
 
-/// Command line usage error - invalid arguments, missing required parameters, etc.
+/// Runtime failure: the invocation was valid, but the operation failed
+pub const FAILURE: i32 = 1;
+
+/// Usage error - invalid arguments or an invalid config file; fix the invocation or config
 pub const USAGE: i32 = 64;
 
 /// Duplicate name conflict during import operation when --update flag is not provided
 pub const DUP: i32 = 65;
 
-/// Operation was cancelled by user (typically Ctrl+C)
+/// Operation was cancelled by user at a confirmation prompt
 pub const CANCEL: i32 = 130;

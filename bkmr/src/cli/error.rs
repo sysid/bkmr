@@ -1,6 +1,7 @@
 // src/cli/error.rs
 use crate::application::error::ApplicationError;
 use crate::domain::error::DomainError;
+use crate::exitcode;
 use std::io;
 use thiserror::Error;
 
@@ -40,8 +41,16 @@ pub enum CliError {
     Other(String),
 }
 
-// Add context method to CliError
 impl CliError {
+    /// Process exit code for this error; the table is in ERROR_HANDLING.md.
+    pub fn exit_code(&self) -> i32 {
+        match self {
+            CliError::InvalidInput(_) | CliError::InvalidIdFormat(_) => exitcode::USAGE,
+            CliError::OperationAborted => exitcode::CANCEL,
+            _ => exitcode::FAILURE,
+        }
+    }
+
     pub fn context<C: Into<String>>(self, context: C) -> Self {
         match self {
             CliError::CommandFailed(msg) => {

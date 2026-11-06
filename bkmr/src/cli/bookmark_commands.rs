@@ -364,7 +364,7 @@ pub fn add(
         let mut template = if let Some(id) = clone_id {
             // Get the bookmark to clone
             let bookmark = bookmark_service.get_bookmark(id)?.ok_or_else(|| {
-                CliError::InvalidInput(format!("No bookmark found with ID {}", id))
+                CliError::CommandFailed(format!("No bookmark found with ID {}", id))
             })?;
 
             // Create a template with the bookmark data but without ID
@@ -837,8 +837,7 @@ pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()>
         .read_line(&mut input)
         .map_err(|e| CliError::CommandFailed(format!("Failed to read input: {}", e)))?;
     if !input.trim().eq_ignore_ascii_case("y") {
-        eprintln!("Aborted.");
-        return Ok(());
+        return Err(CliError::OperationAborted);
     }
 
     purge_all_embeddings(services)?;
@@ -1480,7 +1479,7 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             }
             Err(e) => {
                 eprintln!("{}", format!("Import failed: {}", e).red());
-                std::process::exit(exitcode::USAGE);
+                std::process::exit(exitcode::FAILURE);
             }
         }
     } else {

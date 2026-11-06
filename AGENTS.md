@@ -33,6 +33,7 @@ injection.
 - DB-independent commands (`--generate-config`, `completion`, `create-db`) are routed before `ServiceContainer` creation in `main.rs` and must not require a database.
 - Tag filter flags are easy to misread: `-t` must have ALL, `-T` exclude if has ALL, `-n` must have ANY, `-N` exclude if has ANY.
 - Test function naming convention: `given_X_when_Y_then_Z()`.
+- Exit codes are a tested contract: `CliError::exit_code()` decides them, and `ERROR_HANDLING.md` has the table. Use `InvalidInput` only for errors the user fixes by changing arguments.
 - An unreadable or invalid config file is fatal in `main.rs` (exit 64), since falling back to defaults would open another database. Only `--generate-config` bypasses this.
 - Print fatal errors with `print_error` in `main.rs`, not `.red()`: crossterm's opt-out still writes an empty escape sequence, which ends up in LSP client logs.
 - `embeddable` is decided by `[embeddings.policy]` in `BookmarkServiceImpl`: pass `None` to `add_bookmark` and friends unless the user made an explicit request, never a hardcoded `true`. A policy change does not touch existing rows, except that `always` applies on their next write.

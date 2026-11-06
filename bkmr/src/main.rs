@@ -1,6 +1,7 @@
 // src/main.rs
 use bkmr::cli::args::{Cli, Commands};
 use bkmr::cli::bookmark_commands::pre_fill_database;
+use bkmr::cli::error::CliError;
 use bkmr::config::{load_settings, ConfigSource, Settings};
 use bkmr::exitcode;
 use bkmr::infrastructure::di::ServiceContainer;
@@ -23,7 +24,15 @@ fn main() {
     // Register sqlite-vec before any database connections
     bkmr::infrastructure::repositories::sqlite::register_sqlite_vec();
 
-    let cli = Cli::parse();
+    // clap's own exit() uses 2 for usage errors; bkmr's documented code is 64.
+    let cli = Cli::try_parse().unwrap_or_else(|e| {
+        let _ = e.print();
+        std::process::exit(if e.use_stderr() {
+            exitcode::USAGE
+        } else {
+            exitcode::SUCCESS
+        });
+    });
 
     // Determine if colors should be disabled.
     // Honor the --no-color flag and the NO_COLOR convention (https://no-color.org/).
@@ -59,7 +68,10 @@ fn main() {
     if let Some(result) = handle_database_independent_operations(cli.clone(), &settings) {
         if let Err(e) = result {
             print_error(&format!("Error: {}", e), no_color);
-            std::process::exit(exitcode::USAGE);
+            let code = e
+                .downcast_ref::<CliError>()
+                .map_or(exitcode::FAILURE, CliError::exit_code);
+            std::process::exit(code);
         }
         return;
     }
@@ -72,14 +84,14 @@ fn main() {
                 &format!("Failed to create service container: {}", e),
                 no_color,
             );
-            std::process::exit(exitcode::USAGE);
+            std::process::exit(exitcode::FAILURE);
         }
     };
 
     // Execute CLI command with services
-    if let Err(e) = execute_command_with_services(cli, service_container, settings) {
-        print_error(&format!("Error: {}", e), no_color);
-        std::process::exit(exitcode::USAGE);
+    if let Err(e) = bkmr::cli::execute_command_with_services(cli, service_container, &settings) {
+        print_error(&format!("Error: Command execution failed: {}", e), no_color);
+        std::process::exit(e.exit_code());
     }
 }
 
@@ -232,17 +244,12 @@ fn handle_completion_command(shell: String) -> Result<(), Box<dyn std::error::Er
     // Generate completion script to stdout
     match bkmr::cli::completion::generate_completion(&shell) {
         Ok(_) => Ok(()),
-        Err(e) => Err(format!("Failed to generate completion script: {}", e).into()),
+        Err(e) => Err(CliError::InvalidInput(format!(
+            "Failed to generate completion script: {}",
+            e
+        ))
+        .into()),
     }
-}
-
-fn execute_command_with_services(
-    cli: Cli,
-    services: ServiceContainer,
-    settings: Settings,
-) -> Result<(), Box<dyn std::error::Error>> {
-    bkmr::cli::execute_command_with_services(cli, services, &settings)
-        .map_err(|e| format!("Command execution failed: {}", e).into())
 }
 
 fn setup_logging(verbosity: u8, no_color: bool) {
