@@ -1,127 +1,57 @@
-# Contributing to BKMR
+# Contributing to bkmr
 
-Thank you for considering contributing to BKMR! This document outlines the process for contributing to the project and provides guidelines to ensure consistent code quality.
+Bug fixes and improvements are welcome. For a significant change, open an
+[issue](https://github.com/sysid/bkmr/issues) first so we can agree on the approach. Please be
+respectful to other contributors and users.
 
-## Code of Conduct
+## Setup
 
-Please be respectful to all contributors and users. We aim to foster an inclusive and welcoming community.
+You need stable Rust. SQLite is bundled.
 
-## Getting Started
-
-### Prerequisites
-
-- Rust (stable channel)
-- Cargo
-- SQLite development libraries
-
-### Setting Up Development Environment
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/bkmr.git
-   cd bkmr
-   ```
-
-2. Build the project:
-   ```bash
-   cargo build --manifest-path bkmr/Cargo.toml
-   ```
-
-3. Run tests (single-threaded; see [TESTING.md](TESTING.md)):
-   ```bash
-   make test
-   ```
-
-## Development Workflow
-
-1. Create a new branch for your feature or fix:
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. Make your changes following the code style guidelines below.
-
-3. Write tests for your changes.
-
-4. Run tests locally:
-   ```bash
-   make test
-   ```
-
-5. Submit a pull request.
-
-## Code Style Guidelines
-
-### Architecture
-
-The project follows clean architecture principles with an onion model:
-
-- `domain`: Core business logic and entities
-- `application`: Use cases and services
-- `infrastructure`: External systems integration
-- `cli`: Command-line interface
-
-### Naming Conventions
-
-- Use descriptive names that convey intent
-- For test functions, follow the pattern: `given_X_when_Y_then_Z()`
-- Use snake_case for functions, variables, and file names
-- Use PascalCase for structs, enums, and traits
-
-### Error Handling
-
-- Use `thiserror` for error definitions
-- Provide meaningful error messages
-
-### Testing
-
-How to run, structure and extend tests is described in [TESTING.md](TESTING.md). In short:
-
-- Write unit tests for all public functions
-- Follow the Arrange/Act/Assert pattern
-- Declare test data in the test; never rely on pre-existing rows or literal ids
-  (see [Test data](TESTING.md#test-data))
-
-Example test structure:
-```rust
-#[test]
-fn given_valid_input_when_parsing_then_returns_expected_result() {
-    // Arrange
-    let input = "valid input";
-    
-    // Act
-    let result = parse_input(input);
-    
-    // Assert
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), expected_value);
-}
+```bash
+git clone https://github.com/<your-account>/bkmr.git   # your fork
+cd bkmr
+cargo build --manifest-path bkmr/Cargo.toml             # the manifest is in bkmr/, not the root
+make test                                               # single-threaded; see TESTING.md
 ```
 
-### Documentation
+## Making a change
 
-- Document all public APIs
-- Include examples in documentation where appropriate
-- Keep README up to date
+1. Branch from `main`, e.g. `feat/<name>` or `fix/<name>`.
+2. Write a failing test first, then the code. See [TESTING.md](TESTING.md) for test conventions.
+3. Before opening the pull request, run:
 
-## Pull Request Process
+   ```bash
+   make format
+   make lint
+   make test
+   ```
+4. Update the README and [wiki](https://github.com/sysid/bkmr/wiki) if behaviour changes.
+5. In the pull request, describe the change and link related issues.
 
-1. Ensure all tests pass
-2. Update documentation if necessary
-3. Add a clear description of the changes
-4. Link related issues
+## Where things go
 
-## Release Process
+The code uses a layered architecture. Dependencies point inward:
 
-1. Version numbers follow [Semantic Versioning](https://semver.org/)
-2. Releases are created from the `main` branch
-3. Each release includes a changelog entry
-4. `make bump-patch|minor|major` bumps `VERSION`, `pyproject.toml`, `bkmr/Cargo.toml` and
-   `bkmr/Cargo.lock` in one commit, so the tag builds with `cargo build --locked`
+| Directory (`bkmr/src/`) | Holds | May depend on |
+|---|---|---|
+| `domain` | Entities, business rules, repository traits | nothing |
+| `application` | Services and use cases | `domain` |
+| `infrastructure` | SQLite, embeddings, clipboard, HTTP | implements `domain` traits |
+| `cli`, `lsp` | Command line and editor entry points | `application` services |
 
-## Finding Tasks to Work On
+The binding rules are under "Architectural Invariants" in [AGENTS.md](AGENTS.md). For errors and
+exit codes, see [ERROR_HANDLING.md](ERROR_HANDLING.md). For architecture and build details, see
+the wiki's [Development](https://github.com/sysid/bkmr/wiki/Development) page.
 
-- Check the issues tab for tasks labeled "good first issue"
-- Feel free to ask for clarification or help on any issue
+## Releases (maintainers)
 
-Thank you for contributing to BKMR!
+Versions follow [Semantic Versioning](https://semver.org/). To release, run one of:
+
+```bash
+make bump-patch   # or bump-minor, bump-major
+```
+
+This runs immediately and is visible to everyone: it bumps `VERSION`, `pyproject.toml`,
+`bkmr/Cargo.toml` and `bkmr/Cargo.lock` in one commit, tags it, pushes, and creates a GitHub
+release with generated notes. It needs `bump-my-version`, `gh` and `GITHUB_TOKEN`.

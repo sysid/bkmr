@@ -401,7 +401,7 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
     // Validate environment before starting
     if let Err(e) = validate_environment().await {
         error!("Environment validation failed: {}", e);
-        std::process::exit(1);
+        std::process::exit(crate::exitcode::FAILURE);
     }
 
     use crate::infrastructure::di::ServiceContainer;

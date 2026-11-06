@@ -107,7 +107,7 @@ impl ServiceContainer {
             eprintln!("  1. Create the database using 'bkmr create-db {}'", db_url);
             eprintln!("  2. Set BKMR_DB_URL environment variable to point to an existing database");
             eprintln!("  3. Update the db_url in your config file (~/.config/bkmr/config.toml)");
-            std::process::exit(1);
+            std::process::exit(crate::exitcode::FAILURE);
         }
 
         // Create the repository, runs all migrations

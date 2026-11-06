@@ -644,7 +644,7 @@ pub fn clone_bookmark(
     // Get the bookmark to clone
     let bookmark = bookmark_service
         .get_bookmark(id)?
-        .ok_or_else(|| CliError::InvalidInput(format!("No bookmark found with ID {}", id)))?;
+        .ok_or_else(|| CliError::CommandFailed(format!("No bookmark found with ID {}", id)))?;
 
     println!(
         "Cloning bookmark: {} (ID: {})",
@@ -714,7 +714,7 @@ fn edit_source_file_and_sync(
     let file_path_str = bookmark
         .file_path
         .as_ref()
-        .ok_or_else(|| CliError::InvalidInput("No file path for this bookmark".to_string()))?;
+        .ok_or_else(|| CliError::CommandFailed("No file path for this bookmark".to_string()))?;
 
     // Load settings to resolve base path variables
     let settings = load_settings(None)
@@ -726,7 +726,7 @@ fn edit_source_file_and_sync(
 
     // Check if file exists
     if !source_file.exists() {
-        return Err(CliError::InvalidInput(format!(
+        return Err(CliError::CommandFailed(format!(
             "Source file does not exist: {}",
             resolved_path
         )));
@@ -835,7 +835,7 @@ fn sync_file_to_bookmark(
     // Ensure the bookmark has an ID for updating
     let _bookmark_id = original_bookmark
         .id
-        .ok_or_else(|| CliError::InvalidInput("Bookmark has no ID".to_string()))?;
+        .ok_or_else(|| CliError::CommandFailed("Bookmark has no ID".to_string()))?;
 
     // Create an updated bookmark based on the original but with new file data
     let mut updated_bookmark = original_bookmark.clone();

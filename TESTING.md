@@ -10,8 +10,8 @@ procedures. Other documents link here instead of repeating commands.
  ─────────────────────      ────────────────────────     ─────────────────────────
  unit tests (src/**)        hsearch: 9 pass/fail checks  editors: nvim, IntelliJ
  integration (tests/**)                                  hsearch: TC-01 … TC-14
- LSP over stdio                                          system-ort build
-   (tests/lsp)                                           Homebrew formula
+ LSP over stdio
+   (tests/lsp)
 
  shared fixtures: bkmr/tests/resources/datasets/*.json (datasets), loaded by
                   scripts/test/lib/seed.sh and tests/lsp; scripts/test/lib/bkmr-dev (wrapper)
@@ -36,8 +36,8 @@ env RUST_LOG=error BKMR_DB_URL=../db/bkmr.db \
 
 **Always single-threaded, always with `BKMR_DB_URL`.** Tests share one SQLite file
 (`db/bkmr.db`, recreated by `make test`) and mutate environment variables; parallel runs
-fail with lock errors and races. `RUST_LOG` works under `cargo test` (the test harness reads
-it); the `bkmr` binary itself ignores it (see [Debug logging](#debug-logging)).
+fail with lock errors and races. `RUST_LOG` only works under `cargo test`; see
+[Debug logging](#debug-logging).
 
 | Location | Kind | Notes |
 |---|---|---|
@@ -112,9 +112,9 @@ BKMR_DB_URL=/tmp/x.db bkmr load-json --no-embed bkmr/tests/resources/datasets/ls
 | `lsp.json` | 63 bookmarks: 7 exercising language filtering (aliases, exact tag match, non-snippets, universal), a `Render counter` template with a `shell` filter, 55 python fillers exceeding `max_completions` (50); loaded without embeddings | `make test-env`; [Completion sessions](#completion-sessions-isincomplete-and-template-rendering) — its table is asserted by `given_lsp_dataset_when_completing_then_matches_documented_table` |
 | `hsearch.json` | 13 bookmarks in 5 groups for hybrid search; descriptions frozen from the pages they link to (no network); embeds (model download on first use) | `make test-scenarios`; [hsearch dataset](#hsearch-dataset) |
 
-All fixtures default to the repo debug build; set `BKMR_BIN` to another binary (e.g.
-`~/bin/bkmr7.6.8`) to compare against a released version. Check that the "released" binary
-really is one: `ls -l ~/bin/bkmr*` — an `install-debug` symlink points at the debug build.
+All fixtures default to the repo debug build; set `BKMR_BIN` to another binary to compare
+against a released version. Check that it really is a release with `ls -l`: an `install-debug`
+symlink points at the debug build.
 
 ## L2 — Scenario suites
 
@@ -154,8 +154,8 @@ the local build and the throwaway database, and every server message lands in
 `scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust javascript shellscript python`
 prints the same table without an editor.
 
-**Before/after comparison:** run the same steps with `BKMR_BIN=~/bin/bkmr7.6.8` (nvim) or
-Binary Path pointing to a released binary such as `~/bin/bkmr7.6.8` (IntelliJ).
+**Before/after comparison:** run the same steps with `BKMR_BIN` (nvim) or Binary Path (IntelliJ)
+pointing to a released binary.
 
 #### Neovim (bkmr-nvim)
 
@@ -193,68 +193,19 @@ Use the plugin's sandbox IDE; it keeps its own settings under `build/idea-sandbo
 
 Cleanup: `rm -rf /tmp/bkmr-dev`; reset Binary Path in the sandbox IDE.
 
-GOTCHA:
-- sandbox IDE config must be put in place completely and then restarted (keeps settings)
-- must point to correct binary
-
 #### Completion sessions (isIncomplete and template rendering)
 
-**Scenario** (LSP assessment B2): a completion list is only marked `isIncomplete` when it
-was truncated at `max_completions` (50). A complete list is filtered by the client while you
-type; only a truncated list is re-requested per keystroke. Every request renders all
-templates in its result — including `shell` filters, which execute commands — so the flag
-decides how often templates run. Released 7.6.8 marked every list incomplete: one request and
-one render per keystroke.
+A completion list is marked `isIncomplete` only when it was truncated at `max_completions` (50).
 
-**Data** (dataset `lsp`, seeded by `make test-env`):
-
-| Snippet | Tags | Purpose |
+| languageId | Items | `isIncomplete` |
 |---|---|---|
-| Render counter: `// rendered at {{ "date +%H:%M:%S" \| shell }}` | `rust,_snip_` | each render runs `date`: logged as `Executing shell command: date +%H:%M:%S`, fresh timestamp in the completion preview |
-| Py filler 01 … 55 | `python,_snip_` | 55 + Universal TODO = 56 candidates > 50 → truncated list |
+| `rust` | Render counter, Rust println, Universal TODO | false |
+| `javascript` | JS alias log, JS full-name error, Universal TODO | false |
+| `shellscript` | Bash echo, Universal TODO | false |
+| `python` | 50 (truncated from 56) | true |
 
-**Server-side check (no editor)** — verified 2026-09-30:
-
-```bash
-scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust python javascript
-BKMR_BIN=~/bin/bkmr7.6.8 scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust python javascript
-```
-
-| languageId | Current build | Released 7.6.8 |
-|---|---|---|
-| `rust` | 3 items, `isIncomplete=False` | 5 items (incl. Not a snippet, RA clippy setting), `isIncomplete=True` |
-| `python` | 50 items, `isIncomplete=True` | 50 items, `isIncomplete=True` |
-| `javascript` | 3 items, `isIncomplete=False` | 2 items, `isIncomplete=True` |
-
-Each probe run is a single request, so it renders Render counter exactly once in both
-builds; the difference only shows as re-requests in an editor.
-
-**Editor procedure** (nvim or IntelliJ, set up as in the sections above):
-
-| Step | Action | Expected (current build) | Released 7.6.8 |
-|---|---|---|---|
-| 1 | `: > /tmp/bkmr-dev/lsp.log` | log empty | |
-| 2 | open `t.rs`, empty line, trigger completion (C-P); note the Render counter preview time | popup with 3 items | popup with 5 items |
-| 3 | with the popup open, type `r`, `e`, `n` | popup narrows to Render counter; preview time unchanged | same narrowing, one server request per key |
-| 4 | open `t.py`, empty line, trigger completion, then type `f`, `i`, `l` | one request per key: list stays server-filtered | same |
-
-Counts after step 3:
-
-```bash
-grep -c "Completion request for file://.*/t.rs" /tmp/bkmr-dev/lsp.log   # current: 1   7.6.8: 4 (invoke + 3 keys)
-grep -c "Executing shell command: date" /tmp/bkmr-dev/lsp.log           # current: 1   7.6.8: 4
-```
-
-Counts after step 4:
-
-```bash
-grep -c "Completion request for file://.*/t.py" /tmp/bkmr-dev/lsp.log   # both: 4 (truncated → incomplete)
-```
-
-The server-side flags are verified; the client-side counts follow the LSP contract and have
-not been recorded for every client yet. A client may still re-request on its own (e.g. when
-the word start changes or on a trigger character); more requests than expected in step 3 with
-`isIncomplete=False` point at client behaviour, not at the server.
+`given_lsp_dataset_when_completing_then_matches_documented_table` asserts this table. To print it
+yourself: `scripts/test/lsp_probe.py --bin /tmp/bkmr-dev/bin/bkmr complete rust python javascript shellscript`.
 
 ### hsearch TC catalogue
 
@@ -268,7 +219,7 @@ Setup: `bash scripts/test/hsearch/setup.sh && export BKMR_DB_URL=/tmp/bkmr_hsear
 | B: Semantic-only | 4-6 | Related concepts, different wording — no exact FTS hit | kubernetes, containers |
 | C: Both engines | 7-8 | Match FTS + semantic — boosted via RRF | kubernetes, procedure |
 | D: Tag testing | 9-11 | Various tags for filter testing | procedure, _snip_ |
-| E: Non-URL content | 12-13 | Shell command / SQL snippet (embedded like the rest) | kubernetes, _shell_, _snip_ |
+| E: Non-URL content | 12-13 | Shell command / SQL snippet | kubernetes, _shell_, _snip_ |
 
 | TC | Command | Expected |
 |---|---|---|
@@ -287,62 +238,9 @@ Setup: `bash scripts/test/hsearch/setup.sh && export BKMR_DB_URL=/tmp/bkmr_hsear
 | 13 `search` regression | `bkmr search kubernetes --np`; `bkmr search --tags procedure --np` | ordered by ID ascending, tag filter works, format unchanged |
 | 14 Over-fetching quality | `bkmr hsearch "deployment automation" --limit 3 --json --np` | cross-engine boosted results in top 3 |
 
-TC-05, 07, 08, 10, 11, 12 and 13 are also covered automatically by `verify.sh`.
-
-### `system-ort` build (dynamic ONNX Runtime)
-
-Goal: a build with `--no-default-features --features system-ort` loads `libonnxruntime` at
-runtime from Homebrew and generates embeddings.
-
-```bash
-brew install onnxruntime
-ls "$(brew --prefix onnxruntime)/lib/libonnxruntime.dylib"
-
-cd bkmr
-cargo build --release --no-default-features --features system-ort   # no ort-sys download in output
-
-otool -L target/release/bkmr | grep onnx      # expected: nothing (dlopen, not linked)
-ls -lh target/release/bkmr                    # smaller than a default release build
-
-export BKMR_DB_URL=/tmp/bkmr_system_ort_test.db
-target/release/bkmr create-db "$BKMR_DB_URL" --pre-fill
-target/release/bkmr add "https://example.com" test --title "ONNX Runtime test"
-target/release/bkmr backfill                  # embeddings generated → runtime loaded
-target/release/bkmr search "ONNX" --np
-
-brew uninstall onnxruntime
-target/release/bkmr backfill 2>&1             # expected: dlopen error for libonnxruntime
-brew install onnxruntime                      # restore
-```
-
-If `dlopen` cannot find the library:
-`export ORT_DYLIB_PATH=$(brew --prefix onnxruntime)/lib/libonnxruntime.dylib`.
-On Linux use `ldd` instead of `otool -L` and `LD_LIBRARY_PATH` instead of `DYLD_LIBRARY_PATH`.
-
-### Homebrew formula
-
-```bash
-brew install onnxruntime
-cd /opt/homebrew/Library/Taps/homebrew/homebrew-core
-git checkout bkmr-rpath                       # branch with the bkmr formula change
-
-HOMEBREW_NO_INSTALL_FROM_API=1 brew install --build-from-source bkmr
-brew test bkmr
-otool -l "$(brew --prefix)/bin/bkmr" | grep -A2 LC_RPATH   # rpath embedded
-bkmr backfill --help                                        # no dlopen error
-```
-
-Compile check without installing (simulates the formula):
-
-```bash
-cd bkmr
-RUSTFLAGS="-C link-args=-Wl,-rpath,/opt/homebrew/lib" \
-  cargo build --release --no-default-features --features system-ort
-otool -l target/release/bkmr | grep -A2 LC_RPATH
-```
-
-The formula's `RUSTFLAGS` are set inside the install block and do not appear in brew's
-output summary; verify via `LC_RPATH` instead.
+`verify.sh` automates TC-05, 07, 10 and 12. It covers three more only in part: TC-08 checks that
+exact mode returns results, not its speed; TC-11 checks for tab-separated output, not the columns
+or the absence of color; TC-13 checks for an ID list, not ordering or the tag filter.
 
 ## Debug logging
 

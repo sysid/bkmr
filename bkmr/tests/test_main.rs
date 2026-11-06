@@ -552,3 +552,190 @@ fn given_invalid_policy_when_running_then_fails_naming_the_value() {
         .failure()
         .stderr(predicate::str::contains("never"));
 }
+
+// Exit codes are part of the CLI contract for scripts (see ERROR_HANDLING.md).
+
+#[test]
+fn given_unknown_flag_when_running_then_exits_with_usage_code() {
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .arg("--no-such-flag")
+        .output()
+        .expect("run bkmr");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(64));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--no-such-flag"));
+}
+
+#[test]
+fn given_no_arguments_when_running_then_exits_with_usage_code() {
+    // Act
+    let output = cargo_bin_cmd!("bkmr").output().expect("run bkmr");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_help_flag_when_running_then_exits_successfully_with_help_on_stdout() {
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .arg("--help")
+        .output()
+        .expect("run bkmr");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Usage:"));
+}
+
+#[test]
+fn given_non_numeric_id_when_showing_then_exits_with_usage_code() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("exit.db");
+    create_db_with_one_bookmark(&db);
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", "not-a-number"])
+        .output()
+        .expect("run bkmr show");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_unsupported_shell_when_generating_completion_then_exits_with_usage_code() {
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .args(["completion", "no-such-shell"])
+        .output()
+        .expect("run bkmr completion");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_missing_database_when_searching_then_exits_with_failure_code() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", dir.path().join("missing.db"))
+        .args(["search", "--np", "--json", ""])
+        .output()
+        .expect("run bkmr search");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn given_unknown_clone_id_when_adding_then_exits_with_failure_code() {
+    // Arrange: the arguments are well formed, the failure comes from the database content
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("exit.db");
+    create_db_with_one_bookmark(&db);
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["add", "--clone", "99999"])
+        .output()
+        .expect("run bkmr add --clone");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("No bookmark found with ID 99999"));
+}
+
+#[test]
+fn given_missing_path_when_importing_files_then_exits_with_failure_code() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("exit.db");
+    create_db_with_one_bookmark(&db);
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .arg("import-files")
+        .arg(dir.path().join("no-such-directory"))
+        .output()
+        .expect("run bkmr import-files");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn given_duplicate_name_without_update_when_importing_files_then_exits_with_duplicate_code() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("exit.db");
+    create_db_with_one_bookmark(&db);
+    let script = dir.path().join("script.sh");
+    std::fs::write(
+        &script,
+        "#!/bin/bash\n# name: dup-script\n# tags: t\necho hi\n",
+    )
+    .unwrap();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["import-files", "--no-embed"])
+        .arg(&script)
+        .assert()
+        .success();
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["import-files", "--no-embed"])
+        .arg(&script)
+        .output()
+        .expect("run bkmr import-files");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(65));
+}
+
+#[test]
+fn given_declined_prompt_when_clearing_embeddings_then_exits_with_cancel_code_and_keeps_vector() {
+    use bkmr::domain::repositories::vector_repository::VectorRepository;
+    use bkmr::infrastructure::repositories::sqlite::register_sqlite_vec;
+    use bkmr::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
+
+    // Arrange: the vector is written directly, so the model is not needed
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("exit.db");
+    create_db_with_one_bookmark(&db);
+    let bookmark_id = search_all(&db)[0]["id"].as_i64().expect("bookmark id");
+    register_sqlite_vec();
+    let vectors = SqliteVectorRepository::new(db.to_str().unwrap()).unwrap();
+    vectors.init_vec_table(768).unwrap();
+    vectors
+        .upsert_embedding(bookmark_id as i32, &vec![0.1; 768])
+        .unwrap();
+    drop(vectors);
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .arg("clear-embeddings")
+        .write_stdin("n\n")
+        .output()
+        .expect("run bkmr clear-embeddings");
+
+    // Assert
+    assert_eq!(output.status.code(), Some(130));
+    assert!(
+        has_embedding(&db, bookmark_id),
+        "declined clear deleted the vector"
+    );
+}

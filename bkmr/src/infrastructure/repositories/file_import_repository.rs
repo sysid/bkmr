@@ -261,8 +261,14 @@ impl ImportRepository for FileImportRepository {
             let path = Path::new(path_str);
 
             if !path.exists() {
-                warn!("Path does not exist: {}", path.display());
-                continue;
+                // Fail before anything changes: skipping a mistyped path would report success,
+                // and with --delete-missing would treat its bookmarks as deleted.
+                return Err(DomainError::RepositoryError(
+                    crate::domain::error::RepositoryError::Other(format!(
+                        "Path does not exist: {}",
+                        path.display()
+                    )),
+                ));
             }
 
             if path.is_file() {
