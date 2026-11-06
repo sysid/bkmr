@@ -259,7 +259,7 @@ make test
 
 See **[TESTING.md](TESTING.md)** for everything test-related: automated, scenario and manual editor tests.
 
-See **[Development](https://github.com/sysid/bkmr/wiki/Development)** for complete contributor guide.
+See **[Development](https://github.com/sysid/bkmr/wiki/Development)** for architecture and build details.
 
 ## Community and Contributions
 

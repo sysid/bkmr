@@ -1,158 +1,54 @@
-# Error Handling Guidelines for BKMR Project
+# Error Handling
 
-## Error Type Hierarchy
+Rules for adding or changing errors in bkmr. Errors are converted at each layer boundary on their
+way out to the user:
 
 ```
-Infrastructure → Domain → Application → Presentation (CLI)
+Infrastructure → Domain → Application → CLI / LSP → exit code
 ```
 
-### Key Error Types
+| Layer | Types | Location |
+|---|---|---|
+| Infrastructure | `SqliteRepositoryError` | `src/infrastructure/repositories/sqlite/error.rs` |
+| Domain | `DomainError`, `RepositoryError`, `InterpolationError` | `src/domain/error.rs`, `src/domain/interpolation/errors.rs` |
+| Application | `ApplicationError` | `src/application/error.rs` |
+| CLI | `CliError` | `src/cli/error.rs` |
+| LSP | `LspError`, `SnippetError` | `src/lsp/error.rs`, `src/lsp/services/snippet_service.rs` |
 
-1. **Infrastructure Layer**
-   - `SqliteRepositoryError`: Database-specific errors
-   - `InfrastructureError`: General infrastructure failures
-   - `InterpolationError`: Template rendering failures
+## Rules
 
-2. **Domain Layer**
-   - `DomainError`: Core business logic errors
-   - `RepositoryError`: Abstract repository interface errors
+- **One `thiserror` enum per layer**, with a result alias such as `DomainResult<T>`. Do not
+  collapse them into one catch-all type.
+- **Convert with `From` at layer boundaries**, so `?` propagates. See
+  `impl From<SqliteRepositoryError> for RepositoryError` in `sqlite/error.rs`.
+- **Add context where the failing operation is known**, either on the error or on the result:
 
-3. **Application Layer**
-   - `ApplicationError`: Service-level errors
+  ```rust
+  repository.delete(id).map_err(|e| e.context("deleting bookmark"))?;
+  repository.delete(id).with_app_context(|| format!("deleting bookmark {id}"))?;
+  ```
 
-4. **Presentation Layer**
-   - `CliError`: Command-line interface errors
+  The result helpers are in `src/domain/error_context.rs`.
+- **Tell the user how to recover** when there is a clear next step, as the missing-database
+  message in `service_container.rs` does.
+- **Print fatal errors with `print_error` in `main.rs`**, not `.red()`: crossterm's opt-out still
+  writes an empty escape sequence, which ends up in LSP client logs.
 
-## Core Error Handling Principles
+## Exit codes
 
-1. **Error Context Enhancement**
-   - All error types implement a `context()` method for adding context
-   - Context should clarify where and why the error occurred
+Exit codes are a contract for scripts. `CliError::exit_code()` maps errors to codes, and
+`bkmr/tests/test_main.rs` tests them.
 
-   ```rust
-   // Example: Adding context to an error
-   repository.get_by_id(id)
-       .map_err(|e| e.context(format!("Failed to retrieve bookmark {}", id)))?
-   ```
+| Code | Constant | Meaning | Examples |
+|---|---|---|---|
+| 0 | `SUCCESS` | Success | |
+| 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone`, missing import path |
+| 64 | `USAGE` | Fix the invocation or config | unknown flag, no arguments, non-numeric ID, unsupported shell, invalid config file |
+| 65 | `DUP` | Duplicate name | `import-files` without `--update` |
+| 130 | `CANCEL` | User declined a confirmation | `clear-embeddings` |
 
-2. **Explicit Error Conversion**
-   - Use `From` traits to convert between error types at layer boundaries
-   - More specific conversions for important cases, fallback for others
+A new `CliError` variant exits 1 unless `exit_code()` says otherwise. Use `InvalidInput` only when
+the user can fix the failure by changing the arguments; for a state problem such as an unknown ID,
+use `CommandFailed`.
 
-   ```rust
-   // Example: Converting SqliteRepositoryError to DomainError
-   impl From<SqliteRepositoryError> for DomainError {
-       fn from(err: SqliteRepositoryError) -> Self {
-           match err {
-               SqliteRepositoryError::BookmarkNotFound(id) => 
-                   DomainError::BookmarkNotFound(id.to_string()),
-               SqliteRepositoryError::DatabaseError(e) => 
-                   DomainError::RepositoryError(RepositoryError::Database(e.to_string())),
-               // Other specific mappings...
-               _ => DomainError::RepositoryError(RepositoryError::Other(err.to_string())),
-           }
-       }
-   }
-   ```
-
-3. **Error Propagation with `?` Operator**
-   - Use the `?` operator for clean error propagation
-   - Convert error types at layer boundaries with `.map_err()`
-
-   ```rust
-   fn add_bookmark(&self, ...) -> ApplicationResult<Bookmark> {
-       // Convert domain errors to application errors implicitly with ?
-       let bookmark = self.repository.add(&mut bookmark)?;
-       
-       // Or explicitly with map_err
-       self.repository.add(&mut bookmark)
-           .map_err(|e| ApplicationError::Domain(e))?;
-   }
-   ```
-
-4. **Error Type Patterns**
-   - Use `thiserror` for defining structured error enums
-   - Include helpful error messages in the `#[error("...")]` attributes
-   - Provide serialized field values in error messages
-
-   ```rust
-   #[derive(Error, Debug)]
-   pub enum DomainError {
-       #[error("Bookmark not found: {0}")]
-       BookmarkNotFound(String),
-       
-       #[error("Repository error: {0}")]
-       RepositoryError(#[from] RepositoryError),
-       
-       // Other error variants...
-   }
-   ```
-
-5. **Result Type Aliases**
-   - Define `Result` type aliases for each layer
-
-   ```rust
-   pub type DomainResult<T> = Result<T, DomainError>;
-   pub type ApplicationResult<T> = Result<T, ApplicationError>;
-   pub type CliResult<T> = Result<T, CliError>;
-   pub type SqliteResult<T> = Result<T, SqliteRepositoryError>;
-   ```
-
-## Error Presentation
-
-- CLI errors should be user-friendly with actionable information
-- Use color in terminal output (via `crossterm` crate) to highlight errors
-- Include suggestions for resolution when possible
-
-```rust
-eprintln!("{}", "Error: Database not found.".red());
-eprintln!("Either:");
-eprintln!("  1. Set BKMR_DB_URL environment variable to point to an existing database");
-eprintln!("  2. Create a database using 'bkmr create-db <path>'");
-
-## Exit Codes
-
-The bkmr CLI application uses standard Unix exit codes to indicate the type of error:
-
-### Standard Exit Codes
-
-| Code | Constant           | Description                                         |
-|------|--------------------|-----------------------------------------------------|
-| 0    | `exitcode::SUCCESS`| Successful operation                               |
-| 64   | `exitcode::USAGE`  | Command line usage error (invalid arguments, etc.) |
-| 65   | `exitcode::DUP`    | Duplicate name conflict during import without --update |
-| 130  | `exitcode::CANCEL` | Operation cancelled by user (Ctrl+C)              |
-
-### Usage Examples
-
-```rust
-// Successful completion
-std::process::exit(exitcode::SUCCESS);
-
-// Invalid command line arguments
-std::process::exit(exitcode::USAGE);
-
-// Import operation found duplicate names without --update flag
-std::process::exit(exitcode::DUP);
-
-// User cancelled operation
-std::process::exit(exitcode::CANCEL);
-```
-
-### Import Operation Exit Codes
-
-The `bkmr import` command has specific behavior for duplicate name handling:
-
-- **Exit 0**: All files imported successfully, or no conflicts found
-- **Exit 65**: Duplicate name found and `--update` flag not provided
-  - The operation stops on first duplicate
-  - Error message shows conflicting file path and existing bookmark name
-  - User must re-run with `--update` flag to resolve conflicts
-
-Example error output for exit code 65:
-```
-Error: Duplicate name 'backup-script' found in /path/to/script.sh
-Existing bookmark with same name already exists (ID: 42)
-Use --update flag to overwrite existing bookmarks with changed content
-```
-```
+Leaving the fuzzy finder with Esc still exits 0.
