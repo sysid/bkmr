@@ -24,5 +24,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: bkmr
+          # The automatic key has no OS version, but ort-sys build output stores the Xcode clang
+          # path. Reusing it on another macOS image fails with: library 'clang_rt.osx' not found.
+          # ponytail: an Xcode change within one image can still break this; bump prefix-key then.
+          key: ${{ matrix.runner }}
       - name: make test
         run: make test
