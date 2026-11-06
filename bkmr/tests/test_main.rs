@@ -305,6 +305,97 @@ fn given_stored_vector_when_backfill_force_dry_run_then_keeps_vector() {
 }
 
 #[test]
+fn given_vector_on_non_embeddable_bookmark_when_backfill_prune_then_removes_only_that_vector() {
+    use bkmr::domain::repositories::repository::BookmarkRepository;
+    use bkmr::domain::repositories::vector_repository::VectorRepository;
+    use bkmr::infrastructure::repositories::sqlite::register_sqlite_vec;
+    use bkmr::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
+    use bkmr::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
+
+    // Arrange: vectors are written directly, so the model is not needed
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("prune.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    for (url, title) in [
+        ("https://stale.example.com", "Stale"),
+        ("https://keep.example.com", "Keep"),
+    ] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(["add", url, "t", "--title", title, "--no-web", "--no-embed"])
+            .assert()
+            .success();
+    }
+    let id_of = |title: &str| {
+        search_all(&db)
+            .iter()
+            .find(|b| b["title"] == title)
+            .and_then(|b| b["id"].as_i64())
+            .expect("bookmark added")
+    };
+    let (stale, keep) = (id_of("Stale"), id_of("Keep"));
+
+    let bookmarks = SqliteBookmarkRepository::from_url(db.to_str().unwrap()).unwrap();
+    let mut embeddable = bookmarks.get_by_id(keep as i32).unwrap().unwrap();
+    embeddable.set_embeddable(true);
+    bookmarks.update(&embeddable).unwrap();
+
+    register_sqlite_vec();
+    let vectors = SqliteVectorRepository::new(db.to_str().unwrap()).unwrap();
+    vectors.init_vec_table(768).unwrap();
+    for id in [stale, keep] {
+        vectors
+            .upsert_embedding(id as i32, &vec![0.1; 768])
+            .unwrap();
+    }
+    drop(vectors);
+
+    // Act + Assert: a dry run reports the vector and changes nothing
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--prune", "--dry-run"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(format!("ID: {stale}")));
+    assert!(has_embedding(&db, stale), "dry run deleted the vector");
+
+    // Act
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--prune"])
+        .assert()
+        .success();
+
+    // Assert
+    assert!(!has_embedding(&db, stale), "stale vector must be removed");
+    assert!(has_embedding(&db, keep), "embeddable vector must stay");
+}
+
+#[test]
+fn given_prune_and_force_when_running_backfill_then_rejected() {
+    // Force deletes every vector, which would contradict removing only the stale ones
+    cargo_bin_cmd!("bkmr")
+        .args(["backfill", "--prune", "--force"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn given_backfill_help_when_shown_then_force_does_not_claim_to_skip_imported() {
+    // get_bookmarks_for_forced_backfill filters on the embeddable flag only
+    cargo_bin_cmd!("bkmr")
+        .args(["backfill", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("_imported_").not());
+}
+
+#[test]
 fn given_invalid_default_config_when_running_then_fails_instead_of_using_another_db() {
     // Arrange: a usable database in the default location, the one a silent fallback would open
     let home = TempDir::new().unwrap();

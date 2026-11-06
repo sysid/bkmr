@@ -95,6 +95,10 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Get the IDs of all bookmarks that have an embedding
     fn get_embedded_ids(&self) -> ApplicationResult<HashSet<i32>>;
 
+    /// Remove vectors that have no embeddable bookmark, and return their sorted IDs.
+    /// With `dry_run` the IDs are only reported.
+    fn prune_embeddings(&self, dry_run: bool) -> ApplicationResult<Vec<i32>>;
+
     /// Record that a bookmark was accessed
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark>;
 

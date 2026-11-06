@@ -554,6 +554,33 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
+    fn prune_embeddings(&self, dry_run: bool) -> ApplicationResult<Vec<i32>> {
+        // Compare against embeddable rows rather than select non-embeddable ones, so that
+        // vectors whose bookmark no longer exists are removed too.
+        let embeddable_ids: HashSet<i32> = self
+            .get_bookmarks_for_forced_backfill()?
+            .into_iter()
+            .filter_map(|bookmark| bookmark.id)
+            .collect();
+        let mut stale_ids: Vec<i32> = self
+            .vector_repository
+            .get_embedded_ids()?
+            .difference(&embeddable_ids)
+            .copied()
+            .collect();
+        stale_ids.sort_unstable();
+
+        if !dry_run {
+            for id in &stale_ids {
+                self.vector_repository
+                    .delete_embedding(*id)
+                    .with_app_context(|| format!("deleting embedding of bookmark {}", id))?;
+            }
+        }
+        Ok(stale_ids)
+    }
+
+    #[instrument(skip(self), level = "debug")]
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
@@ -1603,6 +1630,81 @@ mod tests {
             "got: {error}"
         );
         assert_eq!(service.get_bookmark(id).unwrap().unwrap().title, "Fragile");
+    }
+
+    #[test]
+    fn given_stale_vectors_when_pruning_then_removes_them_and_keeps_embeddable_ones() {
+        // Arrange: one vector on an opted-out row, one without any row, one legitimate
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let opted_out = service
+            .add_bookmark(
+                "https://opted-out.example.com",
+                Some("Opted Out"),
+                None,
+                None,
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
+        let embedded = service
+            .add_bookmark(
+                "https://embedded.example.com",
+                Some("Embedded"),
+                None,
+                None,
+                false,
+                Some(true),
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
+        let orphan = embedded + 1000;
+        vectors.upsert_embedding(opted_out, &[0.1; 4]).unwrap();
+        vectors.upsert_embedding(orphan, &[0.1; 4]).unwrap();
+
+        // Act
+        let pruned = service.prune_embeddings(false).unwrap();
+
+        // Assert
+        assert_eq!(pruned, vec![opted_out, orphan]);
+        assert!(!vectors.has_vector(opted_out));
+        assert!(!vectors.has_vector(orphan));
+        assert!(vectors.has_vector(embedded));
+    }
+
+    #[test]
+    fn given_stale_vector_when_pruning_as_dry_run_then_reports_it_and_keeps_it() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let opted_out = service
+            .add_bookmark(
+                "https://dry-run.example.com",
+                Some("Dry Run"),
+                None,
+                None,
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap()
+            .id
+            .unwrap();
+        vectors.upsert_embedding(opted_out, &[0.1; 4]).unwrap();
+
+        // Act
+        let pruned = service.prune_embeddings(true).unwrap();
+
+        // Assert
+        assert_eq!(pruned, vec![opted_out]);
+        assert!(vectors.has_vector(opted_out));
     }
 
     #[test]
