@@ -582,13 +582,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug")]
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
-        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
+        self.repository.record_access(id)?;
 
-        bookmark.record_access();
-
-        self.repository.update_access(&bookmark)?;
-
-        Ok(bookmark)
+        ValidationHelper::validate_and_get_bookmark(id, &*self.repository)
     }
 
     /// Bulk-create bookmarks from JSON array. Creates full Bookmark objects (url, title,

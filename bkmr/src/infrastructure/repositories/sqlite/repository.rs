@@ -416,17 +416,14 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     }
 
     #[instrument(skip_all, level = "debug")]
-    fn update_access(&self, bookmark: &Bookmark) -> Result<(), DomainError> {
+    fn record_access(&self, id: i32) -> Result<(), DomainError> {
         let mut conn = self.get_connection()?;
 
-        let id = bookmark.id.ok_or_else(|| {
-            SqliteRepositoryError::OperationFailed("Bookmark has no ID".to_string())
-        })?;
-
+        // Incrementing in SQL, not read-then-write, so concurrent accesses are all counted
         let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
             .set((
-                dsl::flags.eq(bookmark.access_count),
-                dsl::accessed_at.eq(bookmark.accessed_at.map(|dt| dt.naive_utc())),
+                dsl::flags.eq(dsl::flags + 1),
+                dsl::accessed_at.eq(chrono::Utc::now().naive_utc()),
             ))
             .execute(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;
@@ -936,6 +933,35 @@ mod tests {
         let stored = repo.get_by_id(id)?.unwrap();
         assert!(!stored.tags.contains(&Tag::new("_md_")?));
         Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_when_record_access_then_counts_and_keeps_updated_at(
+    ) -> Result<(), DomainError> {
+        let repo = setup_test_db();
+        let mut bookmark =
+            create_test_bookmark("Access", "https://record-access.com", vec!["access"])?;
+        repo.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+        let before = repo.get_by_id(id)?.unwrap();
+        assert_eq!(before.access_count, 0);
+        assert!(before.accessed_at.is_none());
+
+        repo.record_access(id)?;
+        repo.record_access(id)?;
+
+        let stored = repo.get_by_id(id)?.unwrap();
+        assert_eq!(stored.access_count, 2);
+        assert!(stored.accessed_at.is_some());
+        assert_eq!(stored.updated_at, before.updated_at);
+        Ok(())
+    }
+
+    #[test]
+    fn given_unknown_id_when_record_access_then_fails() {
+        let repo = setup_test_db();
+
+        assert!(repo.record_access(i32::MAX).is_err());
     }
 
     #[test]

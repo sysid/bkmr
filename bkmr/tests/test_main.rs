@@ -739,3 +739,94 @@ fn given_declined_prompt_when_clearing_embeddings_then_exits_with_cancel_code_an
         "declined clear deleted the vector"
     );
 }
+
+fn access_count_of_first_bookmark(db: &std::path::Path) -> i64 {
+    search_all(db)[0]["access_count"].as_i64().unwrap()
+}
+
+#[test]
+fn given_open_stdout_when_running_then_prints_content_and_records_access() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("access.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["open", "--stdout", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("https://example.com"));
+
+    assert_eq!(access_count_of_first_bookmark(&db), 1);
+}
+
+#[test]
+fn given_result_lists_when_running_then_does_not_record_access() {
+    // Nobody picked a specific bookmark, so listing search results is not an access.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("access.db");
+    create_db_with_one_bookmark(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--np", "example"])
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--np", "--json", "example"])
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["hsearch", "--np", "--json", "--mode", "exact", "example"])
+        .assert()
+        .success();
+
+    assert_eq!(access_count_of_first_bookmark(&db), 0);
+}
+
+fn make_bookmark_writes_fail(db: &std::path::Path) {
+    rusqlite::Connection::open(db)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER fail_access_write BEFORE UPDATE ON bookmarks \
+             BEGIN SELECT RAISE(ABORT, 'write refused'); END",
+        )
+        .unwrap();
+}
+
+#[test]
+fn given_failing_access_write_when_open_stdout_then_still_delivers_content_and_warns() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("access.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    make_bookmark_writes_fail(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["open", "--stdout", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("https://example.com"))
+        .stderr(predicate::str::contains("Failed to record access"));
+}
+
+#[test]
+fn given_failing_access_write_when_show_then_still_shows_details_and_warns() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("access.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    make_bookmark_writes_fail(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("https://example.com"))
+        .stderr(predicate::str::contains("Failed to record access"));
+}

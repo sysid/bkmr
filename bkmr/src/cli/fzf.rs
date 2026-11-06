@@ -15,7 +15,7 @@ use crate::domain::search::SemanticSearchResult;
 use crate::domain::system_tag::SystemTag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::util::helper::{format_file_path, format_mtime};
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::style::Stylize;
 use crossterm::{
     execute,
@@ -499,16 +499,37 @@ pub fn fzf_process(
         return Ok(());
     }
 
+    println!();
+
+    handle_final_key(
+        output.final_key,
+        &selected_bookmarks,
+        stdout,
+        services,
+        settings,
+    )?;
+
+    reset_terminal_state(stdout);
+
+    Ok(())
+}
+
+/// Runs what the key that closed the picker asks for on the selected bookmarks.
+fn handle_final_key(
+    key: KeyEvent,
+    selected_bookmarks: &[Bookmark],
+    stdout: bool,
+    services: &ServiceContainer,
+    settings: &crate::config::Settings,
+) -> CliResult<()> {
     let ids: Vec<i32> = selected_bookmarks.iter().filter_map(|bm| bm.id).collect();
     debug!("Selected bookmark IDs: {:?}", ids);
 
-    println!();
-
-    let key = output.final_key;
     match (key.code, key.modifiers) {
         (KeyCode::Enter, _) => {
             if stdout {
-                for bookmark in &selected_bookmarks {
+                for bookmark in selected_bookmarks {
+                    services.action_service.record_access(bookmark);
                     let content = services
                         .interpolation_service
                         .render_bookmark_url(bookmark)
@@ -521,7 +542,7 @@ pub fn fzf_process(
                     println!("{}", content);
                 }
             } else {
-                for bookmark in &selected_bookmarks {
+                for bookmark in selected_bookmarks {
                     execute_bookmark_default_action(bookmark, services.action_service.clone())?;
                 }
             }
@@ -534,9 +555,11 @@ pub fn fzf_process(
                     .any(|tag| tag.is_system_tag_of(SystemTag::Shell));
 
                 if is_shell_script {
+                    // Not counted: this copies a command, and running it records the access
                     let command = format!("bkmr open --no-edit {} --", bookmark.id.unwrap_or(0));
                     copy_url_to_clipboard(&command, services.clipboard_service.clone())?;
                 } else {
+                    services.action_service.record_access(bookmark);
                     copy_bookmark_url_to_clipboard(
                         bookmark,
                         services.interpolation_service.clone(),
@@ -570,6 +593,8 @@ pub fn fzf_process(
         }
         (KeyCode::Char('p'), m) if m.contains(KeyModifiers::CONTROL) => {
             if let Some(bookmark) = selected_bookmarks.first() {
+                // `bookmark` was loaded before this access, so details report the prior state, as `show` does
+                services.action_service.record_access(bookmark);
                 let _ = execute!(std::io::stdout(), Clear(ClearType::FromCursorDown));
                 let embedded_ids = lookup_embedded_ids(&*services.bookmark_service);
                 let details = bookmark_commands::show_bookmark_details(
@@ -585,8 +610,6 @@ pub fn fzf_process(
             debug!("Unhandled key: {:?}", key);
         }
     }
-
-    reset_terminal_state(stdout);
 
     Ok(())
 }
@@ -676,5 +699,155 @@ mod tests {
         }
 
         assert_eq!(count, 2500);
+    }
+
+    mod access_tracking {
+        use super::super::*;
+        use crate::config::Settings;
+        use crate::domain::tag::Tag;
+        use crate::infrastructure::clipboard::DummyClipboardService;
+        use crate::util::test_service_container::TestServiceContainer;
+        use std::collections::HashSet;
+        use std::sync::Arc;
+
+        // The dummy clipboard keeps these tests off the developer's real clipboard.
+        fn services_with_dummy_clipboard(test: &TestServiceContainer) -> ServiceContainer {
+            ServiceContainer {
+                bookmark_repository: test.bookmark_repository.clone(),
+                embedder: test.embedder.clone(),
+                vector_repository: test.vector_repository.clone(),
+                bookmark_service: test.bookmark_service.clone(),
+                tag_service: test.tag_service.clone(),
+                action_service: test.action_service.clone(),
+                clipboard_service: Arc::new(DummyClipboardService::new()),
+                interpolation_service: test.interpolation_service.clone(),
+                template_service: test.template_service.clone(),
+            }
+        }
+
+        fn add_bookmark(services: &ServiceContainer, content: &str, tag: &str) -> Bookmark {
+            let tags = HashSet::from([Tag::new(tag).unwrap()]);
+            services
+                .bookmark_service
+                .add_bookmark(
+                    content,
+                    Some(content),
+                    None,
+                    Some(&tags),
+                    false,
+                    Some(false),
+                    None,
+                )
+                .unwrap()
+        }
+
+        fn reload(services: &ServiceContainer, bookmark: &Bookmark) -> Bookmark {
+            services
+                .bookmark_service
+                .get_bookmark(bookmark.id.unwrap())
+                .unwrap()
+                .unwrap()
+        }
+
+        fn ctrl(letter: char) -> KeyEvent {
+            KeyEvent::new(KeyCode::Char(letter), KeyModifiers::CONTROL)
+        }
+
+        #[test]
+        fn given_enter_with_stdout_when_key_handled_then_records_access() {
+            let test = TestServiceContainer::new();
+            let services = services_with_dummy_clipboard(&test);
+            let added = add_bookmark(&services, "fzf stdout content", "_snip_");
+            // Reloaded: the stored timestamp is less precise than the one from add_bookmark
+            let bookmark = reload(&services, &added);
+
+            handle_final_key(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+                std::slice::from_ref(&bookmark),
+                true,
+                &services,
+                &Settings::default(),
+            )
+            .unwrap();
+
+            let stored = reload(&services, &bookmark);
+            assert_eq!(stored.access_count, 1);
+            assert!(stored.accessed_at.is_some());
+            assert_eq!(stored.updated_at, bookmark.updated_at);
+        }
+
+        #[test]
+        fn given_ctrl_o_on_snippet_when_key_handled_then_records_access() {
+            let test = TestServiceContainer::new();
+            let services = services_with_dummy_clipboard(&test);
+            let bookmark = add_bookmark(&services, "fzf ctrl-o content", "_snip_");
+
+            handle_final_key(
+                ctrl('o'),
+                std::slice::from_ref(&bookmark),
+                false,
+                &services,
+                &Settings::default(),
+            )
+            .unwrap();
+
+            assert_eq!(reload(&services, &bookmark).access_count, 1);
+        }
+
+        #[test]
+        fn given_ctrl_y_on_snippet_when_key_handled_then_records_access() {
+            let test = TestServiceContainer::new();
+            let services = services_with_dummy_clipboard(&test);
+            let bookmark = add_bookmark(&services, "fzf ctrl-y content", "_snip_");
+
+            handle_final_key(
+                ctrl('y'),
+                std::slice::from_ref(&bookmark),
+                false,
+                &services,
+                &Settings::default(),
+            )
+            .unwrap();
+
+            assert_eq!(reload(&services, &bookmark).access_count, 1);
+        }
+
+        #[test]
+        fn given_ctrl_y_on_shell_script_when_key_handled_then_does_not_record_access() {
+            // This copies a `bkmr open` command rather than the script. The access is
+            // recorded when that command runs, so counting the copy too would count twice.
+            let test = TestServiceContainer::new();
+            let services = services_with_dummy_clipboard(&test);
+            let bookmark = add_bookmark(&services, "echo fzf shell", "_shell_");
+
+            handle_final_key(
+                ctrl('y'),
+                std::slice::from_ref(&bookmark),
+                false,
+                &services,
+                &Settings::default(),
+            )
+            .unwrap();
+
+            assert_eq!(reload(&services, &bookmark).access_count, 0);
+        }
+
+        #[test]
+        fn given_ctrl_p_when_key_handled_then_records_access() {
+            let test = TestServiceContainer::new();
+            let services = services_with_dummy_clipboard(&test);
+            let bookmark = add_bookmark(&services, "fzf ctrl-p content", "_snip_");
+
+            handle_final_key(
+                ctrl('p'),
+                std::slice::from_ref(&bookmark),
+                false,
+                &services,
+                &Settings::default(),
+            )
+            .unwrap();
+
+            assert_eq!(reload(&services, &bookmark).access_count, 1);
+        }
     }
 }

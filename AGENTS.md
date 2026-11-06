@@ -39,8 +39,9 @@ injection.
 - `embeddable` is decided by `[embeddings.policy]` in `BookmarkServiceImpl`: pass `None` to `add_bookmark` and friends unless the user made an explicit request, never a hardcoded `true`. A policy change does not touch existing rows, except that `always` applies on their next write.
 
 ## Domain glossary
-- `_snip_`, `_shell_`, `_md_`, `_env_`, `_imported_`, `_mem_` — known system tags marking content type; a bookmark has at most one, validated in the domain setters, `BookmarkBuilder` and the repository's `add`/`update`. `update_access` skips the check so existing violating rows stay openable. Unknown `_x_` tags are allowed and don't count toward that limit.
+- `_snip_`, `_shell_`, `_md_`, `_env_`, `_imported_`, `_mem_` — known system tags marking content type; a bookmark has at most one, validated in the domain setters, `BookmarkBuilder` and the repository's `add`/`update`. `record_access` skips the check so existing violating rows stay openable. Unknown `_x_` tags are allowed and don't count toward that limit.
 - `hsearch` — hybrid search fusing FTS5 and semantic vectors via Reciprocal Rank Fusion.
+- access — recorded when one explicitly chosen bookmark's content starts being delivered (open, execute, copy, print, show details), via `ActionService::record_access`. Listing results and changing data are not accesses. See the wiki's Basic-Usage for the table.
 
 ## Other Instructions
 - Follow TDD, and keep README and the GitHub wiki in sync with behavior changes.

@@ -5,7 +5,7 @@ use crate::domain::error::DomainResult;
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::util::validation::ValidationHelper;
 use std::sync::Arc;
-use tracing::{debug, instrument};
+use tracing::{debug, instrument, warn};
 
 /// Service for executing actions on bookmarks
 pub trait ActionService: Send + Sync {
@@ -25,6 +25,10 @@ pub trait ActionService: Send + Sync {
 
     /// Gets a description of the default action for a bookmark
     fn get_default_action_description(&self, bookmark: &Bookmark) -> &'static str;
+
+    /// Counts an attempt to deliver this bookmark's content. A failed write only warns:
+    /// losing a count must not block the content the user asked for.
+    fn record_access(&self, bookmark: &Bookmark);
 }
 
 /// Implementation of ActionService that uses an ActionResolver
@@ -45,11 +49,8 @@ impl<R: BookmarkRepository> ActionServiceImpl<R> {
 impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
     #[instrument(skip(self, bookmark), level = "debug")]
     fn execute_default_action(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        // First, record the access (increase access count)
-        if let Some(id) = bookmark.id {
-            debug!("Recording access for bookmark {}", id);
-            self.record_bookmark_access(id)?;
-        }
+        // Before the action, so that a long-running or killed shell action is still counted
+        self.record_access(bookmark);
 
         // Resolve and execute the appropriate action
         let action = self.resolver.resolve_action(bookmark);
@@ -81,11 +82,8 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         };
         use std::sync::Arc;
 
-        // First, record the access (increase access count)
-        if let Some(id) = bookmark.id {
-            debug!("Recording access for bookmark {}", id);
-            self.record_bookmark_access(id)?;
-        }
+        // Before the action, so that a long-running or killed shell action is still counted
+        self.record_access(bookmark);
 
         // Use the resolver for consistent action dispatch, then apply --no-edit override
         if no_edit && bookmark.is_shell() {
@@ -112,21 +110,14 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         let action = self.resolver.resolve_action(bookmark);
         action.description()
     }
-}
 
-// Helper methods
-impl<R: BookmarkRepository> ActionServiceImpl<R> {
-    // Record that a bookmark was accessed
-    #[instrument(skip(self), level = "trace")]
-    fn record_bookmark_access(&self, id: i32) -> DomainResult<()> {
-        let mut bookmark =
-            ValidationHelper::validate_and_get_bookmark_domain(id, &*self.repository)?;
-
-        bookmark.record_access();
-
-        self.repository.update_access(&bookmark)?;
-
-        Ok(())
+    #[instrument(skip(self, bookmark), level = "trace")]
+    fn record_access(&self, bookmark: &Bookmark) {
+        if let Some(id) = bookmark.id {
+            if let Err(e) = self.repository.record_access(id) {
+                warn!("Failed to record access for bookmark {}: {}", id, e);
+            }
+        }
     }
 }
 
@@ -382,5 +373,78 @@ mod tests {
             result.is_ok(),
             "Should execute successfully even without bookmark ID"
         );
+    }
+
+    fn make_access_writes_fail(repository: &SqliteBookmarkRepository) {
+        use diesel::RunQueryDsl;
+
+        let mut conn = repository.get_connection().unwrap();
+        diesel::sql_query(
+            "CREATE TRIGGER fail_access_write BEFORE UPDATE ON bookmarks \
+             BEGIN SELECT RAISE(ABORT, 'write refused'); END",
+        )
+        .execute(&mut conn)
+        .unwrap();
+    }
+
+    #[test]
+    fn given_failing_access_write_when_execute_default_action_then_action_still_runs() {
+        let (repository, _db_dir) = create_test_repository();
+        let mock_action = Arc::new(MockAction::new("Mock action"));
+        let resolver = Arc::new(MockActionResolver::new(mock_action));
+        let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
+        let mut bookmark = create_test_bookmark_without_shell_tag();
+        repository.add(&mut bookmark).unwrap();
+        make_access_writes_fail(&repository);
+
+        let result = service.execute_default_action(&bookmark);
+
+        assert!(result.is_ok(), "got {:?}", result);
+    }
+
+    #[test]
+    fn given_failing_access_write_when_execute_with_options_then_action_still_runs() {
+        let (repository, _db_dir) = create_test_repository();
+        let mock_action = Arc::new(MockAction::new("Mock action"));
+        let resolver = Arc::new(MockActionResolver::new(mock_action));
+        let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
+        let mut bookmark = create_test_bookmark_without_shell_tag();
+        repository.add(&mut bookmark).unwrap();
+        make_access_writes_fail(&repository);
+
+        let result = service.execute_default_action_with_options(&bookmark, false, &[]);
+
+        assert!(result.is_ok(), "got {:?}", result);
+    }
+
+    #[test]
+    fn given_concurrent_actions_when_executed_then_every_access_is_counted() {
+        const THREADS: usize = 4;
+        const ACCESSES_PER_THREAD: usize = 25;
+
+        let (repository, _db_dir) = create_test_repository();
+        let mock_action = Arc::new(MockAction::new("Mock action"));
+        let resolver = Arc::new(MockActionResolver::new(mock_action));
+        let service = Arc::new(ActionServiceImpl::new(resolver, Arc::clone(&repository)));
+        let mut bookmark = create_test_bookmark_without_shell_tag();
+        repository.add(&mut bookmark).unwrap();
+
+        let workers: Vec<_> = (0..THREADS)
+            .map(|_| {
+                let service = Arc::clone(&service);
+                let bookmark = bookmark.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..ACCESSES_PER_THREAD {
+                        service.execute_default_action(&bookmark).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for worker in workers {
+            worker.join().unwrap();
+        }
+
+        let stored = repository.get_by_id(bookmark.id.unwrap()).unwrap().unwrap();
+        assert_eq!(stored.access_count as usize, THREADS * ACCESSES_PER_THREAD);
     }
 }

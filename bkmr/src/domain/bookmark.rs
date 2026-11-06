@@ -195,12 +195,6 @@ impl Bookmark {
         Ok(())
     }
 
-    /// Record access to the bookmark (does not change updated_at)
-    pub fn record_access(&mut self) {
-        self.access_count += 1;
-        self.accessed_at = Some(Utc::now());
-    }
-
     /// Update bookmark information
     pub fn update(&mut self, title: String, description: String) {
         self.title = title;
@@ -520,40 +514,6 @@ mod tests {
         bookmark.set_tags(new_tags.clone()).unwrap();
         assert_eq!(bookmark.tags, new_tags);
         assert_eq!(bookmark.tags.len(), 2);
-    }
-
-    #[test]
-    fn given_bookmark_when_record_access_then_increments_count_and_sets_accessed_at() {
-        let _ = init_test_env();
-        let mut tags = HashSet::new();
-        tags.insert(Tag::new("test").unwrap());
-
-        let mut bookmark = Bookmark::new(
-            "https://example.com",
-            "Example Site",
-            "An example website",
-            tags,
-        )
-        .unwrap();
-
-        assert_eq!(bookmark.access_count, 0);
-        assert!(bookmark.accessed_at.is_none());
-        let updated_at_before = bookmark.updated_at;
-
-        bookmark.record_access();
-        assert_eq!(bookmark.access_count, 1);
-        assert!(bookmark.accessed_at.is_some());
-        assert_eq!(
-            bookmark.updated_at, updated_at_before,
-            "record_access must not change updated_at"
-        );
-
-        bookmark.record_access();
-        assert_eq!(bookmark.access_count, 2);
-        assert_eq!(
-            bookmark.updated_at, updated_at_before,
-            "record_access must not change updated_at"
-        );
     }
 
     #[test]

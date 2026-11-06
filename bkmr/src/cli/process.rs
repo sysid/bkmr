@@ -36,7 +36,7 @@ pub fn process(
        p:              print all ids
        d <n1> <n2>:    delete selection
        e <n1> <n2>:    edit selection
-       t <n1> <n2>:    touch selection (update timestamp)
+       t <n1> <n2>:    record an access (access count, last accessed)
        y <n1> <n2>:    yank/copy URL(s) to clipboard
        q | ENTER:      quit
        h:              help
@@ -127,6 +127,7 @@ pub fn process(
                         bookmarks,
                         services.interpolation_service.clone(),
                         services.clipboard_service.clone(),
+                        services.action_service.clone(),
                     )?;
                 } else {
                     eprintln!("Invalid input, only numbers allowed");
@@ -182,7 +183,7 @@ fn get_bookmark_by_index(index: i32, bookmarks: &[Bookmark]) -> Option<&Bookmark
 }
 
 #[instrument(
-    skip(bookmarks, interpolation_service, clipboard_service),
+    skip(bookmarks, interpolation_service, clipboard_service, action_service),
     level = "debug"
 )]
 fn yank_bookmark_urls_by_indices(
@@ -190,6 +191,7 @@ fn yank_bookmark_urls_by_indices(
     bookmarks: &[Bookmark],
     interpolation_service: Arc<dyn InterpolationService>,
     clipboard_service: Arc<dyn ClipboardService>,
+    action_service: Arc<dyn ActionService>,
 ) -> CliResult<()> {
     debug!(
         "Yanking (copying) URLs for bookmarks at indices: {:?}",
@@ -199,6 +201,8 @@ fn yank_bookmark_urls_by_indices(
     for index in indices {
         match get_bookmark_by_index(index, bookmarks) {
             Some(bookmark) => {
+                action_service.record_access(bookmark);
+
                 // Render the URL with interpolation variables if needed
                 let rendered_url = match interpolation_service.render_bookmark_url(bookmark) {
                     Ok(url) => url,
@@ -287,7 +291,7 @@ pub fn open_bookmark(bookmark: &Bookmark, action_service: Arc<dyn ActionService>
     execute_bookmark_default_action(bookmark, action_service)
 }
 
-/// Touch (update timestamp) of bookmarks by indices
+/// Records an access for bookmarks by indices, without running their action
 #[instrument(skip(bookmarks, bookmark_service, settings), level = "debug")]
 fn touch_bookmarks_by_indices(
     indices: Vec<i32>,
@@ -1032,9 +1036,46 @@ mod tests {
             &bookmarks,
             services.interpolation_service.clone(),
             services.clipboard_service.clone(),
+            services.action_service.clone(),
         );
 
         // Assert
         assert!(result.is_ok(), "Yank operation should succeed");
+    }
+
+    #[test]
+    fn given_stored_bookmark_when_yank_then_records_access() {
+        use crate::infrastructure::clipboard::DummyClipboardService;
+        use crate::util::test_service_container::TestServiceContainer;
+
+        let services = TestServiceContainer::new();
+        let bookmark = services
+            .bookmark_service
+            .add_bookmark(
+                "prompt yank content",
+                Some("Prompt yank"),
+                None,
+                None,
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap();
+
+        yank_bookmark_urls_by_indices(
+            vec![1],
+            std::slice::from_ref(&bookmark),
+            services.interpolation_service.clone(),
+            Arc::new(DummyClipboardService::new()),
+            services.action_service.clone(),
+        )
+        .unwrap();
+
+        let stored = services
+            .bookmark_service
+            .get_bookmark(bookmark.id.unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(stored.access_count, 1);
     }
 }

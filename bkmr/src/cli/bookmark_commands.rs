@@ -189,6 +189,7 @@ pub fn open(
                     .cli_context("retrieving bookmark for opening")?
                 {
                     if stdout {
+                        action_service.record_access(&bookmark);
                         // Output interpolated content to stdout instead of executing
                         let content = interpolation_service
                             .render_bookmark_url(&bookmark)
@@ -667,7 +668,7 @@ pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
         for id in id_list {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
                 // Report the state before this access: otherwise "last accessed" always reads "now"
-                bookmark_service.record_bookmark_access(id)?;
+                services.action_service.record_access(&bookmark);
                 bookmarks.push(bookmark);
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
