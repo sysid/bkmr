@@ -231,7 +231,10 @@ pub enum Commands {
         #[arg(long = "fzf", help = "use fzf for interactive selection")]
         is_fuzzy: bool,
 
-        #[arg(long = "stdout", help = "output to stdout for piping")]
+        #[arg(
+            long = "stdout",
+            help = "print result content to stdout (with --fzf, print the selected content)"
+        )]
         stdout: bool,
 
         #[arg(long = "np", help = "no prompt")]
@@ -646,6 +649,21 @@ mod tests {
         assert!(help.contains("- hybrid:"), "{help}");
         assert!(help.contains("- exact:"), "{help}");
         assert!(help.contains("default: 10"), "{help}");
+    }
+
+    #[test]
+    fn given_hsearch_fzf_and_stdout_when_parsed_then_both_flags_are_set() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x", "--fzf", "--stdout"]).unwrap();
+
+        match cli.command {
+            Some(Commands::HSearch {
+                is_fuzzy, stdout, ..
+            }) => {
+                assert!(is_fuzzy);
+                assert!(stdout);
+            }
+            _ => panic!("expected the hsearch subcommand"),
+        }
     }
 
     #[test]
