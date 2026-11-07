@@ -87,7 +87,12 @@ def classify_operation(command: str) -> str:
     if " edit " in command:
         return "EDIT"
     if " delete " in command:
-        return "DELETE"
+        # Unlike a plain delete of a memory, this cannot be undone
+        return "PURGE" if " --force" in command or " -f " in command else "DELETE"
+    if " restore " in command:
+        return "WRITE"
+    if " history" in command:
+        return "READ"
     if " show " in command:
         return "SHOW"
     return "OTHER"

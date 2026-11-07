@@ -11,6 +11,7 @@ use super::connection::{ConnectionPool, PooledConnection};
 use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, RepositoryError};
+use crate::domain::history::{HistoryChange, HistoryEntry};
 use crate::domain::repositories::query::{
     AllTagsSpecification, AnyTagSpecification, BookmarkQuery, SortCriteria, SortDirection,
     SortField,
@@ -18,11 +19,21 @@ use crate::domain::repositories::query::{
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::RankedResult;
 use crate::domain::tag::Tag;
+use crate::infrastructure::repositories::sqlite::model::DbHistoryEntry;
 use crate::infrastructure::repositories::sqlite::model::{
     DbBookmark, DbBookmarkChanges, IdResult, NewBookmark, TagsFrequency,
 };
+use crate::infrastructure::repositories::sqlite::schema::bookmark_history;
 use crate::infrastructure::repositories::sqlite::schema::bookmarks::dsl;
+use diesel::connection::SimpleConnection;
 use diesel::QueryableByName;
+
+/// Result row of PRAGMA wal_checkpoint. Only the first column matters here.
+#[derive(Debug, QueryableByName)]
+struct CheckpointResult {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    busy: i32,
+}
 
 #[derive(Debug, QueryableByName)]
 struct TableSchema {
@@ -58,12 +69,53 @@ impl SqliteBookmarkRepository {
         Self { pool }
     }
 
+    fn to_history_entry(entry: DbHistoryEntry) -> HistoryEntry {
+        HistoryEntry {
+            history_id: entry.history_id,
+            bookmark_id: entry.bookmark_id,
+            change: if entry.change == HistoryChange::Delete.as_str() {
+                HistoryChange::Delete
+            } else {
+                HistoryChange::Update
+            },
+            url: entry.url,
+            title: entry.metadata,
+            description: entry.desc,
+            tags: entry.tags,
+            changed_at: DateTime::from_naive_utc_and_offset(entry.changed_at, Utc),
+            embeddable: entry.embeddable,
+            file_path: entry.file_path,
+            file_mtime: entry.file_mtime,
+            file_hash: entry.file_hash,
+            opener: entry.opener,
+        }
+    }
+
+    fn to_new_bookmark(bookmark: &Bookmark) -> NewBookmark {
+        NewBookmark {
+            url: bookmark.url.to_string(),
+            metadata: bookmark.title.to_string(),
+            tags: bookmark.formatted_tags(),
+            desc: bookmark.description.to_string(),
+            flags: bookmark.access_count,
+            embedding: bookmark.embedding.clone(),
+            content_hash: bookmark.content_hash.clone(),
+            created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
+            embeddable: bookmark.embeddable,
+            file_path: bookmark.file_path.clone(),
+            file_mtime: bookmark.file_mtime,
+            file_hash: bookmark.file_hash.clone(),
+            opener: bookmark.opener.clone(),
+            accessed_at: bookmark.accessed_at.map(|dt| dt.naive_utc()),
+        }
+    }
+
     /// Create a new SQLite repository with the provided database URL
     #[instrument(skip_all, level = "debug")]
     pub fn from_url(database_url: &str) -> SqliteResult<Self> {
         let pool = super::connection::init_pool(database_url)
             .map_err(|e| e.context("initializing database connection pool"))?;
-        Ok(Self { pool })
+        Ok(Self::new(pool))
     }
 
     /// Get a connection from the pool
@@ -349,22 +401,7 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // which leaves a read transaction open. SQLite fails the later upgrade to a write at once
         // with SQLITE_BUSY, without calling the busy handler, so busy_timeout would not apply.
         conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
-            let db_bookmark = NewBookmark {
-                url: bookmark.url.to_string(),
-                metadata: bookmark.title.to_string(),
-                tags: bookmark.formatted_tags(),
-                desc: bookmark.description.to_string(),
-                flags: bookmark.access_count,
-                embedding: bookmark.embedding.clone(),
-                content_hash: bookmark.content_hash.clone(),
-                created_ts: bookmark.created_at.map(|dt| dt.naive_utc()),
-                embeddable: bookmark.embeddable,
-                file_path: bookmark.file_path.clone(),
-                file_mtime: bookmark.file_mtime,
-                file_hash: bookmark.file_hash.clone(),
-                opener: bookmark.opener.clone(),
-                accessed_at: bookmark.accessed_at.map(|dt| dt.naive_utc()),
-            };
+            let db_bookmark = Self::to_new_bookmark(bookmark);
             debug!("Inserting bookmark: {}", db_bookmark);
 
             // Insert the bookmark
@@ -456,6 +493,111 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             debug!(bookmark_id = id, "Bookmark deleted from database");
         }
         Ok(deleted)
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn purge(&self, id: i32) -> Result<bool, DomainError> {
+        let mut conn = self.get_connection()?;
+
+        let removed = conn
+            .immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                // In this order: deleting a memory fires the trigger that writes history
+                let bookmarks =
+                    diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
+                let history = diesel::delete(
+                    bookmark_history::table.filter(bookmark_history::bookmark_id.eq(id)),
+                )
+                .execute(conn)?;
+                Ok(bookmarks + history)
+            })
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        Ok(removed > 0)
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn scrub(&self) -> Result<(), DomainError> {
+        let mut conn = self.get_connection()?;
+
+        // Deleted text is still in full-text index segments, freed pages and the log. Rebuilding the
+        // index (merging it can keep a term as a delete key), rebuilding the file and emptying the
+        // log removes it from these files. Slow for a write, but purges are rare.
+        // ponytail: migration backups and other copies of the file still hold the text, which is up
+        // to the user. It also runs once per purged ID; if bulk purges get slow, scrub once per
+        // command instead.
+        conn.batch_execute(
+            "INSERT INTO bookmarks_fts(bookmarks_fts) VALUES('rebuild');
+             VACUUM;",
+        )
+        .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        let checkpoint = diesel::sql_query("PRAGMA wal_checkpoint(TRUNCATE)")
+            .get_result::<CheckpointResult>(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+        if checkpoint.busy != 0 {
+            return Err(SqliteRepositoryError::OperationFailed(
+                "Another process is reading the database, so deleted text can still be in its \
+                 files. Close that process and run the purge again"
+                    .to_string(),
+            )
+            .into());
+        }
+
+        Ok(())
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn reinsert(&self, bookmark: &Bookmark) -> Result<(), DomainError> {
+        bookmark.validate()?;
+        let id = bookmark.id.ok_or_else(|| {
+            SqliteRepositoryError::OperationFailed("Bookmark has no ID".to_string())
+        })?;
+        let mut conn = self.get_connection()?;
+
+        // Immediate for the same reason as in add: the insert trigger connects the FTS5 vtab
+        conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
+            diesel::insert_into(dsl::bookmarks)
+                .values((dsl::id.eq(id), Self::to_new_bookmark(bookmark)))
+                .execute(conn)
+        })
+        .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        Ok(())
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn get_history(
+        &self,
+        bookmark_id: Option<i32>,
+        limit: i64,
+    ) -> Result<Vec<HistoryEntry>, DomainError> {
+        let mut conn = self.get_connection()?;
+
+        let mut query = bookmark_history::table
+            .order(bookmark_history::history_id.desc())
+            .limit(limit)
+            .into_boxed();
+        if let Some(id) = bookmark_id {
+            query = query.filter(bookmark_history::bookmark_id.eq(id));
+        }
+        let entries = query
+            .load::<DbHistoryEntry>(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        Ok(entries.into_iter().map(Self::to_history_entry).collect())
+    }
+
+    #[instrument(skip_all, level = "debug")]
+    fn get_history_entry(&self, history_id: i32) -> Result<Option<HistoryEntry>, DomainError> {
+        let mut conn = self.get_connection()?;
+
+        let entry = bookmark_history::table
+            .filter(bookmark_history::history_id.eq(history_id))
+            .first::<DbHistoryEntry>(&mut conn)
+            .optional()
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        Ok(entry.map(Self::to_history_entry))
     }
 
     #[instrument(skip_all, level = "trace")]
@@ -1812,6 +1954,388 @@ mod tests {
         assert!(after1.content_hash.is_none());
         assert!(after2.content_hash.is_none());
 
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_when_changed_and_deleted_then_history_keeps_each_state(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_", "fact"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+
+        memory.url = "Runs on 5433".to_string();
+        repo.update(&memory)?;
+        repo.delete(id)?;
+
+        let history = repo.get_history(Some(id), 10)?;
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].change, HistoryChange::Delete);
+        assert_eq!(history[0].url, "Runs on 5433");
+        assert_eq!(history[1].change, HistoryChange::Update);
+        assert_eq!(history[1].url, "Runs on 5432");
+        assert_eq!(history[1].title, "Port");
+        assert_eq!(history[1].description, "Test description");
+        assert_eq!(history[1].tags, ",_mem_,fact,");
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_when_written_outside_bkmr_then_history_keeps_the_old_state(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+
+        // An older binary or a bulk rewrite does not go through this repository
+        rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .execute_batch("UPDATE bookmarks SET URL = 'Runs on 5433'")
+            .unwrap();
+
+        let history = repo.get_history(memory.id, 10)?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].url, "Runs on 5432");
+        Ok(())
+    }
+
+    #[test]
+    fn given_tag_strings_that_read_as_a_memory_when_written_outside_bkmr_then_history_keeps_them(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let writer = rusqlite::Connection::open(&db_path).unwrap();
+
+        // Tag::parse_tags reads each of these as containing _mem_
+        for (index, tags) in [
+            "_mem_",
+            "_mem_,fact,",
+            ",fact,_mem_",
+            ",_MEM_,",
+            ", _mem_ ,",
+        ]
+        .iter()
+        .enumerate()
+        {
+            writer
+                .execute(
+                    "INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+                     VALUES (?1, 'title', ?2, '', 0)",
+                    rusqlite::params![format!("memory {index}"), tags],
+                )
+                .unwrap();
+        }
+        writer
+            .execute_batch("UPDATE bookmarks SET URL = URL || ' changed'; DELETE FROM bookmarks;")
+            .unwrap();
+
+        assert_eq!(repo.get_history(None, 100)?.len(), 10);
+        Ok(())
+    }
+
+    #[test]
+    fn given_other_types_when_changed_and_deleted_then_no_history_is_kept(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        // Deleting a secret from _env_ must remove it. The last tag only looks like a system tag:
+        // in a LIKE pattern, each underscore of _mem_ would match any character.
+        for (index, tag) in ["_env_", "_snip_", "plain", "xmemx"].iter().enumerate() {
+            let url = format!("https://example.com/{index}");
+            let mut bookmark = create_test_bookmark("Other", &url, vec![*tag])?;
+            repo.add(&mut bookmark)?;
+
+            bookmark.url = format!("{url}/changed");
+            repo.update(&bookmark)?;
+            repo.delete(bookmark.id.unwrap())?;
+        }
+
+        assert!(repo.get_history(None, 10)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_when_saved_unchanged_then_no_history_entry() -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+
+        // Writes that do not change what the bookmark says
+        repo.update(&memory)?;
+        repo.record_access(id)?;
+        memory.content_hash = Some(vec![1, 2, 3]);
+        repo.update(&memory)?;
+
+        assert!(repo.get_history(Some(id), 10)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_when_system_tag_is_removed_then_the_old_state_is_kept(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+
+        memory.tags = HashSet::from([Tag::new("plain")?]);
+        repo.update(&memory)?;
+
+        let history = repo.get_history(memory.id, 10)?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].tags, ",_mem_,");
+        Ok(())
+    }
+
+    #[test]
+    fn given_old_text_in_history_when_searching_then_only_current_text_is_found(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory = create_test_bookmark("Port", "zqoldtoken value", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+
+        memory.url = "zqnewtoken value".to_string();
+        repo.update(&memory)?;
+
+        assert!(repo
+            .get_bookmarks_fts_ranked("zqoldtoken", None)?
+            .is_empty());
+        assert_eq!(repo.get_bookmarks_fts_ranked("zqnewtoken", None)?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn given_two_bookmarks_when_one_is_purged_then_the_other_keeps_its_history(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut purged = create_test_bookmark("A", "a one", vec!["_mem_"])?;
+        let mut kept = create_test_bookmark("B", "b one", vec!["_mem_"])?;
+        repo.add(&mut purged)?;
+        repo.add(&mut kept)?;
+        purged.url = "a two".to_string();
+        kept.url = "b two".to_string();
+        repo.update(&purged)?;
+        repo.update(&kept)?;
+
+        assert!(repo.purge(purged.id.unwrap())?);
+
+        assert!(repo.get_by_id(purged.id.unwrap())?.is_none());
+        assert!(repo.get_history(purged.id, 10)?.is_empty());
+        assert_eq!(repo.get_history(kept.id, 10)?.len(), 1);
+        assert!(repo.get_by_id(kept.id.unwrap())?.is_some());
+        Ok(())
+    }
+
+    /// True if the text occurs in the database file or its write-ahead log.
+    fn database_files_contain(db_path: &std::path::Path, text: &str) -> bool {
+        let wal = db_path.with_extension("db-wal");
+        [db_path, wal.as_path()].iter().any(|path| {
+            std::fs::read(path)
+                .map(|bytes| bytes.windows(text.len()).any(|w| w == text.as_bytes()))
+                .unwrap_or(false)
+        })
+    }
+
+    #[test]
+    fn given_secret_in_old_and_deleted_versions_when_purged_and_scrubbed_then_it_is_gone_from_the_database_files(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        // These tokens have no stem to lose, so the index stores them as written
+        let mut memory =
+            create_test_bookmark("Credentials", "token qrlfqmrhlgggddx", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        // Leaves the old text in history, in freed pages and in the full-text index
+        memory.url = "token wvbkzjxqpntgdd".to_string();
+        repo.update(&memory)?;
+        // Leaves the current text in a history entry of change 'delete'
+        repo.delete(id)?;
+        assert!(database_files_contain(&db_path, "qrlfqmrhlgggddx"));
+        assert!(database_files_contain(&db_path, "wvbkzjxqpntgdd"));
+
+        repo.purge(id)?;
+        repo.scrub()?;
+
+        assert!(!database_files_contain(&db_path, "qrlfqmrhlgggddx"));
+        assert!(!database_files_contain(&db_path, "wvbkzjxqpntgdd"));
+        Ok(())
+    }
+
+    #[test]
+    fn given_scrubbed_index_when_bookmark_is_deleted_then_searching_its_id_does_not_fail(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut kept = create_test_bookmark("Kept", "stays", vec!["plain"])?;
+        repo.add(&mut kept)?;
+        let mut deleted = create_test_bookmark("Gone", "goes", vec!["plain"])?;
+        repo.add(&mut deleted)?;
+        let deleted_id = deleted.id.unwrap();
+
+        repo.scrub()?;
+        repo.delete(deleted_id)?;
+
+        let hits = repo
+            .get_bookmarks_fts(&deleted_id.to_string())
+            .expect("searching a deleted ID must not fail");
+        assert!(hits.is_empty());
+        // Rank 1 also compares the index with the rows
+        rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO bookmarks_fts(bookmarks_fts, rank) VALUES('integrity-check', 1)",
+            )
+            .expect("index must match the rows");
+        Ok(())
+    }
+
+    #[test]
+    fn given_index_with_several_segments_when_scrubbed_then_no_delete_key_keeps_the_secret(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let words = |prefix: &str, count: usize| -> String {
+            (0..count)
+                .map(|i| format!("{prefix}{i}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        for index in 0..3 {
+            let mut filler = create_test_bookmark(
+                "Filler",
+                &words(&format!("filler{index}word"), 150),
+                vec!["_mem_"],
+            )?;
+            repo.add(&mut filler)?;
+        }
+        for index in 0..2 {
+            let mut small =
+                create_test_bookmark("Small", &format!("small memory {index}"), vec!["_mem_"])?;
+            repo.add(&mut small)?;
+            repo.purge(small.id.unwrap())?;
+            repo.scrub()?;
+        }
+        let mut large = create_test_bookmark("Large", &words("largeword", 1500), vec!["_mem_"])?;
+        repo.add(&mut large)?;
+        let mut secret = create_test_bookmark("Secret", "token qrlfqmrhlgggddx", vec!["_mem_"])?;
+        repo.add(&mut secret)?;
+
+        repo.purge(secret.id.unwrap())?;
+        repo.scrub()?;
+
+        assert!(!database_files_contain(&db_path, "qrlfqmrhlgggddx"));
+        Ok(())
+    }
+
+    #[test]
+    fn given_other_connection_reading_when_scrubbed_then_fails_and_succeeds_once_it_is_closed(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory =
+            create_test_bookmark("Credentials", "token qrlfqmrhlgggddx", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let reader = rusqlite::Connection::open(&db_path).unwrap();
+        reader.execute_batch("BEGIN").unwrap();
+        let _: i64 = reader
+            .query_row("SELECT count(*) FROM bookmarks", [], |r| r.get(0))
+            .unwrap();
+
+        repo.purge(memory.id.unwrap())?;
+        assert!(repo.scrub().is_err());
+
+        reader.execute_batch("COMMIT").unwrap();
+        drop(reader);
+        repo.scrub()?;
+        assert!(!database_files_contain(&db_path, "qrlfqmrhlgggddx"));
+        Ok(())
+    }
+
+    #[test]
+    fn given_deleted_bookmark_when_reinserted_then_it_returns_under_its_old_id_and_is_searchable(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut first = create_test_bookmark("First", "zqfirst value", vec!["_mem_"])?;
+        let mut second = create_test_bookmark("Second", "zqsecond value", vec!["_mem_"])?;
+        repo.add(&mut first)?;
+        repo.add(&mut second)?;
+        let id = first.id.unwrap();
+        repo.delete(id)?;
+
+        repo.reinsert(&first)?;
+
+        assert_eq!(repo.get_by_id(id)?.unwrap().url, "zqfirst value");
+        assert_eq!(repo.get_bookmarks_fts_ranked("zqfirst", None)?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn given_purged_bookmark_when_searching_others_then_search_still_works(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut purged = create_test_bookmark("A", "zqpurged value", vec!["_mem_"])?;
+        let mut kept = create_test_bookmark("B", "zqkept value", vec!["_mem_"])?;
+        repo.add(&mut purged)?;
+        repo.add(&mut kept)?;
+
+        repo.purge(purged.id.unwrap())?;
+
+        assert!(repo.get_bookmarks_fts_ranked("zqpurged", None)?.is_empty());
+        assert_eq!(repo.get_bookmarks_fts_ranked("zqkept", None)?.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn given_unknown_id_when_purged_then_nothing_is_removed() -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+
+        assert!(!repo.purge(99999)?);
+        Ok(())
+    }
+
+    #[test]
+    fn given_other_writer_active_when_update_on_fresh_connection_then_waits_and_succeeds(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        let mut bookmark = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        SqliteBookmarkRepository::from_url(db_path)?.add(&mut bookmark)?;
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+        bookmark.url = "Runs on 5433".to_string();
+
+        let holder = hold_write_lock_briefly(db_path);
+        let result = repo.update(&bookmark);
+        holder.join().unwrap();
+
+        result?;
+        assert_eq!(repo.get_history(bookmark.id, 10)?.len(), 1);
         Ok(())
     }
 

@@ -8,6 +8,7 @@ use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
 use crate::domain::embedding_policy::EmbeddingPolicy;
 use crate::domain::error_context::ApplicationErrorContext;
+use crate::domain::history::HistoryEntry;
 use crate::domain::repositories::import_repository::{FileImportData, ImportRepository};
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
@@ -80,6 +81,53 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             }
         }
         Ok(())
+    }
+}
+
+impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
+    /// Add a deleted bookmark again under its old ID. Embeds before writing, so that a failed
+    /// embedding leaves no row behind whose vector a retry would then never create. Creation time
+    /// and access count start anew: history does not keep them.
+    fn reinsert_from_history(
+        &self,
+        entry: HistoryEntry,
+        tags: HashSet<Tag>,
+    ) -> ApplicationResult<Bookmark> {
+        let existing_id = self
+            .repository
+            .exists_by_url(&entry.url)
+            .app_context("checking if bookmark with URL already exists")?;
+        if existing_id != -1 {
+            return Err(ApplicationError::BookmarkExists(existing_id, entry.url));
+        }
+
+        let mut bookmark = Bookmark::new(&entry.url, &entry.title, &entry.description, tags)
+            .app_context("creating bookmark from history entry")?;
+        bookmark.set_id(entry.bookmark_id);
+        bookmark.set_embeddable(self.resolve_embeddable(&bookmark.tags, Some(entry.embeddable)));
+        bookmark.opener = entry.opener;
+        bookmark.file_path = entry.file_path;
+        bookmark.file_mtime = entry.file_mtime;
+        bookmark.file_hash = entry.file_hash;
+
+        let embedding = if bookmark.embeddable {
+            let content = bookmark.get_content_for_embedding();
+            bookmark.content_hash = Some(calc_content_hash(&content));
+            self.embedder.embed_document(&content)?
+        } else {
+            None
+        };
+
+        self.repository
+            .reinsert(&bookmark)
+            .with_app_context(|| format!("adding bookmark {} again", entry.bookmark_id))?;
+
+        if let Some(embedding) = embedding {
+            self.vector_repository
+                .upsert_embedding(entry.bookmark_id, &embedding)
+                .app_context("upserting embedding into vector repository")?;
+        }
+        Ok(bookmark)
     }
 }
 
@@ -211,6 +259,77 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
+    fn purge_bookmark(&self, id: i32) -> ApplicationResult<bool> {
+        ValidationHelper::validate_bookmark_id(id)
+            .app_context("validating bookmark ID for purge")?;
+
+        // In this order, each step strict: the scrub must find nothing left to remove. Every step can
+        // run again, so that a retry finishes after any failure.
+        self.vector_repository
+            .delete_embedding(id)
+            .with_app_context(|| format!("deleting embedding of bookmark {}", id))?;
+        let removed = self
+            .repository
+            .purge(id)
+            .with_app_context(|| format!("purging bookmark with ID {}", id))?;
+        self.repository
+            .scrub()
+            .app_context("removing traces of deleted text from the database files")?;
+
+        Ok(removed)
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn get_history(
+        &self,
+        bookmark_id: Option<i32>,
+        limit: i64,
+    ) -> ApplicationResult<Vec<HistoryEntry>> {
+        if let Some(id) = bookmark_id {
+            ValidationHelper::validate_bookmark_id(id)
+                .app_context("validating bookmark ID for history")?;
+        }
+        self.repository
+            .get_history(bookmark_id, limit)
+            .app_context("loading history")
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn restore_bookmark(&self, history_id: i32) -> ApplicationResult<Bookmark> {
+        let entry = self
+            .repository
+            .get_history_entry(history_id)
+            .with_app_context(|| format!("loading history entry {}", history_id))?
+            .ok_or_else(|| {
+                ApplicationError::Other(format!("History entry {} not found", history_id))
+            })?;
+        let tags = Tag::parse_tags(&entry.tags).app_context("parsing tags of history entry")?;
+
+        let current = self
+            .repository
+            .get_by_id(entry.bookmark_id)
+            .with_app_context(|| format!("loading bookmark {}", entry.bookmark_id))?;
+        match current {
+            Some(mut bookmark) => {
+                // Writing back to the file is not ours to do, and with the file left newer, the next
+                // edit or import would silently undo the restore.
+                if let Some(path) = &bookmark.file_path {
+                    return Err(ApplicationError::Other(format!(
+                        "Bookmark {} is imported from {}, which decides its content: change that file instead",
+                        entry.bookmark_id, path
+                    )));
+                }
+                bookmark.url = entry.url;
+                bookmark.title = entry.title;
+                bookmark.description = entry.description;
+                bookmark.tags = tags;
+                self.update_bookmark(bookmark, false)
+            }
+            None => self.reinsert_from_history(entry, tags),
+        }
+    }
+
+    #[instrument(skip(self), level = "debug")]
     fn get_bookmark(&self, id: i32) -> ApplicationResult<Option<Bookmark>> {
         ValidationHelper::validate_bookmark_id(id)
             .app_context("validating bookmark ID for retrieval")?;
@@ -258,6 +377,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         let new_hash = calc_content_hash(&content);
 
         // Only update embedding if embeddable flag is true
+        let mut embedding = None;
         if bookmark.embeddable {
             // Generate new embedding if forced or content has changed
             if force_embedding || bookmark.content_hash.as_ref() != Some(&new_hash) {
@@ -267,10 +387,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     bookmark.content_hash.as_ref() != Some(&new_hash)
                 );
 
-                // Generate embedding and store in vector repository
-                if let Some(id) = bookmark.id {
-                    self.upsert_embedding_for_bookmark(id, &content)?;
-                }
+                embedding = self.embedder.embed_document(&content)?;
                 bookmark.content_hash = Some(new_hash);
                 bookmark.embedding = None;
             } else {
@@ -288,9 +405,18 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             }
         }
 
+        // The row before a new vector: the database can still refuse the write, for example a URL
+        // that is taken, and the vector store must not end up describing text the row does not have.
         self.repository
             .update(&bookmark)
             .with_app_context(|| format!("updating bookmark with ID {:?}", bookmark.id))?;
+
+        if let (Some(id), Some(embedding)) = (bookmark.id, embedding) {
+            self.vector_repository
+                .upsert_embedding(id, &embedding)
+                .app_context("upserting embedding into vector repository")?;
+            debug!("Stored embedding for bookmark {}", id);
+        }
         info!(bookmark_id = ?bookmark.id, "Bookmark updated");
         Ok(bookmark)
     }
@@ -1120,10 +1246,31 @@ mod tests {
         }
     }
 
+    /// Embedder that always fails, standing in for a missing model or a provider outage.
+    #[derive(Debug)]
+    struct FailingEmbedder;
+
+    impl Embedder for FailingEmbedder {
+        fn embed_document(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
+            Err(DomainError::BookmarkOperationFailed(
+                "embedding failed".to_string(),
+            ))
+        }
+
+        fn embed_query(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
+            Ok(None)
+        }
+
+        fn dimensions(&self) -> usize {
+            4
+        }
+    }
+
     /// In-memory vector store recording which bookmarks currently have a vector.
     #[derive(Debug, Default)]
     struct RecordingVectorRepository {
         ids: Mutex<HashSet<i32>>,
+        upserts: std::sync::atomic::AtomicUsize,
         fail_delete: std::sync::atomic::AtomicBool,
     }
 
@@ -1139,6 +1286,8 @@ mod tests {
         }
 
         fn upsert_embedding(&self, bookmark_id: i32, _embedding: &[f32]) -> DomainResult<()> {
+            self.upserts
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             self.ids
                 .lock()
                 .expect("lock not poisoned")
@@ -1227,6 +1376,148 @@ mod tests {
 
     fn tag_set(values: &[&str]) -> HashSet<Tag> {
         values.iter().map(|v| Tag::new(v).unwrap()).collect()
+    }
+
+    fn add_memory(service: &BookmarkServiceImpl<SqliteBookmarkRepository>, url: &str) -> Bookmark {
+        service
+            .add_bookmark(
+                url,
+                Some("Memory"),
+                None,
+                Some(&tag_set(&["_mem_", "fact"])),
+                false,
+                None,
+                None,
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn given_default_policy_when_memory_is_purged_then_its_vector_and_history_are_gone() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let mut memory = add_memory(&service, "purge me");
+        let id = memory.id.unwrap();
+        assert!(vectors.has_vector(id), "default policy embeds memories");
+        memory.url = "purge me too".to_string();
+        service.update_bookmark(memory, false).unwrap();
+
+        assert!(service.purge_bookmark(id).unwrap());
+
+        assert!(service.get_bookmark(id).unwrap().is_none());
+        assert!(service.get_history(Some(id), 10).unwrap().is_empty());
+        assert!(!vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_failing_vector_store_when_purging_then_fails_and_keeps_the_row_for_a_retry() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let memory = add_memory(&service, "purge retry");
+        let id = memory.id.unwrap();
+        vectors
+            .fail_delete
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        assert!(service.purge_bookmark(id).is_err());
+        assert!(service.get_bookmark(id).unwrap().is_some());
+
+        vectors
+            .fail_delete
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        assert!(service.purge_bookmark(id).unwrap());
+        assert!(!vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_unknown_id_when_purging_then_reports_nothing_removed() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+
+        assert!(!service.purge_bookmark(99999).unwrap());
+    }
+
+    #[test]
+    fn given_default_policy_when_deleted_memory_is_restored_then_same_id_tags_and_a_vector() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let memory = add_memory(&service, "restore me");
+        let id = memory.id.unwrap();
+        service.delete_bookmark(id).unwrap();
+        assert!(!vectors.has_vector(id));
+        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+
+        let restored = service.restore_bookmark(history_id).unwrap();
+
+        assert_eq!(restored.id, Some(id));
+        assert!(restored.tags.contains(&Tag::new("_mem_").unwrap()));
+        assert!(restored.tags.contains(&Tag::new("fact").unwrap()));
+        assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_failing_embedder_when_restoring_deleted_memory_then_nothing_is_written() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = Arc::new(setup_test_db());
+        let vectors = Arc::new(RecordingVectorRepository::default());
+        let working = BookmarkServiceImpl::new(
+            repository.clone(),
+            Arc::new(StubEmbedder),
+            vectors.clone(),
+            Arc::new(JsonImportRepository::new()),
+        )
+        .with_embedding_policy(EmbeddingPolicy::default());
+        let failing = BookmarkServiceImpl::new(
+            repository,
+            Arc::new(FailingEmbedder),
+            vectors,
+            Arc::new(JsonImportRepository::new()),
+        )
+        .with_embedding_policy(EmbeddingPolicy::default());
+        let memory = add_memory(&working, "restore fails");
+        let id = memory.id.unwrap();
+        working.delete_bookmark(id).unwrap();
+        let history_id = working.get_history(Some(id), 1).unwrap()[0].history_id;
+
+        assert!(failing.restore_bookmark(history_id).is_err());
+
+        assert!(working.get_bookmark(id).unwrap().is_none());
+    }
+
+    #[test]
+    fn given_url_taken_by_another_bookmark_when_restoring_then_vector_store_is_untouched() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_recorded_vectors();
+        let mut memory = add_memory(&service, "text a");
+        let id = memory.id.unwrap();
+        memory.url = "text b".to_string();
+        service.update_bookmark(memory, false).unwrap();
+        add_memory(&service, "text a");
+        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+        let upserts_before = vectors.upserts.load(std::sync::atomic::Ordering::SeqCst);
+
+        assert!(service.restore_bookmark(history_id).is_err());
+
+        assert_eq!(
+            vectors.upserts.load(std::sync::atomic::Ordering::SeqCst),
+            upserts_before
+        );
+        assert_eq!(service.get_bookmark(id).unwrap().unwrap().url, "text b");
+    }
+
+    #[test]
+    fn given_invalid_id_when_getting_history_then_fails() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+
+        assert!(service.get_history(Some(0), 10).is_err());
     }
 
     #[test]

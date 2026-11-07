@@ -7,6 +7,7 @@ use diesel::sqlite::SqliteConnection;
 use diesel_migrations::MigrationHarness;
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
 use tracing::{debug, info, instrument};
 
 pub type ConnectionPool = r2d2::Pool<ConnectionManager<SqliteConnection>>;
@@ -139,13 +140,9 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
 
                 let backup_path = db_path.with_file_name(backup_name);
 
-                // Copy the database file and fail if backup creation fails
-                fs::copy(db_path, &backup_path).map_err(|e| {
-                    SqliteRepositoryError::IoError(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to create backup: {}", e),
-                    ))
-                })?;
+                // Not a file copy: commits can still be in the log while another process holds
+                // the database open. Fail if backup creation fails.
+                backup_database(&mut conn, &backup_path)?;
 
                 eprintln!("Backup created at: {}", backup_path.display());
             } else {
@@ -160,14 +157,39 @@ pub fn run_pending_migrations(pool: &ConnectionPool, database_url: &str) -> Sqli
         debug!("No existing database to backup before migrations");
     }
 
-    // Run the migrations
-    conn.run_pending_migrations(MIGRATIONS).map_err(|e| {
-        SqliteRepositoryError::MigrationError(format!("Failed to run migrations: {}", e))
+    // Holds the write lock from before the pending check inside run_pending_migrations. Otherwise
+    // processes starting together all see the migration as pending, and all but the first fail.
+    conn.immediate_transaction::<_, SqliteRepositoryError, _>(|conn| {
+        conn.run_pending_migrations(MIGRATIONS).map_err(|e| {
+            SqliteRepositoryError::MigrationError(format!("Failed to run migrations: {}", e))
+        })?;
+        Ok(())
     })?;
 
     info!("Migrations completed successfully");
     eprintln!("Migrations completed successfully.");
     Ok(())
+}
+
+/// A consistent copy of the database including the log. Replaces a backup of the same day, and goes
+/// through a temporary file because VACUUM INTO refuses an existing file and because processes can
+/// start together.
+fn backup_database(conn: &mut SqliteConnection, backup_path: &Path) -> SqliteResult<()> {
+    static COUNTER: AtomicU32 = AtomicU32::new(0);
+    let temp_path = backup_path.with_extension(format!(
+        "tmp{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let quoted = temp_path.to_string_lossy().replace('\'', "''");
+
+    conn.batch_execute(&format!("VACUUM INTO '{}'", quoted))
+        .map_err(|e| {
+            SqliteRepositoryError::OperationFailed(format!("Failed to create backup: {}", e))
+        })?;
+    fs::rename(&temp_path, backup_path).map_err(|e| {
+        SqliteRepositoryError::OperationFailed(format!("Failed to create backup: {}", e))
+    })
 }
 
 #[cfg(test)]
@@ -191,6 +213,452 @@ mod tests {
     }
 
     #[test]
+    fn given_history_migration_when_reverted_then_memories_can_be_written_and_it_applies_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        conn.batch_execute(
+            "INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+             VALUES ('memory', 'title', ',_mem_,', '', 0)",
+        )
+        .unwrap();
+
+        revert_through_history_migration(&mut conn);
+
+        // A leftover trigger would fail these writes: its table is gone
+        conn.batch_execute("UPDATE bookmarks SET URL = 'changed'; DELETE FROM bookmarks;")
+            .unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+    }
+
+    /// Later migrations are reverted too, so that this keeps reaching the history migration.
+    fn revert_through_history_migration(conn: &mut SqliteConnection) {
+        loop {
+            let reverted = conn.revert_last_migration(MIGRATIONS).unwrap().to_string();
+            if reverted == "20261107100000" {
+                return;
+            }
+        }
+    }
+
+    /// A user database one migration behind, large enough to be backed up before migrating.
+    fn create_db_before_history_migration(db: &Path) {
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        revert_through_history_migration(&mut conn);
+        let padding = "x".repeat(2000);
+        for id in [1, 5, 9, 10, 11, 12, 13, 14, 15, 16] {
+            conn.batch_execute(&format!(
+                "INSERT INTO bookmarks (id, URL, metadata, tags, desc, flags)
+                 VALUES ({id}, 'https://example.com/{id}', 'zqtitle{id}', ',plain,', '{padding}', 0)"
+            ))
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn given_existing_bookmarks_when_history_migration_runs_then_they_and_their_search_survive() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        create_db_before_history_migration(&db);
+
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(conn);
+
+        let reader = rusqlite::Connection::open(&db).unwrap();
+        let ids: Vec<i64> = reader
+            .prepare("SELECT id FROM bookmarks ORDER BY id")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(ids, vec![1, 5, 9, 10, 11, 12, 13, 14, 15, 16]);
+        let found: i64 = reader
+            .query_row(
+                "SELECT rowid FROM bookmarks_fts WHERE bookmarks_fts MATCH 'zqtitle5'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 5);
+    }
+
+    #[test]
+    fn given_old_index_with_id_entries_when_migrated_then_it_matches_the_rows_and_a_deleted_id_is_searchable(
+    ) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        create_db_before_history_migration(&db);
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        // An old index holds id entries, and the delete trigger leaves them behind
+        conn.batch_execute(
+            "INSERT INTO bookmarks_fts(bookmarks_fts) VALUES('rebuild');
+             DELETE FROM bookmarks WHERE id = 16;",
+        )
+        .unwrap();
+
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(conn);
+
+        let reader = rusqlite::Connection::open(&db).unwrap();
+        // Rank 1 also compares the index with the rows
+        reader
+            .execute_batch(
+                "INSERT INTO bookmarks_fts(bookmarks_fts, rank) VALUES('integrity-check', 1)",
+            )
+            .expect("index must match the rows");
+        let deleted_id_hits: i64 = reader
+            .query_row(
+                "SELECT count(id) FROM bookmarks_fts WHERE bookmarks_fts MATCH '16'",
+                [],
+                |r| r.get(0),
+            )
+            .expect("searching a deleted ID must not fail");
+        assert_eq!(deleted_id_hits, 0);
+        let found: i64 = reader
+            .query_row(
+                "SELECT id FROM bookmarks_fts WHERE bookmarks_fts MATCH 'zqtitle5'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 5);
+    }
+
+    /// All columns of all rows, and each column's definition, to compare before and after.
+    fn snapshot_of_bookmarks(
+        conn: &rusqlite::Connection,
+    ) -> (Vec<Vec<rusqlite::types::Value>>, Vec<String>) {
+        let mut rows = conn.prepare("SELECT * FROM bookmarks ORDER BY id").unwrap();
+        let columns = rows.column_count();
+        let values = rows
+            .query_map([], |row| {
+                (0..columns)
+                    .map(|index| row.get::<_, rusqlite::types::Value>(index))
+                    .collect()
+            })
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        let definitions = conn
+            .prepare(
+                "SELECT cid || '|' || name || '|' || type || '|' || \"notnull\" || '|' ||
+                        coalesce(dflt_value, 'NULL') || '|' || pk
+                 FROM pragma_table_info('bookmarks')",
+            )
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        (values, definitions)
+    }
+
+    fn fts_hits(conn: &rusqlite::Connection, term: &str) -> i64 {
+        conn.query_row(
+            "SELECT count(id) FROM bookmarks_fts WHERE bookmarks_fts MATCH ?",
+            [term],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    fn assert_index_matches_rows(conn: &rusqlite::Connection) {
+        // Rank 1 also compares the index with the rows
+        conn.execute_batch(
+            "INSERT INTO bookmarks_fts(bookmarks_fts, rank) VALUES('integrity-check', 1)",
+        )
+        .expect("index must match the rows");
+    }
+
+    #[test]
+    fn given_row_with_every_column_set_when_migrated_then_all_values_and_definitions_are_unchanged()
+    {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        create_db_before_history_migration(&db);
+        let before = {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            conn.execute_batch(
+                "INSERT INTO bookmarks (id, URL, metadata, tags, desc, flags, last_update_ts,
+                                        embedding, content_hash, created_ts, embeddable, file_path,
+                                        file_mtime, file_hash, opener, accessed_at)
+                 VALUES (77, 'https://example.com/full', 'title', ',a,b,', 'description', 3,
+                         '2020-01-02 03:04:05', x'0102', x'0304', '2019-01-02 03:04:05', 1,
+                         '/notes/full.md', 123, 'hash', 'open %s', '2021-01-02 03:04:05')",
+            )
+            .unwrap();
+            snapshot_of_bookmarks(&conn)
+        };
+
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(conn);
+
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        assert_eq!(snapshot_of_bookmarks(&conn), before);
+    }
+
+    #[test]
+    fn given_rows_from_before_the_migration_when_changed_then_every_trigger_fires() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        create_db_before_history_migration(&db);
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.batch_execute(
+            "INSERT INTO bookmarks (id, URL, metadata, tags, desc, flags)
+             VALUES (50, 'zqmemoryold', 'memory', ',_mem_,', '', 0)",
+        )
+        .unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(conn);
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let history = |change: &str| -> i64 {
+            conn.query_row(
+                "SELECT count(*) FROM bookmark_history WHERE bookmark_id = 50 AND change = ?",
+                [change],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        let all_history = || -> i64 {
+            conn.query_row("SELECT count(*) FROM bookmark_history", [], |r| r.get(0))
+                .unwrap()
+        };
+
+        // bookmarks_ai
+        conn.execute_batch(
+            "INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+             VALUES ('zqinserted', 'new', ',plain,', '', 0)",
+        )
+        .unwrap();
+        assert_eq!(fts_hits(&conn, "zqinserted"), 1);
+
+        // bookmarks_au, also for a row that is not a memory
+        conn.execute_batch("UPDATE bookmarks SET metadata = 'zqplainnew' WHERE id = 5")
+            .unwrap();
+        assert_eq!(fts_hits(&conn, "zqtitle5"), 0);
+        assert_eq!(fts_hits(&conn, "zqplainnew"), 1);
+        assert_eq!(all_history(), 0, "only memories keep history");
+
+        // bookmarks_au and bookmarks_history_au
+        conn.execute_batch("UPDATE bookmarks SET URL = 'zqmemorynew' WHERE id = 50")
+            .unwrap();
+        assert_eq!(fts_hits(&conn, "zqmemoryold"), 0);
+        assert_eq!(fts_hits(&conn, "zqmemorynew"), 1);
+        assert_eq!(history("update"), 1);
+
+        // bookmarks_ad and bookmarks_history_ad
+        conn.execute_batch("DELETE FROM bookmarks WHERE id = 50")
+            .unwrap();
+        assert_eq!(fts_hits(&conn, "zqmemorynew"), 0);
+        assert_eq!(history("delete"), 1);
+
+        // bookmarks_ad for a row that is not a memory
+        conn.execute_batch("DELETE FROM bookmarks WHERE id = 9")
+            .unwrap();
+        assert_eq!(fts_hits(&conn, "zqtitle9"), 0);
+        assert_eq!(all_history(), 2, "only memories keep history");
+
+        assert_index_matches_rows(&conn);
+    }
+
+    #[test]
+    fn given_migration_failing_after_the_rebuild_when_run_then_the_database_stays_as_it_was() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let url = db.to_str().unwrap();
+        create_db_before_history_migration(&db);
+        // Fails CREATE TABLE bookmark_history, after bookmarks and its index were already replaced
+        let before = {
+            let conn = rusqlite::Connection::open(&db).unwrap();
+            conn.execute_batch("CREATE TABLE bookmark_history (blocker INTEGER)")
+                .unwrap();
+            let schema: String = conn
+                .query_row(
+                    "SELECT group_concat(sql) FROM sqlite_master WHERE name LIKE 'bookmarks%'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            (snapshot_of_bookmarks(&conn), schema)
+        };
+
+        assert!(run_pending_migrations(&pool_for(url), url).is_err());
+
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        let schema: String = conn
+            .query_row(
+                "SELECT group_concat(sql) FROM sqlite_master WHERE name LIKE 'bookmarks%'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!((snapshot_of_bookmarks(&conn), schema), before);
+        assert_eq!(fts_hits(&conn, "zqtitle5"), 1);
+        let recorded: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM __diesel_schema_migrations WHERE version = '20261107100000'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(recorded, 0, "a failed migration must run again next time");
+    }
+
+    #[test]
+    fn given_databases_from_older_versions_when_migrated_then_rows_and_index_are_intact() {
+        let dir = tempfile::tempdir().unwrap();
+
+        for name in [
+            "schema_v1_migration_test.db",
+            "schema_v2_no_embeddings.db",
+            "schema_v2_with_embeddings.db",
+        ] {
+            let old_db = dir.path().join(name);
+            fs::copy(
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/resources")
+                    .join(name),
+                &old_db,
+            )
+            .unwrap();
+            let rows_before = snapshot_of_bookmarks(&rusqlite::Connection::open(&old_db).unwrap())
+                .0
+                .len();
+            assert!(rows_before > 0, "{name} is meant to hold bookmarks");
+
+            let mut conn = SqliteConnection::establish(old_db.to_str().unwrap()).unwrap();
+            conn.run_pending_migrations(MIGRATIONS).unwrap();
+            drop(conn);
+
+            let conn = rusqlite::Connection::open(&old_db).unwrap();
+            assert_eq!(snapshot_of_bookmarks(&conn).0.len(), rows_before, "{name}");
+            assert_index_matches_rows(&conn);
+        }
+    }
+
+    #[test]
+    fn given_migrated_db_when_the_highest_id_is_deleted_then_the_next_row_gets_a_new_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        create_db_before_history_migration(&db);
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(conn);
+
+        let writer = rusqlite::Connection::open(&db).unwrap();
+        writer
+            .execute_batch(
+                "DELETE FROM bookmarks WHERE id = 16;
+                 INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+                 VALUES ('https://example.com/new', 'new', ',plain,', '', 0);",
+            )
+            .unwrap();
+        let new_id: i64 = writer
+            .query_row(
+                "SELECT id FROM bookmarks WHERE URL = 'https://example.com/new'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(new_id, 17);
+        let found: i64 = writer
+            .query_row(
+                "SELECT rowid FROM bookmarks_fts WHERE bookmarks_fts MATCH 'zqtitle5'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 5, "search triggers must survive the table rebuild");
+    }
+
+    #[test]
+    fn given_commit_still_in_the_log_when_migrating_then_the_backup_contains_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let url = db.to_str().unwrap();
+        create_db_before_history_migration(&db);
+
+        // Stands in for an LSP server or a running agent, which keeps the log from being merged
+        let holder = rusqlite::Connection::open(&db).unwrap();
+        holder
+            .execute_batch(
+                "PRAGMA journal_mode = WAL;
+                 PRAGMA wal_autocheckpoint = 0;
+                 INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+                 VALUES ('https://example.com/only-in-log', 't', ',plain,', '', 0);",
+            )
+            .unwrap();
+
+        run_pending_migrations(&pool_for(url), url).unwrap();
+
+        let backups = backups_in(dir.path());
+        assert_eq!(backups.len(), 1, "{backups:?}");
+        let backup = rusqlite::Connection::open(dir.path().join(&backups[0])).unwrap();
+        let found: i64 = backup
+            .query_row(
+                "SELECT count(*) FROM bookmarks WHERE URL = 'https://example.com/only-in-log'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(found, 1, "the backup misses a committed bookmark");
+    }
+
+    #[test]
+    fn given_backup_of_today_exists_when_migrating_again_then_it_is_replaced() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let url = db.to_str().unwrap();
+        create_db_before_history_migration(&db);
+        run_pending_migrations(&pool_for(url), url).unwrap();
+        let mut conn = SqliteConnection::establish(url).unwrap();
+        revert_through_history_migration(&mut conn);
+        drop(conn);
+
+        run_pending_migrations(&pool_for(url), url).unwrap();
+
+        assert_eq!(backups_in(dir.path()).len(), 1);
+    }
+
+    #[test]
+    fn given_concurrent_first_runs_behind_a_writer_when_migrating_then_all_succeed() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let url = db.to_str().unwrap().to_string();
+        create_db_before_history_migration(&db);
+
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let writer_url = url.clone();
+        let writer = std::thread::spawn(move || {
+            let conn = rusqlite::Connection::open(writer_url).unwrap();
+            conn.execute_batch("PRAGMA journal_mode = WAL; BEGIN IMMEDIATE;")
+                .unwrap();
+            locked_tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_secs(1));
+            conn.execute_batch("COMMIT").unwrap();
+        });
+        locked_rx.recv().unwrap();
+
+        let runs: Vec<_> = (0..4)
+            .map(|_| {
+                let url = url.clone();
+                std::thread::spawn(move || init_pool(&url).map(|_| ()))
+            })
+            .collect();
+
+        let results: Vec<_> = runs.into_iter().map(|run| run.join().unwrap()).collect();
+        writer.join().unwrap();
+        for result in results {
+            assert!(result.is_ok(), "{result:?}");
+        }
+    }
+
+    #[test]
     fn given_db_over_16kb_with_failing_bookmarks_count_when_migrating_then_backup_is_created() {
         let dir = tempfile::tempdir().unwrap();
         let db = dir.path().join("bkmr.db");
@@ -200,7 +668,7 @@ mod tests {
         // can no longer be counted (stand-in for corruption or lock failure).
         let mut conn = SqliteConnection::establish(url).unwrap();
         conn.run_pending_migrations(MIGRATIONS).unwrap();
-        conn.revert_last_migration(MIGRATIONS).unwrap();
+        revert_through_history_migration(&mut conn);
         conn.batch_execute(
             "DROP TABLE bookmarks;
              CREATE TABLE gone (x INTEGER);

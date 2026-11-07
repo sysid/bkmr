@@ -311,6 +311,31 @@ pub enum Commands {
     Delete {
         /// Bookmark IDs (comma-separated)
         ids: String,
+        #[arg(
+            short = 'f',
+            long = "force",
+            help = "permanently remove the bookmark and its history, and traces of deleted text in the database files; also works for an already deleted bookmark. Cannot be restored"
+        )]
+        force: bool,
+    },
+    /// Show saved old states of agent memories, newest first
+    History {
+        /// Memory ID (without it: all memories, which finds the ID of a deleted one)
+        id: Option<i32>,
+        #[arg(
+            short = 'l',
+            long = "limit",
+            default_value_t = 20,
+            help = "limit number of results"
+        )]
+        limit: i64,
+        #[arg(long = "json", help = "output as JSON")]
+        is_json: bool,
+    },
+    /// Bring back a saved state of a memory under its own ID, also if it was deleted
+    Restore {
+        /// History ID, from `bkmr history`
+        history_id: i32,
     },
     /// Update bookmark fields non-interactively (tags, title, description, URL, opener)
     Update {

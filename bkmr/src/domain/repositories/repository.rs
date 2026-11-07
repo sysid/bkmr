@@ -2,6 +2,7 @@
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainError;
+use crate::domain::history::HistoryEntry;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::search::RankedResult;
 use crate::domain::tag::Tag;
@@ -40,8 +41,29 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// Atomically count one access and stamp accessed_at (does NOT change updated_at)
     fn record_access(&self, id: i32) -> Result<(), DomainError>;
 
-    /// Delete a bookmark by ID
+    /// Delete a bookmark by ID. A memory keeps its old state in history.
     fn delete(&self, id: i32) -> Result<bool, DomainError>;
+
+    /// Delete a bookmark and all history stored under its ID. True if anything was removed. Their
+    /// text stays in the database files until `scrub`.
+    fn purge(&self, id: i32) -> Result<bool, DomainError>;
+
+    /// Remove the traces of deleted text from the database files. Safe to run again after a failure.
+    fn scrub(&self) -> Result<(), DomainError>;
+
+    /// Add a bookmark again under its old ID, which it must carry. Only for a bookmark that was
+    /// deleted, because history refers to it by that ID.
+    fn reinsert(&self, bookmark: &Bookmark) -> Result<(), DomainError>;
+
+    /// History entries, newest first, of one bookmark ID or of all bookmarks
+    fn get_history(
+        &self,
+        bookmark_id: Option<i32>,
+        limit: i64,
+    ) -> Result<Vec<HistoryEntry>, DomainError>;
+
+    /// One history entry by its own ID
+    fn get_history_entry(&self, history_id: i32) -> Result<Option<HistoryEntry>, DomainError>;
 
     /// Get all unique tags with their frequency
     fn get_all_tags(&self) -> Result<Vec<(Tag, usize)>, DomainError>;

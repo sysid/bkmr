@@ -132,6 +132,24 @@ impl fmt::Display for DbBookmarkChanges {
     }
 }
 
+/// Stored old state of a bookmark
+#[derive(Queryable, Debug)]
+pub struct DbHistoryEntry {
+    pub history_id: i32,
+    pub bookmark_id: i32,
+    pub change: String,
+    pub url: String,
+    pub metadata: String,
+    pub tags: String,
+    pub desc: String,
+    pub changed_at: NaiveDateTime,
+    pub embeddable: bool,
+    pub file_path: Option<String>,
+    pub file_mtime: Option<i32>,
+    pub file_hash: Option<String>,
+    pub opener: Option<String>,
+}
+
 /// New bookmark for insertion
 #[derive(Insertable, Debug)]
 #[diesel(table_name = crate::infrastructure::repositories::sqlite::schema::bookmarks)]
