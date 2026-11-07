@@ -1237,6 +1237,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Bookmark with embeddable=false
@@ -1257,6 +1258,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Test cases
@@ -1307,6 +1309,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Execute the action
@@ -1356,6 +1359,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Execute the action
@@ -1405,6 +1409,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Execute the action
@@ -1759,6 +1764,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         let result = action.get_source_file_path(&bookmark);
@@ -1794,6 +1800,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         let result = action.get_source_file_path(&bookmark);
@@ -1828,6 +1835,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         let result = action.get_source_file_path(&bookmark);

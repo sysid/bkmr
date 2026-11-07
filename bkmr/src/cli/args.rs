@@ -363,6 +363,12 @@ pub enum Commands {
         /// History ID, from `bkmr history`
         history_id: i32,
     },
+    /// Record that bookmarks were checked against reality and still hold
+    Verify {
+        /// Bookmark IDs (space- or comma-separated)
+        #[arg(required = true, num_args = 1.., value_delimiter = ',')]
+        ids: Vec<i32>,
+    },
     /// Update bookmark fields non-interactively (tags, title, description, URL, opener)
     Update {
         /// Bookmark IDs (comma-separated)

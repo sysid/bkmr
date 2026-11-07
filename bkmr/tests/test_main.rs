@@ -1020,6 +1020,339 @@ fn given_two_ids_when_delete_confirmed_then_deletes_both_and_exits_success() {
     assert_eq!(search_all(&db).len(), 0);
 }
 
+fn verified_at(db: &std::path::Path, id: &str) -> serde_json::Value {
+    search_all(db)
+        .into_iter()
+        .find(|bookmark| bookmark["id"].to_string() == id)
+        .expect("bookmark is in the search results")["verified_at"]
+        .clone()
+}
+
+#[test]
+fn given_ids_separated_by_spaces_or_commas_when_verify_then_all_are_stamped() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    add_second_bookmark(&db);
+    let ids: Vec<String> = search_all(&db)
+        .iter()
+        .map(|b| b["id"].to_string())
+        .collect();
+    assert!(verified_at(&db, &ids[0]).is_null());
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &ids[0], &ids[1]])
+        .assert()
+        .success();
+
+    assert!(verified_at(&db, &ids[0]).is_string());
+    assert!(verified_at(&db, &ids[1]).is_string());
+
+    let before = verified_at(&db, &ids[0]);
+    std::thread::sleep(std::time::Duration::from_millis(5));
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &ids.join(",")])
+        .assert()
+        .success();
+    assert_ne!(verified_at(&db, &ids[0]), before);
+}
+
+#[test]
+fn given_unknown_id_among_ids_when_verify_then_stamps_the_rest_and_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", "9999", &id])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("9999"));
+
+    assert!(verified_at(&db, &id).is_string());
+}
+
+#[test]
+fn given_no_id_or_a_word_when_verify_then_usage_error() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+
+    for args in [vec!["verify"], vec!["verify", "abc"]] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(args)
+            .assert()
+            .code(64);
+    }
+}
+
+#[test]
+fn given_verify_when_run_then_updated_at_and_access_count_stay() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let before = search_all(&db)[0].clone();
+    let id = before["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &id])
+        .assert()
+        .success();
+
+    let after = search_all(&db)[0].clone();
+    assert_eq!(after["updated_at"], before["updated_at"]);
+    assert_eq!(after["access_count"], before["access_count"]);
+}
+
+#[test]
+fn given_verified_bookmark_when_text_stays_then_the_stamp_stays() {
+    // Bulk rewrites reset updated_at before: a write that leaves the text alone must not move this.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &id])
+        .assert()
+        .success();
+    let stamp = verified_at(&db, &id);
+
+    for args in [
+        vec!["update", "-d", "why", &id],
+        vec!["update", "-t", "extra", &id],
+        vec!["update", "--url", "https://example.com", &id],
+        vec!["show", &id],
+    ] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(args)
+            .assert()
+            .success();
+    }
+
+    assert_eq!(verified_at(&db, &id), stamp);
+}
+
+#[test]
+fn given_verified_bookmark_when_url_or_title_changes_then_the_stamp_is_cleared() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    for args in [
+        vec!["update", "--url", "https://example.com/new", &id],
+        vec!["update", "--title", "New title", &id],
+    ] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(["verify", &id])
+            .assert()
+            .success();
+        assert!(verified_at(&db, &id).is_string());
+
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(args)
+            .assert()
+            .success();
+
+        assert!(verified_at(&db, &id).is_null());
+    }
+}
+
+#[test]
+fn given_corrected_then_verified_memory_when_old_state_is_restored_then_the_stamp_is_cleared() {
+    // The restored text is what the check disproved, so it must not carry the check's stamp.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(&db, &config, &["update", "--url", "port 5433", &id], "");
+    run_with_config(&db, &config, &["verify", &id], "");
+    assert!(verified_at(&db, &id).is_string());
+    let history_id = history_of(&db, &[&id])[0]["history_id"].to_string();
+
+    let restore = run_with_config(&db, &config, &["restore", &history_id], "");
+
+    assert!(restore.status.success());
+    assert!(verified_at(&db, &id).is_null());
+}
+
+#[test]
+fn given_repeated_ids_when_verify_then_each_is_handled_once() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let known = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &id, &id])
+        .output()
+        .expect("run bkmr verify");
+    assert!(known.status.success());
+    let stderr = String::from_utf8_lossy(&known.stderr);
+    assert_eq!(stderr.matches("Verified bookmark").count(), 1, "{stderr}");
+
+    let unknown = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", "9999,9999"])
+        .output()
+        .expect("run bkmr verify");
+    assert!(!unknown.status.success());
+    let stderr = String::from_utf8_lossy(&unknown.stderr);
+    assert!(stderr.contains("IDs: [9999]"), "{stderr}");
+}
+
+#[test]
+fn given_memory_when_verified_then_no_undo_step_is_written_and_a_restored_copy_is_unverified() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    run_with_config(&db, &config, &["verify", &id], "");
+    assert!(history_of(&db, &[&id]).is_empty());
+
+    run_with_config(&db, &config, &["delete", "--yes", &id], "");
+    let history_id = history_of(&db, &[&id])[0]["history_id"].to_string();
+    run_with_config(&db, &config, &["restore", &history_id], "");
+
+    assert!(verified_at(&db, &id).is_null());
+}
+
+#[test]
+fn given_bookmark_when_hsearch_json_then_age_fields_are_included() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    let hsearch = || -> Vec<serde_json::Value> {
+        let output = cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(["hsearch", "Example", "--mode", "exact", "--json", "--np"])
+            .output()
+            .expect("run bkmr hsearch");
+        assert!(output.status.success());
+        serde_json::from_slice(&output.stdout).expect("hsearch --json returns a JSON array")
+    };
+
+    let before = &hsearch()[0];
+    assert!(before["created_at"].is_string());
+    assert!(before["verified_at"].is_null());
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &id])
+        .assert()
+        .success();
+
+    assert!(hsearch()[0]["verified_at"].is_string());
+}
+
+#[test]
+fn given_verify_when_run_then_no_embedding_model_is_loaded() {
+    // Agents stamp at session end: this has to stay a plain write, not half a second of model load.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    let models = dir.path().join("models");
+    std::fs::create_dir(&models).unwrap();
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .env("FASTEMBED_CACHE_DIR", &models)
+        .args(["verify", &id])
+        .assert()
+        .success();
+
+    assert_eq!(std::fs::read_dir(&models).unwrap().count(), 0);
+}
+
+#[test]
+fn given_unverified_bookmark_when_show_then_it_prints_never() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Verified: never"));
+}
+
+#[test]
+fn given_verified_bookmark_when_show_then_it_prints_when() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["verify", &id])
+        .assert()
+        .success();
+    let stamp = verified_at(&db, &id);
+    let date = &stamp.as_str().expect("verify sets a stamp")[..10];
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("Verified: {date}")));
+}
+
+#[test]
+fn given_bookmark_when_hsearch_json_then_it_keeps_its_own_shape() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("verify.db");
+    create_db_with_one_bookmark(&db);
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["hsearch", "Example", "--mode", "exact", "--json", "--np"])
+        .output()
+        .expect("run bkmr hsearch");
+
+    assert!(output.status.success());
+    let hits: Vec<serde_json::Value> =
+        serde_json::from_slice(&output.stdout).expect("hsearch --json returns a JSON array");
+    let hit = hits[0].as_object().expect("a hit is a JSON object");
+    let mut keys: Vec<&str> = hit.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "created_at",
+            "description",
+            "id",
+            "rrf_score",
+            "tags",
+            "title",
+            "url",
+            "verified_at"
+        ]
+    );
+    assert!(hit["id"].is_i64());
+    assert!(hit["rrf_score"].is_f64());
+    assert_eq!(hit["tags"], ",show-test,");
+}
+
 /// Config file that stops memories being embedded, so these tests need no embedding model.
 fn config_without_memory_embedding(dir: &std::path::Path) -> std::path::PathBuf {
     let path = dir.join("config.toml");

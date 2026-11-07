@@ -46,6 +46,8 @@ pub struct DbBookmark {
     pub opener: Option<String>,
     #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamp>)]
     pub accessed_at: Option<NaiveDateTime>,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Timestamp>)]
+    pub verified_at: Option<NaiveDateTime>,
 }
 
 impl fmt::Display for DbBookmark {
@@ -76,7 +78,9 @@ impl fmt::Debug for DbBookmark {
     }
 }
 
-/// Changes for updating a bookmark
+/// Changes for updating a bookmark. Leaves out verified_at, which only `mark_verified` sets: no
+/// update, whatever it read earlier, can fake that a bookmark was checked. A trigger clears it when
+/// the content or title changes.
 #[derive(AsChangeset, Debug)]
 #[diesel(table_name = crate::infrastructure::repositories::sqlite::schema::bookmarks)]
 pub struct DbBookmarkChanges {

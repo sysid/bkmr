@@ -141,6 +141,10 @@ impl SqliteBookmarkRepository {
             .accessed_at
             .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
 
+        let verified_at = db_bookmark
+            .verified_at
+            .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc));
+
         // Create bookmark from storage data
         Bookmark::from_storage(
             db_bookmark.id,
@@ -159,6 +163,7 @@ impl SqliteBookmarkRepository {
             db_bookmark.file_hash,
             db_bookmark.opener,
             accessed_at,
+            verified_at,
         )
         .map_err(|e| {
             SqliteRepositoryError::ConversionError(format!(
@@ -464,6 +469,21 @@ impl BookmarkRepository for SqliteBookmarkRepository {
                 dsl::flags.eq(dsl::flags + 1),
                 dsl::accessed_at.eq(chrono::Utc::now().naive_utc()),
             ))
+            .execute(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        if result == 0 {
+            return Err(SqliteRepositoryError::BookmarkNotFound(id).into());
+        }
+
+        Ok(())
+    }
+
+    fn mark_verified(&self, id: i32) -> Result<(), DomainError> {
+        let mut conn = self.get_connection()?;
+
+        let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
+            .set(dsl::verified_at.eq(chrono::Utc::now().naive_utc()))
             .execute(&mut conn)
             .map_err(SqliteRepositoryError::DatabaseError)?;
 
@@ -2058,6 +2078,61 @@ mod tests {
         }
 
         assert!(repo.get_history(None, 10)?.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_read_before_verify_when_saved_after_then_the_stamp_stays(
+    ) -> Result<(), DomainError> {
+        let repo = setup_test_db();
+        let mut bookmark = create_test_bookmark("Stale", "https://stale-read.com", vec!["x"])?;
+        repo.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+        let mut read_earlier = repo.get_by_id(id)?.unwrap();
+        assert!(read_earlier.verified_at.is_none());
+
+        repo.mark_verified(id)?;
+        read_earlier.description = "changed".to_string();
+        repo.update(&read_earlier)?;
+
+        assert!(repo.get_by_id(id)?.unwrap().verified_at.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn given_unknown_id_when_mark_verified_then_not_found() {
+        let repo = setup_test_db();
+
+        assert!(repo.mark_verified(9999).is_err());
+    }
+
+    #[test]
+    fn given_other_writer_active_when_stamp_or_access_on_fresh_connection_then_waits_and_succeeds(
+    ) -> Result<(), DomainError> {
+        // Single statements: outside a transaction no read snapshot stays open, so busy_timeout
+        // applies. Wrapping one in a deferred transaction makes this fail with "database is locked".
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        let mut bookmark = create_test_bookmark("Busy", "https://example.com/busy", vec!["test"])?;
+        SqliteBookmarkRepository::from_url(db_path)?.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+        let holder = hold_write_lock_briefly(db_path);
+        let result = repo.mark_verified(id);
+        holder.join().unwrap();
+        result?;
+
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+        let holder = hold_write_lock_briefly(db_path);
+        let result = repo.record_access(id);
+        holder.join().unwrap();
+        result?;
+
+        let stored = repo.get_by_id(id)?.unwrap();
+        assert!(stored.verified_at.is_some());
+        assert_eq!(stored.access_count, 1);
         Ok(())
     }
 

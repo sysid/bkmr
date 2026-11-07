@@ -268,6 +268,7 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
         file_hash: None,
         opener: None,
         accessed_at: None,
+        verified_at: None,
     };
 
     // Execute the markdown action - it will handle file reading and rendering
@@ -478,14 +479,26 @@ pub fn add(
     Ok(())
 }
 
+/// The IDs in their given order without repeats, so each is handled and reported once.
+fn distinct_ids(ids: Vec<i32>) -> Vec<i32> {
+    let mut seen = HashSet::new();
+    ids.into_iter().filter(|id| seen.insert(*id)).collect()
+}
+
+fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
+    if failed_ids.is_empty() {
+        return Ok(());
+    }
+    Err(CliError::CommandFailed(format!(
+        "Failed to {} bookmarks with IDs: {:?}",
+        action, failed_ids
+    )))
+}
+
 #[instrument(skip(cli, bookmark_service))]
 pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
     if let Commands::Delete { ids, force, yes } = cli.command.unwrap() {
-        let mut seen = HashSet::new();
-        let id_list: Vec<i32> = get_ids(ids)?
-            .into_iter()
-            .filter(|id| seen.insert(*id))
-            .collect();
+        let id_list = distinct_ids(get_ids(ids)?);
         // One failed ID must not stop the others, so failures are reported at the end
         let mut failed_ids = Vec::new();
         let mut declined = false;
@@ -537,12 +550,7 @@ pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult
             }
         }
 
-        if !failed_ids.is_empty() {
-            return Err(CliError::CommandFailed(format!(
-                "Failed to delete bookmarks with IDs: {:?}",
-                failed_ids
-            )));
-        }
+        report_failed_ids("delete", &failed_ids)?;
         // A script or an agent without stdin must not read a declined prompt as the bookmark being
         // gone. Failed IDs go first: they need the caller's attention whatever else was declined.
         if declined {
@@ -655,6 +663,25 @@ pub fn restore(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResul
             bookmark.title,
             bookmark.id.unwrap_or(0)
         );
+    }
+    Ok(())
+}
+
+#[instrument(skip(cli, bookmark_service))]
+pub fn verify(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
+    if let Commands::Verify { ids } = cli.command.unwrap() {
+        // One failed ID must not stop the others, so failures are reported at the end
+        let mut failed_ids = Vec::new();
+        for id in distinct_ids(ids) {
+            match bookmark_service.verify_bookmark(id) {
+                Ok(()) => eprintln!("Verified bookmark with ID {}", id),
+                Err(e) => {
+                    eprintln!("Error verifying bookmark with ID {}: {}", id, e);
+                    failed_ids.push(id);
+                }
+            }
+        }
+        report_failed_ids("verify", &failed_ids)?;
     }
     Ok(())
 }
@@ -899,7 +926,7 @@ fn format_bookmark_details(
 
     // Format all the bookmark details
     let mut details = format!(
-        "{} {} [{}] ({})\n  URL/Content: {}\n{}\n  Opener: {}\n  Access count: {}\n  Last accessed: {}\n  Created: {}\n  Updated: {}\n  Embeddable: {}\n  Has embedding: {}\n  Content hash: {}\n  Default Action: {}",
+        "{} {} [{}] ({})\n  URL/Content: {}\n{}\n  Opener: {}\n  Access count: {}\n  Last accessed: {}\n  Verified: {}\n  Created: {}\n  Updated: {}\n  Embeddable: {}\n  Has embedding: {}\n  Content hash: {}\n  Default Action: {}",
         paint(
             bookmark.id.map_or("?".to_string(), |id| id.to_string()),
             Color::Blue
@@ -916,6 +943,7 @@ fn format_bookmark_details(
         bookmark.opener.as_deref().unwrap_or("N/A"),
         bookmark.access_count,
         bookmark.accessed_at.map_or("never".to_string(), |dt| dt.to_string()),
+        bookmark.verified_at.map_or("never".to_string(), |dt| dt.to_string()),
         bookmark.created_at.map_or("N/A".to_string(), |dt| dt.to_string()),
         bookmark.updated_at,
         bookmark.embeddable,

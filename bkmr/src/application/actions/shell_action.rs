@@ -285,6 +285,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Act
@@ -325,6 +326,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Act
@@ -364,6 +366,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Act
@@ -545,6 +548,7 @@ mod tests {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         // Act

@@ -211,6 +211,14 @@
         {
           "text": "Memories that hold are unchanged",
           "type": "required"
+        },
+        {
+          "text": "The correction is stamped with verify",
+          "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
+          "type": "required"
         }
       ]
     },
@@ -235,6 +243,10 @@
         {
           "text": "Memories that hold are unchanged",
           "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
+          "type": "required"
         }
       ]
     },
@@ -258,6 +270,14 @@
         },
         {
           "text": "Memories that hold are unchanged",
+          "type": "required"
+        },
+        {
+          "text": "The confirmed memory is stamped with verify",
+          "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
           "type": "required"
         }
       ]
@@ -287,6 +307,10 @@
         {
           "text": "Memories that hold are unchanged",
           "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
+          "type": "required"
         }
       ]
     },
@@ -315,6 +339,10 @@
         {
           "text": "Memories that hold are unchanged",
           "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
+          "type": "required"
         }
       ]
     },
@@ -339,6 +367,10 @@
         {
           "text": "Memories that hold are unchanged",
           "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
+          "type": "required"
         }
       ]
     },
@@ -362,6 +394,10 @@
         },
         {
           "text": "Memories that hold are unchanged",
+          "type": "required"
+        },
+        {
+          "text": "The memory no repo can confirm is not stamped",
           "type": "required"
         }
       ]

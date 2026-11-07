@@ -50,6 +50,9 @@ pub fn execute_command_with_services(
         Some(Commands::Restore { .. }) => {
             bookmark_commands::restore(cli, services.bookmark_service.clone())
         }
+        Some(Commands::Verify { .. }) => {
+            bookmark_commands::verify(cli, services.bookmark_service.clone())
+        }
         Some(Commands::Update { .. }) => bookmark_commands::update(
             cli,
             services.bookmark_service.clone(),

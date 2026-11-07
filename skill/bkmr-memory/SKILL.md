@@ -153,13 +153,15 @@ bkmr search -t _mem_ -n gotcha --json --np
 
 The `url` field contains the actual memory content. The `rrf_score` indicates relevance —
 higher is better. Use `id` to reference a specific memory for updates. A `description`, if set, says
-what last corrected or checked the memory.
+what last corrected or checked the memory. `created_at` and `verified_at` show its age: `verified_at`
+is when someone last checked its current text, and `null` means not since it last changed. A restored
+deleted memory counts from the restore. The older it is, the more a memory is a hint.
 
 To view a single memory in detail: `bkmr show 42 --json`
 
 Note: `search --json` returns a slightly different shape (tags as array, includes
-`access_count`/`created_at`/`updated_at` instead of `rrf_score`), but the key fields
-(`id`, `url`, `title`, `tags`) are the same.
+`access_count`/`updated_at`/`accessed_at` instead of `rrf_score`), but the key fields
+(`id`, `url`, `title`, `tags`, `created_at`, `verified_at`) are the same.
 
 ### Query Patterns by Situation
 
@@ -437,6 +439,14 @@ search, so these actions can be undone. Mention each one in your reply.
 quick read, grep or command can confirm it, alongside your other reads where possible. Prefer
 reading: never run a deploy, migration or anything else with side effects to test a memory.
 
+**When a check confirms a memory,** note its ID and stamp all of them in one call before you finish.
+Only stamp what you checked just now: appearing in search results, or going unused, confirms nothing.
+A stamp covers the whole memory: if you confirmed only part of it, say which part in `-d` and do not stamp.
+
+```bash
+bkmr verify 42 57 63
+```
+
 **When evidence contradicts a memory, correct it in place,** including one you came across while
 doing something else. Replace the content, and the title if it repeats the wrong claim, and say in
 `-d` what showed it. Do not add a new memory next to the wrong one: search would return both.
@@ -445,13 +455,14 @@ doing something else. Replace the content, and the title if it repeats the wrong
 bkmr update --url "$(cat <<'EOF'
 Production PostgreSQL 15 runs on port 5433, not the default 5432.
 EOF
-)" --title 'Production database port' -d 'Corrected: config/db.yml sets 5433, checked 2026-11-07' 42
+)" --title 'Production database port' -d 'Corrected: config/db.yml sets 5433, checked 2026-11-07' 42 && bkmr verify 42
 ```
 
 Evidence has to reach what the memory claims: not finding something in this repo contradicts a claim
 about this repo, not one about another repo or live infrastructure. Read the dedup results for other
 memories that relied on the old value, and fix those too. If the user tells you a new fact, that
-counts as evidence.
+counts as evidence. Changing the content or title clears the stamp, so stamp a correction again only
+if you checked it yourself, not if the user told you.
 
 **When nothing true is left to say, delete it,** after saving the reason:
 
@@ -481,6 +492,7 @@ and date.
 
 | Situation | Action |
 |-----------|--------|
+| Evidence confirms a memory | Stamp it with `bkmr verify` |
 | Direct evidence contradicts a memory | Correct it in place, without asking |
 | A memory is junk, or nothing true is left | Delete it, without asking |
 | You could not reproduce it, or one run passed | Keep it; absence of a failure is not a contradiction |
@@ -533,6 +545,7 @@ corrects it); otherwise add a new one.
 | Storing codebase structure | Reading the code is cheap; structure changes with every PR | Only store non-obvious *interpretations* (e.g., "X exists because of Y constraint") |
 | Adding a corrected memory next to the wrong one | Search returns both and the next agent has to guess | Correct in place; history keeps the old text |
 | Asking whether to fix a memory you have evidence against | Interrupts the user with a decision that can be undone | Correct or delete it, and mention it in your reply |
+| `bkmr verify` on a memory you only read | Later agents and audits skip it as checked, though nobody did | Stamp only what you checked just now |
 | Changing a memory after one clean run | Rare failures are the valuable ones; a pass disproves nothing | Keep it unless evidence contradicts it |
 | `bkmr delete` without `--yes` | Asks for confirmation, finds no input, cancels and exits 130 | `bkmr delete --yes <id>` |
 | `delete --force` without being asked | Nothing can bring it back | Plain `delete` |
@@ -563,8 +576,8 @@ bkmr hsearch '<decision topic>' -t _mem_ --json --np
 ```
 
 ### At Task End or Session End (BEFORE signing off)
-If the task changed behaviour, or you found evidence against a memory, correct the store first (see
-"Keeping Memory Current"). Then evaluate whether anything learned warrants storing, using the
+If the task changed behaviour, or you found evidence against a memory, correct the store first, and
+stamp what you confirmed (see "Keeping Memory Current"). Then evaluate whether anything learned warrants storing, using the
 checklist in section 3. If something qualifies, dedup and store it, formatted as in "Formatting the
 Content":
 ```bash

@@ -41,6 +41,10 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// Atomically count one access and stamp accessed_at (does NOT change updated_at)
     fn record_access(&self, id: i32) -> Result<(), DomainError>;
 
+    /// Stamp verified_at, the only way to set it (does NOT change updated_at). A change of content
+    /// or title clears it, by a database trigger.
+    fn mark_verified(&self, id: i32) -> Result<(), DomainError>;
+
     /// Delete a bookmark by ID. A memory keeps its old state in history.
     fn delete(&self, id: i32) -> Result<bool, DomainError>;
 
