@@ -155,10 +155,10 @@ pub enum Commands {
         #[arg(long = "embeddable", help = "filter to show only embeddable bookmarks")]
         embeddable: bool,
     },
-    /// Hybrid search combining full-text and semantic search with RRF fusion
+    /// Search by keywords and by meaning, merged into one ranking
     #[command(name = "hsearch")]
     HSearch {
-        /// Search query text, matched literally (use `search` for FTS5 syntax)
+        /// Search text; special characters need no quoting (for phrases, AND/OR/NOT or prefix* use `search`)
         query: String,
 
         #[arg(
@@ -192,18 +192,37 @@ pub enum Commands {
         #[arg(
             short = 'e',
             long = "exact",
-            help = "exact tag match (comma-separated)"
+            help = "must have exactly these tags, no others (comma-separated)"
         )]
         tags_exact: Option<String>,
 
         #[arg(
             long = "mode",
             default_value = "hybrid",
-            help = "search mode: hybrid or exact"
+            help = "how to match the search text",
+            // Must match the mode mapping in hsearch_handler. Listing the values rejects typos
+            // that would otherwise silently run in hybrid mode. Exact mode is not a phrase or
+            // literal match, which its name suggests, so the help spells out what it does.
+            value_parser = clap::builder::PossibleValuesParser::new([
+                clap::builder::PossibleValue::new("hybrid").help(
+                    "Keyword matches plus the bookmarks closest in meaning, even if they share \
+                     no words, merged into one ranking. Closeness has no cutoff, so results can \
+                     be loosely related. Without embeddings, keyword matches only",
+                ),
+                clap::builder::PossibleValue::new("exact").help(
+                    "Keyword matches only: all words must occur, in any order, in title, \
+                     content, description or tags. Ignores case, punctuation and word endings \
+                     (deploying finds deploy). Not a phrase match. Needs no embedding model",
+                ),
+            ])
         )]
         mode: String,
 
-        #[arg(short = 'l', long = "limit", help = "limit number of results")]
+        #[arg(
+            short = 'l',
+            long = "limit",
+            help = "limit number of results (default: 10)"
+        )]
         limit: Option<i32>,
 
         #[arg(long = "json", help = "output as JSON (includes rrf_score)")]
@@ -611,6 +630,29 @@ mod tests {
             !help.contains("markdown") && !help.contains("memory"),
             "{help}"
         );
+    }
+
+    #[test]
+    fn given_hsearch_help_when_rendered_then_explains_modes_without_engine_jargon() {
+        let help = Cli::try_parse_from(["bkmr", "hsearch", "--help"])
+            .err()
+            .expect("--help exits through clap's error path")
+            .to_string();
+
+        // clap wraps long help lines, so compare with whitespace collapsed.
+        let help = help.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(!help.contains("FTS"), "{help}");
+        assert!(!help.contains("RRF"), "{help}");
+        assert!(help.contains("- hybrid:"), "{help}");
+        assert!(help.contains("- exact:"), "{help}");
+        assert!(help.contains("default: 10"), "{help}");
+    }
+
+    #[test]
+    fn given_misspelled_mode_when_hsearch_then_rejected_instead_of_becoming_hybrid() {
+        let result = Cli::try_parse_from(["bkmr", "hsearch", "x", "--mode", "exakt"]);
+
+        assert!(result.is_err());
     }
 
     #[test]

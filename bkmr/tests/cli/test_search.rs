@@ -115,3 +115,81 @@ fn given_no_matching_bookmarks_when_hsearch_json_then_stdout_is_empty_array() {
         "JSON consumers need valid JSON on zero hits"
     );
 }
+
+/// Titles that `hsearch --mode exact` returns. Exact mode needs no embedding model.
+fn hsearch_exact_titles(query: &str) -> Vec<String> {
+    let result = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", "../db/bkmr.db")
+        .args(["hsearch", "--json", "--np", "--mode", "exact", query])
+        .assert()
+        .success();
+    let hits: Vec<serde_json::Value> = serde_json::from_slice(&result.get_output().stdout).unwrap();
+    hits.iter()
+        .map(|hit| hit["title"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn given_scattered_inflected_terms_when_hsearch_exact_then_matches() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let bookmark_service = TestServiceContainer::new().bookmark_service;
+    bookmark_service
+        .add_bookmark(
+            "https://example.com/mode-doc",
+            Some("Zqrunning pods on the zqcluster"),
+            None,
+            None,
+            false,
+            Some(false),
+            None,
+        )
+        .unwrap();
+
+    // Different case, different word order, different word ending, words not adjacent.
+    assert_eq!(
+        hsearch_exact_titles("ZQCLUSTER zqruns"),
+        vec!["Zqrunning pods on the zqcluster"]
+    );
+}
+
+#[test]
+fn given_one_term_missing_when_hsearch_exact_then_no_match() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let bookmark_service = TestServiceContainer::new().bookmark_service;
+    bookmark_service
+        .add_bookmark(
+            "https://example.com/mode-doc",
+            Some("Zqrunning pods on the zqcluster"),
+            None,
+            None,
+            false,
+            Some(false),
+            None,
+        )
+        .unwrap();
+
+    assert!(hsearch_exact_titles("zqcluster zqabsent").is_empty());
+}
+
+#[test]
+fn given_term_with_punctuation_when_hsearch_exact_then_punctuation_is_ignored() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let bookmark_service = TestServiceContainer::new().bookmark_service;
+    bookmark_service
+        .add_bookmark(
+            "https://example.com/mode-doc",
+            Some("Zqlang basics"),
+            None,
+            None,
+            false,
+            Some(false),
+            None,
+        )
+        .unwrap();
+
+    // The title has no `++`: the term is safe to type, but not matched character by character.
+    assert_eq!(hsearch_exact_titles("zqlang++"), vec!["Zqlang basics"]);
+}
