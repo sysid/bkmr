@@ -345,8 +345,10 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             .map_err(|e| DomainError::RepositoryError(e.into()))
             .map_err(|e| e.context("getting database connection for adding bookmark"))?;
 
-        // Begin transaction
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+        // Immediate, not deferred: preparing the insert connects the FTS5 vtab behind its trigger,
+        // which leaves a read transaction open. SQLite fails the later upgrade to a write at once
+        // with SQLITE_BUSY, without calling the busy handler, so busy_timeout would not apply.
+        conn.immediate_transaction::<_, diesel::result::Error, _>(|conn| {
             let db_bookmark = NewBookmark {
                 url: bookmark.url.to_string(),
                 metadata: bookmark.title.to_string(),
@@ -439,9 +441,9 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     fn delete(&self, id: i32) -> Result<bool, DomainError> {
         let mut conn = self.get_connection()?;
 
-        // Begin transaction
+        // Immediate for the same reason as in add: the delete trigger connects the FTS5 vtab
         let deleted = conn
-            .transaction::<bool, diesel::result::Error, _>(|conn| {
+            .immediate_transaction::<bool, diesel::result::Error, _>(|conn| {
                 let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
                 if result == 0 {
                     return Ok(false); // No bookmark was deleted
@@ -1810,6 +1812,65 @@ mod tests {
         assert!(after1.content_hash.is_none());
         assert!(after2.content_hash.is_none());
 
+        Ok(())
+    }
+
+    /// Holds the database write lock from a second connection for a moment, as another bkmr
+    /// process would. Returns once the lock is taken.
+    fn hold_write_lock_briefly(db_path: &str) -> std::thread::JoinHandle<()> {
+        let db_path = db_path.to_string();
+        let (locked_tx, locked_rx) = std::sync::mpsc::channel();
+        let holder = std::thread::spawn(move || {
+            let other_process = rusqlite::Connection::open(db_path).unwrap();
+            other_process.execute_batch("BEGIN IMMEDIATE").unwrap();
+            locked_tx.send(()).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            other_process.execute_batch("COMMIT").unwrap();
+        });
+        locked_rx.recv().unwrap();
+        holder
+    }
+
+    #[test]
+    fn given_other_writer_active_when_add_on_fresh_connection_then_waits_and_succeeds(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        // Migrations run on the first pool and connect the FTS5 vtab there. The second pool has
+        // fresh connections, as in each CLI run, with the vtab behind the insert trigger not yet
+        // connected, which is what used to defeat busy_timeout.
+        drop(SqliteBookmarkRepository::from_url(db_path)?);
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+        let mut bookmark = create_test_bookmark("Added", "https://example.com/add", vec!["test"])?;
+
+        let holder = hold_write_lock_briefly(db_path);
+        let result = repo.add(&mut bookmark);
+        holder.join().unwrap();
+
+        result?;
+        assert!(repo.get_by_url("https://example.com/add")?.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn given_other_writer_active_when_delete_on_fresh_connection_then_waits_and_succeeds(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        let mut bookmark =
+            create_test_bookmark("Deleted", "https://example.com/delete", vec!["test"])?;
+        SqliteBookmarkRepository::from_url(db_path)?.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+
+        let holder = hold_write_lock_briefly(db_path);
+        let result = repo.delete(id);
+        holder.join().unwrap();
+
+        assert!(result?);
+        assert!(repo.get_by_id(id)?.is_none());
         Ok(())
     }
 }
