@@ -9,6 +9,7 @@ use crate::domain::error_context::CliErrorContext;
 use crate::domain::search::{HybridSearch, SearchMode};
 use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
+use crate::infrastructure::json::{write_bookmarks_as_json, JsonSearchHit};
 use crate::util::helper::is_stdout_piped;
 use tracing::instrument;
 
@@ -82,24 +83,8 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         let is_piped = is_stdout_piped();
 
         if is_json {
-            // JSON output with rrf_score
-            let json_results: Vec<serde_json::Value> = results
-                .iter()
-                .map(|r| {
-                    serde_json::json!({
-                        "id": r.bookmark.id.unwrap_or(0),
-                        "url": r.bookmark.url,
-                        "title": r.bookmark.title,
-                        "description": r.bookmark.description,
-                        "tags": r.bookmark.formatted_tags(),
-                        "rrf_score": r.rrf_score,
-                    })
-                })
-                .collect();
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json_results).unwrap_or_else(|_| "[]".to_string())
-            );
+            let hits: Vec<JsonSearchHit> = results.iter().map(JsonSearchHit::from_domain).collect();
+            write_bookmarks_as_json(&hits).cli_context("writing search results as JSON")?;
         } else if is_piped {
             // Tab-delimited output for piping: id, title, url, rrf_score
             for result in &results {

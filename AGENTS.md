@@ -34,6 +34,8 @@ injection.
 - Tag filter flags are easy to misread: `-t` must have ALL, `-T` exclude if has ALL, `-n` must have ANY, `-N` exclude if has ANY.
 - Test function naming convention: `given_X_when_Y_then_Z()`.
 - Bookmark IDs are never given out twice (`AUTOINCREMENT`), because `bookmark_history` refers to them. `restore` of a deleted memory inserts it again under its old ID, the only write with an explicit ID.
+- Only `mark_verified` sets `verified_at`: `DbBookmarkChanges` and `NewBookmark` leave it out on purpose, so no update or import can claim a check. The trigger `bookmarks_verified_au` clears it when `URL` or `metadata` (title) changes, so a stamp always refers to the current text; tag and description writes keep it. A restored deleted memory has no stamp, and its age counts from the restore, because `created_ts` starts anew.
+- Plain single-statement writes (`update`, `record_access`, `mark_verified`) honour `busy_timeout`. Use `immediate_transaction` as soon as a write runs inside a transaction: a deferred one holds the read snapshot left by connecting the FTS5 vtab and fails at once with `database is locked`.
 - A purge must end in `BookmarkRepository::scrub`, which is safe to rerun: deleted text stays in FTS segments, freed pages and the WAL until then.
 - Migration `2026-11-07-100000_add_bookmark_history` recreates `bookmarks_fts` with `id UNINDEXED`. A numeric full-text query no longer matches a bookmark ID; an indexed `id` left stale entries that made such a search fail with "database disk image is malformed".
 - Exit codes are a tested contract: `CliError::exit_code()` decides them, and `ERROR_HANDLING.md` has the table. Use `InvalidInput` only for errors the user fixes by changing arguments.

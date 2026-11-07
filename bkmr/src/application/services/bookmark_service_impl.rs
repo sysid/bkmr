@@ -707,6 +707,15 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
+    fn verify_bookmark(&self, id: i32) -> ApplicationResult<()> {
+        ValidationHelper::validate_bookmark_id(id)
+            .app_context("validating bookmark ID for verification")?;
+
+        self.repository.mark_verified(id)?;
+        Ok(())
+    }
+
+    #[instrument(skip(self), level = "debug")]
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark> {
         self.repository.record_access(id)?;
 

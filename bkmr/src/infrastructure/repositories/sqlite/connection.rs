@@ -394,8 +394,9 @@ mod tests {
             snapshot_of_bookmarks(&conn)
         };
 
+        // Only the rebuild: a later migration may add columns, which this comparison would count
         let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
-        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        conn.run_next_migration(MIGRATIONS).unwrap();
         drop(conn);
 
         let conn = rusqlite::Connection::open(&db).unwrap();
@@ -463,6 +464,91 @@ mod tests {
         assert_eq!(fts_hits(&conn, "zqtitle9"), 0);
         assert_eq!(all_history(), 2, "only memories keep history");
 
+        assert_index_matches_rows(&conn);
+    }
+
+    #[test]
+    fn given_verified_row_when_written_outside_bkmr_then_only_text_changes_clear_the_stamp() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let mut setup = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        setup.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(setup);
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        conn.execute_batch(
+            "INSERT INTO bookmarks (id, URL, metadata, tags, desc, flags, verified_at)
+             VALUES (5, 'zqurl', 'zqtitle', ',plain,', '', 0, '2026-11-07 10:00:00')",
+        )
+        .unwrap();
+        let is_stamped = || -> bool {
+            conn.query_row(
+                "SELECT verified_at IS NOT NULL FROM bookmarks WHERE id = 5",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap()
+        };
+        let stamp = "UPDATE bookmarks SET verified_at = '2026-11-07 10:00:00' WHERE id = 5";
+
+        for keeps in [
+            "UPDATE bookmarks SET tags = ',other,' WHERE id = 5",
+            "UPDATE bookmarks SET desc = 'why' WHERE id = 5",
+            "UPDATE bookmarks SET flags = 3 WHERE id = 5",
+            "UPDATE bookmarks SET URL = 'zqurl', metadata = 'zqtitle' WHERE id = 5",
+        ] {
+            conn.execute_batch(keeps).unwrap();
+            assert!(is_stamped(), "{keeps}");
+        }
+
+        for clears in [
+            "UPDATE bookmarks SET URL = 'zqurlnew' WHERE id = 5",
+            "UPDATE bookmarks SET metadata = 'zqtitlenew' WHERE id = 5",
+        ] {
+            conn.execute_batch(stamp).unwrap();
+            conn.execute_batch(clears).unwrap();
+            assert!(!is_stamped(), "{clears}");
+        }
+
+        assert_index_matches_rows(&conn);
+    }
+
+    #[test]
+    fn given_row_when_only_unindexed_columns_change_then_the_search_index_is_not_rewritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let mut setup = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        setup.run_pending_migrations(MIGRATIONS).unwrap();
+        drop(setup);
+        let conn = rusqlite::Connection::open(&db).unwrap();
+        conn.execute_batch(
+            "INSERT INTO bookmarks (id, URL, metadata, tags, desc, flags)
+             VALUES (5, 'zqurl', 'zqtitle', ',zqtag,', 'zqdesc', 0)",
+        )
+        .unwrap();
+        let index_rows = || -> i64 {
+            conn.query_row("SELECT count(*) FROM bookmarks_fts_data", [], |r| r.get(0))
+                .unwrap()
+        };
+
+        let before = index_rows();
+        conn.execute_batch(
+            "UPDATE bookmarks SET verified_at = '2026-11-07 10:00:00' WHERE id = 5;
+             UPDATE bookmarks SET flags = 1, accessed_at = '2026-11-07 10:00:00' WHERE id = 5;",
+        )
+        .unwrap();
+        assert_eq!(index_rows(), before);
+
+        // Each indexed column still reaches the index
+        conn.execute_batch(
+            "UPDATE bookmarks SET URL = 'zqurlnew' WHERE id = 5;
+             UPDATE bookmarks SET metadata = 'zqtitlenew' WHERE id = 5;
+             UPDATE bookmarks SET tags = ',zqtagnew,' WHERE id = 5;
+             UPDATE bookmarks SET desc = 'zqdescnew' WHERE id = 5;",
+        )
+        .unwrap();
+        for term in ["zqurlnew", "zqtitlenew", "zqtagnew", "zqdescnew"] {
+            assert_eq!(fts_hits(&conn, term), 1, "{term}");
+        }
         assert_index_matches_rows(&conn);
     }
 

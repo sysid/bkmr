@@ -151,6 +151,7 @@ bkmr search --fzf
 | `delete` | Delete bookmarks by ID; `--yes` skips the prompt; `--force` also purges their history, permanently |
 | `history` | Show saved old states of agent memories (`_mem_`), which stay out of search |
 | `restore` | Bring back a saved state from `history`, under the memory's own ID |
+| `verify` | Record that bookmarks were checked against reality; only this sets `verified_at`, and changing the content or title clears it |
 | `show` | Display bookmark details |
 | `import-files` | Import files/directories with frontmatter parsing |
 | `load-json` | Bulk-create bookmarks from a JSON array |

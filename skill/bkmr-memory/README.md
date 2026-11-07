@@ -7,7 +7,7 @@ Teaches AI agents (Claude Code, Copilot CLI, pi-mono) how to use [bkmr](https://
 - **READ**: Query bkmr for relevant memories at task start, before decisions, and when encountering bugs
 - **WRITE**: Store non-trivial learnings with proper taxonomy and deduplication
 - **UPDATE**: Enrich or correct existing memories with `bkmr update --url`
-- **KEEP CURRENT**: Check constraints before relying on them; correct or delete what evidence contradicts, without asking the user. History keeps the old state
+- **KEEP CURRENT**: Check constraints before relying on them; correct or delete what evidence contradicts, without asking the user, and stamp what it confirms. History keeps the old state
 - **DEDUP**: Check for existing memories before creating new ones
 - **FORMAT**: Store content as light markdown that also reads well for humans (lead line, prose
   wrapped at 100 columns, fenced commands, `1.` lists); no headings or tables, which hurt retrieval
@@ -121,6 +121,12 @@ Five of the 14 runs tried to run `deploy.sh` to test a memory, and the auto mode
 each one. A sentence against this was added afterwards: re-running the three affected cases gave one
 attempt in three and the same grades. That is too few runs to show the sentence works, so do not rely on
 it as a safeguard. The runs also shared port 8123, which fits the few `make test` failures they saw, but that is not proven.
+
+`bkmr verify` was checked afterwards on four of these cases (2026-11-07, one run each): 24/25
+assertions passed. Every run stamped its correction, none stamped the memory no repo can confirm, and the
+memory the user reported stayed unstamped. The failed assertion is a run that reworded a memory that
+still held, to say that part of it rests only on a code comment. One run stamped a memory it had only
+partly confirmed, so the sentence on partial stamps was added afterwards. It has not been tested.
 
 ### Retrieval Eval: Markdown vs. Plain Content
 

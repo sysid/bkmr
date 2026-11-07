@@ -31,6 +31,9 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// wish of the user; `None` applies the mode of the embedding policy.
     fn resolve_embeddable(&self, tags: &HashSet<Tag>, requested: Option<bool>) -> bool;
 
+    /// Record that a bookmark was checked against reality just now
+    fn verify_bookmark(&self, id: i32) -> ApplicationResult<()>;
+
     /// Delete a bookmark by ID. A memory keeps its old state in history.
     fn delete_bookmark(&self, id: i32) -> ApplicationResult<bool>;
 

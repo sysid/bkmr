@@ -228,6 +228,10 @@ class State:
         rows = self.db.execute("SELECT URL FROM bookmark_history WHERE bookmark_id=?", (self.ids[key],)).fetchall()
         return self.original(key) in [r[0] for r in rows]
 
+    def verified(self, key):
+        row = self.db.execute("SELECT verified_at FROM bookmarks WHERE id=?", (self.ids[key],)).fetchone()
+        return bool(row and row[0])
+
     def reason_recorded(self, key):
         """In the memory, or for a deleted one, in the state that history saved last."""
         m = self.memory(key)
@@ -278,6 +282,7 @@ def grade(base: Path, name: str):
              and not any("--legacy-auth" in c for c in commands)),
             ("repo_left_unchanged", not s.changed()),
             *corrected_in_place(s, "stale_flag", "--region"),
+            ("correction_checked_by_the_agent_is_stamped", s.verified("stale_flag")),
             ("title_no_longer_states_the_old_claim", bool(s.memory("stale_flag")) and s.memory("stale_flag")["title"] != MEMORIES["stale_flag"][1]),
         ]
     elif name == "stale-missing-guard":
@@ -294,6 +299,7 @@ def grade(base: Path, name: str):
             ("shipped_migration_untouched", "migrations/0001_init.sql" not in s.changed()),
             ("new_migration_adds_the_column", any("currency" in s.read(f) for f in added) or any(
                 "currency" in p.read_text() for p in (s.repo / "migrations").glob("*.sql"))),
+            ("confirmed_memory_is_stamped", s.verified("valid_migration")),
         ]
     elif name == "supersede-on-write":
         checks = [
@@ -321,6 +327,8 @@ def grade(base: Path, name: str):
     else:
         sys.exit(f"unknown eval: {name}")
     checks.append(true_memories_untouched(s, name))
+    # Nothing in the repo can confirm it, so a stamp here means stamping without checking.
+    checks.append(("uncheckable_memory_not_stamped", not s.verified("noise_vpn")))
     result = {
         "eval": name,
         "counts_for_stale_rate": name in STALE_EVALS,

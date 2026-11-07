@@ -45,6 +45,10 @@ pub struct Bookmark {
     pub opener: Option<String>,
     #[builder(default)]
     pub accessed_at: Option<DateTime<Utc>>,
+    /// When someone last checked this text against reality. Read-only here: set by `mark_verified`,
+    /// cleared by the database when the content or title changes.
+    #[builder(default)]
+    pub verified_at: Option<DateTime<Utc>>,
 }
 
 impl BookmarkBuilder {
@@ -90,6 +94,7 @@ impl Bookmark {
             file_hash: None,
             opener: None,
             accessed_at: None,
+            verified_at: None,
         };
 
         Self::validate_single_system_tag(&bookmark.tags)?;
@@ -114,6 +119,7 @@ impl Bookmark {
         file_hash: Option<String>,
         opener: Option<String>,
         accessed_at: Option<DateTime<Utc>>,
+        verified_at: Option<DateTime<Utc>>,
     ) -> DomainResult<Self> {
         let tags = Tag::parse_tags(tag_string)?;
 
@@ -134,6 +140,7 @@ impl Bookmark {
             file_hash,
             opener,
             accessed_at,
+            verified_at,
         })
     }
 
@@ -399,6 +406,7 @@ impl fmt::Debug for Bookmark {
             .field("content_hash", &self.content_hash)
             .field("embeddable", &self.embeddable)
             .field("accessed_at", &self.accessed_at)
+            .field("verified_at", &self.verified_at)
             .finish()
     }
 }

@@ -18,6 +18,7 @@ diesel::table! {
         file_hash -> Nullable<Text>,
         opener -> Nullable<Text>,
         accessed_at -> Nullable<Timestamp>,
+        verified_at -> Nullable<Timestamp>,
     }
 }
 

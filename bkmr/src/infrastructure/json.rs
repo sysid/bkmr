@@ -2,6 +2,7 @@
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::search::HybridSearchResult;
 use crate::domain::tag::Tag;
 use crate::util::path::extract_filename;
 use serde::{Deserialize, Serialize};
@@ -16,16 +17,56 @@ struct TextDocument {
     content: String,
 }
 
-/// Structure for serializing bookmarks to JSON output
+/// Fields every JSON form of a bookmark has. Tags are not among them: their shape differs.
 #[derive(Serialize)]
-pub struct JsonBookmarkView {
+pub struct JsonBookmarkFields {
     pub id: Option<i32>,
     pub url: String,
     pub title: String,
     pub description: String,
+    pub created_at: Option<String>,
+    pub verified_at: Option<String>,
+}
+
+impl JsonBookmarkFields {
+    fn from_domain(bookmark: &Bookmark) -> Self {
+        Self {
+            id: bookmark.id,
+            url: bookmark.url.to_string(),
+            title: bookmark.title.to_string(),
+            description: bookmark.description.to_string(),
+            created_at: bookmark.created_at.map(|dt| dt.to_rfc3339()),
+            verified_at: bookmark.verified_at.map(|dt| dt.to_rfc3339()),
+        }
+    }
+}
+
+/// One result of `hsearch --json`: tags as a comma-delimited string, with the relevance score
+#[derive(Serialize)]
+pub struct JsonSearchHit {
+    #[serde(flatten)]
+    pub fields: JsonBookmarkFields,
+    pub tags: String,
+    pub rrf_score: f64,
+}
+
+impl JsonSearchHit {
+    pub fn from_domain(result: &HybridSearchResult) -> Self {
+        Self {
+            fields: JsonBookmarkFields::from_domain(&result.bookmark),
+            tags: result.bookmark.formatted_tags(),
+            rrf_score: result.rrf_score,
+        }
+    }
+}
+
+/// Structure for serializing bookmarks to JSON output
+#[derive(Serialize)]
+pub struct JsonBookmarkView {
+    #[serde(flatten)]
+    pub fields: JsonBookmarkFields,
     pub tags: Vec<String>,
     pub access_count: i32,
-    pub created_at: Option<String>,
     pub updated_at: String,
     pub accessed_at: Option<String>,
     pub opener: Option<String>,
@@ -42,17 +83,13 @@ impl JsonBookmarkView {
     /// Create from a domain `Bookmark`
     pub fn from_domain(bookmark: &Bookmark, embedded_ids: Option<&HashSet<i32>>) -> Self {
         Self {
-            id: bookmark.id,
-            url: bookmark.url.to_string(),
-            title: bookmark.title.to_string(),
-            description: bookmark.description.to_string(),
+            fields: JsonBookmarkFields::from_domain(bookmark),
             tags: bookmark
                 .tags
                 .iter()
                 .map(|tag| tag.value().to_string())
                 .collect(),
             access_count: bookmark.access_count,
-            created_at: bookmark.created_at.map(|dt| dt.to_rfc3339()),
             updated_at: bookmark.updated_at.to_rfc3339(),
             accessed_at: bookmark.accessed_at.map(|dt| dt.to_rfc3339()),
             opener: bookmark.opener.clone(),
@@ -83,7 +120,7 @@ impl JsonBookmarkView {
 /// Converts bookmarks to JSON and writes to standard output
 /// todo: add flag for embeddings
 /// Standard output is used for pipeable content without colors or formatting
-pub fn write_bookmarks_as_json(views: &[JsonBookmarkView]) -> DomainResult<()> {
+pub fn write_bookmarks_as_json<T: Serialize>(views: &[T]) -> DomainResult<()> {
     let json = serde_json::to_string_pretty(&views).map_err(|e| {
         DomainError::BookmarkOperationFailed(format!(
             "Failed to serialize bookmarks to JSON: {}",
