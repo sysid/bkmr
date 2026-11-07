@@ -480,26 +480,180 @@ pub fn add(
 
 #[instrument(skip(cli, bookmark_service))]
 pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
-    if let Commands::Delete { ids } = cli.command.unwrap() {
-        let id_list = get_ids(ids)?;
+    if let Commands::Delete { ids, force } = cli.command.unwrap() {
+        let mut seen = HashSet::new();
+        let id_list: Vec<i32> = get_ids(ids)?
+            .into_iter()
+            .filter(|id| seen.insert(*id))
+            .collect();
+        // One failed ID must not stop the others, so failures are reported at the end
+        let mut failed_ids = Vec::new();
+        let mut purge_declined = false;
 
         for id in id_list {
-            if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+            if force {
+                match purge_with_confirmation(&bookmark_service, id) {
+                    Ok(PurgeOutcome::Purged) => {}
+                    Ok(PurgeOutcome::Declined) => purge_declined = true,
+                    Ok(PurgeOutcome::NotFound) => failed_ids.push(id),
+                    Err(e) => {
+                        eprintln!("Error purging bookmark with ID {}: {}", id, e);
+                        failed_ids.push(id);
+                    }
+                }
+                continue;
+            }
+
+            let bookmark = match bookmark_service.get_bookmark(id) {
+                Ok(bookmark) => bookmark,
+                Err(e) => {
+                    eprintln!("Error reading bookmark with ID {}: {}", id, e);
+                    failed_ids.push(id);
+                    continue;
+                }
+            };
+            if let Some(bookmark) = bookmark {
                 eprintln!("Deleting: {} ({})", bookmark.title, bookmark.url);
 
                 if confirm("Confirm delete?") {
                     match bookmark_service.delete_bookmark(id) {
                         Ok(true) => eprintln!("Deleted bookmark with ID {}", id),
-                        Ok(false) => eprintln!("Bookmark with ID {} not found", id),
-                        Err(e) => eprintln!("Error deleting bookmark with ID {}: {}", id, e),
+                        Ok(false) => {
+                            eprintln!("Bookmark with ID {} not found", id);
+                            failed_ids.push(id);
+                        }
+                        Err(e) => {
+                            eprintln!("Error deleting bookmark with ID {}: {}", id, e);
+                            failed_ids.push(id);
+                        }
                     }
                 } else {
                     eprintln!("Deletion cancelled");
                 }
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
+                failed_ids.push(id);
             }
         }
+
+        if !failed_ids.is_empty() {
+            return Err(CliError::CommandFailed(format!(
+                "Failed to delete bookmarks with IDs: {:?}",
+                failed_ids
+            )));
+        }
+        // A script must not read a declined purge as the text being gone. A plain delete promises
+        // no such thing and keeps exiting 0.
+        if purge_declined {
+            return Err(CliError::OperationAborted);
+        }
+    }
+    Ok(())
+}
+
+enum PurgeOutcome {
+    Purged,
+    Declined,
+    NotFound,
+}
+
+fn purge_with_confirmation(
+    bookmark_service: &Arc<dyn BookmarkService>,
+    id: i32,
+) -> CliResult<PurgeOutcome> {
+    let bookmark = bookmark_service.get_bookmark(id)?;
+    let history_count = bookmark_service.get_history(Some(id), i64::MAX)?.len();
+
+    match &bookmark {
+        // Not the content: this command exists to remove secrets, and terminal scrollback and agent
+        // transcripts are out of reach of any scrub.
+        Some(bookmark) => eprintln!(
+            "Permanently removing: {} (ID {}) and {} history entries",
+            bookmark.title, id, history_count
+        ),
+        None if history_count > 0 => eprintln!(
+            "Permanently removing {} history entries of deleted bookmark {}",
+            history_count, id
+        ),
+        // Nothing left that a prompt could protect. The text of a bookmark deleted earlier, an _env_
+        // secret for example, or of a purge that failed halfway can still be in the files.
+        None => {
+            bookmark_service.purge_bookmark(id)?;
+            eprintln!(
+                "Bookmark with ID {} not found. Removed traces of deleted text from the database files",
+                id
+            );
+            return Ok(PurgeOutcome::NotFound);
+        }
+    }
+
+    if confirm("Confirm permanent removal? This cannot be restored") {
+        bookmark_service.purge_bookmark(id)?;
+        eprintln!("Purged bookmark with ID {}", id);
+        Ok(PurgeOutcome::Purged)
+    } else {
+        eprintln!("Purge cancelled");
+        Ok(PurgeOutcome::Declined)
+    }
+}
+
+#[instrument(skip(cli, bookmark_service))]
+pub fn history(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
+    if let Commands::History { id, limit, is_json } = cli.command.unwrap() {
+        if limit <= 0 {
+            return Err(CliError::InvalidInput(
+                "Limit must be a positive integer".to_string(),
+            ));
+        }
+        let entries = bookmark_service.get_history(id, limit)?;
+
+        if is_json {
+            let json: Vec<serde_json::Value> = entries
+                .iter()
+                .map(|entry| {
+                    serde_json::json!({
+                        "history_id": entry.history_id,
+                        "bookmark_id": entry.bookmark_id,
+                        "change": entry.change.as_str(),
+                        "url": entry.url,
+                        "title": entry.title,
+                        "description": entry.description,
+                        "tags": entry.tags,
+                        "changed_at": entry.changed_at.to_rfc3339(),
+                    })
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json).unwrap_or_else(|_| "[]".to_string())
+            );
+        } else if entries.is_empty() {
+            eprintln!("No history found");
+        } else {
+            for entry in &entries {
+                println!(
+                    "{}\t#{}\t{}\t{} UTC\t{}",
+                    entry.history_id,
+                    entry.bookmark_id,
+                    entry.change.as_str(),
+                    entry.changed_at.format("%Y-%m-%d %H:%M"),
+                    entry.title
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[instrument(skip(cli, bookmark_service))]
+pub fn restore(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
+    if let Commands::Restore { history_id } = cli.command.unwrap() {
+        let bookmark = bookmark_service.restore_bookmark(history_id)?;
+        eprintln!(
+            "Restored: {} (ID: {})",
+            bookmark.title,
+            bookmark.id.unwrap_or(0)
+        );
     }
     Ok(())
 }
@@ -550,69 +704,74 @@ pub fn update(
                     );
                 }
 
+                let has_changes = tags.is_some()
+                    || tags_not.is_some()
+                    || title.is_some()
+                    || description.is_some()
+                    || url.is_some()
+                    || open_with.is_some();
+                if !has_changes {
+                    continue;
+                }
+
+                // All changes go into one write, so that one command is one undo step in history.
+                // Fetch latest version to avoid stale data after the embedding change.
+                let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? else {
+                    continue;
+                };
+
                 if force && tags.is_some() {
                     // Replace all tags
                     let tag_str = tags.as_ref().unwrap();
                     let parsed_tags = tag_service.parse_tag_string(tag_str)?;
                     let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
 
-                    let updated = bookmark_service.replace_bookmark_tags(id, &tag_set)?;
-                    eprintln!("Tags replaced: {}", updated.formatted_tags());
+                    latest_bookmark.set_tags(tag_set)?;
+                    eprintln!("Tags replaced: {}", latest_bookmark.formatted_tags());
                 } else {
                     // Add tags if provided
                     if let Some(tag_str) = &tags {
-                        let parsed_tags = tag_service.parse_tag_string(tag_str)?;
-                        let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
-
-                        let updated = bookmark_service.add_tags_to_bookmark(id, &tag_set)?;
-                        eprintln!("Tags added: {}", updated.formatted_tags());
+                        for tag in tag_service.parse_tag_string(tag_str)? {
+                            latest_bookmark.add_tag(tag)?;
+                        }
+                        eprintln!("Tags added: {}", latest_bookmark.formatted_tags());
                     }
 
                     // Remove tags if provided
                     if let Some(tag_str) = &tags_not {
-                        let parsed_tags = tag_service.parse_tag_string(tag_str)?;
-                        let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
-
-                        let updated = bookmark_service.remove_tags_from_bookmark(id, &tag_set)?;
-                        eprintln!("Tags removed: {}", updated.formatted_tags());
+                        for tag in tag_service.parse_tag_string(tag_str)? {
+                            let _ = latest_bookmark.remove_tag(&tag);
+                        }
+                        eprintln!("Tags removed: {}", latest_bookmark.formatted_tags());
                     }
                 }
 
                 // Update scalar fields if provided (title, description, url, opener)
-                let has_field_updates = title.is_some()
-                    || description.is_some()
-                    || url.is_some()
-                    || open_with.is_some();
-                if has_field_updates {
-                    // Fetch latest version to avoid stale data after tag operations
-                    if let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? {
-                        if let Some(ref t) = title {
-                            latest_bookmark.title = t.clone();
-                            eprintln!("Title set to: {}", t);
-                        }
-                        if let Some(ref d) = description {
-                            latest_bookmark.description = d.clone();
-                            eprintln!("Description set to: {}", d);
-                        }
-                        if let Some(ref u) = url {
-                            latest_bookmark.url = u.clone();
-                            eprintln!("URL set to: {}", u);
-                        }
-                        if let Some(ref opener) = open_with {
-                            latest_bookmark.opener = if opener.is_empty() {
-                                None
-                            } else {
-                                Some(opener.clone())
-                            };
-                            if opener.is_empty() {
-                                eprintln!("Custom opener cleared");
-                            } else {
-                                eprintln!("Custom opener set to: {}", opener);
-                            }
-                        }
-                        bookmark_service.update_bookmark(latest_bookmark, false)?;
+                if let Some(ref t) = title {
+                    latest_bookmark.title = t.clone();
+                    eprintln!("Title set to: {}", t);
+                }
+                if let Some(ref d) = description {
+                    latest_bookmark.description = d.clone();
+                    eprintln!("Description set to: {}", d);
+                }
+                if let Some(ref u) = url {
+                    latest_bookmark.url = u.clone();
+                    eprintln!("URL set to: {}", u);
+                }
+                if let Some(ref opener) = open_with {
+                    latest_bookmark.opener = if opener.is_empty() {
+                        None
+                    } else {
+                        Some(opener.clone())
+                    };
+                    if opener.is_empty() {
+                        eprintln!("Custom opener cleared");
+                    } else {
+                        eprintln!("Custom opener set to: {}", opener);
                     }
                 }
+                bookmark_service.update_bookmark(latest_bookmark, false)?;
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
             }

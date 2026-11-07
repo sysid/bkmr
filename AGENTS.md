@@ -33,6 +33,9 @@ injection.
 - DB-independent commands (`--generate-config`, `completion`, `create-db`) are routed before `ServiceContainer` creation in `main.rs` and must not require a database.
 - Tag filter flags are easy to misread: `-t` must have ALL, `-T` exclude if has ALL, `-n` must have ANY, `-N` exclude if has ANY.
 - Test function naming convention: `given_X_when_Y_then_Z()`.
+- Bookmark IDs are never given out twice (`AUTOINCREMENT`), because `bookmark_history` refers to them. `restore` of a deleted memory inserts it again under its old ID, the only write with an explicit ID.
+- A purge must end in `BookmarkRepository::scrub`, which is safe to rerun: deleted text stays in FTS segments, freed pages and the WAL until then.
+- Migration `2026-11-07-100000_add_bookmark_history` recreates `bookmarks_fts` with `id UNINDEXED`. A numeric full-text query no longer matches a bookmark ID; an indexed `id` left stale entries that made such a search fail with "database disk image is malformed".
 - Exit codes are a tested contract: `CliError::exit_code()` decides them, and `ERROR_HANDLING.md` has the table. Use `InvalidInput` only for errors the user fixes by changing arguments.
 - An unreadable or invalid config file is fatal in `main.rs` (exit 64), since falling back to defaults would open another database. Only `--generate-config` bypasses this.
 - Print fatal errors with `print_error` in `main.rs`, not `.red()`: crossterm's opt-out still writes an empty escape sequence, which ends up in LSP client logs.

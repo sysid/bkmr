@@ -1,6 +1,7 @@
 // src/application/services/bookmark_service.rs
 use crate::application::error::ApplicationResult;
 use crate::domain::bookmark::Bookmark;
+use crate::domain::history::HistoryEntry;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::search::{
     HybridSearch, HybridSearchResult, SemanticSearch, SemanticSearchResult,
@@ -30,8 +31,25 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// wish of the user; `None` applies the mode of the embedding policy.
     fn resolve_embeddable(&self, tags: &HashSet<Tag>, requested: Option<bool>) -> bool;
 
-    /// Delete a bookmark by ID
+    /// Delete a bookmark by ID. A memory keeps its old state in history.
     fn delete_bookmark(&self, id: i32) -> ApplicationResult<bool>;
+
+    /// Permanently remove a bookmark and all history stored under its ID, and the traces of deleted
+    /// text from the database files, also if the ID is unknown by now. True if anything was removed
+    /// under this ID. After a failure, running it again finishes the job.
+    fn purge_bookmark(&self, id: i32) -> ApplicationResult<bool>;
+
+    /// History entries, newest first, of one bookmark ID or of all bookmarks
+    fn get_history(
+        &self,
+        bookmark_id: Option<i32>,
+        limit: i64,
+    ) -> ApplicationResult<Vec<HistoryEntry>>;
+
+    /// Bring back the state saved in a history entry, always under the bookmark's own ID: in place
+    /// if it still exists, otherwise by adding it again. A bookmark imported from a file is refused
+    /// in place, because the file decides its content.
+    fn restore_bookmark(&self, history_id: i32) -> ApplicationResult<Bookmark>;
 
     /// Get a bookmark by ID
     fn get_bookmark(&self, id: i32) -> ApplicationResult<Option<Bookmark>>;

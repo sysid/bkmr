@@ -830,3 +830,954 @@ fn given_failing_access_write_when_show_then_still_shows_details_and_warns() {
         .stdout(predicate::str::contains("https://example.com"))
         .stderr(predicate::str::contains("Failed to record access"));
 }
+
+fn add_second_bookmark(db: &std::path::Path) {
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args([
+            "add",
+            "https://example.org",
+            "show-test",
+            "--title",
+            "Second",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn given_failing_delete_when_delete_then_exits_failure_and_reports_error() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "CREATE TRIGGER fail_delete BEFORE DELETE ON bookmarks \
+             BEGIN SELECT RAISE(ABORT, 'delete refused'); END",
+        )
+        .unwrap();
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &id])
+        .write_stdin("y\n")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Error deleting bookmark"));
+    assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_unknown_id_among_ids_when_delete_then_deletes_the_rest_and_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &format!("99999,{id}")])
+        .write_stdin("y\n")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("99999"));
+    assert_eq!(search_all(&db).len(), 0, "the valid ID was not deleted");
+}
+
+#[test]
+fn given_declined_prompt_when_delete_then_keeps_bookmark_and_exits_success() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &id])
+        .write_stdin("n\n")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Deletion cancelled"));
+
+    assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_two_ids_when_delete_confirmed_then_deletes_both_and_exits_success() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    add_second_bookmark(&db);
+    let ids: Vec<String> = search_all(&db)
+        .iter()
+        .map(|b| b["id"].to_string())
+        .collect();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &ids.join(",")])
+        .write_stdin("y\ny\n")
+        .assert()
+        .success();
+
+    assert_eq!(search_all(&db).len(), 0);
+}
+
+/// Config file that stops memories being embedded, so these tests need no embedding model.
+fn config_without_memory_embedding(dir: &std::path::Path) -> std::path::PathBuf {
+    let path = dir.join("config.toml");
+    std::fs::write(&path, "[embeddings.policy]\n_mem_ = \"off\"\n").unwrap();
+    path
+}
+
+fn create_db_with_one_memory(db: &std::path::Path, config: &std::path::Path) {
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .arg("--config")
+        .arg(config)
+        .args([
+            "add",
+            "https://example.com",
+            "show-test",
+            "--title",
+            "Example",
+            "-t",
+            "mem",
+            "--no-web",
+        ])
+        .assert()
+        .success();
+}
+
+fn history_of(db: &std::path::Path, args: &[&str]) -> Vec<serde_json::Value> {
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .arg("history")
+        .args(args)
+        .arg("--json")
+        .output()
+        .expect("run bkmr history");
+    assert!(
+        output.status.success(),
+        "bkmr history failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout).expect("history --json returns a JSON array")
+}
+
+fn run_with_config(
+    db: &std::path::Path,
+    config: &std::path::Path,
+    args: &[&str],
+    stdin: &str,
+) -> std::process::Output {
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .arg("--config")
+        .arg(config)
+        .args(args)
+        .write_stdin(stdin)
+        .output()
+        .expect("run bkmr")
+}
+
+#[test]
+fn given_memory_when_url_changes_then_history_keeps_the_old_text() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+    assert!(output.status.success());
+
+    let history = history_of(&db, &[&id]);
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0]["change"], "update");
+    assert_eq!(history[0]["url"], "https://example.com");
+    assert_eq!(history[0]["title"], "Example");
+    assert_eq!(history[0]["bookmark_id"].to_string(), id);
+}
+
+#[test]
+fn given_other_type_when_url_changes_then_no_history_is_kept() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    // Only agent memories keep history.
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["update", "--url", "https://example.com/new", &id])
+        .assert()
+        .success();
+
+    assert!(history_of(&db, &[&id]).is_empty());
+}
+
+#[test]
+fn given_memory_when_only_accessed_then_no_history_is_kept() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = run_with_config(&db, &config, &["show", &id], "");
+    assert!(output.status.success());
+
+    assert!(history_of(&db, &[&id]).is_empty());
+}
+
+#[test]
+fn given_update_entry_when_restored_then_old_text_returns_under_the_same_id_and_undo_is_possible() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+    let history_id = history_of(&db, &[&id])[0]["history_id"].to_string();
+
+    let output = run_with_config(&db, &config, &["restore", &history_id], "");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let bookmarks = search_all(&db);
+    assert_eq!(bookmarks.len(), 1);
+    assert_eq!(bookmarks[0]["id"].to_string(), id);
+    assert_eq!(bookmarks[0]["url"], "https://example.com");
+    // Restoring is a change like any other, so the corrected text can be brought back too.
+    assert_eq!(history_of(&db, &[&id])[0]["url"], "https://example.com/new");
+}
+
+#[test]
+fn given_deleted_memory_when_restored_then_it_is_back_with_its_tags() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(&db, &config, &["delete", &id], "y\n");
+    assert!(search_all(&db).is_empty());
+
+    // Without an ID, history lists everything, which is how a deleted ID is found again.
+    let history = history_of(&db, &[]);
+    assert_eq!(history[0]["change"], "delete");
+    let history_id = history[0]["history_id"].to_string();
+
+    let output = run_with_config(&db, &config, &["restore", &history_id], "");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let bookmarks = search_all(&db);
+    assert_eq!(bookmarks.len(), 1);
+    assert_eq!(bookmarks[0]["url"], "https://example.com");
+    let tags = bookmarks[0]["tags"].to_string();
+    assert!(tags.contains("show-test"), "{tags}");
+    assert!(tags.contains("_mem_"), "{tags}");
+}
+
+#[test]
+fn given_deleted_highest_id_when_adding_then_the_id_is_not_reused_and_restore_returns_under_the_old_id(
+) {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/v2", &id],
+        "",
+    );
+    run_with_config(&db, &config, &["delete", &id], "y\n");
+
+    add_second_bookmark(&db);
+    let second_id = search_all(&db)[0]["id"].to_string();
+    assert_ne!(second_id, id, "a deleted ID must not be given out again");
+
+    let oldest = history_of(&db, &[]).last().unwrap().clone();
+    assert_eq!(oldest["change"], "update");
+    let output = run_with_config(
+        &db,
+        &config,
+        &["restore", &oldest["history_id"].to_string()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let bookmarks = search_all(&db);
+    assert_eq!(bookmarks.len(), 2);
+    let restored = bookmarks
+        .iter()
+        .find(|b| b["id"].to_string() == id)
+        .expect("restored under its old ID");
+    assert_eq!(restored["url"], "https://example.com");
+    let other = bookmarks
+        .iter()
+        .find(|b| b["id"].to_string() == second_id)
+        .expect("the other bookmark still exists");
+    assert_eq!(other["url"], "https://example.org");
+}
+
+#[test]
+fn given_memory_that_lost_its_tag_before_delete_when_restoring_then_a_later_bookmark_is_untouched()
+{
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/v2", &id],
+        "",
+    );
+    run_with_config(&db, &config, &["update", "-n", "_mem_", &id], "");
+    // No longer a memory, so this delete leaves no 'delete' entry behind.
+    run_with_config(&db, &config, &["delete", &id], "y\n");
+    add_second_bookmark(&db);
+
+    let oldest = history_of(&db, &[]).last().unwrap().clone();
+    let output = run_with_config(
+        &db,
+        &config,
+        &["restore", &oldest["history_id"].to_string()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let urls: Vec<String> = search_all(&db)
+        .iter()
+        .map(|b| b["url"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(urls.len(), 2, "got {urls:?}");
+    assert!(urls.contains(&"https://example.org".to_string()));
+    assert!(urls.contains(&"https://example.com".to_string()));
+}
+
+#[test]
+fn given_memory_deleted_and_restored_when_rolling_back_further_then_no_second_memory_appears() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/v2", &id],
+        "",
+    );
+    run_with_config(&db, &config, &["delete", &id], "y\n");
+    let history = history_of(&db, &[]);
+    let (delete_entry, oldest) = (history[0].clone(), history[1].clone());
+    run_with_config(
+        &db,
+        &config,
+        &["restore", &delete_entry["history_id"].to_string()],
+        "",
+    );
+
+    let output = run_with_config(
+        &db,
+        &config,
+        &["restore", &oldest["history_id"].to_string()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let bookmarks = search_all(&db);
+    assert_eq!(bookmarks.len(), 1);
+    assert_eq!(bookmarks[0]["id"].to_string(), id);
+    assert_eq!(bookmarks[0]["url"], "https://example.com");
+}
+
+#[test]
+fn given_row_that_lost_the_memory_tag_when_restoring_then_its_current_text_is_kept_in_history() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(&db, &config, &["update", "-n", "_mem_", &id], "");
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://plain.example/valuable", &id],
+        "",
+    );
+    let entry = history_of(&db, &[&id]).last().unwrap().clone();
+
+    let output = run_with_config(
+        &db,
+        &config,
+        &["restore", &entry["history_id"].to_string()],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert_eq!(search_all(&db)[0]["url"], "https://example.com");
+    assert_eq!(
+        history_of(&db, &[&id])[0]["url"],
+        "https://plain.example/valuable"
+    );
+}
+
+#[test]
+fn given_one_update_with_several_flags_when_restoring_the_newest_entry_then_the_command_is_undone()
+{
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = run_with_config(
+        &db,
+        &config,
+        &[
+            "update",
+            &id,
+            "-t",
+            "newtag",
+            "-n",
+            "show-test",
+            "--url",
+            "https://example.com/new",
+            "--title",
+            "New title",
+        ],
+        "",
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let history = history_of(&db, &[&id]);
+    assert_eq!(history.len(), 1, "one command must write one history entry");
+    run_with_config(
+        &db,
+        &config,
+        &["restore", &history[0]["history_id"].to_string()],
+        "",
+    );
+    let restored = &search_all(&db)[0];
+    assert_eq!(restored["url"], "https://example.com");
+    assert_eq!(restored["title"], "Example");
+    let tags = restored["tags"].to_string();
+    assert!(
+        tags.contains("show-test") && !tags.contains("newtag"),
+        "{tags}"
+    );
+}
+
+#[test]
+fn given_adding_and_removing_the_same_tag_when_updating_then_no_history_is_written() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    run_with_config(&db, &config, &["update", &id, "-t", "x", "-n", "x"], "");
+
+    assert!(history_of(&db, &[&id]).is_empty());
+}
+
+#[test]
+fn given_memory_with_opener_and_no_embedding_when_deleted_and_restored_then_both_survive() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = dir.path().join("config.toml");
+    std::fs::write(&config, "[embeddings.policy]\n_mem_ = \"on\"\n").unwrap();
+    create_db_with_one_memory_not_embedded(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch(
+            "UPDATE bookmarks SET opener = 'less {}', file_path = '/tmp/x.md', \
+             file_mtime = 7, file_hash = 'abc'",
+        )
+        .unwrap();
+    run_with_config(&db, &config, &["delete", &id], "y\n");
+    let history_id = history_of(&db, &[])[0]["history_id"].to_string();
+
+    let output = run_with_config(&db, &config, &["restore", &history_id], "");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let (opener, embeddable, path, mtime, hash): (String, bool, String, i32, String) =
+        rusqlite::Connection::open(&db)
+            .unwrap()
+            .query_row(
+                "SELECT opener, embeddable, file_path, file_mtime, file_hash FROM bookmarks",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+    assert_eq!(opener, "less {}");
+    assert!(!embeddable);
+    assert_eq!(path, "/tmp/x.md");
+    assert_eq!(mtime, 7);
+    assert_eq!(hash, "abc");
+}
+
+fn create_db_with_one_memory_not_embedded(db: &std::path::Path, config: &std::path::Path) {
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .arg("--config")
+        .arg(config)
+        .args([
+            "add",
+            "https://example.com",
+            "show-test",
+            "--title",
+            "Example",
+            "-t",
+            "mem",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn given_memory_imported_from_a_file_when_restoring_in_place_then_refused_and_unchanged() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch("UPDATE bookmarks SET file_path = '/tmp/source.md'")
+        .unwrap();
+    let history_id = history_of(&db, &[&id])[0]["history_id"].to_string();
+
+    let output = run_with_config(&db, &config, &["restore", &history_id], "");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("/tmp/source.md"));
+    assert_eq!(search_all(&db)[0]["url"], "https://example.com/new");
+}
+
+#[test]
+fn given_repeated_id_when_delete_then_deletes_once_and_exits_success() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &format!("{id},{id}")])
+        .write_stdin("y\ny\n")
+        .output()
+        .unwrap();
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(search_all(&db).is_empty());
+}
+
+#[test]
+fn given_invalid_id_among_ids_when_delete_then_still_offers_the_rest_and_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &format!("0,{id}")])
+        .write_stdin("y\n")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(search_all(&db).is_empty(), "the valid ID was not deleted");
+}
+
+#[test]
+fn given_limit_below_one_when_history_then_exits_with_usage_error() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    create_db_with_one_bookmark(&db);
+
+    for limit in ["--limit=0", "--limit=-1"] {
+        let output = cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(["history", limit])
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(64), "{limit}");
+    }
+}
+
+#[test]
+fn given_invalid_id_when_history_then_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    create_db_with_one_bookmark(&db);
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["history", "0"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+}
+
+#[test]
+fn given_history_when_listing_as_text_then_the_change_time_is_labelled_utc() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["history", &id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(" UTC"));
+}
+
+/// True if the text occurs in the database file or its write-ahead log.
+fn database_files_contain(db: &std::path::Path, text: &str) -> bool {
+    let wal = db.with_extension("db-wal");
+    [db, wal.as_path()].iter().any(|path| {
+        std::fs::read(path)
+            .map(|bytes| bytes.windows(text.len()).any(|w| w == text.as_bytes()))
+            .unwrap_or(false)
+    })
+}
+
+fn add_env_secret(db: &std::path::Path, secret: &str) {
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args([
+            "add",
+            &format!("export TOKEN={secret}"),
+            "--title",
+            "Token",
+            "-t",
+            "env",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn given_plain_deleted_env_secret_when_force_delete_then_it_is_gone_from_the_database_files() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    add_env_secret(&db, "qrlfqmrhlgggddx");
+    let id = search_all(&db)[0]["id"].to_string();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &id])
+        .write_stdin("y\n")
+        .assert()
+        .success();
+    assert!(database_files_contain(&db, "qrlfqmrhlgggddx"));
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "--force", &id])
+        .output()
+        .unwrap();
+
+    // The ID is still unknown, but the traces of what it held are removed.
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("not found"));
+    assert!(!database_files_contain(&db, "qrlfqmrhlgggddx"));
+}
+
+#[test]
+fn given_secret_when_force_delete_prompts_then_the_prompt_does_not_print_it() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "token qrlfqmrhlgggddx", &id],
+        "",
+    );
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &id], "n\n");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Example"), "{stderr}");
+    assert!(!stderr.contains("qrlfqmrhlgggddx"), "{stderr}");
+}
+
+#[test]
+fn given_a_purge_then_a_delete_when_searching_the_deleted_id_then_search_succeeds() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let purged = search_all(&db)[0]["id"].to_string();
+    for url in ["https://example.com/a", "https://example.com/b"] {
+        let output = run_with_config(
+            &db,
+            &config,
+            &[
+                "add",
+                url,
+                "plain",
+                "--title",
+                "Plain",
+                "--no-web",
+                "--no-embed",
+            ],
+            "",
+        );
+        assert!(output.status.success());
+    }
+    let deleted = search_all(&db)
+        .iter()
+        .map(|bookmark| bookmark["id"].as_i64().unwrap())
+        .max()
+        .unwrap()
+        .to_string();
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &purged], "y\n");
+    assert!(output.status.success());
+    let output = run_with_config(&db, &config, &["delete", &deleted], "y\n");
+    assert!(output.status.success());
+
+    let output = run_with_config(&db, &config, &["search", "--np", "--json", &deleted], "");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let found: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(found.is_empty());
+}
+
+#[test]
+fn given_other_process_reading_when_force_delete_then_reports_failure_and_a_retry_finishes() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "token qrlfqmrhlgggddx", &id],
+        "",
+    );
+    let reader = rusqlite::Connection::open(&db).unwrap();
+    reader
+        .execute_batch("BEGIN; SELECT count(*) FROM bookmarks;")
+        .ok();
+    let _: i64 = reader
+        .query_row("SELECT count(*) FROM bookmarks", [], |r| r.get(0))
+        .unwrap();
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &id], "y\n");
+
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "must not claim a purge while the text can still be on disk"
+    );
+    assert!(search_all(&db).is_empty());
+
+    reader.execute_batch("COMMIT").unwrap();
+    drop(reader);
+    let retry = run_with_config(&db, &config, &["delete", "--force", &id], "");
+    assert_eq!(retry.status.code(), Some(1), "the ID is unknown by now");
+    assert!(!database_files_contain(&db, "qrlfqmrhlgggddx"));
+}
+
+#[test]
+fn given_unknown_history_id_when_restoring_then_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    create_db_with_one_bookmark(&db);
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["restore", "99999"])
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_force_when_delete_then_bookmark_and_its_history_are_gone() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &id], "y\n");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(search_all(&db).is_empty());
+    assert!(history_of(&db, &[]).is_empty());
+}
+
+#[test]
+fn given_force_when_bookmark_was_already_deleted_then_its_history_is_purged() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(&db, &config, &["delete", &id], "y\n");
+    assert_eq!(history_of(&db, &[]).len(), 1);
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &id], "y\n");
+
+    assert_eq!(output.status.code(), Some(0));
+    assert!(history_of(&db, &[]).is_empty());
+}
+
+#[test]
+fn given_force_and_declined_prompt_when_delete_then_nothing_is_purged_and_exit_is_cancel() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &id], "n\n");
+
+    // A script running `delete --force` && ... must not read this as the secret being gone.
+    assert_eq!(output.status.code(), Some(130));
+    assert_eq!(search_all(&db).len(), 1);
+    assert_eq!(history_of(&db, &[&id]).len(), 1);
+}
+
+#[test]
+fn given_force_and_unknown_id_when_delete_then_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    create_db_with_one_bookmark(&db);
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "--force", "99999"])
+        .write_stdin("y\n")
+        .output()
+        .unwrap();
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(search_all(&db).len(), 1);
+}

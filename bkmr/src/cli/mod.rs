@@ -44,6 +44,12 @@ pub fn execute_command_with_services(
         Some(Commands::Delete { .. }) => {
             bookmark_commands::delete(cli, services.bookmark_service.clone())
         }
+        Some(Commands::History { .. }) => {
+            bookmark_commands::history(cli, services.bookmark_service.clone())
+        }
+        Some(Commands::Restore { .. }) => {
+            bookmark_commands::restore(cli, services.bookmark_service.clone())
+        }
         Some(Commands::Update { .. }) => bookmark_commands::update(
             cli,
             services.bookmark_service.clone(),

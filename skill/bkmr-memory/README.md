@@ -158,7 +158,8 @@ Evals create real `_mem_` bookmarks in the database. Clean up with:
 # List test memories
 bkmr search -t _mem_ --json --np
 
-# Delete by ID (interactive confirmation required)
+# Delete by ID (interactive confirmation required). History keeps the text of a memory:
+# use --force as well if an eval stored anything sensitive
 bkmr delete 17,18,19
 ```
 
