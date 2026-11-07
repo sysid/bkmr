@@ -185,6 +185,186 @@
           "type": "required"
         }
       ]
+    },
+    {
+      "id": 5,
+      "name": "stale-deploy-flag",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> stale-deploy-flag`.",
+      "expected_output": "Memory demands a flag that deploy.sh now rejects. Agent checks deploy.sh, gives the working command, and corrects the memory in place.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> stale-deploy-flag",
+      "assertions": [
+        {
+          "text": "Command in the answer omits --legacy-auth",
+          "type": "required"
+        },
+        {
+          "text": "Same memory now states --region, with a new title",
+          "type": "required"
+        },
+        {
+          "text": "Old text in history; reason in description",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "stale-missing-guard",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> stale-missing-guard`.",
+      "expected_output": "Memory forbids a change, citing a file that does not exist. Agent checks, makes the change, and corrects or deletes the memory.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> stale-missing-guard",
+      "assertions": [
+        {
+          "text": "DEFAULT_TIMEOUT is changed to 60",
+          "type": "required"
+        },
+        {
+          "text": "Old text in history, with a reason",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "valid-constraint-holds",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> valid-constraint-holds`.",
+      "expected_output": "Control. Memory forbids editing shipped migrations and the code confirms it. Agent adds a new migration and leaves the memory alone.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> valid-constraint-holds",
+      "assertions": [
+        {
+          "text": "0001_init.sql is untouched",
+          "type": "required"
+        },
+        {
+          "text": "A new migration adds the column",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "supersede-on-write",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> supersede-on-write`.",
+      "expected_output": "User reports a new fact that contradicts a memory. Agent corrects that memory in place instead of adding a second one.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> supersede-on-write",
+      "assertions": [
+        {
+          "text": "Same memory now states 3.10.6, with a new title",
+          "type": "required"
+        },
+        {
+          "text": "Old text in history; reason in description",
+          "type": "required"
+        },
+        {
+          "text": "Only one memory states 3.10.6",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "change-trigger",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> change-trigger`.",
+      "expected_output": "Task changes behaviour a memory describes. Agent finds that memory before finishing and corrects it, unprompted.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> change-trigger",
+      "assertions": [
+        {
+          "text": "Code changed",
+          "type": "required"
+        },
+        {
+          "text": "Same memory now states the new path",
+          "type": "required"
+        },
+        {
+          "text": "Old text in history; reason in description",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "name": "not-reproduced-keeps-memory",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> not-reproduced-keeps-memory`.",
+      "expected_output": "Intermittent gotcha does not reproduce in one run. Agent keeps the memory; one passing run is not a contradiction.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> not-reproduced-keeps-memory",
+      "assertions": [
+        {
+          "text": "The flake claim is kept",
+          "type": "required"
+        },
+        {
+          "text": "Answer reports the run",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "preference-not-overruled",
+      "prompt": "Fixture eval: see PROMPTS in lifecycle_eval.py. Run `lifecycle_eval.py setup <dir>`, then `prompt <dir> preference-not-overruled`.",
+      "expected_output": "Repository evidence conflicts with a user preference. Agent does not delete or rewrite it and surfaces the conflict.",
+      "files": [
+        "evals/lifecycle_eval.py"
+      ],
+      "grader": "lifecycle_eval.py grade <dir> preference-not-overruled",
+      "assertions": [
+        {
+          "text": "Test is written",
+          "type": "required"
+        },
+        {
+          "text": "Answer mentions both pytest and unittest",
+          "type": "required"
+        },
+        {
+          "text": "Memories that hold are unchanged",
+          "type": "required"
+        }
+      ]
     }
   ]
 }
