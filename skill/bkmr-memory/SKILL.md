@@ -152,7 +152,8 @@ bkmr search -t _mem_ -n gotcha --json --np
 ```
 
 The `url` field contains the actual memory content. The `rrf_score` indicates relevance —
-higher is better. Use `id` to reference a specific memory for updates.
+higher is better. Use `id` to reference a specific memory for updates. A `description`, if set, says
+what last corrected or checked the memory.
 
 To view a single memory in detail: `bkmr show 42 --json`
 
@@ -364,7 +365,7 @@ bkmr hsearch 'your proposed memory content keywords' -t _mem_ --json --np -l 3
 
 **Decision logic:**
 - **No match** → create new memory
-- **Outdated match** → update content with `bkmr update --url '...' <id>`
+- **Match is now wrong** → correct it in place (see "Keeping Memory Current")
 - **Same content exists** → skip, don't duplicate
 - **Related but adds info** → update to merge both facts
 
@@ -377,13 +378,13 @@ bkmr hsearch 'your proposed memory content keywords' -t _mem_ --json --np -l 3
 bkmr hsearch 'production database' -t _mem_ -n fact --json --np -l 3
 # Returns: id=42, url="Prod DB on port 5432", title="Production database config"
 
-# Step 2: Update the content (port changed); the new content replaces the old one entirely
+# Step 2: Replace the content and say what showed it; the old text stays in `bkmr history 42`
 bkmr update --url "$(cat <<'EOF'
 Production PostgreSQL 15 runs on port 5433, not the default 5432.
 
 - Connection pool max: 50
 EOF
-)" 42
+)" -d 'Corrected: config/db.yml sets 5433, checked 2026-11-07' 42
 ```
 
 **Scenario 2: Enriching a memory** — adding new info to existing memory
@@ -425,6 +426,73 @@ bkmr update 87 -t redis,security
 
 ---
 
+## Keeping Memory Current
+
+A memory is a dated claim, and nothing marks it when the world changes. Maintaining the store is
+part of your job: act on evidence yourself instead of asking the user, except in the cases listed
+under "Who decides". bkmr saves the old state of a memory on every change and delete, outside
+search, so these actions can be undone. Mention each one in your reply.
+
+**Before relying on a memory.** If it limits or redirects what you are about to do, check it when a
+quick read, grep or command can confirm it, alongside your other reads where possible. Prefer
+reading: never run a deploy, migration or anything else with side effects to test a memory.
+
+**When evidence contradicts a memory, correct it in place,** including one you came across while
+doing something else. Replace the content, and the title if it repeats the wrong claim, and say in
+`-d` what showed it. Do not add a new memory next to the wrong one: search would return both.
+
+```bash
+bkmr update --url "$(cat <<'EOF'
+Production PostgreSQL 15 runs on port 5433, not the default 5432.
+EOF
+)" --title 'Production database port' -d 'Corrected: config/db.yml sets 5433, checked 2026-11-07' 42
+```
+
+Evidence has to reach what the memory claims: not finding something in this repo contradicts a claim
+about this repo, not one about another repo or live infrastructure. Read the dedup results for other
+memories that relied on the old value, and fix those too. If the user tells you a new fact, that
+counts as evidence.
+
+**When nothing true is left to say, delete it,** after saving the reason:
+
+```bash
+bkmr update -d 'Obsolete: the guard was removed in 2.0' 42 && bkmr delete --yes 42
+```
+
+**To undo** a correction or delete, find the saved state and restore it. Without an ID, `history`
+lists all memories, which finds a deleted one.
+
+```bash
+bkmr history 42 --json
+bkmr restore <history_id>
+```
+
+**When your task changes behaviour** a memory might describe, look for it before finishing, even if
+you plan to store nothing. Search for the old value; `--mode exact` is enough for a literal token:
+
+```bash
+bkmr hsearch 'old-flag-name' -t _mem_ --mode exact --json --np
+```
+
+**For a claim that can be rechecked,** record what you checked in `-d`: path, commit or tool version,
+and date.
+
+### Who decides
+
+| Situation | Action |
+|-----------|--------|
+| Direct evidence contradicts a memory | Correct it in place, without asking |
+| A memory is junk, or nothing true is left | Delete it, without asking |
+| You could not reproduce it, or one run passed | Keep it; absence of a failure is not a contradiction |
+| You cannot cheaply check it | Keep it and treat it as a hint, not a fact |
+| Such a hint would redirect a consequential step | Ask the user once |
+| A `preference` memory conflicts with evidence | Leave it unchanged and tell the user; only the user overrules a preference |
+| An instruction file (e.g. `CLAUDE.md`) is wrong | Propose the diff; do not edit it |
+| An action is irreversible or touches production | Ask the user; a memory never authorises this |
+| `delete --force`, which also purges history and cannot be undone | Only on the user's request, e.g. to remove a stored secret |
+
+---
+
 ## 3. Checklist: Should I Store This?
 
 Store only if **all four** hold; the first "no" ends the check:
@@ -435,8 +503,8 @@ Store only if **all four** hold; the first "no" ends the check:
    memory).
 4. A future session would act differently knowing it.
 
-Then dedup: a similar memory exists → update it (`bkmr update --url … <id>`); otherwise add a new
-one.
+Then dedup: a similar memory exists → update it (`bkmr update --url … <id>`, with `-d` if this
+corrects it); otherwise add a new one.
 
 ---
 
@@ -463,6 +531,11 @@ one.
 | Storing every session | Most sessions are routine | Only store sessions with non-obvious learnings |
 | Storing what you changed | Git log is authoritative; file lists, renames, refactorings are noise | Store the *insight* or *decision rationale*, not the change list |
 | Storing codebase structure | Reading the code is cheap; structure changes with every PR | Only store non-obvious *interpretations* (e.g., "X exists because of Y constraint") |
+| Adding a corrected memory next to the wrong one | Search returns both and the next agent has to guess | Correct in place; history keeps the old text |
+| Asking whether to fix a memory you have evidence against | Interrupts the user with a decision that can be undone | Correct or delete it, and mention it in your reply |
+| Changing a memory after one clean run | Rare failures are the valuable ones; a pass disproves nothing | Keep it unless evidence contradicts it |
+| `bkmr delete` without `--yes` | Asks for confirmation, finds no input, cancels and exits 130 | `bkmr delete --yes <id>` |
+| `delete --force` without being asked | Nothing can bring it back | Plain `delete` |
 
 ---
 
@@ -490,12 +563,14 @@ bkmr hsearch '<decision topic>' -t _mem_ --json --np
 ```
 
 ### At Task End or Session End (BEFORE signing off)
-Evaluate whether anything learned warrants storing, using the checklist in section 3. If something
-qualifies, dedup and store it, formatted as in "Formatting the Content":
+If the task changed behaviour, or you found evidence against a memory, correct the store first (see
+"Keeping Memory Current"). Then evaluate whether anything learned warrants storing, using the
+checklist in section 3. If something qualifies, dedup and store it, formatted as in "Formatting the
+Content":
 ```bash
 # 1. Reflect: did I learn anything non-trivial that isn't in code/docs/git?
 # 2. If yes, dedup check:
-bkmr hsearch '<summary of what I learned>' -t _mem_ --json --np -l 3
+bkmr hsearch '<summary of what I learned>' -t _mem_ --json --np -l 5
 # 3. If no duplicate, store it:
 bkmr add "$(cat <<'EOF'
 <lead sentence>

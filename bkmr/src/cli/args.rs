@@ -336,6 +336,13 @@ pub enum Commands {
             help = "permanently remove the bookmark and its history, and traces of deleted text in the database files; also works for an already deleted bookmark. Cannot be restored"
         )]
         force: bool,
+        #[arg(
+            short = 'y',
+            long = "yes",
+            conflicts_with = "force",
+            help = "do not ask for confirmation, for scripts and agents; a memory stays restorable"
+        )]
+        yes: bool,
     },
     /// Show saved old states of agent memories, newest first
     History {

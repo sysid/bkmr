@@ -7,6 +7,7 @@ Teaches AI agents (Claude Code, Copilot CLI, pi-mono) how to use [bkmr](https://
 - **READ**: Query bkmr for relevant memories at task start, before decisions, and when encountering bugs
 - **WRITE**: Store non-trivial learnings with proper taxonomy and deduplication
 - **UPDATE**: Enrich or correct existing memories with `bkmr update --url`
+- **KEEP CURRENT**: Check constraints before relying on them; correct or delete what evidence contradicts, without asking the user. History keeps the old state
 - **DEDUP**: Check for existing memories before creating new ones
 - **FORMAT**: Store content as light markdown that also reads well for humans (lead line, prose
   wrapped at 100 columns, fenced commands, `1.` lists); no headings or tables, which hurt retrieval
@@ -28,6 +29,7 @@ bkmr-memory/
 ├── README.md          # This file
 └── evals/
     ├── evals.json              # Agent-behaviour test cases with assertions
+    ├── lifecycle_eval.py       # Fixture and grader for the lifecycle evals
     ├── markdown_retrieval.py   # Deterministic retrieval eval (markdown vs plain)
     └── markdown_corpus.json    # Corpus + queries for markdown_retrieval.py
 ```
@@ -88,6 +90,37 @@ You: For each test case in ~/.claude/skills/bkmr-memory/evals/evals.json,
 | 1 | post-task-memory-write | WRITE workflow | Dedup first, `-t mem --no-web`, classification tag, content in url field |
 | 2 | dedup-scenario | Dedup logic | Searches before writing, uses `_mem_` filter, updates or skips if match exists |
 | 3 | shell-quoting | WRITE safety | No double-quoted content; backticks/`$`/apostrophes stored verbatim; no `--stdin` + positional tags |
+
+### Lifecycle Evals: Keeping Memory Current
+
+Seven more test cases in `evals.json` check how an agent handles memories that may be wrong. They run
+against a throwaway repo and store built by `evals/lifecycle_eval.py`, which grades the end state
+without an LLM and never touches a real DB. Each run needs its own directory:
+
+```bash
+evals/lifecycle_eval.py setup /tmp/lc/r1
+evals/lifecycle_eval.py prompt /tmp/lc/r1 stale-deploy-flag   # give this text to a subagent
+evals/lifecycle_eval.py grade /tmp/lc/r1 stale-deploy-flag
+```
+
+Keep eval names out of the run paths and out of the agent's view: a path like `stale-deploy-flag`
+tells the agent the answer. Put `SKILL.md` in the parent of the run directories.
+
+Results (2026-11-07, one run per case, Opus 5.5, bkmr 8.0.0, so history kept the old text for both):
+
+| Skill | Assertions passed | Both stale memories fixed | Asked the user about a stale memory | Mean tool calls | Mean tokens |
+|---|---|---|---|---|---|
+| Before lifecycle rules | 28/32 | 4/7 runs | 3/7 runs | 8.0 | 60.6K |
+| With lifecycle rules | 32/32 | 7/7 runs | 0/7 runs | 9.7 | 65.8K |
+
+All four failed assertions are a missing reason in `-d`. No run on either skill changed a memory that
+still held. These are small repos and one run each, in a store where two of eight memories were stale:
+read the table as direction, not as a rate.
+
+Five of the 14 runs tried to run `deploy.sh` to test a memory, and the auto mode classifier blocked
+each one. A sentence against this was added afterwards: re-running the three affected cases gave one
+attempt in three and the same grades. That is too few runs to show the sentence works, so do not rely on
+it as a safeguard. The runs also shared port 8123, which fits the few `make test` failures they saw, but that is not proven.
 
 ### Retrieval Eval: Markdown vs. Plain Content
 
@@ -158,7 +191,7 @@ Evals create real `_mem_` bookmarks in the database. Clean up with:
 # List test memories
 bkmr search -t _mem_ --json --np
 
-# Delete by ID (interactive confirmation required). History keeps the text of a memory:
+# Delete by ID (asks for confirmation; --yes skips it). History keeps the text of a memory:
 # use --force as well if an eval stored anything sensitive
 bkmr delete 17,18,19
 ```

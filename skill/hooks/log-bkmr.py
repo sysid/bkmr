@@ -49,6 +49,7 @@ EXIT CODES:
 """
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 
@@ -74,28 +75,43 @@ def setup_logging(session_id: str) -> logging.Logger:
     return logger
 
 
+# An invocation is the word bkmr at a command position or after a path, never inside a path such as
+# "cd bkmr" or "dev/bkmr/src". Text that merely quotes "bkmr add" is also logged: this is a
+# statistic, and missing real chained commands would cost more.
+BKMR_INVOCATION = re.compile(r"(?:^|[\s;&|(/])bkmr\s+(--?\w[\w-]*|[a-z][a-z-]*)")
+
+OPERATIONS = {
+    "hsearch": "READ",
+    "sem-search": "READ",
+    "search": "READ",
+    "add": "WRITE",
+    "update": "UPDATE",
+    "edit": "EDIT",
+    "delete": "DELETE",
+    "restore": "WRITE",
+    "history": "READ",
+    "show": "SHOW",
+    "verify": "VERIFY",
+}
+
+FORCE_FLAG = re.compile(r"\s(--force|-f)(\s|$)")
+
+
+def invokes_bkmr(command: str) -> bool:
+    """True if the command runs bkmr, also when chained or with a path or environment prefix."""
+    return BKMR_INVOCATION.search(command) is not None
+
+
 def classify_operation(command: str) -> str:
-    """Classify a bkmr command into a human-readable operation type."""
-    if "hsearch" in command or "sem-search" in command:
-        return "READ"
-    if "search" in command:
-        return "READ"
-    if " add " in command:
-        return "WRITE"
-    if " update " in command:
-        return "UPDATE"
-    if " edit " in command:
-        return "EDIT"
-    if " delete " in command:
-        # Unlike a plain delete of a memory, this cannot be undone
-        return "PURGE" if " --force" in command or " -f " in command else "DELETE"
-    if " restore " in command:
-        return "WRITE"
-    if " history" in command:
-        return "READ"
-    if " show " in command:
-        return "SHOW"
-    return "OTHER"
+    """Classify a command by the subcommand of its first bkmr invocation."""
+    invocation = BKMR_INVOCATION.search(command)
+    if not invocation:
+        return "OTHER"
+    operation = OPERATIONS.get(invocation.group(1), "OTHER")
+    # Unlike a plain delete of a memory, this cannot be undone
+    if operation == "DELETE" and FORCE_FLAG.search(command):
+        return "PURGE"
+    return operation
 
 
 def main() -> None:
@@ -107,7 +123,7 @@ def main() -> None:
     command = payload.get("tool_input", {}).get("command", "")
 
     # Only log bkmr commands
-    if not command.startswith("bkmr "):
+    if not invokes_bkmr(command):
         sys.exit(0)
 
     session_id = payload.get("session_id", "unknown")

@@ -45,7 +45,7 @@ Exit codes are a contract for scripts. `CliError::exit_code()` maps errors to co
 | 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone` or `delete`, failed `delete`, `delete --force` with another process reading, missing import path |
 | 64 | `USAGE` | Fix the invocation or config | unknown flag, no arguments, non-numeric ID, unsupported shell, invalid config file |
 | 65 | `DUP` | Duplicate name | `import-files` without `--update` |
-| 130 | `CANCEL` | User declined a confirmation | `clear-embeddings`, `delete --force` (plain `delete` exits 0: it promises no removal for good) |
+| 130 | `CANCEL` | User declined a confirmation | `clear-embeddings`, `delete` (also with no input on stdin; `--yes` skips the prompt, except with `--force`) |
 
 A new `CliError` variant exits 1 unless `exit_code()` says otherwise. Use `InvalidInput` only when
 the user can fix the failure by changing the arguments; for a state problem such as an unknown ID,
