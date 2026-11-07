@@ -480,7 +480,7 @@ pub fn add(
 
 #[instrument(skip(cli, bookmark_service))]
 pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
-    if let Commands::Delete { ids, force } = cli.command.unwrap() {
+    if let Commands::Delete { ids, force, yes } = cli.command.unwrap() {
         let mut seen = HashSet::new();
         let id_list: Vec<i32> = get_ids(ids)?
             .into_iter()
@@ -488,13 +488,13 @@ pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult
             .collect();
         // One failed ID must not stop the others, so failures are reported at the end
         let mut failed_ids = Vec::new();
-        let mut purge_declined = false;
+        let mut declined = false;
 
         for id in id_list {
             if force {
                 match purge_with_confirmation(&bookmark_service, id) {
                     Ok(PurgeOutcome::Purged) => {}
-                    Ok(PurgeOutcome::Declined) => purge_declined = true,
+                    Ok(PurgeOutcome::Declined) => declined = true,
                     Ok(PurgeOutcome::NotFound) => failed_ids.push(id),
                     Err(e) => {
                         eprintln!("Error purging bookmark with ID {}: {}", id, e);
@@ -515,7 +515,7 @@ pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult
             if let Some(bookmark) = bookmark {
                 eprintln!("Deleting: {} ({})", bookmark.title, bookmark.url);
 
-                if confirm("Confirm delete?") {
+                if yes || confirm("Confirm delete?") {
                     match bookmark_service.delete_bookmark(id) {
                         Ok(true) => eprintln!("Deleted bookmark with ID {}", id),
                         Ok(false) => {
@@ -529,6 +529,7 @@ pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult
                     }
                 } else {
                     eprintln!("Deletion cancelled");
+                    declined = true;
                 }
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
@@ -542,9 +543,9 @@ pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult
                 failed_ids
             )));
         }
-        // A script must not read a declined purge as the text being gone. A plain delete promises
-        // no such thing and keeps exiting 0.
-        if purge_declined {
+        // A script or an agent without stdin must not read a declined prompt as the bookmark being
+        // gone. Failed IDs go first: they need the caller's attention whatever else was declined.
+        if declined {
             return Err(CliError::OperationAborted);
         }
     }

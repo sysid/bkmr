@@ -453,11 +453,10 @@ about this repo, not one about another repo or live infrastructure. Read the ded
 memories that relied on the old value, and fix those too. If the user tells you a new fact, that
 counts as evidence.
 
-**When nothing true is left to say, delete it,** after saving the reason. `delete` asks for
-confirmation: without a piped `y` it cancels and still exits 0.
+**When nothing true is left to say, delete it,** after saving the reason:
 
 ```bash
-bkmr update -d 'Obsolete: the guard was removed in 2.0' 42 && printf 'y\n' | bkmr delete 42
+bkmr update -d 'Obsolete: the guard was removed in 2.0' 42 && bkmr delete --yes 42
 ```
 
 **To undo** a correction or delete, find the saved state and restore it. Without an ID, `history`
@@ -535,7 +534,7 @@ corrects it); otherwise add a new one.
 | Adding a corrected memory next to the wrong one | Search returns both and the next agent has to guess | Correct in place; history keeps the old text |
 | Asking whether to fix a memory you have evidence against | Interrupts the user with a decision that can be undone | Correct or delete it, and mention it in your reply |
 | Changing a memory after one clean run | Rare failures are the valuable ones; a pass disproves nothing | Keep it unless evidence contradicts it |
-| `bkmr delete` without a piped `y` | Cancels and exits 0, so it looks done | `printf 'y\n' \| bkmr delete <id>` |
+| `bkmr delete` without `--yes` | Asks for confirmation, finds no input, cancels and exits 130 | `bkmr delete --yes <id>` |
 | `delete --force` without being asked | Nothing can bring it back | Plain `delete` |
 
 ---

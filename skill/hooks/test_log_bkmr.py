@@ -18,12 +18,12 @@ spec.loader.exec_module(log_bkmr)
         ("cd /tmp/project && bkmr add 'x' 'gotcha' -t mem --no-web", "WRITE"),
         ("BKMR_DB_URL=/tmp/x.db bkmr hsearch 'x' -t _mem_", "READ"),
         ("/Users/me/bin/bkmr update --url 'x' 42", "UPDATE"),
-        ("bkmr update 42 -d 'why' && printf 'y\\n' | bkmr delete 42", "UPDATE"),
+        ("bkmr update 42 -d 'why' && bkmr delete --yes 42", "UPDATE"),
         # The operation is the subcommand, not a word that happens to be in the content.
         ("bkmr add 'fix the search box' 'gotcha' -t mem", "WRITE"),
         ("bkmr show 42 --json", "SHOW"),
         ("bkmr delete 42", "DELETE"),
-        ("printf 'y\\n' | bkmr delete 42", "DELETE"),
+        ("bkmr delete --yes 42", "DELETE"),
         # Unlike a plain delete of a memory, this cannot be undone
         ("bkmr delete --force 42", "PURGE"),
         ("bkmr delete 42 -f", "PURGE"),

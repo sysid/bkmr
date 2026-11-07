@@ -893,7 +893,7 @@ fn given_unknown_id_among_ids_when_delete_then_deletes_the_rest_and_exits_failur
 }
 
 #[test]
-fn given_declined_prompt_when_delete_then_keeps_bookmark_and_exits_success() {
+fn given_declined_prompt_when_delete_then_keeps_bookmark_and_exits_cancel() {
     let dir = TempDir::new().unwrap();
     let db = dir.path().join("delete.db");
     create_db_with_one_bookmark(&db);
@@ -904,10 +904,99 @@ fn given_declined_prompt_when_delete_then_keeps_bookmark_and_exits_success() {
         .args(["delete", &id])
         .write_stdin("n\n")
         .assert()
-        .success()
+        .code(130)
         .stderr(predicate::str::contains("Deletion cancelled"));
 
     assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_no_input_when_delete_then_keeps_bookmark_and_exits_cancel() {
+    // An agent has no stdin. Exit 0 here would read as the bookmark being gone.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &id])
+        .write_stdin("")
+        .assert()
+        .code(130);
+
+    assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_yes_when_delete_then_deletes_all_without_asking() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    add_second_bookmark(&db);
+    let ids: Vec<String> = search_all(&db)
+        .iter()
+        .map(|b| b["id"].to_string())
+        .collect();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "--yes", &ids.join(",")])
+        .write_stdin("")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Confirm").not());
+
+    assert_eq!(search_all(&db).len(), 0);
+}
+
+#[test]
+fn given_yes_and_unknown_id_when_delete_then_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "-y", "9999"])
+        .write_stdin("")
+        .assert()
+        .code(1);
+
+    assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_yes_and_force_when_delete_then_rejected_and_nothing_is_removed() {
+    // A purge cannot be undone, so skipping its prompt must take more than one flag.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("delete.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "--yes", "--force", &id])
+        .write_stdin("")
+        .assert()
+        .code(64);
+
+    assert_eq!(search_all(&db).len(), 1);
+}
+
+#[test]
+fn given_memory_when_deleted_with_yes_then_it_can_be_restored() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = run_with_config(&db, &config, &["delete", "--yes", &id], "");
+
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(search_all(&db).len(), 0);
+    assert_eq!(history_of(&db, &[&id]).len(), 1);
 }
 
 #[test]
