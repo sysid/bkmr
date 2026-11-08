@@ -47,6 +47,7 @@ LIVE MONITORING:
 EXIT CODES:
   Always exits 0. Purely observational — never blocks agent behavior.
 """
+
 import json
 import logging
 import re
@@ -67,9 +68,7 @@ def setup_logging(session_id: str) -> logging.Logger:
     # Avoid duplicate handlers on repeated calls
     if not logger.handlers:
         handler = logging.FileHandler(log_file)
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         logger.addHandler(handler)
 
     return logger

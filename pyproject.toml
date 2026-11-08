@@ -18,9 +18,8 @@ license = {text = "BSD-3-Clause"}
 requires = ["maturin>=1,<2"]
 build-backend = "maturin"
 
-[tool.uv]
-managed = true
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pip>=26.0",
     "pytest>=8.3.2",
     "pytest-mock>=3.14.0",
@@ -28,6 +27,9 @@ dev-dependencies = [
     "isort>=5.13.2",
     "mypy>=1.11.1",
 ]
+
+[tool.uv]
+managed = true
 
 [tool.maturin]
 bindings = "bin"
