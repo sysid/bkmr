@@ -1,4 +1,5 @@
 """Tests for the bkmr logging hook. Run: uv run --with pytest pytest skill/hooks/test_log_bkmr.py"""
+
 import importlib.util
 from pathlib import Path
 

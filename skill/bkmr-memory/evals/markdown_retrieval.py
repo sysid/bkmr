@@ -90,7 +90,9 @@ def _entry(url: str, title: str, tags: list[str]) -> dict:
     return {"url": url, "title": title, "description": "", "tags": ["_mem_", *tags]}
 
 
-def load_db(bkmr: str, workdir: Path, name: str, entries: list[dict]) -> tuple[Path, dict[str, int]]:
+def load_db(
+    bkmr: str, workdir: Path, name: str, entries: list[dict]
+) -> tuple[Path, dict[str, int]]:
     db = workdir / f"{name}.db"
     src = workdir / f"{name}.json"
     src.write_text(json.dumps(entries))
@@ -104,7 +106,9 @@ def load_db(bkmr: str, workdir: Path, name: str, entries: list[dict]) -> tuple[P
 
 
 def rank_hsearch(bkmr: str, db: Path, q: str, target: int) -> int | None:
-    rows = json.loads(run(bkmr, db, "hsearch", q, "-t", "_mem_", "--json", "--np", "-l", str(LIMIT)) or "[]")
+    rows = json.loads(
+        run(bkmr, db, "hsearch", q, "-t", "_mem_", "--json", "--np", "-l", str(LIMIT)) or "[]"
+    )
     ids = [r["id"] for r in rows]
     return ids.index(target) + 1 if target in ids else None
 
@@ -120,7 +124,9 @@ def rank_sem(bkmr: str, db: Path, q: str, target: int) -> int | None:
 def fts_hit(bkmr: str, db: Path, q: str, target: int) -> bool:
     # Same query string hsearch hands to FTS5 (domain/search.rs fts_query).
     fts = " ".join('"' + t.replace('"', '""') + '"' for t in q.split())
-    rows = json.loads(run(bkmr, db, "search", fts, "-t", "_mem_", "--json", "--np", "-l", str(LIMIT)) or "[]")
+    rows = json.loads(
+        run(bkmr, db, "search", fts, "-t", "_mem_", "--json", "--np", "-l", str(LIMIT)) or "[]"
+    )
     return target in {r["id"] for r in rows}
 
 
@@ -155,14 +161,24 @@ def load_tokenizer():
 def token_stats(corpus: dict, tok) -> dict:
     out = {}
     for v in ["plain", "md_light", "md_heavy"]:
-        counts = [len(tok.encode(embedding_text(f["tags"], f["title"], f[v])).ids) for f in corpus["facts"]]
-        out[v] = {"mean": round(statistics.mean(counts)), "max": max(counts), "over_512": sum(c > EMBED_MAX_TOKENS for c in counts)}
+        counts = [
+            len(tok.encode(embedding_text(f["tags"], f["title"], f[v])).ids)
+            for f in corpus["facts"]
+        ]
+        out[v] = {
+            "mean": round(statistics.mean(counts)),
+            "max": max(counts),
+            "over_512": sum(c > EMBED_MAX_TOKENS for c in counts),
+        }
     return out
 
 
 def truncation_probe(bkmr: str, workdir: Path, corpus: dict, tok) -> dict:
     p = corpus["truncation_probe"]
-    rows = "\n".join(f"| event_{i} | `/hooks/v1/evt{i}` | retry {i % 5} | {i * 10}ms |" for i in range(p["filler_rows"]))
+    rows = "\n".join(
+        f"| event_{i} | `/hooks/v1/evt{i}` | retry {i % 5} | {i * 10}ms |"
+        for i in range(p["filler_rows"])
+    )
     buried = f"## Webhook endpoints\n\n| Event | Path | Retry | Timeout |\n|---|---|---|---|\n{rows}\n\n## Signature\n\n{p['key_fact']}"
     results = {}
     for name, content in [("short", p["key_fact"]), ("buried", buried)]:
@@ -182,7 +198,9 @@ def truncation_probe(bkmr: str, workdir: Path, corpus: dict, tok) -> dict:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("--bkmr", default=shutil.which("bkmr") or "bkmr")
     ap.add_argument("--keep", type=Path, help="keep DBs in this dir instead of a tempdir")
     ap.add_argument("--json", type=Path, help="write full per-query results here")
@@ -201,15 +219,21 @@ def main() -> None:
         rows = []
         for q in corpus["queries"]:
             target = ids[owner[q["target"]]]
-            rows.append({
-                **q,
-                "hsearch": rank_hsearch(args.bkmr, db, q["q"], target),
-                "sem": rank_sem(args.bkmr, db, q["q"], target),
-                "fts_hit": fts_hit(args.bkmr, db, q["q"], target),
-            })
+            rows.append(
+                {
+                    **q,
+                    "hsearch": rank_hsearch(args.bkmr, db, q["q"], target),
+                    "sem": rank_sem(args.bkmr, db, q["q"], target),
+                    "fts_hit": fts_hit(args.bkmr, db, q["q"], target),
+                }
+            )
         per_query[v] = rows
 
-    report = {"summary": {}, "tokens": token_stats(corpus, tok), "truncation_probe": truncation_probe(args.bkmr, workdir, corpus, tok)}
+    report = {
+        "summary": {},
+        "tokens": token_stats(corpus, tok),
+        "truncation_probe": truncation_probe(args.bkmr, workdir, corpus, tok),
+    }
     for v, rows in per_query.items():
         report["summary"][v] = {}
         for kind in ["all", "kw", "para"]:
@@ -230,21 +254,29 @@ def main() -> None:
 
 def print_report(report: dict, corpus: dict) -> None:
     n_docs = len(corpus["facts"]) + len(corpus["distractors"])
-    print(f"\nCorpus: {len(corpus['facts'])} target facts, {len(corpus['distractors'])} distractors (~{n_docs} memories/DB), {len(corpus['queries'])} queries\n")
+    print(
+        f"\nCorpus: {len(corpus['facts'])} target facts, {len(corpus['distractors'])} distractors (~{n_docs} memories/DB), {len(corpus['queries'])} queries\n"
+    )
     for kind in ["all", "kw", "para"]:
         print(f"== queries: {kind} ==")
-        print(f"{'variant':<13} {'hs MRR':>7} {'hs R@1':>7} {'hs R@5':>7} {'sem MRR':>8} {'sem R@1':>8} {'sem R@5':>8} {'FTS hit':>8}")
+        print(
+            f"{'variant':<13} {'hs MRR':>7} {'hs R@1':>7} {'hs R@5':>7} {'sem MRR':>8} {'sem R@1':>8} {'sem R@5':>8} {'FTS hit':>8}"
+        )
         for v, s in report["summary"].items():
             k = s[kind]
-            print(f"{v:<13} {k['hsearch']['mrr']:>7} {k['hsearch']['r@1']:>7} {k['hsearch']['r@5']:>7} "
-                  f"{k['sem']['mrr']:>8} {k['sem']['r@1']:>8} {k['sem']['r@5']:>8} {k['fts_hit_rate']:>8}")
+            print(
+                f"{v:<13} {k['hsearch']['mrr']:>7} {k['hsearch']['r@1']:>7} {k['hsearch']['r@5']:>7} "
+                f"{k['sem']['mrr']:>8} {k['sem']['r@1']:>8} {k['sem']['r@5']:>8} {k['fts_hit_rate']:>8}"
+            )
         print()
     print("== embedding input tokens (Nomic tokenizer, incl. prefix/title/tags) ==")
     for v, t in report["tokens"].items():
         print(f"{v:<13} mean {t['mean']:>4}  max {t['max']:>4}  over 512: {t['over_512']}")
     print("\n== truncation probe ==")
     for name, r in report["truncation_probe"].items():
-        print(f"{name:<7} tokens {r['tokens']:>5} truncated={r['truncated']!s:<5} sem rank {r['sem_rank']}  hsearch rank {r['hsearch_rank']}")
+        print(
+            f"{name:<7} tokens {r['tokens']:>5} truncated={r['truncated']!s:<5} sem rank {r['sem_rank']}  hsearch rank {r['hsearch_rank']}"
+        )
 
 
 if __name__ == "__main__":

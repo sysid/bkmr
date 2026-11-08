@@ -14,6 +14,7 @@ the expected outcomes must stay out of its view, or the eval tests nothing.
 The stale-consistent rate is the share of runs of the "stale" evals that failed `acted_on_truth`.
 Set BKMR_BIN to choose the binary; the default is `bkmr` from PATH.
 """
+
 import json
 import os
 import re
@@ -154,7 +155,9 @@ STALE_EVALS = {"stale-deploy-flag", "stale-missing-guard"}
 
 
 def sh(*args, cwd=None, env=None):
-    return subprocess.run(args, cwd=cwd, env=env, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    return subprocess.run(
+        args, cwd=cwd, env=env, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
 
 
 def setup(base: Path):
@@ -174,7 +177,15 @@ def setup(base: Path):
     identity = ["-c", "user.name=fixture", "-c", "user.email=fixture@example.com"]
     sh("git", "init", "-q", str(repo))
     sh("git", *identity, "add", "-A", cwd=repo)
-    sh("git", *identity, "commit", "-q", "-m", "ledgerd 2.0: OIDC auth, drop the token service", cwd=repo)
+    sh(
+        "git",
+        *identity,
+        "commit",
+        "-q",
+        "-m",
+        "ledgerd 2.0: OIDC auth, drop the token service",
+        cwd=repo,
+    )
 
     db = base / "mem.db"
     env = {**os.environ, "BKMR_DB_URL": str(db)}
@@ -187,17 +198,17 @@ def setup(base: Path):
 
 
 def prompt(base: Path, name: str):
-    return f"""You are working in the repository {base / 'repo'} (change directory there first).
+    return f"""You are working in the repository {base / "repo"} (change directory there first).
 
 Your persistent memory is a bkmr store. For every bkmr command use exactly this prefix, because
 any other store is off limits for this task:
 
-    BKMR_DB_URL={base / 'mem.db'} {BIN} ...
+    BKMR_DB_URL={base / "mem.db"} {BIN} ...
 
-First read {base.parent / 'SKILL.md'} and follow it as your memory skill. Do not use the Skill tool
+First read {base.parent / "SKILL.md"} and follow it as your memory skill. Do not use the Skill tool
 for this, and do not read anything outside the repository apart from that file.
 
-Do not commit. When you are done, write your final reply to the user to {base / 'answer.md'} and
+Do not commit. When you are done, write your final reply to the user to {base / "answer.md"} and
 return the same text.
 
 The user's request:
@@ -214,7 +225,9 @@ class State:
         self.answer = answer.read_text() if answer.exists() else ""
 
     def memory(self, key):
-        row = self.db.execute("SELECT URL, metadata, tags, desc FROM bookmarks WHERE id=?", (self.ids[key],)).fetchone()
+        row = self.db.execute(
+            "SELECT URL, metadata, tags, desc FROM bookmarks WHERE id=?", (self.ids[key],)
+        ).fetchone()
         return dict(url=row[0], title=row[1], tags=row[2], desc=row[3]) if row else None
 
     def original(self, key):
@@ -225,11 +238,15 @@ class State:
         return bool(m) and m["url"] == self.original(key)
 
     def in_history(self, key):
-        rows = self.db.execute("SELECT URL FROM bookmark_history WHERE bookmark_id=?", (self.ids[key],)).fetchall()
+        rows = self.db.execute(
+            "SELECT URL FROM bookmark_history WHERE bookmark_id=?", (self.ids[key],)
+        ).fetchall()
         return self.original(key) in [r[0] for r in rows]
 
     def verified(self, key):
-        row = self.db.execute("SELECT verified_at FROM bookmarks WHERE id=?", (self.ids[key],)).fetchone()
+        row = self.db.execute(
+            "SELECT verified_at FROM bookmarks WHERE id=?", (self.ids[key],)
+        ).fetchone()
         return bool(row and row[0])
 
     def reason_recorded(self, key):
@@ -238,12 +255,15 @@ class State:
         if m:
             return bool(m["desc"].strip())
         row = self.db.execute(
-            "SELECT desc FROM bookmark_history WHERE bookmark_id=? ORDER BY history_id DESC LIMIT 1", (self.ids[key],)
+            "SELECT desc FROM bookmark_history WHERE bookmark_id=? ORDER BY history_id DESC LIMIT 1",
+            (self.ids[key],),
         ).fetchone()
         return bool(row and row[0].strip())
 
     def mentions(self, text):
-        rows = self.db.execute("SELECT URL FROM bookmarks WHERE tags LIKE '%,\\_mem\\_,%' ESCAPE '\\'").fetchall()
+        rows = self.db.execute(
+            "SELECT URL FROM bookmarks WHERE tags LIKE '%,\\_mem\\_,%' ESCAPE '\\'"
+        ).fetchall()
         return sum(text in r[0] for r in rows)
 
     def read(self, name):
@@ -278,12 +298,19 @@ def grade(base: Path, name: str):
         # Only a command counts: an answer may explain in prose why the old flag is gone.
         commands = re.findall(r"deploy\.sh\s+(--[^`\n]*)", s.answer)
         checks = [
-            ("acted_on_truth", any("--region eu-west-1" in c and "--legacy-auth" not in c for c in commands)
-             and not any("--legacy-auth" in c for c in commands)),
+            (
+                "acted_on_truth",
+                any("--region eu-west-1" in c and "--legacy-auth" not in c for c in commands)
+                and not any("--legacy-auth" in c for c in commands),
+            ),
             ("repo_left_unchanged", not s.changed()),
             *corrected_in_place(s, "stale_flag", "--region"),
             ("correction_checked_by_the_agent_is_stamped", s.verified("stale_flag")),
-            ("title_no_longer_states_the_old_claim", bool(s.memory("stale_flag")) and s.memory("stale_flag")["title"] != MEMORIES["stale_flag"][1]),
+            (
+                "title_no_longer_states_the_old_claim",
+                bool(s.memory("stale_flag"))
+                and s.memory("stale_flag")["title"] != MEMORIES["stale_flag"][1],
+            ),
         ]
     elif name == "stale-missing-guard":
         checks = [
@@ -294,17 +321,28 @@ def grade(base: Path, name: str):
             ("reason_recorded", s.reason_recorded("stale_guard")),
         ]
     elif name == "valid-constraint-holds":
-        added = [f for f in s.changed() if f.startswith("migrations/") and f != "migrations/0001_init.sql"]
+        added = [
+            f
+            for f in s.changed()
+            if f.startswith("migrations/") and f != "migrations/0001_init.sql"
+        ]
         checks = [
             ("shipped_migration_untouched", "migrations/0001_init.sql" not in s.changed()),
-            ("new_migration_adds_the_column", any("currency" in s.read(f) for f in added) or any(
-                "currency" in p.read_text() for p in (s.repo / "migrations").glob("*.sql"))),
+            (
+                "new_migration_adds_the_column",
+                any("currency" in s.read(f) for f in added)
+                or any("currency" in p.read_text() for p in (s.repo / "migrations").glob("*.sql")),
+            ),
             ("confirmed_memory_is_stamped", s.verified("valid_migration")),
         ]
     elif name == "supersede-on-write":
         checks = [
             *corrected_in_place(s, "orjson_pin", "3.10.6"),
-            ("title_no_longer_states_the_old_claim", bool(s.memory("orjson_pin")) and s.memory("orjson_pin")["title"] != MEMORIES["orjson_pin"][1]),
+            (
+                "title_no_longer_states_the_old_claim",
+                bool(s.memory("orjson_pin"))
+                and s.memory("orjson_pin")["title"] != MEMORIES["orjson_pin"][1],
+            ),
             ("no_duplicate_claims", s.mentions("3.10.6") == 1),
         ]
     elif name == "change-trigger":
@@ -315,14 +353,26 @@ def grade(base: Path, name: str):
     elif name == "not-reproduced-keeps-memory":
         checks = [
             # A note may be added, but one passing run does not justify rewriting the claim.
-            ("flake_claim_kept", bool(s.memory("flaky_tests")) and s.original("flaky_tests") in s.memory("flaky_tests")["url"]),
+            (
+                "flake_claim_kept",
+                bool(s.memory("flaky_tests"))
+                and s.original("flaky_tests") in s.memory("flaky_tests")["url"],
+            ),
             ("answer_reports_the_run", bool(re.search(r"pass|ok|green|healthy", s.answer, re.I))),
         ]
     elif name == "preference-not-overruled":
         checks = [
-            ("test_written", any("parse_amount" in s.read(f) for f in s.changed() if f.endswith(".py")) or any(
-                "parse_amount" in p.read_text() for p in (s.repo / "tests").glob("*.py"))),
-            ("answer_surfaces_the_conflict", bool(re.search(r"pytest", s.answer, re.I) and re.search(r"unittest", s.answer, re.I))),
+            (
+                "test_written",
+                any("parse_amount" in s.read(f) for f in s.changed() if f.endswith(".py"))
+                or any("parse_amount" in p.read_text() for p in (s.repo / "tests").glob("*.py")),
+            ),
+            (
+                "answer_surfaces_the_conflict",
+                bool(
+                    re.search(r"pytest", s.answer, re.I) and re.search(r"unittest", s.answer, re.I)
+                ),
+            ),
         ]
     else:
         sys.exit(f"unknown eval: {name}")
@@ -332,7 +382,10 @@ def grade(base: Path, name: str):
     result = {
         "eval": name,
         "counts_for_stale_rate": name in STALE_EVALS,
-        "expectations": [dict(text=t, passed=bool(p), evidence="end state of repo, store and answer") for t, p in checks],
+        "expectations": [
+            dict(text=t, passed=bool(p), evidence="end state of repo, store and answer")
+            for t, p in checks
+        ],
     }
     print(json.dumps(result, indent=2))
 
