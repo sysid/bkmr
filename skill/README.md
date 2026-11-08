@@ -28,6 +28,10 @@ bkmr skill install ~/.agents/skills          # agents that read the shared .agen
 bkmr skill install --force ~/.claude/skills  # after upgrading bkmr
 ```
 
+`--force` writes the new copy first and swaps it in, so a failed install keeps the old one. It
+replaces a symlink at `DIR/bkmr-memory` as a link, but deletes a real directory there, also when
+`DIR` leads into a repo checkout. Commit or move local edits to the skill before using it.
+
 Any [Agent Skills](https://agentskills.io) installer works as well, e.g.
 `gh skill install sysid/bkmr bkmr-memory --agent claude-code --scope user`; it installs the latest
 release, which can be newer than your binary.

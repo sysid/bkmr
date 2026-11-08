@@ -275,3 +275,56 @@ fn given_skill_path_is_symlink_when_installing_with_force_then_replaces_link_and
         "the link target must never be touched"
     );
 }
+
+#[test]
+fn given_broken_config_when_installing_then_still_succeeds() {
+    let base = TempDir::new().unwrap();
+    let config = base.path().join("config.toml");
+    fs::write(&config, "this is = = not toml").unwrap();
+
+    cargo_bin_cmd!("bkmr")
+        .arg("--config")
+        .arg(&config)
+        .args(["skill", "install"])
+        .arg(base.path().join("skills"))
+        .assert()
+        .success();
+
+    assert!(base.path().join("skills").join(SKILL_NAME).is_dir());
+}
+
+#[test]
+fn given_unexpanded_tilde_in_dir_when_installing_then_installs_under_home() {
+    // An agent calling bkmr without a shell passes `~` literally.
+    let home = TempDir::new().unwrap();
+    let cwd = TempDir::new().unwrap();
+
+    cargo_bin_cmd!("bkmr")
+        .env("HOME", home.path())
+        .current_dir(cwd.path())
+        .args(["skill", "install", "~/skills"])
+        .assert()
+        .success();
+
+    assert!(home.path().join("skills").join(SKILL_NAME).is_dir());
+    assert!(!cwd.path().join("~").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn given_restrictive_umask_when_installing_then_script_is_executable_only_for_the_owner() {
+    use std::os::unix::fs::PermissionsExt;
+    let target = TempDir::new().unwrap();
+
+    let status = std::process::Command::new("sh")
+        .args(["-c", "umask 077 && exec \"$0\" skill install \"$1\""])
+        .arg(env!("CARGO_BIN_EXE_bkmr"))
+        .arg(target.path())
+        .status()
+        .unwrap();
+
+    assert!(status.success());
+    let script = target.path().join(SKILL_NAME).join("scripts/due-report.py");
+    let mode = fs::metadata(script).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode, 0o700);
+}

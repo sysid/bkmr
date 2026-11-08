@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -9,6 +10,8 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[2] / "bkmr/skills/bkmr-memory/scripts/due-report.py"
 spec = importlib.util.spec_from_file_location("due_report", SCRIPT)
 due_report = importlib.util.module_from_spec(spec)
+# Keep __pycache__ out of the shipped bundle, whichever runner imports the script.
+sys.dont_write_bytecode = True
 spec.loader.exec_module(due_report)
 
 NOW = datetime(2026, 11, 8, tzinfo=timezone.utc)

@@ -76,22 +76,10 @@ pub fn execute_command_with_services(
         Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli, &services),
         Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),
         Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
-        Some(Commands::CreateDb { .. }) => {
-            // This should never be reached as CreateDb is handled specially in main.rs
+        // main.rs handles these before any database is opened; reaching here is a dispatch bug.
+        Some(Commands::CreateDb { .. } | Commands::Completion { .. } | Commands::Skill { .. }) => {
             Err(error::CliError::CommandFailed(
-                "CreateDb command should be handled in main.rs".to_string(),
-            ))
-        }
-        Some(Commands::Completion { .. }) => {
-            // This should never be reached as Completion is handled specially in main.rs
-            Err(error::CliError::CommandFailed(
-                "Completion command should be handled in main.rs".to_string(),
-            ))
-        }
-        Some(Commands::Skill { .. }) => {
-            // This should never be reached as Skill is handled specially in main.rs
-            Err(error::CliError::CommandFailed(
-                "Skill command should be handled in main.rs".to_string(),
+                "database-independent command should be handled in main.rs".to_string(),
             ))
         }
         Some(Commands::Xxx { ids, tags }) => {

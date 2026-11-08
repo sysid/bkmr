@@ -45,8 +45,8 @@ fn main() {
     // Load configuration with CLI overrides
     let config_path_ref = cli.config.as_deref();
     let mut settings = load_settings(config_path_ref).unwrap_or_else(|e| {
-        // A broken config must not block generating a fresh one
-        if cli.generate_config {
+        // A broken config must not block generating a fresh one, nor commands that never read it
+        if cli.generate_config || matches!(cli.command, Some(Commands::Skill { .. })) {
             return Settings::default();
         }
         print_error(&format!("Error: {}", e), no_color);

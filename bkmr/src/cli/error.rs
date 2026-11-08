@@ -100,3 +100,19 @@ impl From<crate::infrastructure::repositories::sqlite::error::SqliteRepositoryEr
 }
 
 pub type CliResult<T> = Result<T, CliError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn given_already_exists_error_when_adding_context_then_keeps_duplicate_exit_code() {
+        let err = CliError::AlreadyExists("skills/bkmr-memory".to_string()).context("install");
+
+        assert_eq!(err.exit_code(), exitcode::DUP);
+        assert_eq!(
+            err.to_string(),
+            "Already exists: install: skills/bkmr-memory"
+        );
+    }
+}

@@ -608,9 +608,10 @@ Exit codes:
   64   invalid arguments
   65   DIR/bkmr-memory already exists; --force replaces it")]
     Install {
-        /// Skills directory of the agent; created if missing
+        /// Skills directory of the agent; created if missing. `~` and `$VAR` are expanded
         dir: PathBuf,
-        /// Replace an existing DIR/bkmr-memory; a symlink is replaced, its target is left alone
+        /// Replace an existing DIR/bkmr-memory; a symlink is replaced, its target is left alone.
+        /// A real directory is deleted, also inside a repo checkout
         #[arg(short = 'f', long = "force")]
         force: bool,
     },

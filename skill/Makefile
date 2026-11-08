@@ -11,8 +11,6 @@ python_src := $(hooks) $(scripts) $(tests) $(evals)
 
 # The scripts are stdlib-only PEP 723 scripts. Pytest and ruff come in ad hoc via `uv run --with`.
 # --no-project: this directory sits inside the bkmr Python project, whose build runs maturin.
-# Tests import the shipped due-report.py; keep its directory free of __pycache__.
-export PYTHONDONTWRITEBYTECODE := 1
 UV := uv run --quiet --no-project
 PYTEST := $(UV) --with pytest pytest
 
