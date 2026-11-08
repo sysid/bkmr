@@ -3,12 +3,16 @@ MAKEFLAGS += --no-print-directory
 
 app_root := $(CURDIR)
 hooks := $(app_root)/hooks
-scripts := $(app_root)/bkmr-memory/scripts
-evals := $(app_root)/bkmr-memory/evals
-python_src := $(hooks) $(scripts) $(evals)
+# The shipped skill lives in the crate (embedded by `bkmr skill install`); tests stay here.
+scripts := $(app_root)/../bkmr/skills/bkmr-memory/scripts
+tests := $(app_root)/tests
+evals := $(app_root)/evals
+python_src := $(hooks) $(scripts) $(tests) $(evals)
 
 # The scripts are stdlib-only PEP 723 scripts. Pytest and ruff come in ad hoc via `uv run --with`.
 # --no-project: this directory sits inside the bkmr Python project, whose build runs maturin.
+# Tests import the shipped due-report.py; keep its directory free of __pycache__.
+export PYTHONDONTWRITEBYTECODE := 1
 UV := uv run --quiet --no-project
 PYTEST := $(UV) --with pytest pytest
 
@@ -18,11 +22,11 @@ TESTING:  ## ############################################################
 
 .PHONY: test
 test:  ## run all pytest cases (hooks, due report, lifecycle eval)
-	$(PYTEST) $(hooks) $(scripts) $(evals)
+	$(PYTEST) $(hooks) $(tests) $(evals)
 
 .PHONY: test-verbose
 test-verbose:  ## run pytest with -v
-	$(PYTEST) -v $(hooks) $(scripts) $(evals)
+	$(PYTEST) -v $(hooks) $(tests) $(evals)
 
 ################################################################################
 # Code Quality \

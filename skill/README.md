@@ -19,11 +19,18 @@ the agent look them up before it works and write them down when it is done.
 
 ## Using It
 
-Install once by linking the skill where the agent finds it:
+Install once into the skills directory of your agent. The binary carries a copy of the skill that
+matches its own CLI flags:
 
 ```bash
-ln -s ~/path/to/bkmr/skill/bkmr-memory ~/.claude/skills/bkmr-memory
+bkmr skill install ~/.claude/skills          # Claude Code
+bkmr skill install ~/.agents/skills          # agents that read the shared .agents directory
+bkmr skill install --force ~/.claude/skills  # after upgrading bkmr
 ```
+
+Any [Agent Skills](https://agentskills.io) installer works as well, e.g.
+`gh skill install sysid/bkmr bkmr-memory --agent claude-code --scope user`; it installs the latest
+release, which can be newer than your binary.
 
 After that it triggers on its own. You only talk to the agent:
 
@@ -68,11 +75,11 @@ age ≥ window  ──>  due  (means "review", never "delete")
 ```
 
 Pinned memories describe things that change with releases, not with time, so they come up sooner.
-The rule lives in `scripts/due-report.py` (`VERSION`, `HARNESS_TAGS`), computed per run; bkmr
+The rule lives in `bkmr/skills/bkmr-memory/scripts/due-report.py` (`VERSION`, `HARNESS_TAGS`), computed per run; bkmr
 stores nothing about it. Two-part versions like "JDK 25" are not detected.
 
 ```bash
-scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db          # table, most overdue first
+scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db          # table, most overdue first; run from the installed skill dir
 scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --json   # same, for an agent
 ```
 
@@ -91,9 +98,16 @@ scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --json   # same, fo
 
 ## Developing
 
-- Edit `SKILL.md`; keep it under 500 lines. Agents read top-down, so "Mandatory Tag Rules" stays
-  first.
+- Layout: only `bkmr/skills/bkmr-memory/` ships. It sits inside the crate so `bkmr skill install`
+  can embed it (`bkmr/src/cli/skill.rs`) and `gh skill` finds it by name. Everything in `skill/`
+  (this README, evals, tests, hooks) stays in the repo. `bkmr/tests/test_skill.rs` checks the
+  Agent Skills spec rules and fails when a new bundle file is not listed in `SKILL_FILES`.
+- Edit `bkmr/skills/bkmr-memory/SKILL.md`; keep it under 500 lines (currently over; splitting
+  needs an eval rerun). Agents read top-down, so "Mandatory Tag Rules" stays first.
 - `make -C skill test` / `make -C skill lint` for the scripts.
+- Optional, Claude Code only: `hooks/log-bkmr.py` is a PostToolUse hook that logs every bkmr call
+  an agent makes to `~/.claude/debug/`. Setup instructions are in its docstring. It is a debugging
+  aid and not part of the installed skill.
 - `evals/evals.json` holds agent-behaviour cases; `/skill-creator` runs and grades them. Evals write
   to the DB they are given: use a scratch DB.
 - Two evals have their own harness, since `/skill-creator` does not know them:

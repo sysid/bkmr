@@ -13,6 +13,7 @@ pub mod error;
 pub mod fzf;
 pub mod hsearch_handler;
 pub mod process;
+pub mod skill;
 pub mod tag_commands;
 
 // Old execute_command removed - use execute_command_with_services with dependency injection
@@ -85,6 +86,12 @@ pub fn execute_command_with_services(
             // This should never be reached as Completion is handled specially in main.rs
             Err(error::CliError::CommandFailed(
                 "Completion command should be handled in main.rs".to_string(),
+            ))
+        }
+        Some(Commands::Skill { .. }) => {
+            // This should never be reached as Skill is handled specially in main.rs
+            Err(error::CliError::CommandFailed(
+                "Skill command should be handled in main.rs".to_string(),
             ))
         }
         Some(Commands::Xxx { ids, tags }) => {

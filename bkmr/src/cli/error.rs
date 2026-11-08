@@ -37,6 +37,9 @@ pub enum CliError {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
 
+    #[error("Already exists: {0}")]
+    AlreadyExists(String),
+
     #[error("{0}")]
     Other(String),
 }
@@ -47,6 +50,7 @@ impl CliError {
         match self {
             CliError::InvalidInput(_) | CliError::InvalidIdFormat(_) => exitcode::USAGE,
             CliError::OperationAborted => exitcode::CANCEL,
+            CliError::AlreadyExists(_) => exitcode::DUP,
             _ => exitcode::FAILURE,
         }
     }
@@ -71,6 +75,9 @@ impl CliError {
             CliError::Network(msg) => CliError::Network(format!("{}: {}", context.into(), msg)),
             CliError::Application(err) => CliError::Application(err.context(context)),
             CliError::Other(msg) => CliError::Other(format!("{}: {}", context.into(), msg)),
+            CliError::AlreadyExists(msg) => {
+                CliError::AlreadyExists(format!("{}: {}", context.into(), msg))
+            }
             err => CliError::Other(format!("{}: {}", context.into(), err)),
         }
     }

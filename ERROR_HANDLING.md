@@ -37,8 +37,9 @@ Infrastructure → Domain → Application → CLI / LSP → exit code
 ## Exit codes
 
 Exit codes are a contract for scripts. `CliError::exit_code()` maps errors to codes, and
-`bkmr/tests/test_main.rs` tests them. `bkmr --help` repeats the table, and `delete`, `clear-embeddings`
-and `import-files` list their codes in their own help; keep `bkmr/src/cli/args.rs` in sync when a
+`bkmr/tests/test_main.rs` tests them (`skill install`: `bkmr/tests/test_skill.rs`). `bkmr --help` repeats
+the table, and `delete`, `clear-embeddings`, `import-files` and `skill install` list their codes in
+their own help; keep `bkmr/src/cli/args.rs` in sync when a
 code changes.
 
 | Code | Constant | Meaning | Examples |
@@ -46,7 +47,7 @@ code changes.
 | 0 | `SUCCESS` | Success | |
 | 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone` or `delete`, failed `delete`, `delete --force` with another process reading, missing import path |
 | 64 | `USAGE` | Fix the invocation or config | unknown flag, no arguments, non-numeric ID, unsupported shell, invalid config file |
-| 65 | `DUP` | Duplicate name | `import-files` without `--update` |
+| 65 | `DUP` | Duplicate name | `import-files` without `--update`, `skill install` onto an existing skill without `--force` |
 | 130 | `CANCEL` | User declined a confirmation | `clear-embeddings`, `delete` (also with no input on stdin; `--yes` skips the prompt, except with `--force`) |
 
 A new `CliError` variant exits 1 unless `exit_code()` says otherwise. Use `InvalidInput` only when

@@ -46,7 +46,13 @@ bkmr hsearch "database configuration" -t _mem_ --json --np
 # All output is structured JSON — designed for programmatic consumption
 ```
 
-Use [`skill/bkmr-memory`](skill/bkmr-memory/SKILL.md). It defines a comprehensive memory protocol with taxonomy, deduplication, and session workflows.
+Install the [`bkmr-memory`](bkmr/skills/bkmr-memory/SKILL.md) skill into your agent's skills directory. It defines a comprehensive memory protocol with taxonomy, deduplication, and session workflows. The copy embedded in the binary matches its CLI flags:
+
+```bash
+bkmr skill install ~/.claude/skills    # or ~/.agents/skills, or any agent's skills dir
+# alternative, tracks the latest release:
+gh skill install sysid/bkmr bkmr-memory --agent claude-code --scope user
+```
 
 See **[Agent Integration](https://github.com/sysid/bkmr/wiki/Agent-Integration)**.
 

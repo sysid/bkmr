@@ -1,5 +1,5 @@
 // src/main.rs
-use bkmr::cli::args::{Cli, Commands};
+use bkmr::cli::args::{Cli, Commands, SkillCommands};
 use bkmr::cli::bookmark_commands::pre_fill_database;
 use bkmr::cli::error::CliError;
 use bkmr::config::{load_settings, ConfigSource, Settings};
@@ -198,8 +198,17 @@ fn handle_database_independent_operations(
     match cli.command.as_ref() {
         Some(Commands::CreateDb { .. }) => Some(handle_create_db_command(cli, settings)),
         Some(Commands::Completion { shell }) => Some(handle_completion_command(shell.clone())),
+        Some(Commands::Skill {
+            command: SkillCommands::Install { dir, force },
+        }) => Some(handle_skill_install(dir, *force)),
         _ => None, // Requires database services
     }
+}
+
+fn handle_skill_install(dir: &Path, force: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let installed = bkmr::cli::skill::install(dir, force)?;
+    println!("{}", installed.display());
+    Ok(())
 }
 
 fn handle_generate_config() -> Result<(), Box<dyn std::error::Error>> {
