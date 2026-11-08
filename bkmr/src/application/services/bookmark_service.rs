@@ -10,6 +10,17 @@ use crate::domain::tag::Tag;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
+/// A restore worked out but not written: `restore_bookmark` writes `restored` as it is
+#[derive(Debug, Clone)]
+pub struct RestorePreview {
+    /// The saved state being brought back
+    pub entry: HistoryEntry,
+    /// The bookmark as it is now, `None` if it was deleted
+    pub current: Option<Bookmark>,
+    /// The bookmark as the restore would write it
+    pub restored: Bookmark,
+}
+
 /// Service interface for bookmark-related operations
 pub trait BookmarkService: Send + Sync + Debug {
     /// Add a new bookmark
@@ -53,6 +64,10 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// if it still exists, otherwise by adding it again. A bookmark imported from a file is refused
     /// in place, because the file decides its content.
     fn restore_bookmark(&self, history_id: i32) -> ApplicationResult<Bookmark>;
+
+    /// What `restore_bookmark` would write, without writing it. Runs the same checks, so it
+    /// fails where the restore would fail, short of the write itself.
+    fn preview_restore(&self, history_id: i32) -> ApplicationResult<RestorePreview>;
 
     /// Get a bookmark by ID
     fn get_bookmark(&self, id: i32) -> ApplicationResult<Option<Bookmark>>;

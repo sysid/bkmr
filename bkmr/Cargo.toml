@@ -59,6 +59,7 @@ zerocopy = { version = "0.8", features = ["derive"] }
 tower-lsp-server = "0.23"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "io-std", "time", "process", "sync"] }
 async-trait = "0.1"
+similar = "3.2.1"
 
 [features]
 default = ["ort-download-binaries"]
