@@ -37,6 +37,9 @@ pub enum CliError {
     #[error("IO error: {0}")]
     Io(#[from] io::Error),
 
+    #[error("Already exists: {0}")]
+    AlreadyExists(String),
+
     #[error("{0}")]
     Other(String),
 }
@@ -47,6 +50,7 @@ impl CliError {
         match self {
             CliError::InvalidInput(_) | CliError::InvalidIdFormat(_) => exitcode::USAGE,
             CliError::OperationAborted => exitcode::CANCEL,
+            CliError::AlreadyExists(_) => exitcode::DUP,
             _ => exitcode::FAILURE,
         }
     }
@@ -71,6 +75,9 @@ impl CliError {
             CliError::Network(msg) => CliError::Network(format!("{}: {}", context.into(), msg)),
             CliError::Application(err) => CliError::Application(err.context(context)),
             CliError::Other(msg) => CliError::Other(format!("{}: {}", context.into(), msg)),
+            CliError::AlreadyExists(msg) => {
+                CliError::AlreadyExists(format!("{}: {}", context.into(), msg))
+            }
             err => CliError::Other(format!("{}: {}", context.into(), err)),
         }
     }
@@ -93,3 +100,19 @@ impl From<crate::infrastructure::repositories::sqlite::error::SqliteRepositoryEr
 }
 
 pub type CliResult<T> = Result<T, CliError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn given_already_exists_error_when_adding_context_then_keeps_duplicate_exit_code() {
+        let err = CliError::AlreadyExists("skills/bkmr-memory".to_string()).context("install");
+
+        assert_eq!(err.exit_code(), exitcode::DUP);
+        assert_eq!(
+            err.to_string(),
+            "Already exists: install: skills/bkmr-memory"
+        );
+    }
+}

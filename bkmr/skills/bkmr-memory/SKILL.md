@@ -11,6 +11,8 @@ description: >
   (6) End of task — persist non-trivial learnings.
   When in doubt, invoke — a quick bkmr query costs almost nothing.
   DO NOT use file-based memory — use bkmr instead.
+license: BSD-3-Clause
+compatibility: Requires the bkmr CLI (>= 8.2.0) on PATH. scripts/due-report.py requires uv.
 ---
 
 # bkmr-memory — Persistent Agent Memory
@@ -251,8 +253,8 @@ both, and when the two conflict, the agent wins.
       ```
    2. Copy `kafka.jks` to every broker.
    ````
-6. **No headings, tables or `[text](url)` links.** The retrieval eval
-   (`evals/markdown_retrieval.py`) showed why: a memory that needs `##` sections is several facts
+6. **No headings, tables or `[text](url)` links.** bkmr's markdown retrieval eval (in the bkmr
+   repo) showed why: a memory that needs `##` sections is several facts
    merged into one blurred embedding (paraphrase R@1 dropped from 0.75 to 0.58), and a table can
    push the tail past the 512-token embedding window, where it is silently cut. Split instead.
 
@@ -434,6 +436,9 @@ A memory is a dated claim, and nothing marks it when the world changes. Maintain
 part of your job: act on evidence yourself instead of asking the user, except in the cases listed
 under "Who decides". bkmr saves the old state of a memory on every change and delete, outside
 search, so these actions can be undone. Mention each one in your reply.
+
+To find memories past their review window, run `scripts/due-report.py --json` from this skill's
+directory. It only reads the store; the rules below decide what to do with each hit.
 
 **Before relying on a memory.** If it limits or redirects what you are about to do, check it when a
 quick read, grep or command can confirm it, alongside your other reads where possible. Prefer

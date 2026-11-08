@@ -1,5 +1,5 @@
 // src/main.rs
-use bkmr::cli::args::{Cli, Commands};
+use bkmr::cli::args::{Cli, Commands, SkillCommands};
 use bkmr::cli::bookmark_commands::pre_fill_database;
 use bkmr::cli::error::CliError;
 use bkmr::config::{load_settings, ConfigSource, Settings};
@@ -45,8 +45,8 @@ fn main() {
     // Load configuration with CLI overrides
     let config_path_ref = cli.config.as_deref();
     let mut settings = load_settings(config_path_ref).unwrap_or_else(|e| {
-        // A broken config must not block generating a fresh one
-        if cli.generate_config {
+        // A broken config must not block generating a fresh one, nor commands that never read it
+        if cli.generate_config || matches!(cli.command, Some(Commands::Skill { .. })) {
             return Settings::default();
         }
         print_error(&format!("Error: {}", e), no_color);
@@ -198,8 +198,17 @@ fn handle_database_independent_operations(
     match cli.command.as_ref() {
         Some(Commands::CreateDb { .. }) => Some(handle_create_db_command(cli, settings)),
         Some(Commands::Completion { shell }) => Some(handle_completion_command(shell.clone())),
+        Some(Commands::Skill {
+            command: SkillCommands::Install { dir, force },
+        }) => Some(handle_skill_install(dir, *force)),
         _ => None, // Requires database services
     }
+}
+
+fn handle_skill_install(dir: &Path, force: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let installed = bkmr::cli::skill::install(dir, force)?;
+    println!("{}", installed.display());
+    Ok(())
 }
 
 fn handle_generate_config() -> Result<(), Box<dyn std::error::Error>> {

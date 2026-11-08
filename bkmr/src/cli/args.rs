@@ -10,7 +10,7 @@ use std::path::PathBuf;
   0    success
   1    valid invocation, but the operation failed
   64   usage error: invalid arguments or invalid config file
-  65   duplicate name (import-files without --update)
+  65   duplicate name (import-files without --update), skill already installed (skill install)
   130  confirmation declined (delete, clear-embeddings)")]
 /// Knowledge management for humans and agents — bookmarks, snippets, scripts, and semantic search
 pub struct Cli {
@@ -581,12 +581,39 @@ pub enum Commands {
         #[arg(long, help = "Disable bkmr template interpolation")]
         no_interpolation: bool,
     },
+    /// Manage the bkmr-memory agent skill that teaches agents to use bkmr as memory
+    Skill {
+        #[command(subcommand)]
+        command: SkillCommands,
+    },
     #[command(hide = true)]
     Xxx {
         /// list of ids, separated by comma, no blanks
         ids: String,
         #[arg(short = 't', long = "tags", help = "add tags to taglist")]
         tags: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Clone)]
+pub enum SkillCommands {
+    /// Install the bkmr-memory skill into DIR/bkmr-memory, matching this binary's version
+    #[command(after_help = "Examples:
+  bkmr skill install ~/.claude/skills    # Claude Code
+  bkmr skill install ~/.agents/skills    # agents reading the shared .agents directory
+
+Exit codes:
+  0    skill installed
+  1    the skill could not be written
+  64   invalid arguments
+  65   DIR/bkmr-memory already exists; --force replaces it")]
+    Install {
+        /// Skills directory of the agent; created if missing. `~` and `$VAR` are expanded
+        dir: PathBuf,
+        /// Replace an existing DIR/bkmr-memory; a symlink is replaced, its target is left alone.
+        /// A real directory is deleted, also inside a repo checkout
+        #[arg(short = 'f', long = "force")]
+        force: bool,
     },
 }
 
@@ -607,6 +634,36 @@ mod tests {
         // `bkmr search --no-color` position too (see issue #73).
         let cli = Cli::try_parse_from(["bkmr", "search", "--no-color"]).unwrap();
         assert!(cli.no_color);
+    }
+
+    #[test]
+    fn given_skill_install_with_dir_when_parsing_then_dir_is_set_and_force_is_off() {
+        let cli = Cli::try_parse_from(["bkmr", "skill", "install", "/tmp/skills"]).unwrap();
+        match cli.command {
+            Some(Commands::Skill {
+                command: SkillCommands::Install { dir, force },
+            }) => {
+                assert_eq!(dir, PathBuf::from("/tmp/skills"));
+                assert!(!force);
+            }
+            _ => panic!("expected skill install"),
+        }
+    }
+
+    #[test]
+    fn given_skill_install_with_force_when_parsing_then_force_is_on() {
+        let cli = Cli::try_parse_from(["bkmr", "skill", "install", "--force", "d"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Skill {
+                command: SkillCommands::Install { force: true, .. }
+            })
+        ));
+    }
+
+    #[test]
+    fn given_skill_install_without_dir_when_parsing_then_rejected() {
+        assert!(Cli::try_parse_from(["bkmr", "skill", "install"]).is_err());
     }
 
     #[test]
