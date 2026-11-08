@@ -5,6 +5,13 @@ use std::path::PathBuf;
 #[derive(Parser, Clone)]
 #[command(author, version, about, long_about = None)]
 #[command(arg_required_else_help = true, disable_help_subcommand = true)]
+// Mirrors the table in ERROR_HANDLING.md: exit codes are a contract for scripts and agents.
+#[command(after_help = "Exit codes:
+  0    success
+  1    valid invocation, but the operation failed
+  64   usage error: invalid arguments or invalid config file
+  65   duplicate name (import-files without --update)
+  130  confirmation declined (delete, clear-embeddings)")]
 /// Knowledge management for humans and agents — bookmarks, snippets, scripts, and semantic search
 pub struct Cli {
     /// Optional name to operate on
@@ -330,6 +337,11 @@ pub enum Commands {
         no_embed: bool,
     },
     /// Delete bookmarks by ID
+    #[command(after_help = "Exit codes:
+  0    all bookmarks deleted
+  1    an ID was not found or a delete failed; the other IDs are still processed
+  64   invalid ID format
+  130  confirmation declined or no input on stdin (--yes skips the prompt, except with --force)")]
     Delete {
         /// Bookmark IDs (comma-separated)
         ids: String,
@@ -455,6 +467,10 @@ pub enum Commands {
         prune: bool,
     },
     /// Clear all embeddings and content hashes (clean slate for backfill)
+    #[command(after_help = "Exit codes:
+  0    embeddings cleared, or none found
+  1    the operation failed
+  130  confirmation declined")]
     ClearEmbeddings {},
 
     /// Bulk-create bookmarks from JSON array (skips existing Content/URLs, no update support)
@@ -494,6 +510,11 @@ pub enum Commands {
     /// # name: Script Name
     /// # tags: tag1, tag2
     /// # type: _shell_
+    #[command(after_help = "Exit codes:
+  0    import finished
+  1    the import failed, e.g. a path does not exist
+  64   --base-path names a base path missing from the config
+  65   duplicate name and --update not given")]
     ImportFiles {
         /// Directories or files to import
         #[arg(help = "Directories or files to import")]
@@ -662,6 +683,51 @@ mod tests {
         assert!(help.contains("- hybrid:"), "{help}");
         assert!(help.contains("- exact:"), "{help}");
         assert!(help.contains("default: 10"), "{help}");
+    }
+
+    fn rendered_help(args: &[&str]) -> String {
+        let help = Cli::try_parse_from(args)
+            .err()
+            .expect("--help exits through clap's error path")
+            .to_string();
+        // clap wraps long help lines, so compare with whitespace collapsed.
+        help.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    #[test]
+    fn given_top_level_help_when_rendered_then_lists_every_exit_code() {
+        for flag in ["-h", "--help"] {
+            let help = rendered_help(&["bkmr", flag]);
+
+            assert!(help.contains("Exit codes:"), "{help}");
+            for code in ["0 success", "1 ", "64 ", "65 ", "130 "] {
+                assert!(help.contains(code), "missing exit code {code:?}:\n{help}");
+            }
+        }
+    }
+
+    #[test]
+    fn given_delete_help_when_rendered_then_lists_cancel_exit_code() {
+        let help = rendered_help(&["bkmr", "delete", "--help"]);
+
+        assert!(help.contains("Exit codes:"), "{help}");
+        assert!(help.contains("130 "), "{help}");
+    }
+
+    #[test]
+    fn given_clear_embeddings_help_when_rendered_then_lists_cancel_exit_code() {
+        let help = rendered_help(&["bkmr", "clear-embeddings", "--help"]);
+
+        assert!(help.contains("Exit codes:"), "{help}");
+        assert!(help.contains("130 "), "{help}");
+    }
+
+    #[test]
+    fn given_import_files_help_when_rendered_then_lists_duplicate_exit_code() {
+        let help = rendered_help(&["bkmr", "import-files", "--help"]);
+
+        assert!(help.contains("Exit codes:"), "{help}");
+        assert!(help.contains("65 "), "{help}");
     }
 
     #[test]

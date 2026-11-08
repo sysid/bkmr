@@ -37,7 +37,9 @@ Infrastructure → Domain → Application → CLI / LSP → exit code
 ## Exit codes
 
 Exit codes are a contract for scripts. `CliError::exit_code()` maps errors to codes, and
-`bkmr/tests/test_main.rs` tests them.
+`bkmr/tests/test_main.rs` tests them. `bkmr --help` repeats the table, and `delete`, `clear-embeddings`
+and `import-files` list their codes in their own help; keep `bkmr/src/cli/args.rs` in sync when a
+code changes.
 
 | Code | Constant | Meaning | Examples |
 |---|---|---|---|
