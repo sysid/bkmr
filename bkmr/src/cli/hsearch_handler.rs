@@ -84,29 +84,14 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer, settings: &Settings)
 
         let is_piped = is_stdout_piped();
 
-        // JSON wins when combined with a picker or stdout flag: both flags were
-        // previously ignored, so these combinations already produced JSON.
+        // JSON wins when combined with the picker: --fzf was ignored when --json
+        // was set before this change, and scripts may rely on that.
         if is_fuzzy && !is_json {
             let bookmarks: Vec<Bookmark> = results
                 .iter()
                 .map(|result| result.bookmark.clone())
                 .collect();
             fzf_process(&bookmarks, "classic", services, settings, stdout)?;
-            return Ok(());
-        }
-
-        if stdout && !is_json {
-            for result in &results {
-                services.action_service.record_access(&result.bookmark);
-                let content = services
-                    .interpolation_service
-                    .render_bookmark_url(&result.bookmark)
-                    .map_err(|e| {
-                        CliError::CommandFailed(format!("Failed to render content: {}", e))
-                    })?;
-                println!("{}", content);
-            }
-            writeln!(stderr, "{} bookmarks found", results.len())?;
             return Ok(());
         }
 
