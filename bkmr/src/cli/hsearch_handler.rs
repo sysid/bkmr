@@ -5,6 +5,9 @@ use crossterm::style::Stylize;
 
 use crate::cli::args::{Cli, Commands};
 use crate::cli::error::{CliError, CliResult};
+use crate::cli::fzf::fzf_process;
+use crate::config::Settings;
+use crate::domain::bookmark::Bookmark;
 use crate::domain::error_context::CliErrorContext;
 use crate::domain::search::{HybridSearch, SearchMode};
 use crate::domain::tag::Tag;
@@ -33,8 +36,8 @@ fn parse_tags(s: &str) -> Option<std::collections::HashSet<Tag>> {
     }
 }
 
-#[instrument(skip(cli, services), level = "debug")]
-pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+#[instrument(skip(cli, services, settings), level = "debug")]
+pub fn hybrid_search(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     let mut stderr = std::io::stderr();
     if let Commands::HSearch {
         query,
@@ -46,8 +49,8 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         mode,
         limit,
         is_json,
-        is_fuzzy: _is_fuzzy,
-        stdout: _stdout,
+        is_fuzzy,
+        stdout,
         non_interactive,
     } = cli.command.unwrap()
     {
@@ -81,6 +84,17 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         }
 
         let is_piped = is_stdout_piped();
+
+        // JSON wins when combined with the picker: --fzf was ignored when --json
+        // was set before this change, and scripts may rely on that.
+        if is_fuzzy && !is_json {
+            let bookmarks: Vec<Bookmark> = results
+                .iter()
+                .map(|result| result.bookmark.clone())
+                .collect();
+            fzf_process(&bookmarks, "classic", services, settings, stdout)?;
+            return Ok(());
+        }
 
         if is_json {
             let hits: Vec<JsonSearchHit> = results.iter().map(JsonSearchHit::from_domain).collect();

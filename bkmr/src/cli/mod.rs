@@ -28,7 +28,7 @@ pub fn execute_command_with_services(
                 command_handler::SearchCommandHandler::with_services(services, settings.clone());
             handler.execute(cli)
         }
-        Some(Commands::HSearch { .. }) => hsearch_handler::hybrid_search(cli, &services),
+        Some(Commands::HSearch { .. }) => hsearch_handler::hybrid_search(cli, &services, settings),
         Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(cli, &services),
         Some(Commands::Open { .. }) => bookmark_commands::open(
             cli,

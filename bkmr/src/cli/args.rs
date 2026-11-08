@@ -231,7 +231,10 @@ pub enum Commands {
         #[arg(long = "fzf", help = "use fzf for interactive selection")]
         is_fuzzy: bool,
 
-        #[arg(long = "stdout", help = "output to stdout for piping")]
+        #[arg(
+            long = "stdout",
+            help = "output selected bookmark content to stdout instead of executing"
+        )]
         stdout: bool,
 
         #[arg(long = "np", help = "no prompt")]

@@ -762,6 +762,43 @@ fn given_open_stdout_when_running_then_prints_content_and_records_access() {
 }
 
 #[test]
+fn given_stdout_without_fzf_when_hsearch_then_keeps_table_and_does_not_record_access() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("hsearch-stdout.db");
+    create_db_with_one_bookmark(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["hsearch", "example", "--mode", "exact", "--stdout", "--np"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\t"));
+
+    assert_eq!(access_count_of_first_bookmark(&db), 0);
+}
+
+#[test]
+fn given_json_with_stdout_when_hsearch_then_keeps_json_output() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("hsearch-json-stdout.db");
+    create_db_with_one_bookmark(&db);
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args([
+            "hsearch", "example", "--mode", "exact", "--stdout", "--json", "--np",
+        ])
+        .output()
+        .expect("run bkmr hsearch --stdout --json");
+    assert!(output.status.success());
+
+    let hits: Vec<serde_json::Value> =
+        serde_json::from_slice(&output.stdout).expect("stdout stays valid JSON");
+    assert_eq!(hits[0]["url"], "https://example.com");
+    assert_eq!(access_count_of_first_bookmark(&db), 0);
+}
+
+#[test]
 fn given_result_lists_when_running_then_does_not_record_access() {
     // Nobody picked a specific bookmark, so listing search results is not an access.
     let dir = TempDir::new().unwrap();
