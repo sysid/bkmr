@@ -10,10 +10,12 @@ use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
 use crate::cli::display::lookup_embedded_ids;
 use crate::cli::error::{CliError, CliResult};
+use crate::cli::history_diff::{render_patch, MemoryState};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::get_config_file_path;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error_context::CliErrorContext;
+use crate::domain::history::{HistoryChange, HistoryEntry};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
@@ -606,9 +608,19 @@ fn purge_with_confirmation(
     }
 }
 
-#[instrument(skip(cli, bookmark_service))]
-pub fn history(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
-    if let Commands::History { id, limit, is_json } = cli.command.unwrap() {
+#[instrument(skip(cli, bookmark_service, settings))]
+pub fn history(
+    cli: Cli,
+    bookmark_service: Arc<dyn BookmarkService>,
+    settings: &Settings,
+) -> CliResult<()> {
+    if let Commands::History {
+        id,
+        limit,
+        is_json,
+        patch,
+    } = cli.command.unwrap()
+    {
         if limit <= 0 {
             return Err(CliError::InvalidInput(
                 "Limit must be a positive integer".to_string(),
@@ -638,25 +650,123 @@ pub fn history(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResul
             );
         } else if entries.is_empty() {
             eprintln!("No history found");
+        } else if let (true, Some(id)) = (patch, id) {
+            let use_color = diff_color(settings);
+            // Each entry holds the state before its change, so the state after it is the next newer
+            // entry, or for the newest one the bookmark as it is now.
+            let mut newer = bookmark_service
+                .get_bookmark(id)?
+                .map(|b| MemoryState::from_bookmark(&b));
+            let mut newer_label = current_label(id);
+            for entry in &entries {
+                println!("{}", history_line(entry));
+                let older = MemoryState::from_entry(entry);
+                let older_label = history_label(entry);
+                match (&entry.change, &newer) {
+                    (HistoryChange::Delete, _) => print!(
+                        "{}",
+                        render_patch(Some(&older), None, &older_label, "/dev/null", use_color)
+                    ),
+                    (HistoryChange::Update, Some(after)) => print!(
+                        "{}",
+                        render_patch(
+                            Some(&older),
+                            Some(after),
+                            &older_label,
+                            &newer_label,
+                            use_color
+                        )
+                    ),
+                    // Deleted after it stopped being a memory, which history does not record, so
+                    // the state this update led to is gone
+                    (HistoryChange::Update, None) => println!(
+                        "(no diff: #{} no longer exists, and its state after this update was not kept)",
+                        id
+                    ),
+                }
+                println!();
+                newer = Some(older);
+                newer_label = older_label;
+            }
         } else {
             for entry in &entries {
-                println!(
-                    "{}\t#{}\t{}\t{} UTC\t{}",
-                    entry.history_id,
-                    entry.bookmark_id,
-                    entry.change.as_str(),
-                    entry.changed_at.format("%Y-%m-%d %H:%M"),
-                    entry.title
-                );
+                println!("{}", history_line(entry));
             }
         }
     }
     Ok(())
 }
 
-#[instrument(skip(cli, bookmark_service))]
-pub fn restore(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
-    if let Commands::Restore { history_id } = cli.command.unwrap() {
+/// One row of the `history` listing
+fn history_line(entry: &HistoryEntry) -> String {
+    format!(
+        "{}\t#{}\t{}\t{} UTC\t{}",
+        entry.history_id,
+        entry.bookmark_id,
+        entry.change.as_str(),
+        entry.changed_at.format("%Y-%m-%d %H:%M"),
+        entry.title
+    )
+}
+
+/// How the bookmark as it is now is named in a diff header
+fn current_label(id: i32) -> String {
+    format!("#{} current", id)
+}
+
+/// Diffs are colored on a terminal unless the user turned color off
+fn diff_color(settings: &Settings) -> bool {
+    should_use_color(settings.no_color, !is_stdout_piped())
+}
+
+/// How a saved state is named in a diff header
+fn history_label(entry: &HistoryEntry) -> String {
+    format!(
+        "history {} ({} UTC)",
+        entry.history_id,
+        entry.changed_at.format("%Y-%m-%d %H:%M")
+    )
+}
+
+#[instrument(skip(cli, bookmark_service, settings))]
+pub fn restore(
+    cli: Cli,
+    bookmark_service: Arc<dyn BookmarkService>,
+    settings: &Settings,
+) -> CliResult<()> {
+    if let Commands::Restore {
+        history_id,
+        dry_run,
+    } = cli.command.unwrap()
+    {
+        if dry_run {
+            let preview = bookmark_service.preview_restore(history_id)?;
+            let old_label = match &preview.current {
+                Some(_) => current_label(preview.entry.bookmark_id),
+                None => "/dev/null".to_string(),
+            };
+            // The bookmark the restore would write, not the entry, so the diff shows what it does
+            let patch = render_patch(
+                preview
+                    .current
+                    .as_ref()
+                    .map(MemoryState::from_bookmark)
+                    .as_ref(),
+                Some(&MemoryState::from_bookmark(&preview.restored)),
+                &old_label,
+                &history_label(&preview.entry),
+                diff_color(settings),
+            );
+            if patch.is_empty() {
+                eprintln!(
+                    "Restoring history entry {} would change nothing",
+                    history_id
+                );
+            } else {
+                print!("{}", patch);
+            }
+            return Ok(());
+        }
         let bookmark = bookmark_service.restore_bookmark(history_id)?;
         eprintln!(
             "Restored: {} (ID: {})",

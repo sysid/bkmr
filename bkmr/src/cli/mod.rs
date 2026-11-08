@@ -11,6 +11,7 @@ pub mod completion;
 pub mod display;
 pub mod error;
 pub mod fzf;
+pub mod history_diff;
 pub mod hsearch_handler;
 pub mod process;
 pub mod skill;
@@ -46,10 +47,10 @@ pub fn execute_command_with_services(
             bookmark_commands::delete(cli, services.bookmark_service.clone())
         }
         Some(Commands::History { .. }) => {
-            bookmark_commands::history(cli, services.bookmark_service.clone())
+            bookmark_commands::history(cli, services.bookmark_service.clone(), settings)
         }
         Some(Commands::Restore { .. }) => {
-            bookmark_commands::restore(cli, services.bookmark_service.clone())
+            bookmark_commands::restore(cli, services.bookmark_service.clone(), settings)
         }
         Some(Commands::Verify { .. }) => {
             bookmark_commands::verify(cli, services.bookmark_service.clone())

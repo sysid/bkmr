@@ -2240,3 +2240,209 @@ fn given_force_and_unknown_id_when_delete_then_exits_failure() {
     assert_eq!(output.status.code(), Some(1));
     assert_eq!(search_all(&db).len(), 1);
 }
+
+#[test]
+fn given_memory_changed_twice_when_history_with_patch_then_each_step_is_shown_as_a_diff() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/v2", &id],
+        "",
+    );
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/v3", &id],
+        "",
+    );
+
+    let output = run_with_config(&db, &config, &["--no-color", "history", &id, "-p"], "");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Oldest step: the first text was replaced by v2; newest step: v2 by the current v3.
+    assert!(
+        stdout.contains("\n-https://example.com\n+https://example.com/v2\n"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("\n-https://example.com/v2\n+https://example.com/v3\n"),
+        "{stdout}"
+    );
+    assert!(stdout.contains(&format!("+++ #{id} current\n")), "{stdout}");
+    // Piped stdout is never colored, so this holds with or without --no-color: it guards the
+    // diff against escape codes in pipes. The flag's own effect is tested in util::helper.
+    assert!(!stdout.contains('\x1b'), "{stdout:?}");
+}
+
+#[test]
+fn given_deleted_memory_when_history_with_patch_then_the_last_state_is_shown_removed() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(&db, &config, &["delete", "--yes", &id], "");
+
+    let output = run_with_config(&db, &config, &["--no-color", "history", &id, "-p"], "");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("+++ /dev/null\n"), "{stdout}");
+    assert!(stdout.contains("\n-https://example.com\n"), "{stdout}");
+}
+
+#[test]
+fn given_patch_without_memory_id_when_history_then_usage_error() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+
+    let output = run_with_config(&db, &config, &["history", "-p"], "");
+
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_patch_with_json_when_history_then_usage_error() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = run_with_config(&db, &config, &["history", &id, "-p", "--json"], "");
+
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_updated_memory_when_restore_dry_run_then_diff_from_current_to_saved_state_and_nothing_changes(
+) {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(
+        &db,
+        &config,
+        &["update", "--url", "https://example.com/new", &id],
+        "",
+    );
+    let history_id = history_of(&db, &[&id])[0]["history_id"].to_string();
+
+    let output = run_with_config(
+        &db,
+        &config,
+        &["--no-color", "restore", &history_id, "--dry-run"],
+        "",
+    );
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(&format!("--- #{id} current\n")), "{stdout}");
+    assert!(
+        stdout.contains("\n-https://example.com/new\n+https://example.com\n"),
+        "{stdout}"
+    );
+    assert_eq!(search_all(&db)[0]["url"], "https://example.com/new");
+    assert_eq!(
+        history_of(&db, &[&id]).len(),
+        1,
+        "a dry run must not write history"
+    );
+}
+
+#[test]
+fn given_deleted_memory_when_restore_dry_run_then_every_line_is_added_and_it_stays_deleted() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    run_with_config(&db, &config, &["delete", "--yes", &id], "");
+    let history_id = history_of(&db, &[])[0]["history_id"].to_string();
+
+    let output = run_with_config(
+        &db,
+        &config,
+        &["--no-color", "restore", &history_id, "--dry-run"],
+        "",
+    );
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.starts_with("--- /dev/null\n"), "{stdout}");
+    assert!(stdout.contains("\n+https://example.com\n"), "{stdout}");
+    assert!(search_all(&db).is_empty());
+}
+
+#[test]
+fn given_unknown_history_id_when_restore_dry_run_then_it_fails_like_restore() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+
+    let output = run_with_config(&db, &config, &["restore", "99999", "--dry-run"], "");
+
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("History entry 99999 not found"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn given_memory_deleted_without_history_after_last_update_when_history_with_patch_then_update_is_not_shown_as_deletion(
+) {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    // Recorded, because the row was a memory before the change
+    run_with_config(&db, &config, &["update", "-n", "_mem_", &id], "");
+    // Not recorded, because it is no longer a memory
+    run_with_config(&db, &config, &["delete", "--yes", &id], "");
+    assert_eq!(history_of(&db, &[&id]).len(), 1);
+
+    let output = run_with_config(&db, &config, &["--no-color", "history", &id, "-p"], "");
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("/dev/null"), "{stdout}");
+    assert!(!stdout.contains("\n-https://example.com\n"), "{stdout}");
+    assert!(
+        stdout.contains(&format!("#{id} no longer exists")),
+        "{stdout}"
+    );
+}

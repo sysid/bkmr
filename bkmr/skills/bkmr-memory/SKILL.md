@@ -480,6 +480,7 @@ lists all memories, which finds a deleted one.
 
 ```bash
 bkmr history 42 --json
+bkmr restore <history_id> --dry-run   # unified diff of what the restore changes, writes nothing
 bkmr restore <history_id>
 ```
 

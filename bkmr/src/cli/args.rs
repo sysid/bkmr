@@ -372,11 +372,24 @@ pub enum Commands {
         limit: i64,
         #[arg(long = "json", help = "output as JSON")]
         is_json: bool,
+        #[arg(
+            short = 'p',
+            long = "patch",
+            requires = "id",
+            conflicts_with = "is_json",
+            help = "show each change as a unified diff, like git log -p"
+        )]
+        patch: bool,
     },
     /// Bring back a saved state of a memory under its own ID, also if it was deleted
     Restore {
         /// History ID, from `bkmr history`
         history_id: i32,
+        #[arg(
+            long = "dry-run",
+            help = "show what the restore would change as a unified diff, without writing"
+        )]
+        dry_run: bool,
     },
     /// Record that bookmarks were checked against reality and still hold
     Verify {

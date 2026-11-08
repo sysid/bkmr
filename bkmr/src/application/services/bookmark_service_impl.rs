@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
-use crate::application::services::bookmark_service::BookmarkService;
+use crate::application::services::bookmark_service::{BookmarkService, RestorePreview};
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
 use crate::domain::embedding_policy::EmbeddingPolicy;
@@ -85,31 +85,30 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 }
 
 impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
-    /// Add a deleted bookmark again under its old ID. Embeds before writing, so that a failed
-    /// embedding leaves no row behind whose vector a retry would then never create. Creation time
+    /// A deleted bookmark built again from its history entry, under its old ID. Creation time
     /// and access count start anew: history does not keep them.
-    fn reinsert_from_history(
+    fn rebuild_from_history(
         &self,
-        entry: HistoryEntry,
+        entry: &HistoryEntry,
         tags: HashSet<Tag>,
     ) -> ApplicationResult<Bookmark> {
-        let existing_id = self
-            .repository
-            .exists_by_url(&entry.url)
-            .app_context("checking if bookmark with URL already exists")?;
-        if existing_id != -1 {
-            return Err(ApplicationError::BookmarkExists(existing_id, entry.url));
-        }
-
         let mut bookmark = Bookmark::new(&entry.url, &entry.title, &entry.description, tags)
             .app_context("creating bookmark from history entry")?;
         bookmark.set_id(entry.bookmark_id);
         bookmark.set_embeddable(self.resolve_embeddable(&bookmark.tags, Some(entry.embeddable)));
-        bookmark.opener = entry.opener;
-        bookmark.file_path = entry.file_path;
+        bookmark.opener = entry.opener.clone();
+        bookmark.file_path = entry.file_path.clone();
         bookmark.file_mtime = entry.file_mtime;
-        bookmark.file_hash = entry.file_hash;
+        bookmark.file_hash = entry.file_hash.clone();
+        Ok(bookmark)
+    }
 
+    /// Write a deleted bookmark again under its old ID. Embeds before writing, so that a failed
+    /// embedding leaves no row behind whose vector a retry would then never create.
+    fn reinsert(&self, mut bookmark: Bookmark) -> ApplicationResult<Bookmark> {
+        let id = bookmark.id.ok_or_else(|| {
+            ApplicationError::Validation("Bookmark ID is required to add it again".to_string())
+        })?;
         let embedding = if bookmark.embeddable {
             let content = bookmark.get_content_for_embedding();
             bookmark.content_hash = Some(calc_content_hash(&content));
@@ -120,11 +119,11 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
         self.repository
             .reinsert(&bookmark)
-            .with_app_context(|| format!("adding bookmark {} again", entry.bookmark_id))?;
+            .with_app_context(|| format!("adding bookmark {} again", id))?;
 
         if let Some(embedding) = embedding {
             self.vector_repository
-                .upsert_embedding(entry.bookmark_id, &embedding)
+                .upsert_embedding(id, &embedding)
                 .app_context("upserting embedding into vector repository")?;
         }
         Ok(bookmark)
@@ -296,6 +295,15 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self), level = "debug")]
     fn restore_bookmark(&self, history_id: i32) -> ApplicationResult<Bookmark> {
+        let preview = self.preview_restore(history_id)?;
+        match preview.current {
+            Some(_) => self.update_bookmark(preview.restored, false),
+            None => self.reinsert(preview.restored),
+        }
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn preview_restore(&self, history_id: i32) -> ApplicationResult<RestorePreview> {
         let entry = self
             .repository
             .get_history_entry(history_id)
@@ -303,30 +311,52 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .ok_or_else(|| {
                 ApplicationError::Other(format!("History entry {} not found", history_id))
             })?;
-        let tags = Tag::parse_tags(&entry.tags).app_context("parsing tags of history entry")?;
 
         let current = self
             .repository
             .get_by_id(entry.bookmark_id)
             .with_app_context(|| format!("loading bookmark {}", entry.bookmark_id))?;
-        match current {
-            Some(mut bookmark) => {
-                // Writing back to the file is not ours to do, and with the file left newer, the next
-                // edit or import would silently undo the restore.
-                if let Some(path) = &bookmark.file_path {
-                    return Err(ApplicationError::Other(format!(
-                        "Bookmark {} is imported from {}, which decides its content: change that file instead",
-                        entry.bookmark_id, path
-                    )));
-                }
-                bookmark.url = entry.url;
-                bookmark.title = entry.title;
-                bookmark.description = entry.description;
-                bookmark.tags = tags;
-                self.update_bookmark(bookmark, false)
-            }
-            None => self.reinsert_from_history(entry, tags),
+        // Writing back to the file is not ours to do, and with the file left newer, the next
+        // edit or import would silently undo the restore.
+        if let Some(path) = current.as_ref().and_then(|b| b.file_path.as_ref()) {
+            return Err(ApplicationError::Other(format!(
+                "Bookmark {} is imported from {}, which decides its content: change that file instead",
+                entry.bookmark_id, path
+            )));
         }
+
+        // Checked here rather than left to the database, so a preview fails like the restore
+        let existing_id = self
+            .repository
+            .exists_by_url(&entry.url)
+            .app_context("checking if bookmark with URL already exists")?;
+        if existing_id != -1 && existing_id != entry.bookmark_id {
+            return Err(ApplicationError::BookmarkExists(
+                existing_id,
+                entry.url.clone(),
+            ));
+        }
+
+        let tags = Tag::parse_tags(&entry.tags).app_context("parsing tags of history entry")?;
+        let restored = match &current {
+            Some(bookmark) => {
+                let mut restored = bookmark.clone();
+                restored.url = entry.url.clone();
+                restored.title = entry.title.clone();
+                restored.description = entry.description.clone();
+                restored
+                    .set_tags(tags)
+                    .app_context("setting tags of history entry")?;
+                restored
+            }
+            None => self.rebuild_from_history(&entry, tags)?,
+        };
+
+        Ok(RestorePreview {
+            entry,
+            current,
+            restored,
+        })
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -1447,6 +1477,102 @@ mod tests {
         let (service, _vectors) = create_service_with_recorded_vectors();
 
         assert!(!service.purge_bookmark(99999).unwrap());
+    }
+
+    #[test]
+    fn given_updated_memory_when_previewing_restore_then_saved_and_current_state_are_returned_and_nothing_is_written(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut memory = add_memory(&service, "old text");
+        let id = memory.id.unwrap();
+        memory.url = "new text".to_string();
+        service.update_bookmark(memory, false).unwrap();
+        let history_id = service.get_history(Some(id), 10).unwrap()[0].history_id;
+
+        let preview = service.preview_restore(history_id).unwrap();
+
+        assert_eq!(preview.entry.history_id, history_id);
+        assert_eq!(preview.current.unwrap().url, "new text");
+        assert_eq!(preview.restored.id, Some(id));
+        assert_eq!(preview.restored.url, "old text");
+        assert_eq!(preview.restored.tags, tag_set(&["_mem_", "fact"]));
+        assert_eq!(service.get_bookmark(id).unwrap().unwrap().url, "new text");
+        assert_eq!(service.get_history(Some(id), 10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn given_deleted_memory_when_previewing_restore_then_there_is_no_current_bookmark_and_it_stays_deleted(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let id = add_memory(&service, "deleted text").id.unwrap();
+        service.delete_bookmark(id).unwrap();
+        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+
+        let preview = service.preview_restore(history_id).unwrap();
+
+        assert!(preview.current.is_none());
+        assert_eq!(preview.restored.id, Some(id));
+        assert_eq!(preview.restored.url, "deleted text");
+        assert_eq!(preview.restored.tags, tag_set(&["_mem_", "fact"]));
+        assert!(service.get_bookmark(id).unwrap().is_none());
+    }
+
+    #[test]
+    fn given_deleted_memory_whose_content_another_bookmark_now_has_when_previewing_restore_then_it_fails(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let id = add_memory(&service, "shared text").id.unwrap();
+        service.delete_bookmark(id).unwrap();
+        let other_id = add_memory(&service, "shared text").id.unwrap();
+        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+
+        let error = service.preview_restore(history_id).unwrap_err();
+
+        assert!(
+            matches!(&error, ApplicationError::BookmarkExists(existing, _) if *existing == other_id),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn given_updated_memory_whose_old_content_another_bookmark_now_has_when_previewing_restore_then_it_fails(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut memory = add_memory(&service, "text a");
+        let id = memory.id.unwrap();
+        memory.url = "text b".to_string();
+        service.update_bookmark(memory, false).unwrap();
+        let other_id = add_memory(&service, "text a").id.unwrap();
+        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+
+        let error = service.preview_restore(history_id).unwrap_err();
+
+        assert!(
+            matches!(&error, ApplicationError::BookmarkExists(existing, _) if *existing == other_id),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn given_unknown_history_id_when_previewing_restore_then_it_fails_like_restore() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+
+        let error = service.preview_restore(99999).unwrap_err();
+
+        assert!(
+            error.to_string().contains("History entry 99999 not found"),
+            "{error}"
+        );
     }
 
     #[test]
