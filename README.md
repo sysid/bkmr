@@ -154,10 +154,10 @@ bkmr search --fzf
 | `open` | Smart action dispatch based on content type |
 | `edit` | Edit bookmarks (smart: opens source file for imports) |
 | `update` | Change tags, title, description, content, opener or embedding, non-interactively |
-| `delete` | Delete bookmarks by ID; `--yes` skips the prompt; `--force` also purges their history, permanently |
-| `history` | Show saved old states of agent memories (`_mem_`), which stay out of search |
-| `restore` | Bring back a saved state from `history`, under the memory's own ID |
-| `verify` | Record that bookmarks were checked against reality; only this sets `verified_at`, and changing the content or title clears it |
+| `delete` | Delete bookmarks by ID (`--yes`: no prompt; `--force`: also purge history, permanently) |
+| `history` | Show saved old states of agent memories (`_mem_`) |
+| `restore` | Bring back a saved state from `history`, also of a deleted memory |
+| `verify` | Record that bookmarks were checked against reality (`verified_at`) |
 | `show` | Display bookmark details |
 | `import-files` | Import files/directories with frontmatter parsing |
 | `load-json` | Bulk-create bookmarks from a JSON array |
@@ -166,6 +166,7 @@ bkmr search --fzf
 | `create-db` | Initialize a bookmark database |
 | `backfill` | Generate missing embeddings; `--prune` removes vectors of non-embeddable bookmarks |
 | `clear-embeddings` | Clear all embeddings and content hashes |
+| `skill install` | Install the bkmr-memory agent skill into an agent's skills directory |
 | `lsp` | Start LSP server for editor snippet completion |
 | `completion` | Generate shell completions (bash, zsh, fish) |
 | `surprise` | Open random URL bookmarks |

@@ -82,9 +82,12 @@ Pinned memories describe things that change with releases, not with time, so the
 The rule lives in `bkmr/skills/bkmr-memory/scripts/due-report.py` (`VERSION`, `HARNESS_TAGS`), computed per run; bkmr
 stores nothing about it. Two-part versions like "JDK 25" are not detected.
 
+Run it from the installed skill directory; it needs bkmr ≥ 8.2.0 and `uv`:
+
 ```bash
-scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db          # table, most overdue first; run from the installed skill dir
-scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --json   # same, for an agent
+scripts/due-report.py                       # table, most overdue first
+scripts/due-report.py --json                # same, for an agent
+scripts/due-report.py --db ~/other/bm.db    # default: BKMR_DB_URL or config.toml
 ```
 
 ```
@@ -94,11 +97,8 @@ scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --json   # same, fo
 ```
 
 `over`: days past the window. `win`: window after pinning. `from`/`anchor`: what age counts from.
-`chk`: `yes` if the memory cites a path, commit or URL an agent can recheck.
-
-- Pass `--bkmr ~/bin/bkmr`: inside this repo direnv puts a debug build first on PATH, and
-  `BKMR_DB_URL` points at the repo's dev DB. bkmr ≥ 8.2.0 is required.
-- `-v` adds debug logging (why each memory is due) to stderr, here and in the eval scripts.
+`chk`: `yes` if the memory cites a path, commit or URL an agent can recheck. `-v` logs to stderr
+why each memory is due.
 
 ## Developing
 
@@ -109,6 +109,9 @@ scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --json   # same, fo
 - Edit `bkmr/skills/bkmr-memory/SKILL.md`; keep it under 500 lines (currently over; splitting
   needs an eval rerun). Agents read top-down, so "Mandatory Tag Rules" stays first.
 - `make -C skill test` / `make -C skill lint` for the scripts.
+- Inside this repo, direnv puts a debug build first on PATH and points `BKMR_DB_URL` at the dev
+  DB: run `due-report.py --bkmr ~/bin/bkmr --db <real db>` against your real store. `-v` logs
+  debug output in the eval scripts too.
 - Optional, Claude Code only: `hooks/log-bkmr.py` is a PostToolUse hook that logs every bkmr call
   an agent makes to `~/.claude/debug/`. Setup instructions are in its docstring. It is a debugging
   aid and not part of the installed skill.
