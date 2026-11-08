@@ -27,6 +27,10 @@ bkmr/skill/bkmr-memory/     # Source (lives in the bkmr repo)
 bkmr-memory/
 ├── SKILL.md           # The skill itself (loaded into agent context)
 ├── README.md          # This file
+├── scripts/
+│   ├── due-report.py           # Lists memories due for review; never changes the store
+│   ├── run-audit.py            # One headless audit over the most overdue memories
+│   └── test_*.py               # Tests for both
 └── evals/
     ├── evals.json              # Agent-behaviour test cases with assertions
     ├── lifecycle_eval.py       # Fixture and grader for the lifecycle evals
@@ -52,6 +56,138 @@ Eval workspace (created at runtime, not checked in):
     └── dedup-scenario/
         └── (same structure)
 ```
+
+## Reviewing Due Memories
+
+Agents keep memories current while they work, as SKILL.md's "Keeping Memory Current" asks: they
+check a memory before relying on it, correct what evidence contradicts, and stamp what they
+confirm with `bkmr verify`. That only reaches memories somebody uses. A memory nobody touches, or
+one about something that changed outside any session (a tool upgrade, infrastructure), stays
+wrong. The two scripts cover those:
+
+```
+due-report.py ──> which memories are due?              read only, run any time
+      │
+      v
+run-audit.py  ──> headless agent reviews the 20 most    writes to the store (undoable),
+                  overdue, under SKILL.md's rules       then a digest for you to read
+```
+
+Both are stdlib-only `uv` scripts. Inside this repo, direnv puts `bkmr/target/debug/bkmr` first on
+PATH, which may be an older build of whatever branch is checked out. Pass the release binary with
+`--bkmr ~/bin/bkmr`; the scripts refuse a bkmr older than 8.2.0 because its output has no
+`verified_at`.
+
+### When a memory is due
+
+Age counts from `verified_at` (the last `bkmr verify`), or from `created_at` if the memory was
+never stamped or was changed since; a change to content or title clears the stamp. A memory is due
+once its age reaches its window:
+
+| Class | Window |
+|-------|--------|
+| `fact` | 90 days |
+| `procedure`, `gotcha`, `episode` | 180 days |
+| `preference` | 365 days |
+| No class | 90 days, flagged |
+| Pins a version (`1.24.4`, `v2`, `-rc.13`) or has a harness tag (`sandbox`, `claude-code`, `codex`, `mcp`, ...) | at most 90 days |
+
+A memory with two classes gets the shorter window and a flag. Due means "audit", never "delete".
+
+### due-report.py: see what is due
+
+Use it to look at the backlog, before an audit, or to check that stamps took effect. It only runs
+`bkmr search`, which changes nothing.
+
+```bash
+scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db
+```
+
+```
+32 of 156 memories due
+    id  over  win from     anchor     chk  title / flags
+  3505   124   90 created  2026-04-07 yes  ort-sys API version must not exceed Homebrew onnxruntime
+                                          pinned: version
+```
+
+| Column | Meaning |
+|--------|---------|
+| `over` | Days past the window; the list is sorted by it, most overdue first |
+| `win` | Review window in days, after class, pins and flags |
+| `from`, `anchor` | Whether age counts from `verified` or `created`, and that date |
+| `chk` | `yes` if content or description cites a path, commit or URL, so an agent can recheck it. `-` means the audit will most likely keep it as a hint |
+
+Options: `--json` prints the same list as JSON; `--input FILE` reads a saved
+`bkmr search -t _mem_ --json` instead of calling bkmr; `--now YYYY-MM-DD` evaluates as of another
+date.
+
+### run-audit.py: review the due memories
+
+One run hands the 20 most overdue memories to a headless agent (`claude -p`). For each one it reads
+the memory, looks for direct evidence in the code, config and lock files it cites, and then:
+
+| Finding | Action |
+|---------|--------|
+| Evidence confirms all of it | Stamped with `bkmr verify` |
+| Evidence contradicts it | Corrected in place, evidence in the description |
+| Nothing true is left, or junk | Reason saved, then deleted |
+| Partly confirmed, not reproduced, or not cheaply checkable | Kept unchanged |
+| A preference, or a wrong instruction file such as `CLAUDE.md` | Reported under "Needs Tom", unchanged |
+
+It stops changing memories after more than `min(5, 10%)` of those it reviews (2 for 20), so a
+bad run cannot rewrite the store. Stamps do not count.
+
+**What the agent may do.** It runs with `--permission-mode dontAsk`, without user or project
+settings and without MCP servers, so only these tools work: Read, Grep, Glob, `git log`, `git
+show`, and `bkmr search`, `hsearch`, `show`, `history`, `update`, `verify` and `delete --yes`. It
+cannot edit files, run `bkmr open` (which executes shell bookmarks), purge with `delete --force`,
+or reach the network. User settings are left out on purpose: a user-level `Bash` allow rule would
+otherwise make the list meaningless.
+
+**How to use it:**
+
+1. Preview the prompt and the exact `claude` command. Nothing runs:
+
+   ```bash
+   scripts/run-audit.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --dry-run
+   ```
+2. Run the first audit on a copy, so you can judge the agent's decisions before it touches the
+   real store:
+
+   ```bash
+   sqlite3 ~/path/to/bm.db ".backup '/tmp/bm-audit.db'"
+   scripts/run-audit.py --bkmr ~/bin/bkmr --db /tmp/bm-audit.db --out-dir /tmp/bkmr-audit
+   ```
+3. Read the digest the script prints the path of. Its header comes from the store, not from the
+   agent: changed, deleted and stamped IDs, whether the threshold was exceeded, and the cost.
+   Then the agent's line per memory with its evidence, and "Needs Tom".
+4. Undo anything you disagree with; the digest lists one command per change:
+
+   ```bash
+   bkmr restore <history_id>
+   ```
+5. Once the decisions look right, run it on the real store. The digest goes to
+   `~/.local/state/bkmr-audit/<date>.md`. Repeat monthly, or until the backlog is gone: the first
+   runs work through memories that were never stamped.
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | Done, or nothing due (then no agent runs) |
+| 1 | The agent failed, e.g. auth or credit; the digest holds the error |
+| 2 | More changes than the threshold: read the digest and restore what is wrong |
+
+Options: `--limit N` memories per run (default 20), `--model` (default `claude-opus-5-5`),
+`--budget-usd` cap per run (default 5), `--out-dir`, `--claude` binary.
+
+**Auth.** `claude -p` uses `ANTHROPIC_API_KEY` if it is set, otherwise your claude.ai login.
+Decide which one the audit should bill before running it.
+
+**Not yet done:** no live run has confirmed that leaving out user settings keeps a user-level
+`Bash` rule out; check the first digest for commands outside the list above. There is no schedule:
+a cloud routine cannot reach the local database, so a monthly run needs launchd or cron on this
+machine.
+
+Run the tests with `make -C skill test`; `make -C skill lint` checks every Python script in `skill/`.
 
 ## Running Evals
 
