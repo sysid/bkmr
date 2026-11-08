@@ -24,7 +24,7 @@ large markdown table, to show the 512-token embedding window cutting the tail.
 Never touches the user's real DB: every call passes --db <tmpdir>/<variant>.db.
 
 Usage:
-  ./markdown_retrieval.py [--bkmr PATH] [--keep DIR] [--json OUT]
+  ./markdown_retrieval.py [--bkmr PATH] [--keep DIR] [--json OUT] [-v]
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import logging
 import os
 import re
 import shutil
@@ -48,8 +49,11 @@ VARIANTS = ["plain", "md_light", "md_heavy", "consolidated"]
 EMBED_MAX_TOKENS = 512  # fastembed DEFAULT_MAX_LENGTH, silently truncates
 SEM_LINE = re.compile(r"^(\d+)\t")
 
+log = logging.getLogger("markdown-retrieval")
+
 
 def run(bkmr: str, db: Path, *args: str) -> str:
+    log.debug("running: %s --db %s %s", bkmr, db.name, " ".join(args)[:200])
     proc = subprocess.run(
         [bkmr, "--db", str(db), *args],
         capture_output=True,
@@ -197,38 +201,55 @@ def truncation_probe(bkmr: str, workdir: Path, corpus: dict, tok) -> dict:
     return results
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("--bkmr", default=shutil.which("bkmr") or "bkmr")
     ap.add_argument("--keep", type=Path, help="keep DBs in this dir instead of a tempdir")
     ap.add_argument("--json", type=Path, help="write full per-query results here")
-    args = ap.parse_args()
+    ap.add_argument("-v", "--verbose", action="store_true", help="debug logging to stderr")
+    args = ap.parse_args(argv)
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s" if args.verbose else "%(message)s",
+        stream=sys.stderr,
+    )
 
     corpus = json.loads(CORPUS.read_text())
     tok = load_tokenizer()
     workdir = args.keep or Path(tempfile.mkdtemp(prefix="bkmr-md-eval-"))
     workdir.mkdir(parents=True, exist_ok=True)
+    log.debug("bkmr: %s, workdir: %s", args.bkmr, workdir)
 
     per_query: dict[str, list[dict]] = {}
     for v in VARIANTS:
-        print(f"[{v}] loading + embedding ...", file=sys.stderr)
+        log.info("[%s] loading + embedding ...", v)
         entries, owner = build_entries(corpus, v)
         db, ids = load_db(args.bkmr, workdir, v, entries)
         rows = []
+        log.info("[%s] ranking %d queries ...", v, len(corpus["queries"]))
         for q in corpus["queries"]:
             target = ids[owner[q["target"]]]
-            rows.append(
-                {
-                    **q,
-                    "hsearch": rank_hsearch(args.bkmr, db, q["q"], target),
-                    "sem": rank_sem(args.bkmr, db, q["q"], target),
-                    "fts_hit": fts_hit(args.bkmr, db, q["q"], target),
-                }
+            row = {
+                **q,
+                "hsearch": rank_hsearch(args.bkmr, db, q["q"], target),
+                "sem": rank_sem(args.bkmr, db, q["q"], target),
+                "fts_hit": fts_hit(args.bkmr, db, q["q"], target),
+            }
+            log.debug(
+                "[%s] %r -> #%s hsearch %s, sem %s, fts %s",
+                v,
+                q["q"],
+                target,
+                row["hsearch"],
+                row["sem"],
+                row["fts_hit"],
             )
+            rows.append(row)
         per_query[v] = rows
 
+    log.info("truncation probe ...")
     report = {
         "summary": {},
         "tokens": token_stats(corpus, tok),

@@ -49,45 +49,45 @@ the `_mem_` system tag and exactly one class.
 | `episode` | Dated debugging stories | 180 days |
 | `preference` | Your conventions and tool choices | 365 days |
 
-`project:foo` tags scope a memory to a project. A memory that pins a version or names a harness
-(`sandbox`, `mcp`, ...) is reviewed after at most 90 days. `SKILL.md` holds the exact commands,
-quoting rules and formatting.
+`project:foo` tags scope a memory to a project. `SKILL.md` holds the exact commands, quoting rules
+and formatting.
 
 ## Keeping It Current
 
-Agents fix memories they use. Memories nobody touches rot silently, so two scripts sweep them:
+Agents fix memories they use. Memories nobody touches rot silently, so `due-report.py` lists the
+ones past their review window. It only reads the store; reviewing is up to you and the agent of
+your choice, under SKILL.md's "Keeping Memory Current" rules.
 
 ```
-due-report.py ──> which memories are past their review window?     read-only
-      │
-      v
-run-audit.py  ──> headless agent checks the 20 most overdue        writes (undoable),
-                  against code, git and config, then per memory:   prints a digest
-                    confirmed     -> bkmr verify (stamp)
-                    contradicted  -> corrected, evidence in description
-                    nothing left  -> deleted
-                    unsure        -> kept
-                    preference    -> "Needs Tom"
+age = today - last `bkmr verify`  (or creation, if never stamped or changed since)
+
+class window ──┬── version in content/title (1.2.3, v2, -rc.4)?  ─┐
+ 90/180/365    └── harness tag (sandbox, mcp, codex, claude-code)? ┴─> "pinned": window ≤ 90 days
+
+age ≥ window  ──>  due  (means "review", never "delete")
 ```
+
+Pinned memories describe things that change with releases, not with time, so they come up sooner.
+The rule lives in `scripts/due-report.py` (`VERSION`, `HARNESS_TAGS`), computed per run; bkmr
+stores nothing about it. Two-part versions like "JDK 25" are not detected.
 
 ```bash
-scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db
-scripts/run-audit.py  --bkmr ~/bin/bkmr --db ~/path/to/bm.db --dry-run   # preview, runs nothing
-scripts/run-audit.py  --bkmr ~/bin/bkmr --db ~/path/to/bm.db             # digest in ~/.local/state/bkmr-audit/
-bkmr restore <history_id>                                                # undo a change from the digest
+scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db          # table, most overdue first
+scripts/due-report.py --bkmr ~/bin/bkmr --db ~/path/to/bm.db --json   # same, for an agent
 ```
 
-Things to know:
+```
+    id  over  win from     anchor     chk  title / flags
+  3512   121   90 created  2026-04-10 -    Gradle daemon sandbox contamination ...
+                                          pinned: version,sandbox
+```
 
-- Pass `--bkmr ~/bin/bkmr`: inside this repo direnv puts a debug build first on PATH. bkmr ≥ 8.2.0
-  is required.
-- The audit agent runs with `dontAsk`, no user settings and no MCP: read-only tools plus
-  `bkmr update/verify/delete --yes`. No file edits, no network, no `bkmr open`.
-- It stops after changing more than `min(5, 10%)` of the reviewed memories (exit code 2).
-- `claude -p` bills `ANTHROPIC_API_KEY` if set, else your claude.ai login.
-- First run: audit a copy (`sqlite3 bm.db ".backup '/tmp/bm-audit.db'"`) and judge the digest.
-- Open: no live run has yet confirmed that a user-level `Bash` allow rule stays out; no schedule
-  (needs local launchd/cron, a cloud routine cannot reach the DB).
+`over`: days past the window. `win`: window after pinning. `from`/`anchor`: what age counts from.
+`chk`: `yes` if the memory cites a path, commit or URL an agent can recheck.
+
+- Pass `--bkmr ~/bin/bkmr`: inside this repo direnv puts a debug build first on PATH, and
+  `BKMR_DB_URL` points at the repo's dev DB. bkmr ≥ 8.2.0 is required.
+- `-v` adds debug logging (why each memory is due) to stderr, here and in the eval scripts.
 
 ## Developing
 

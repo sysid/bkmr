@@ -6,7 +6,8 @@
 
   lifecycle_eval.py setup <dir>          Build <dir>/repo and <dir>/mem.db. Never touches a real DB.
   lifecycle_eval.py prompt <dir> <eval>  Print the prompt for an agent run, with the store path.
-  lifecycle_eval.py grade <dir> <eval>   Grade the end state; prints JSON in the README's schema.
+  lifecycle_eval.py grade <dir> <eval>   Grade the end state; prints JSON in grading.json's schema.
+  lifecycle_eval.py -v ...               Debug logging to stderr (commands run, each check).
 
 Each run needs its own <dir>. An agent gets only the printed prompt: the eval's name, this file and
 the expected outcomes must stay out of its view, or the eval tests nothing.
@@ -15,7 +16,9 @@ The stale-consistent rate is the share of runs of the "stale" evals that failed 
 Set BKMR_BIN to choose the binary; the default is `bkmr` from PATH.
 """
 
+import argparse
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -24,6 +27,8 @@ import sys
 from pathlib import Path
 
 BIN = os.environ.get("BKMR_BIN", "bkmr")
+
+log = logging.getLogger("lifecycle-eval")
 
 FILES = {
     "deploy.sh": """#!/usr/bin/env bash
@@ -155,6 +160,7 @@ STALE_EVALS = {"stale-deploy-flag", "stale-missing-guard"}
 
 
 def sh(*args, cwd=None, env=None):
+    log.debug("running in %s: %s", cwd or ".", " ".join(map(str, args))[:300])
     return subprocess.run(
         args, cwd=cwd, env=env, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL
     )
@@ -194,6 +200,7 @@ def setup(base: Path):
     for key, (tags, title, content) in MEMORIES.items():
         sh(BIN, "add", content, tags, "--title", title, "-t", "mem", "--no-web", env=env)
         ids[key] = sqlite3.connect(db).execute("SELECT max(id) FROM bookmarks").fetchone()[0]
+    log.debug("memory ids: %s", ids)
     (base / "memories.json").write_text(json.dumps(ids))
 
 
@@ -379,6 +386,8 @@ def grade(base: Path, name: str):
     checks.append(true_memories_untouched(s, name))
     # Nothing in the repo can confirm it, so a stamp here means stamping without checking.
     checks.append(("uncheckable_memory_not_stamped", not s.verified("noise_vpn")))
+    for text, passed in checks:
+        log.debug("%s %s", "pass" if passed else "FAIL", text)
     result = {
         "eval": name,
         "counts_for_stale_rate": name in STALE_EVALS,
@@ -390,13 +399,33 @@ def grade(base: Path, name: str):
     print(json.dumps(result, indent=2))
 
 
-if __name__ == "__main__":
-    command, base = sys.argv[1], Path(sys.argv[2]).resolve()
-    if command == "setup":
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="debug logging to stderr")
+    parser.add_argument("command", choices=["setup", "prompt", "grade"])
+    parser.add_argument("dir", type=Path)
+    parser.add_argument("eval", nargs="?", help="eval name, for prompt and grade")
+    args = parser.parse_args(argv)
+    # force: main() may run several times in one process (tests).
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+        force=True,
+    )
+    base = args.dir.resolve()
+    log.debug("%s %s %s (bkmr: %s)", args.command, base, args.eval or "", BIN)
+    if args.command == "setup":
         setup(base)
-    elif command == "prompt":
-        print(prompt(base, sys.argv[3]))
-    elif command == "grade":
-        grade(base, sys.argv[3])
+    elif not args.eval:
+        parser.error(f"{args.command} needs an eval name")
+    elif args.command == "prompt":
+        print(prompt(base, args.eval))
     else:
-        sys.exit(__doc__)
+        grade(base, args.eval)
+
+
+if __name__ == "__main__":
+    main()

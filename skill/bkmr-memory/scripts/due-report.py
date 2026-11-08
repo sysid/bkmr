@@ -8,6 +8,7 @@
   due-report.py --bkmr ~/bin/bkmr ...     Pick the binary: in the bkmr repo, PATH may find an
                                           older debug build without verified_at.
   due-report.py --input FILE [--json]     Read a saved `bkmr search -t _mem_ --json` instead.
+  due-report.py -v ...                    Log why each memory is or is not due, to stderr.
 
 A memory is due when its age reaches its review window. Age counts from `verified_at`, the last
 `bkmr verify`, or from `created_at` if it was never stamped or changed since. Due means "audit",
@@ -20,6 +21,7 @@ those go stale when the tool changes, not with age.
 
 import argparse
 import json
+import logging
 import re
 import subprocess
 import sys
@@ -41,6 +43,20 @@ VERSION = re.compile(r"\bv\d+(?:\.\d+)*\b|\b\d+\.\d+\.\d+\b|-rc\.\d+")
 FILE_PATH = re.compile(r"\b[\w.-]+/[\w./-]*\w\.[A-Za-z]\w*\b")
 COMMIT = re.compile(r"\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{7,40}\b")
 URL = re.compile(r"https?://\S+")
+
+log = logging.getLogger("due-report")
+LOG_FORMAT = "%(message)s"
+VERBOSE_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+
+
+def setup_logging(verbose):
+    # force: main() may run several times in one process (tests).
+    logging.basicConfig(
+        level=logging.DEBUG if verbose else logging.INFO,
+        format=VERBOSE_LOG_FORMAT if verbose else LOG_FORMAT,
+        stream=sys.stderr,
+        force=True,
+    )
 
 
 def parse_time(value):
@@ -77,6 +93,17 @@ def review(memory, now):
     text = f"{memory['url']}\n{memory['title']}\n{memory.get('description') or ''}"
     checkable = any(p.search(text) for p in (FILE_PATH, COMMIT, URL))
 
+    log.debug(
+        "#%s age %d from %s %s, window %d, overdue %d, checkable %s, flags %s",
+        memory["id"],
+        age,
+        anchor,
+        anchor_time.date(),
+        window,
+        age - window,
+        checkable,
+        flags or "-",
+    )
     return {
         "id": memory["id"],
         "title": memory["title"],
@@ -102,8 +129,11 @@ def load_from_bkmr(bkmr, db):
     command = [bkmr, "search", "-t", "_mem_", "--json", "--np"]
     if db:
         command += ["--db", db]
+    log.debug("running: %s", " ".join(command))
     result = subprocess.run(command, capture_output=True, text=True, check=True)
-    return json.loads(result.stdout)
+    memories = json.loads(result.stdout)
+    log.debug("bkmr returned %d memories", len(memories))
+    return memories
 
 
 def print_table(due, total):
@@ -130,9 +160,12 @@ def main(argv=None):
     )
     parser.add_argument("--json", action="store_true", help="print JSON for the audit")
     parser.add_argument("--now", help="reference date, YYYY-MM-DD (default: today)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="debug logging to stderr")
     args = parser.parse_args(argv)
+    setup_logging(args.verbose)
 
     if args.input:
+        log.debug("reading memories from %s", args.input)
         with open(args.input) as f:
             memories = json.load(f)
     else:
@@ -146,6 +179,7 @@ def main(argv=None):
 
     now = parse_time(args.now) if args.now else datetime.now(timezone.utc)
     due = due_memories(memories, now)
+    log.debug("%d of %d memories due as of %s", len(due), len(memories), now.date())
     if args.json:
         print(json.dumps(due, indent=2))
     else:

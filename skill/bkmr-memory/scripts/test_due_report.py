@@ -283,3 +283,28 @@ def test_the_table_shows_a_summary_line(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "1 of 2 memories due" in out
     assert "7" in out
+
+
+# --- debug logging -----------------------------------------------------------------------------------
+
+
+def test_verbose_logs_why_each_memory_is_due_to_stderr(tmp_path, capsys):
+    saved = tmp_path / "memories.json"
+    saved.write_text(json.dumps([memory(id=7, created_at="2026-01-01T00:00:00+00:00")]))
+
+    due_report.main(["--input", str(saved), "--json", "--now", "2026-11-08", "-v"])
+
+    captured = capsys.readouterr()
+    assert "DEBUG" in captured.err
+    assert "#7" in captured.err and "window 180" in captured.err
+    # stdout stays machine-readable for the audit
+    assert ids(json.loads(captured.out)) == [7]
+
+
+def test_without_verbose_there_is_no_debug_output(tmp_path, capsys):
+    saved = tmp_path / "memories.json"
+    saved.write_text(json.dumps([memory(id=7, created_at="2026-01-01T00:00:00+00:00")]))
+
+    due_report.main(["--input", str(saved), "--json", "--now", "2026-11-08"])
+
+    assert "DEBUG" not in capsys.readouterr().err

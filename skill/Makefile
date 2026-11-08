@@ -17,12 +17,12 @@ PYTEST := $(UV) --with pytest pytest
 TESTING:  ## ############################################################
 
 .PHONY: test
-test:  ## run all pytest cases (hooks, due report, audit runner)
-	$(PYTEST) $(hooks) $(scripts)
+test:  ## run all pytest cases (hooks, due report, lifecycle eval)
+	$(PYTEST) $(hooks) $(scripts) $(evals)
 
 .PHONY: test-verbose
 test-verbose:  ## run pytest with -v
-	$(PYTEST) -v $(hooks) $(scripts)
+	$(PYTEST) -v $(hooks) $(scripts) $(evals)
 
 ################################################################################
 # Code Quality \
