@@ -43,6 +43,7 @@ After that it triggers on its own. You only talk to the agent:
 | Starts a task | `hsearch` for related facts, gotchas, preferences |
 | Hits a strange bug, makes a design decision | Searches for prior episodes and decisions |
 | "Remember that we deploy with `make release`" | Dedup check, then `add` as `procedure` |
+| `/bkmr-memory remember …` (explicit invocation) | Dedup check, proposes title + tags, writes only what you approve |
 | "What do you know about the auth service?" | `hsearch -t _mem_`, answers from the hits |
 | Finishes a task | Stores non-trivial learnings, skips trivia |
 | Finds a memory that evidence contradicts | Corrects or deletes it without asking; history keeps the old text |

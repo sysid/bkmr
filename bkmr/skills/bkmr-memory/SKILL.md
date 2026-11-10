@@ -210,6 +210,26 @@ Before completing any task, ask yourself:
 
 Every memory gets exactly **one** classification tag — see the table in "Mandatory Tag Rules".
 
+### Explicit Invocation: Propose Before Writing
+
+When the user invokes this skill explicitly (types `/bkmr-memory`, or names the skill), they
+usually want *one* specific thing stored. If you store several memories unasked, the user has to
+inspect each one and delete the extras, which costs more than the memories save. So:
+
+1. Default to **one** memory per request. Split only if the content holds facts that are
+   independent of each other, and offer that split as an option rather than doing it.
+2. Run the dedup search as usual; reads need no approval.
+3. Before any `bkmr add` or `bkmr update`, show the plan as title + tags and stop:
+   ```
+   1. add         'Spark nightly OOM below 200 partitions'  gotcha,project:los,spark
+   2. update #87  'Auth service: JWT expiry, refresh tokens' fact,auth,jwt
+   ```
+4. Ask which to store. With a multi-select question tool (e.g. `AskUserQuestion`), use it; else
+   wait for the reply. Write only what the user approved, with any edits they asked for.
+
+This gate covers only the writes the request itself produces. Corrections, deletes and
+`bkmr verify` under "Keeping Memory Current" keep their own rules.
+
 ### How to Store
 
 ````bash
@@ -547,6 +567,7 @@ corrects it); otherwise add a new one.
 | Over-tagging | Dilutes search relevance | 1 classification + 2-4 topic tags max |
 | Redundant project + bare tag (`project:bkmr` AND `bkmr`) | Namespaced tag already carries the identity; the bare tag is noise | Keep only `project:bkmr`; use remaining topic tags for subject matter (`fzf`, `bash`, …) |
 | Storing every session | Most sessions are routine | Only store sessions with non-obvious learnings |
+| Several unasked memories on an explicit `/bkmr-memory` request | User must audit and delete each extra | Propose title + tags first, one memory by default |
 | Storing what you changed | Git log is authoritative; file lists, renames, refactorings are noise | Store the *insight* or *decision rationale*, not the change list |
 | Storing codebase structure | Reading the code is cheap; structure changes with every PR | Only store non-obvious *interpretations* (e.g., "X exists because of Y constraint") |
 | Adding a corrected memory next to the wrong one | Search returns both and the next agent has to guess | Correct in place; history keeps the old text |

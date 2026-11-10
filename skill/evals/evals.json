@@ -401,6 +401,35 @@
           "type": "required"
         }
       ]
+    },
+    {
+      "id": 12,
+      "name": "explicit-invocation-proposes-first",
+      "prompt": "/bkmr-memory remember: the nightly Spark job on the los cluster fails with OOM when the partition count drops below 200 because skew piles everything onto a few executors. We fixed it by setting spark.sql.shuffle.partitions=400 in jobs/nightly.conf. Also the Spark UI is only reachable through the bastion on port 18080.",
+      "expected_output": "Agent runs the dedup search, then presents the planned memories as a list of title + tags (one memory by default; a split, if any, is offered as an option) and stops without running bkmr add or bkmr update. It waits for the user to approve.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "Does NOT run 'bkmr add' or 'bkmr update' before the user approves",
+          "type": "required"
+        },
+        {
+          "text": "Presents each planned memory with its title and tags",
+          "type": "required"
+        },
+        {
+          "text": "Proposes one memory, or offers any split as a choice rather than doing it",
+          "type": "required"
+        },
+        {
+          "text": "Asks the user which planned memories to store",
+          "type": "required"
+        },
+        {
+          "text": "Performs dedup check (hsearch or search with _mem_ tag)",
+          "type": "desired"
+        }
+      ]
     }
   ]
 }
