@@ -988,6 +988,26 @@ fn given_yes_when_delete_then_deletes_all_without_asking() {
 }
 
 #[test]
+fn given_answer_on_stdin_when_delete_then_prompt_goes_to_stderr_not_stdout() {
+    // `bkmr delete 5 > out` must still show the question, and keep it out of the file
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("prompt.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", &id])
+        .write_stdin("yes\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Confirm").not())
+        .stderr(predicate::str::contains("Confirm delete?"));
+
+    assert_eq!(search_all(&db).len(), 0);
+}
+
+#[test]
 fn given_yes_and_unknown_id_when_delete_then_exits_failure() {
     let dir = TempDir::new().unwrap();
     let db = dir.path().join("delete.db");

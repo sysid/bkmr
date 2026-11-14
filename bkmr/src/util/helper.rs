@@ -20,16 +20,22 @@ pub fn calc_content_hash(content: &str) -> Vec<u8> {
     md5::compute(content).0.to_vec()
 }
 
-/// Interactive confirmation prompt
+/// Ask a yes/no question on stderr, so that `bkmr delete 5 > out` still shows it and keeps it
+/// out of the file. Anything but y/yes, including no input, declines.
 pub fn confirm(prompt: &str) -> bool {
-    print!("{} (y/N): ", prompt);
-    io::stdout().flush().unwrap(); // Ensure the prompt is displayed immediately
+    confirm_from(prompt, io::stdin().lock(), &mut io::stderr())
+}
+
+/// `confirm` over any input and output. A failed read declines rather than panics.
+pub fn confirm_from(prompt: &str, mut input: impl io::BufRead, output: &mut impl Write) -> bool {
+    // The answer still counts if the prompt cannot be shown
+    let _ = write!(output, "{} (y/N): ", prompt);
+    let _ = output.flush();
 
     let mut user_input = String::new();
-    io::stdin()
-        .read_line(&mut user_input)
-        .expect("Failed to read line");
-
+    if input.read_line(&mut user_input).is_err() {
+        return false;
+    }
     matches!(user_input.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
@@ -129,6 +135,35 @@ pub fn create_shell_function_name(title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn given_y_or_yes_in_any_case_when_confirm_from_then_true() {
+        for answer in ["y\n", "yes\n", "Y\n", " YES \n"] {
+            let mut prompt = Vec::new();
+            assert!(
+                confirm_from("Go on?", answer.as_bytes(), &mut prompt),
+                "{answer:?}"
+            );
+            assert_eq!(String::from_utf8(prompt).unwrap(), "Go on? (y/N): ");
+        }
+    }
+
+    #[test]
+    fn given_other_answer_or_no_input_when_confirm_from_then_false() {
+        for answer in ["n\n", "\n", "", "yep\n"] {
+            assert!(
+                !confirm_from("Go on?", answer.as_bytes(), &mut Vec::new()),
+                "{answer:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn given_input_that_is_not_utf8_when_confirm_from_then_false_instead_of_panic() {
+        let answer: &[u8] = &[0xff, 0xfe, b'\n'];
+
+        assert!(!confirm_from("Go on?", answer, &mut Vec::new()));
+    }
 
     #[test]
     fn given_valid_string_numbers_when_ensure_int_vector_then_returns_sorted_integers() {

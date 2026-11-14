@@ -1152,12 +1152,7 @@ pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()>
         return Ok(());
     }
 
-    eprint!("This will delete ALL embeddings and content hashes. Continue? [y/N] ");
-    let mut input = String::new();
-    std::io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| CliError::CommandFailed(format!("Failed to read input: {}", e)))?;
-    if !input.trim().eq_ignore_ascii_case("y") {
+    if !confirm("This will delete ALL embeddings and content hashes. Continue?") {
         return Err(CliError::OperationAborted);
     }
 
