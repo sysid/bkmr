@@ -121,7 +121,7 @@ impl SkimItem for FzfBookmarkItem {
         // the cleared preview is actually painted (unlike preview_fn which doesn't
         // trigger a re-render).
         let query = context.query;
-        if !query.is_empty() && !is_fuzzy_subsequence(query, &self.display_text) {
+        if !query.is_empty() && !query_may_match(query, &self.display_text) {
             return ItemPreview::AnsiText(String::new());
         }
         ItemPreview::AnsiText(self.preview_text.clone())
@@ -136,6 +136,13 @@ impl SkimItem for SemanticSearchResult {
     fn text(&self) -> Cow<'_, str> {
         Cow::Owned(self.display())
     }
+}
+
+/// Whether skim could match `query` against `text`. Only a plain fuzzy query can be checked
+/// here: skim matches space-separated terms in any order and reads `!`, `^`, `$`, `'` and `|`
+/// as operators, so such a query may match even when it is no subsequence.
+fn query_may_match(query: &str, text: &str) -> bool {
+    query.contains([' ', '!', '^', '$', '\'', '|']) || is_fuzzy_subsequence(query, text)
 }
 
 /// Check if `query` is a case-insensitive subsequence of `text`.
@@ -659,6 +666,23 @@ pub fn pick_restore_ids(items: Vec<RestorePickItem>) -> CliResult<Option<Vec<i32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn given_extended_skim_query_when_query_may_match_then_keeps_the_preview() {
+        // skim matches `bar foo` in any order, and `!x`, `^x`, `x$`, `'x`, `a | b` are operators
+        let text = "7: foo something bar";
+        for query in ["bar foo", "!zzz", "^7", "bar$", "'foo", "zzz | foo"] {
+            assert!(query_may_match(query, text), "{query:?}");
+        }
+    }
+
+    #[test]
+    fn given_plain_query_when_query_may_match_then_checks_subsequence() {
+        let text = "7: foo something bar";
+
+        assert!(query_may_match("fsb", text));
+        assert!(!query_may_match("zzz", text));
+    }
 
     #[test]
     fn given_title_and_content_with_brackets_when_classic_display_then_segments_cover_their_fields()
