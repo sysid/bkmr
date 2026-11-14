@@ -158,22 +158,8 @@ impl ShellAction {
             .write_all(script.as_bytes())
             .map_err(|e| DomainError::Other(format!("Failed to write to temporary file: {}", e)))?;
 
-        // Make the temporary script executable
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let metadata = temp_file
-                .as_file()
-                .metadata()
-                .map_err(|e| DomainError::Other(format!("Failed to get file metadata: {}", e)))?;
-            let mut perms = metadata.permissions();
-            perms.set_mode(0o755); // rwx r-x r-x
-            std::fs::set_permissions(temp_file.path(), perms).map_err(|e| {
-                DomainError::Other(format!("Failed to set file permissions: {}", e))
-            })?;
-        }
-
-        // Execute the script
+        // The file keeps tempfile's 0600: the shell reads it as an argument, so it needs no
+        // execute bit, and the script can hold interpolated secrets other users must not read.
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string());
 
         let mut command = Command::new(&shell);
@@ -438,6 +424,27 @@ mod tests {
             result.is_ok(),
             "Shell script with parameters should execute successfully"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_script_when_execute_then_script_file_is_readable_by_owner_only() {
+        // Arrange: the script may hold interpolated secrets, so while it runs no other local
+        // user may read it. It records its own mode, as the shell sees it, into a file.
+        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
+        let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
+        let action = ShellAction::new_direct(interpolation_service);
+        let out_dir = tempfile::tempdir().unwrap();
+        let mode_file = out_dir.path().join("mode.txt");
+        let script = format!("ls -l \"$0\" | cut -c1-10 > '{}'", mode_file.display());
+
+        // Act
+        action.execute_script(&script).unwrap();
+
+        // Assert
+        let mode = std::fs::read_to_string(&mode_file).unwrap();
+        assert_eq!(mode.trim(), "-rw-------");
     }
 
     #[test]
