@@ -105,15 +105,9 @@ impl UriAction {
             // Check if it's a markdown file
             if path.ends_with(".md") {
                 debug!("Opening markdown file with editor: {}", path);
-                let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-                debug!("Using editor: {}", editor);
-
-                std::process::Command::new(editor)
-                    .arg(&path)
-                    .status()
-                    .map_err(|e| {
-                        DomainError::Other(format!("Failed to open with editor: {}", e))
-                    })?;
+                let editor = crate::util::editor::configured_editor();
+                crate::util::editor::edit_file(&editor, std::path::Path::new(&path))
+                    .map_err(DomainError::Other)?;
             } else {
                 debug!("Opening file with default OS application: {}", path);
                 open::that(&path)

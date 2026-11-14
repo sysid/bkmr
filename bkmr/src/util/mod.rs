@@ -1,4 +1,5 @@
 pub mod argument_processor;
+pub mod editor;
 pub mod helper;
 pub mod interpolation;
 pub mod path;

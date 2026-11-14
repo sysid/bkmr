@@ -715,7 +715,6 @@ fn edit_source_file_and_sync(
 ) -> CliResult<()> {
     use crate::config::resolve_file_path;
     use std::path::Path;
-    use std::process::Command;
 
     // Get the file path
     let file_path_str = bookmark
@@ -737,23 +736,8 @@ fn edit_source_file_and_sync(
 
     eprintln!("  Editing source file: {}", resolved_path);
 
-    // Get the editor command
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-
-    // Edit the file with the user's preferred editor
-    let status = Command::new(&editor)
-        .arg(&resolved_path)
-        .status()
-        .map_err(|e| {
-            CliError::CommandFailed(format!("Failed to start editor '{}': {}", editor, e))
-        })?;
-
-    if !status.success() {
-        return Err(CliError::CommandFailed(format!(
-            "Editor '{}' exited with non-zero status",
-            editor
-        )));
-    }
+    crate::util::editor::edit_file(&crate::util::editor::configured_editor(), source_file)
+        .map_err(CliError::CommandFailed)?;
 
     eprintln!("  File edited successfully, syncing changes to database...");
 
