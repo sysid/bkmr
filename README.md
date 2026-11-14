@@ -202,7 +202,7 @@ bkmr intelligently handles different content types with appropriate actions:
 
 > **Rule:** A bookmark can have at most **one** system tag. Local files without a system tag open with the default application.
 
-> **URL/content:** every bookmark keeps its payload in one field, named URL for historical reasons. For a web bookmark it holds the URL; for every other type it holds the content itself: the snippet, script, markdown, env vars or memory text. Help texts and docs therefore say *URL/content*; in JSON the field is `url`.
+> **URL/content:** every bookmark keeps its payload in one field, named URL for historical reasons. For a web bookmark it is a web address; for every other type it is the content itself: the snippet, script, markdown, env vars or memory text. Help texts and docs therefore say *URL/content*; in JSON the field is `url`.
 
 Learn more: **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)** | **[Core Concepts](https://github.com/sysid/bkmr/wiki/Core-Concepts)**
 

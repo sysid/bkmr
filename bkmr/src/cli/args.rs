@@ -321,7 +321,7 @@ pub enum Commands {
         bookmark_type: String,
         #[arg(short = 'c', long = "clone", help = "clone an existing bookmark by ID")]
         clone_id: Option<i32>,
-        #[arg(long = "stdin", help = "read the URL/content from stdin")]
+        #[arg(long = "stdin", help = "read URL/content from stdin")]
         stdin: bool,
         #[arg(
             long = "open-with",
@@ -491,7 +491,7 @@ Exit codes:
         ids: String,
         #[arg(
             long = "force-db",
-            help = "for file-imported bookmarks: edit the URL/content stored in the database instead of the source file"
+            help = "for file-imported bookmarks: edit URL/content stored in the database instead of the source file"
         )]
         force_db: bool,
     },
@@ -551,8 +551,8 @@ Exit codes:
     /// Add bookmarks in bulk from a JSON array; existing bookmarks stay as they are
     ///
     /// Made for bulk creation: migrations, seeding a database, agent-generated inserts. Each
-    /// entry needs `url` (the URL/content), `title`, `description` and `tags` (an array of
-    /// strings). Other fields, `id` included, are ignored; every new bookmark gets a new ID.
+    /// entry needs `url` (content), `title`, `description` and `tags` (an array of strings).
+    /// Other fields, `id` included, are ignored; every new bookmark gets a new ID.
     ///
     /// Loading is additive and safe to repeat: an entry whose URL/content a bookmark already
     /// has is skipped, and existing bookmarks are never changed. An entry with different
