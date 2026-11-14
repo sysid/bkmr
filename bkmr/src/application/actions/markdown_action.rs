@@ -157,7 +157,6 @@ impl MarkdownAction {
 
     /// Extract headers from HTML content and add IDs if missing
     fn extract_and_process_headers(&self, html_content: &str) -> (String, Vec<TocEntry>) {
-        let mut processed_html = html_content.to_string();
         let mut toc_entries: Vec<TocEntry> = Vec::new();
         let mut header_counts = std::collections::HashMap::new();
 
@@ -165,63 +164,51 @@ impl MarkdownAction {
         let header_regex = Regex::new(r"<(h[123])(?:\s+[^>]*)?>(.*?)</h[123]>").unwrap();
         let id_regex = Regex::new(r#"\s+id\s*=\s*["']([^"']+)["']"#).unwrap();
 
-        // Find all headers and process them
-        let matches: Vec<_> = header_regex.find_iter(html_content).collect();
+        // Each heading is rewritten where it stands. Replacing its text across the document
+        // would give identical headings the same ID, and the TOC links to `-1`, `-2`.
+        let processed_html = header_regex.replace_all(html_content, |caps: &regex::Captures| {
+            let full_match = &caps[0];
+            let tag = &caps[1];
+            let content = &caps[2];
+            let level = match tag {
+                "h1" => 1,
+                "h2" => 2,
+                _ => 3,
+            };
 
-        for m in matches.iter() {
-            let full_match = m.as_str();
+            // Check if header already has an ID
+            let existing_id = id_regex.captures(full_match).map(|c| c[1].to_string());
 
-            if let Some(header_cap) = header_regex.captures(full_match) {
-                let level = match &header_cap[1] {
-                    "h1" => 1,
-                    "h2" => 2,
-                    "h3" => 3,
-                    _ => continue,
-                };
+            let header_id = if let Some(ref id) = existing_id {
+                id.clone()
+            } else {
+                // Generate ID from content
+                let base_id = self.generate_header_id(content);
 
-                let content = &header_cap[2];
+                // Handle duplicates
+                let count = header_counts.entry(base_id.clone()).or_insert(0);
+                *count += 1;
 
-                // Check if header already has an ID
-                let existing_id = id_regex.captures(full_match).map(|c| c[1].to_string());
-
-                let header_id = if let Some(ref id) = existing_id {
-                    id.clone()
+                if *count > 1 {
+                    format!("{}-{}", base_id, *count - 1)
                 } else {
-                    // Generate ID from content
-                    let base_id = self.generate_header_id(content);
-
-                    // Handle duplicates
-                    let count = header_counts.entry(base_id.clone()).or_insert(0);
-                    *count += 1;
-
-                    if *count > 1 {
-                        format!("{}-{}", base_id, *count - 1)
-                    } else {
-                        base_id
-                    }
-                };
-
-                // Create TOC entry
-                toc_entries.push(TocEntry {
-                    level,
-                    title: self.clean_html_content(content),
-                    id: header_id.clone(),
-                });
-
-                // Add ID to header if it doesn't exist
-                if existing_id.is_none() {
-                    let new_header = format!(
-                        "<{} id=\"{}\">{}</{}>",
-                        &header_cap[1], header_id, content, &header_cap[1]
-                    );
-
-                    // Replace in the processed HTML
-                    processed_html = processed_html.replace(full_match, &new_header);
+                    base_id
                 }
-            }
-        }
+            };
 
-        (processed_html, toc_entries)
+            toc_entries.push(TocEntry {
+                level,
+                title: self.clean_html_content(content),
+                id: header_id.clone(),
+            });
+
+            match existing_id {
+                Some(_) => full_match.to_string(),
+                None => format!("<{} id=\"{}\">{}</{}>", tag, header_id, content, tag),
+            }
+        });
+
+        (processed_html.into_owned(), toc_entries)
     }
 
     /// Generate a URL-safe ID from header content
@@ -1450,6 +1437,23 @@ mod tests {
         assert!(processed_html.contains("<h1 id=\"introduction\">Introduction</h1>"));
         assert!(processed_html.contains("<h2 id=\"introduction-1\">Introduction</h2>"));
         assert!(processed_html.contains("<h3 id=\"introduction-2\">Introduction</h3>"));
+    }
+
+    #[test]
+    fn given_identical_headings_when_extract_then_each_gets_the_id_its_toc_link_names() {
+        // Same level and text, so the two tags are the same string
+        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
+        let action = MarkdownAction::new(embedder);
+        let html_content = "<h2>Setup</h2>\n<p>one</p>\n<h2>Setup</h2>";
+
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+
+        assert_eq!(toc_entries[0].id, "setup");
+        assert_eq!(toc_entries[1].id, "setup-1");
+        assert_eq!(
+            processed_html,
+            "<h2 id=\"setup\">Setup</h2>\n<p>one</p>\n<h2 id=\"setup-1\">Setup</h2>"
+        );
     }
 
     #[test]
