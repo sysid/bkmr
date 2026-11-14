@@ -11,7 +11,7 @@ use std::path::PathBuf;
   1    valid invocation, but the operation failed
   64   usage error: invalid arguments or invalid config file
   65   duplicate name (import-files without --update), skill already installed (skill install)
-  130  confirmation declined (delete, clear-embeddings)")]
+  130  confirmation declined (delete, clear-embeddings, restore --from)")]
 /// Knowledge management for humans and agents — bookmarks, snippets, scripts, and semantic search
 pub struct Cli {
     /// Optional name to operate on

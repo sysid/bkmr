@@ -156,11 +156,11 @@ bkmr search --fzf
 | `update` | Change tags, title, description, content, opener or embedding, non-interactively |
 | `delete` | Delete bookmarks by ID (`--yes`: no prompt; `--force`: also purge history, permanently) |
 | `history` | Show saved old states of agent memories (`_mem_`); `-p`: each change as a unified diff |
-| `restore` | Bring back a saved state from `history`, also of a deleted memory; `--dry-run`: show the diff only |
+| `restore` | Bring back a saved state from `history`, also of a deleted memory; `--from FILE`: changed and deleted bookmarks of any type from a `search --json` backup; `--dry-run`: show the diff only |
 | `verify` | Record that bookmarks were checked against reality (`verified_at`) |
 | `show` | Display bookmark details |
 | `import-files` | Import files/directories with frontmatter parsing |
-| `load-json` | Bulk-create bookmarks from a JSON array |
+| `load-json` | Create new bookmarks from a JSON array; skips existing URLs, never updates (restoring a backup is `restore --from`) |
 | `tags` | View tag taxonomy with usage counts |
 | `info` | Show configuration, database path, embedding status |
 | `create-db` | Initialize a bookmark database |
