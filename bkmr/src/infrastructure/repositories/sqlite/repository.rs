@@ -12,10 +12,7 @@ use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, RepositoryError};
 use crate::domain::history::{HistoryChange, HistoryEntry};
-use crate::domain::repositories::query::{
-    AllTagsSpecification, AnyTagSpecification, BookmarkQuery, SortCriteria, SortDirection,
-    SortField,
-};
+use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::RankedResult;
 use crate::domain::tag::Tag;
@@ -205,6 +202,96 @@ impl SqliteBookmarkRepository {
     }
 }
 
+/// Query helpers of `search`. Kept off the domain trait: they use SQLite types.
+impl SqliteBookmarkRepository {
+    #[instrument(skip_all, level = "trace")]
+    fn get_all_bookmark_ids(
+        &self,
+        conn: &mut PooledConnection,
+    ) -> Result<Vec<i32>, SqliteRepositoryError> {
+        let ids = dsl::bookmarks
+            .select(dsl::id)
+            .load::<i32>(conn)
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| e.context("loading all bookmark IDs from database"))?;
+
+        Ok(ids)
+    }
+
+    #[instrument(skip_all, level = "trace")]
+    fn get_bookmarks_by_ids(&self, ids: &[i32]) -> Result<Vec<Bookmark>, DomainError> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut conn = self
+            .get_connection()
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context("getting database connection for bulk bookmark retrieval"))?;
+
+        let db_bookmarks = dsl::bookmarks
+            .filter(dsl::id.eq_any(ids))
+            .load::<DbBookmark>(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)
+            .map_err(|e| DomainError::RepositoryError(e.into()))
+            .map_err(|e| e.context(format!("querying bookmarks by IDs: {:?}", ids)))?;
+
+        let bookmarks = db_bookmarks
+            .into_iter()
+            .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
+                Ok(bookmark) => Some(bookmark),
+                Err(e) => {
+                    error!("Failed to convert bookmark: {}", e);
+                    None
+                }
+            })
+            .collect();
+
+        Ok(bookmarks)
+    }
+
+    // #[instrument(level = "debug")]
+    // fn get_bookmarks_fts(&self, fts_query: &str) -> SqliteResult<Vec<i32>> {
+    //     let mut conn = self.get_connection()?;
+    //
+    //     sql_query(
+    //         "SELECT id FROM bookmarks_fts \
+    //      WHERE bookmarks_fts MATCH ? \
+    //      ORDER BY rank",
+    //     )
+    //     .bind::<Text, _>(fts_query)
+    //     .load::<IdResult>(&mut conn)
+    //     .map(|results| results.into_iter().map(|result| result.id).collect())
+    //     .map_err(SqliteRepositoryError::DatabaseError)
+    // }
+    fn get_bookmarks_fts(&self, fts_query: &str) -> Result<Vec<i32>, SqliteRepositoryError> {
+        let mut conn = self.get_connection()?;
+
+        // Prepare the Diesel query
+        let query = sql_query(
+            "SELECT id FROM bookmarks_fts \
+             WHERE bookmarks_fts MATCH ? \
+             ORDER BY rank",
+        )
+        .bind::<Text, _>(fts_query);
+
+        // Log the SQL string (substitutes parameters into the query)
+        info!(
+            "Executing SQL: {}",
+            diesel::debug_query::<diesel::sqlite::Sqlite, _>(&query)
+        );
+
+        // Execute and transform into Vec<i32>
+        let ids = query
+            .load::<IdResult>(&mut conn)?
+            .into_iter()
+            .map(|record| record.id)
+            .collect();
+
+        Ok(ids)
+    }
+}
+
 impl BookmarkRepository for SqliteBookmarkRepository {
     #[instrument(skip_all, level = "debug")]
     fn get_by_id(&self, id: i32) -> Result<Option<Bookmark>, DomainError> {
@@ -322,52 +409,6 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             filtered_bookmarks.len()
         );
         Ok(filtered_bookmarks)
-    }
-
-    #[instrument(skip_all, level = "trace")]
-    fn get_all_bookmark_ids(
-        &self,
-        conn: &mut PooledConnection,
-    ) -> Result<Vec<i32>, SqliteRepositoryError> {
-        let ids = dsl::bookmarks
-            .select(dsl::id)
-            .load::<i32>(conn)
-            .map_err(SqliteRepositoryError::DatabaseError)
-            .map_err(|e| e.context("loading all bookmark IDs from database"))?;
-
-        Ok(ids)
-    }
-
-    #[instrument(skip_all, level = "trace")]
-    fn get_bookmarks_by_ids(&self, ids: &[i32]) -> Result<Vec<Bookmark>, DomainError> {
-        if ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let mut conn = self
-            .get_connection()
-            .map_err(|e| DomainError::RepositoryError(e.into()))
-            .map_err(|e| e.context("getting database connection for bulk bookmark retrieval"))?;
-
-        let db_bookmarks = dsl::bookmarks
-            .filter(dsl::id.eq_any(ids))
-            .load::<DbBookmark>(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)
-            .map_err(|e| DomainError::RepositoryError(e.into()))
-            .map_err(|e| e.context(format!("querying bookmarks by IDs: {:?}", ids)))?;
-
-        let bookmarks = db_bookmarks
-            .into_iter()
-            .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
-                Ok(bookmark) => Some(bookmark),
-                Err(e) => {
-                    error!("Failed to convert bookmark: {}", e);
-                    None
-                }
-            })
-            .collect();
-
-        Ok(bookmarks)
     }
 
     #[instrument(skip_all, level = "debug")]
@@ -752,39 +793,6 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         Ok(bookmarks)
     }
 
-    // Update get_without_embeddings to ignore embeddable flag (let the service handle filtering)
-    #[instrument(skip_all, level = "debug")]
-    fn get_without_embeddings(&self) -> Result<Vec<Bookmark>, DomainError> {
-        let mut conn = self.get_connection()?;
-
-        let db_bookmarks = dsl::bookmarks
-            .filter(dsl::embedding.is_null())
-            .load::<DbBookmark>(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
-
-        let mut bookmarks = Vec::new();
-        for db_bookmark in db_bookmarks {
-            match self.to_domain_model(db_bookmark) {
-                Ok(bookmark) => bookmarks.push(bookmark),
-                Err(e) => error!("Failed to convert bookmark: {}", e),
-            }
-        }
-
-        Ok(bookmarks)
-    }
-
-    #[instrument(skip_all, level = "debug")]
-    fn get_by_all_tags(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError> {
-        let query =
-            BookmarkQuery::new().with_specification(AllTagsSpecification::new(tags.clone()));
-        self.search(&query)
-    }
-
-    fn get_by_any_tag(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError> {
-        let query = BookmarkQuery::new().with_specification(AnyTagSpecification::new(tags.clone()));
-        self.search(&query)
-    }
-
     fn get_by_access_date(
         &self,
         direction: SortDirection,
@@ -796,106 +804,6 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             query = query.with_limit(Option::from(limit));
         }
         self.search(&query)
-    }
-
-    // TODO:testing, which methods can be hidden?
-    fn search_by_text(&self, text: &str) -> Result<Vec<Bookmark>, DomainError> {
-        // let query = BookmarkQuery::new().with_specification(
-        //     crate::domain::repositories::query::TextSearchSpecification::new(text.to_string()),
-        // );
-        // self.search(&query)
-        self.get_bookmarks(text).map_err(|e| {
-            DomainError::RepositoryError(RepositoryError::Other(format!(
-                "Failed to search bookmarks by text: {}",
-                e
-            )))
-        })
-    }
-
-    // TODO:testing
-    #[instrument(level = "debug")]
-    fn get_bookmarks(&self, query: &str) -> SqliteResult<Vec<Bookmark>> {
-        let mut conn = self.get_connection()?;
-
-        if query.is_empty() {
-            let db_bookmarks = dsl::bookmarks
-                .load::<DbBookmark>(&mut conn)
-                .map_err(SqliteRepositoryError::DatabaseError)?;
-
-            let bookmarks = db_bookmarks
-                .into_iter()
-                .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
-                    Ok(bookmark) => Some(bookmark),
-                    Err(e) => {
-                        error!("Failed to convert bookmark: {}", e);
-                        None
-                    }
-                })
-                .collect();
-
-            Ok(bookmarks)
-        } else {
-            let ids = self.get_bookmarks_fts(query)?;
-
-            let db_bookmarks = dsl::bookmarks
-                .filter(dsl::id.eq_any(ids))
-                .load::<DbBookmark>(&mut conn)
-                .map_err(SqliteRepositoryError::DatabaseError)?;
-
-            let bookmarks = db_bookmarks
-                .into_iter()
-                .filter_map(|db_bookmark| match self.to_domain_model(db_bookmark) {
-                    Ok(bookmark) => Some(bookmark),
-                    Err(e) => {
-                        error!("Failed to convert bookmark: {}", e);
-                        None
-                    }
-                })
-                .collect();
-
-            Ok(bookmarks)
-        }
-    }
-
-    // #[instrument(level = "debug")]
-    // fn get_bookmarks_fts(&self, fts_query: &str) -> SqliteResult<Vec<i32>> {
-    //     let mut conn = self.get_connection()?;
-    //
-    //     sql_query(
-    //         "SELECT id FROM bookmarks_fts \
-    //      WHERE bookmarks_fts MATCH ? \
-    //      ORDER BY rank",
-    //     )
-    //     .bind::<Text, _>(fts_query)
-    //     .load::<IdResult>(&mut conn)
-    //     .map(|results| results.into_iter().map(|result| result.id).collect())
-    //     .map_err(SqliteRepositoryError::DatabaseError)
-    // }
-    fn get_bookmarks_fts(&self, fts_query: &str) -> Result<Vec<i32>, SqliteRepositoryError> {
-        let mut conn = self.get_connection()?;
-
-        // Prepare the Diesel query
-        let query = sql_query(
-            "SELECT id FROM bookmarks_fts \
-             WHERE bookmarks_fts MATCH ? \
-             ORDER BY rank",
-        )
-        .bind::<Text, _>(fts_query);
-
-        // Log the SQL string (substitutes parameters into the query)
-        info!(
-            "Executing SQL: {}",
-            diesel::debug_query::<diesel::sqlite::Sqlite, _>(&query)
-        );
-
-        // Execute and transform into Vec<i32>
-        let ids = query
-            .load::<IdResult>(&mut conn)?
-            .into_iter()
-            .map(|record| record.id)
-            .collect();
-
-        Ok(ids)
     }
 
     fn get_bookmarks_fts_ranked(
@@ -937,15 +845,8 @@ impl BookmarkRepository for SqliteBookmarkRepository {
     }
 
     #[instrument(skip(self))]
-    fn exists_by_url(&self, url: &str) -> Result<i32, DomainError> {
-        let bookmark = self.get_by_url(url)?;
-
-        match bookmark {
-            Some(bm) => bm
-                .id
-                .ok_or_else(|| DomainError::BookmarkNotFound("Bookmark ID is None".to_string())),
-            None => Ok(-1),
-        }
+    fn exists_by_url(&self, url: &str) -> Result<Option<i32>, DomainError> {
+        Ok(self.get_by_url(url)?.and_then(|bookmark| bookmark.id))
     }
 
     #[instrument(skip_all, level = "debug")]
@@ -1357,30 +1258,6 @@ mod tests {
     }
 
     #[test]
-    fn given_bookmarks_without_embeddings_when_get_then_returns_filtered_list(
-    ) -> Result<(), DomainError> {
-        let repo = setup_test_db();
-
-        // Add bookmarks (all should have null embeddings in this test)
-        for i in 1..=3 {
-            let mut bookmark = create_test_bookmark(
-                &format!("Test {}", i),
-                &format!("https://example{}.com", i),
-                vec!["test"],
-            )?;
-            repo.add(&mut bookmark)?;
-        }
-
-        // Get bookmarks without embeddings
-        let bookmarks = repo.get_without_embeddings()?;
-
-        // All bookmarks should be returned
-        assert_eq!(bookmarks.len(), 3);
-
-        Ok(())
-    }
-
-    #[test]
     fn given_url_when_exists_by_url_then_returns_existence_status() -> Result<(), DomainError> {
         let repo = setup_test_db();
 
@@ -1391,11 +1268,11 @@ mod tests {
 
         // Check existing URL
         let exists = repo.exists_by_url("https://exists-test.com")?;
-        assert_eq!(exists, 1);
+        assert_eq!(exists, bookmark.id);
 
         // Check non-existing URL
         let not_exists = repo.exists_by_url("https://does-not-exist.com")?;
-        assert_eq!(not_exists, -1);
+        assert_eq!(not_exists, None);
 
         Ok(())
     }

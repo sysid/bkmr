@@ -145,20 +145,9 @@ pub trait BookmarkService: Send + Sync + Debug {
         force_embedding: bool,
     ) -> ApplicationResult<Bookmark>;
 
-    /// Add tags to a bookmark
-    fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
-
-    /// Remove tags from a bookmark
-    fn remove_tags_from_bookmark(
-        &self,
-        id: i32,
-        tags: &HashSet<Tag>,
-    ) -> ApplicationResult<Bookmark>;
-
     /// Replace all tags on a bookmark
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
 
-    fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>>;
     // Add a convenience method to create a query for text search
 
     // Replace the complex search_bookmarks method with a simpler interface
@@ -172,9 +161,6 @@ pub trait BookmarkService: Send + Sync + Debug {
 
     /// Perform hybrid search combining FTS and semantic search with RRF fusion
     fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>>;
-
-    /// Get bookmark by URL
-    fn get_bookmark_by_url(&self, url: &str) -> ApplicationResult<Option<Bookmark>>;
 
     /// Get all bookmarks
     fn get_all_bookmarks(

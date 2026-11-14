@@ -14,7 +14,7 @@ use crate::domain::history::HistoryEntry;
 use crate::domain::repositories::import_repository::{
     BackupEntry, FileImportData, ImportRepository,
 };
-use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
+use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::search::{
@@ -155,10 +155,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             .repository
             .exists_by_url(&entry.url)
             .app_context("checking if bookmark with URL already exists")?;
-        if url_holder != -1 && url_holder != id {
-            return Ok(BackupRestoreState::Conflict {
-                blocking_id: url_holder,
-            });
+        if let Some(blocking_id) = url_holder.filter(|&holder| holder != id) {
+            return Ok(BackupRestoreState::Conflict { blocking_id });
         }
 
         match current {
@@ -254,7 +252,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .repository
             .exists_by_url(url)
             .app_context("checking if bookmark with URL already exists")?;
-        if existing_id != -1 {
+        if let Some(existing_id) = existing_id {
             return Err(ApplicationError::BookmarkExists(
                 existing_id,
                 url.to_string(),
@@ -436,7 +434,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .repository
             .exists_by_url(&entry.url)
             .app_context("checking if bookmark with URL already exists")?;
-        if existing_id != -1 && existing_id != entry.bookmark_id {
+        if let Some(existing_id) = existing_id.filter(|&holder| holder != entry.bookmark_id) {
             return Err(ApplicationError::BookmarkExists(
                 existing_id,
                 entry.url.clone(),
@@ -558,57 +556,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self, tags), level = "debug")]
-    fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
-        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)
-            .with_app_context(|| {
-                format!(
-                    "validating and retrieving bookmark with ID {} for adding tags",
-                    id
-                )
-            })?;
-
-        for tag in tags {
-            bookmark
-                .add_tag(tag.clone())
-                .with_app_context(|| format!("adding tag '{}' to bookmark", tag.value()))?;
-        }
-        self.update_bookmark(bookmark, false)
-            .app_context("updating bookmark after adding tags")
-    }
-
-    #[instrument(skip(self, tags), level = "debug")]
-    fn remove_tags_from_bookmark(
-        &self,
-        id: i32,
-        tags: &HashSet<Tag>,
-    ) -> ApplicationResult<Bookmark> {
-        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
-
-        for tag in tags {
-            let _ = bookmark.remove_tag(tag);
-        }
-        self.update_bookmark(bookmark, false)
-    }
-
-    #[instrument(skip(self, tags), level = "debug")]
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
         bookmark.set_tags(tags.clone())?;
         self.update_bookmark(bookmark, false)
-    }
-
-    // Implement the convenience method for text search
-    #[instrument(skip_all, level = "debug")]
-    fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
-        let query = BookmarkQuery::new()
-            .with_text_query(Some(query))
-            .with_sort(SortCriteria::new(
-                SortField::Modified,
-                SortDirection::Descending,
-            ));
-
-        self.search_bookmarks(&query)
     }
 
     #[instrument(skip_all, level = "debug")]
@@ -758,12 +710,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn get_bookmark_by_url(&self, url: &str) -> ApplicationResult<Option<Bookmark>> {
-        let bookmark = self.repository.get_by_url(url)?;
-        Ok(bookmark)
-    }
-
-    #[instrument(skip(self), level = "debug")]
     fn get_all_bookmarks(
         &self,
         sort_direction: Option<SortDirection>,
@@ -908,8 +854,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         for import in imports {
             // Check if bookmark with URL already exists
-            let existing_id = self.repository.exists_by_url(&import.url)?;
-            if existing_id != -1 {
+            if let Some(existing_id) = self.repository.exists_by_url(&import.url)? {
                 debug!(
                     "Bookmark with URL {} already exists (ID: {}), skipping",
                     import.url, existing_id
@@ -2211,29 +2156,6 @@ mod tests {
     }
 
     #[test]
-    fn given_non_embeddable_bookmark_when_retagged_to_always_type_then_gets_embedded() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let (service, vectors) = create_service_with_recorded_vectors();
-        let id = service
-            .add_bookmark("retag", Some("Retag"), None, None, false, Some(false), None)
-            .unwrap()
-            .id
-            .unwrap();
-        assert!(!vectors.has_vector(id));
-
-        // Act
-        let updated = service
-            .add_tags_to_bookmark(id, &tag_set(&["_mem_"]))
-            .unwrap();
-
-        // Assert
-        assert!(updated.embeddable);
-        assert!(vectors.has_vector(id));
-    }
-
-    #[test]
     fn given_non_embeddable_bookmark_when_tags_replaced_with_always_type_then_gets_embedded() {
         // Arrange
         let _env = init_test_env();
@@ -3022,36 +2944,6 @@ mod tests {
     }
 
     #[test]
-    fn given_valid_url_when_get_bookmark_by_url_then_returns_correct_bookmark() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        service
-            .add_bookmark(
-                "https://get-by-url.example.com",
-                Some("Get By Url"),
-                None,
-                None,
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap();
-
-        // Act
-        let result = service
-            .get_bookmark_by_url("https://get-by-url.example.com")
-            .unwrap();
-
-        // Assert
-        assert!(result.is_some(), "Should find bookmark with URL");
-        let bookmark = result.unwrap();
-        assert_eq!(bookmark.url, "https://get-by-url.example.com");
-        assert_eq!(bookmark.title, "Get By Url");
-    }
-
-    #[test]
     fn given_new_bookmark_when_add_bookmark_then_creates_and_returns_bookmark() {
         // Arrange
         let _env = init_test_env();
@@ -3244,88 +3136,6 @@ mod tests {
     //         _ => panic!("Expected a BookmarkNotFound error"),
     //     }
     // }
-
-    #[test]
-    fn given_existing_bookmark_when_add_tags_then_adds_tags_correctly() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        let mut original_tags = HashSet::new();
-        original_tags.insert(Tag::new("original").unwrap());
-        let id = service
-            .add_bookmark(
-                "https://add-tags.example.com",
-                Some("Add Tags"),
-                None,
-                Some(&original_tags),
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap()
-            .id
-            .unwrap();
-        let mut tags = HashSet::new();
-        tags.insert(Tag::new("newtag").unwrap());
-
-        // Get original tags
-        let original = service.get_bookmark(id).unwrap().unwrap();
-        let original_tag_count = original.tags.len();
-
-        // Act
-        let updated = service.add_tags_to_bookmark(id, &tags).unwrap();
-
-        // Assert
-        assert!(updated.tags.contains(&Tag::new("newtag").unwrap()));
-        assert_eq!(updated.tags.len(), original_tag_count + 1);
-
-        // Verify changes were persisted
-        let retrieved = service.get_bookmark(id).unwrap().unwrap();
-        assert!(retrieved.tags.contains(&Tag::new("newtag").unwrap()));
-    }
-
-    #[test]
-    fn given_existing_bookmark_when_remove_tags_then_removes_tags_correctly() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        let mut original_tags = HashSet::new();
-        original_tags.insert(Tag::new("keep").unwrap());
-        original_tags.insert(Tag::new("remove").unwrap());
-        let id = service
-            .add_bookmark(
-                "https://remove-tags.example.com",
-                Some("Remove Tags"),
-                None,
-                Some(&original_tags),
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap()
-            .id
-            .unwrap();
-        let tag_to_remove = Tag::new("remove").unwrap();
-
-        let mut tags_to_remove = HashSet::new();
-        tags_to_remove.insert(tag_to_remove.clone());
-
-        // Act
-        let updated = service
-            .remove_tags_from_bookmark(id, &tags_to_remove)
-            .unwrap();
-
-        // Assert
-        assert!(!updated.tags.contains(&tag_to_remove));
-        assert!(updated.tags.contains(&Tag::new("keep").unwrap()));
-        assert_eq!(updated.tags.len(), 1);
-
-        // Verify changes were persisted
-        let retrieved = service.get_bookmark(id).unwrap().unwrap();
-        assert!(!retrieved.tags.contains(&tag_to_remove));
-    }
 
     #[test]
     fn given_existing_bookmark_when_replace_tags_then_replaces_all_tags() {
@@ -3548,43 +3358,6 @@ mod tests {
     //     let all_tag_results = service.search_bookmarks_by_all_tags(&tags).unwrap();
     //     assert!(results.len() >= all_tag_results.len());
     // }
-
-    #[test]
-    fn given_text_query_when_search_by_text_then_returns_matching_bookmarks() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        service
-            .add_bookmark(
-                "https://www.google.com",
-                Some("Google"),
-                None,
-                None,
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap();
-        service
-            .add_bookmark(
-                "https://www.rust-lang.org",
-                Some("Rust"),
-                None,
-                None,
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap();
-
-        // Act
-        let results = service.search_bookmarks_by_text("Google").unwrap();
-
-        // Assert
-        assert_eq!(results.len(), 1, "Only the Google bookmark matches");
-        assert_eq!(results[0].title, "Google");
-    }
 
     #[test]
     fn given_test_database_when_get_all_bookmarks_then_returns_all_bookmarks() {
