@@ -176,10 +176,6 @@ impl TestServiceContainer {
         let memory_action: Box<dyn BookmarkAction> =
             Box::new(crate::application::actions::MemoryAction::new());
 
-        let default_action: Box<dyn BookmarkAction> = Box::new(
-            crate::application::actions::DefaultAction::new(interpolation_service.clone()),
-        );
-
         Arc::new(SystemTagActionResolver::new(
             uri_action,
             snippet_action,
@@ -188,7 +184,6 @@ impl TestServiceContainer {
             markdown_action,
             env_action,
             memory_action,
-            default_action,
         ))
     }
 

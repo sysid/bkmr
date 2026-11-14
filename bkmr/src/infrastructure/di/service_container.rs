@@ -1,6 +1,5 @@
 use crate::application::actions::{
-    DefaultAction, EnvAction, MarkdownAction, MemoryAction, ShellAction, SnippetAction, TextAction,
-    UriAction,
+    EnvAction, MarkdownAction, MemoryAction, ShellAction, SnippetAction, TextAction, UriAction,
 };
 use crate::application::error::ApplicationResult;
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
@@ -230,9 +229,6 @@ impl ServiceContainer {
 
         let memory_action: Box<dyn BookmarkAction> = Box::new(MemoryAction::new());
 
-        let default_action: Box<dyn BookmarkAction> =
-            Box::new(DefaultAction::new(interpolation_service.clone()));
-
         Ok(Arc::new(SystemTagActionResolver::new(
             uri_action,
             snippet_action,
@@ -241,7 +237,6 @@ impl ServiceContainer {
             markdown_action,
             env_action,
             memory_action,
-            default_action,
         )))
     }
 }
