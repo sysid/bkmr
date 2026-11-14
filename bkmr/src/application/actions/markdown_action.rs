@@ -446,9 +446,10 @@ impl BookmarkAction for MarkdownAction {
         open::that(&file_path)
             .map_err(|e| DomainError::Other(format!("Failed to open HTML in browser: {}", e)))?;
 
-        // Keep the temporary directory around until the program exits
-        // This prevents the file from being deleted while the browser is using it
-        std::mem::forget(temp_dir);
+        // The browser reads the page after bkmr has exited, so the directory must outlive it.
+        // ponytail: never removed by bkmr, one directory per open; the OS cleans $TMPDIR. The
+        // upgrade is one cache directory per bookmark ID, overwritten on each open.
+        let _kept = temp_dir.keep();
 
         Ok(())
     }

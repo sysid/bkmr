@@ -48,8 +48,9 @@ impl ShellAction {
                 debug!("Executing interactive command: {}", final_command);
                 self.execute_script(&final_command, script_args)
             }
-            Err(ReadlineError::Interrupted) => {
-                debug!("User cancelled shell execution with Ctrl-C");
+            // Ctrl-C and Ctrl-D both cancel, as at a shell prompt
+            Err(ReadlineError::Interrupted | ReadlineError::Eof) => {
+                debug!("User cancelled shell execution");
                 Ok(())
             }
             Err(e) => Err(DomainError::Other(format!("Readline error: {}", e))),
