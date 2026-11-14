@@ -75,7 +75,9 @@ pub fn execute_command_with_services(
             bookmark_commands::clear_embeddings(cli, &services)
         }
         Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli, &services),
-        Some(Commands::ImportFiles { .. }) => bookmark_commands::import_files(cli, &services),
+        Some(Commands::ImportFiles { .. }) => {
+            bookmark_commands::import_files(cli, &services, settings)
+        }
         Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),
         Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
         // main.rs handles these before any database is opened; reaching here is a dispatch bug.

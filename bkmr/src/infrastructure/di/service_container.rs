@@ -67,7 +67,8 @@ impl ServiceContainer {
                 vector_repository.clone(),
                 Arc::new(FileImportRepository::new()),
             )
-            .with_embedding_policy(config.embeddings.policy),
+            .with_embedding_policy(config.embeddings.policy)
+            .with_base_paths(config.base_paths.clone()),
         );
 
         let tag_service = Arc::new(TagServiceImpl::new(bookmark_repository.clone()));

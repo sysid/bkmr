@@ -348,11 +348,11 @@ pub fn has_base_path(settings: &Settings, name: &str) -> bool {
 }
 
 /// Resolve a file path with base path variables
-pub fn resolve_file_path(settings: &Settings, path: &str) -> String {
+pub fn resolve_file_path(base_paths: &HashMap<String, String>, path: &str) -> String {
     let mut resolved = path.to_string();
 
     // Replace base path variables
-    for (name, base_path) in &settings.base_paths {
+    for (name, base_path) in base_paths {
         let var_pattern = format!("${}", name);
         if resolved.contains(&var_pattern) {
             let expanded_base =

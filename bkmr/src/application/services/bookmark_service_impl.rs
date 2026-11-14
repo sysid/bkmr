@@ -1,5 +1,5 @@
 // src/application/services/bookmark_service_impl.rs
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
@@ -49,6 +49,8 @@ pub struct BookmarkServiceImpl<R: BookmarkRepository> {
     vector_repository: Arc<dyn VectorRepository>,
     import_repository: Arc<dyn ImportRepository>,
     embedding_policy: EmbeddingPolicy,
+    /// Named base paths (`$NAME/...` in a stored file path), from the loaded config
+    base_paths: HashMap<String, String>,
 }
 
 impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
@@ -64,7 +66,14 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             vector_repository,
             import_repository,
             embedding_policy: EmbeddingPolicy::default(),
+            base_paths: HashMap::new(),
         }
+    }
+
+    /// Use the base paths of the loaded config, so that `--config` decides them.
+    pub fn with_base_paths(mut self, base_paths: HashMap<String, String>) -> Self {
+        self.base_paths = base_paths;
+        self
     }
 
     /// Replace the built-in embedding policy with the configured one.
@@ -976,14 +985,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}, verbose={}, base_path={:?}", 
                paths, update, delete_missing, dry_run, verbose, base_path_name);
 
-        // Load settings for base path resolution
-        let settings = crate::config::load_settings(None)
-            .map_err(|e| ApplicationError::Other(format!("Failed to load settings: {}", e)))?;
-
         // Resolve actual scan paths based on base path
         let actual_scan_paths = if let Some(base_name) = base_path_name {
-            if let Some(base_value) = settings.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(&settings, base_value);
+            if let Some(base_value) = self.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(&self.base_paths, base_value);
                 // Convert relative paths to absolute paths under the base
                 paths
                     .iter()
@@ -1054,19 +1059,14 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
                 // Update existing bookmark
                 if !dry_run {
-                    self.update_bookmark_from_file(
-                        &existing,
-                        file_data,
-                        &settings,
-                        base_path_name,
-                    )?;
+                    self.update_bookmark_from_file(&existing, file_data, base_path_name)?;
                 }
                 updated_count += 1;
                 println!("Updated bookmark: {}", file_data.name);
             } else {
                 // Create new bookmark
                 if !dry_run {
-                    self.create_bookmark_from_file(file_data, &settings, base_path_name, embed)?;
+                    self.create_bookmark_from_file(file_data, base_path_name, embed)?;
                 }
                 added_count += 1;
                 println!("Added bookmark: {}", file_data.name);
@@ -1128,7 +1128,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     fn create_bookmark_from_file(
         &self,
         file_data: &FileImportData,
-        settings: &crate::config::Settings,
         base_path_name: Option<&str>,
         embed: Option<bool>,
     ) -> ApplicationResult<Bookmark> {
@@ -1165,8 +1164,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         // Set file metadata with base path handling
         let file_path_str = if let Some(base_name) = base_path_name {
             // User provided base path - store as relative path with base path variable
-            if let Some(base_value) = settings.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(settings, base_value);
+            if let Some(base_value) = self.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(&self.base_paths, base_value);
                 let absolute_file_path = file_data.file_path.display().to_string();
 
                 // Since we resolved the scan paths, files should be under the base path
@@ -1220,7 +1219,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         &self,
         existing: &Bookmark,
         file_data: &FileImportData,
-        settings: &crate::config::Settings,
         base_path_name: Option<&str>,
     ) -> ApplicationResult<Bookmark> {
         let mut updated = existing.clone();
@@ -1232,8 +1230,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         // Update file path with base path handling
         let file_path_str = if let Some(base_name) = base_path_name {
             // User provided base path - store as relative path with base path variable
-            if let Some(base_value) = settings.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(settings, base_value);
+            if let Some(base_value) = self.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(&self.base_paths, base_value);
                 let absolute_file_path = file_data.file_path.display().to_string();
 
                 // Since we resolved the scan paths, files should be under the base path
@@ -1316,10 +1314,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         for bookmark in all_bookmarks {
             if let Some(file_path_str) = &bookmark.file_path {
                 // Handle base path variables and resolve to absolute path
-                let settings = crate::config::load_settings(None).map_err(|e| {
-                    ApplicationError::Other(format!("Failed to load settings: {}", e))
-                })?;
-                let resolved_path = crate::config::resolve_file_path(&settings, file_path_str);
+                let resolved_path =
+                    crate::config::resolve_file_path(&self.base_paths, file_path_str);
                 let path = Path::new(&resolved_path);
 
                 // Check if file still exists at the stored path
@@ -1406,7 +1402,7 @@ mod tests {
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
     use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;
 
     /// Embedder returning a fixed vector, so that tests can see whether embedding happened.
@@ -2388,6 +2384,67 @@ mod tests {
         assert!(memory.content_hash.is_some());
         assert!(vectors.has_vector(memory.id.unwrap()));
         assert!(!stored("imported-snippet").embeddable);
+    }
+
+    #[test]
+    fn given_injected_base_path_when_importing_files_then_resolves_it_without_reading_config() {
+        use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
+
+        // Arrange: the base path exists only in the settings handed to the service, as with
+        // `bkmr --config alt.toml`; the default config file does not define it.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = Arc::new(setup_test_db());
+        let base_dir = tempfile::tempdir().unwrap();
+        let scripts = base_dir.path().join("scripts");
+        std::fs::create_dir_all(&scripts).unwrap();
+        std::fs::write(
+            scripts.join("hello.sh"),
+            "#!/bin/bash\n# name: injected-base\necho hi\n",
+        )
+        .unwrap();
+        let base_paths = HashMap::from([(
+            "BKMR_INJECTED_BASE".to_string(),
+            base_dir
+                .path()
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )]);
+        let service = BookmarkServiceImpl::new(
+            repository.clone(),
+            Arc::new(DummyEmbedding),
+            Arc::new(RecordingVectorRepository::default()),
+            Arc::new(FileImportRepository::new()),
+        )
+        .with_base_paths(base_paths);
+
+        // Act: --delete-missing also resolves stored paths through the base path
+        let (added, _, deleted) = service
+            .import_files(
+                &["scripts".to_string()],
+                false,
+                true,
+                false,
+                false,
+                Some("BKMR_INJECTED_BASE"),
+                Some(false),
+            )
+            .unwrap();
+
+        // Assert
+        assert_eq!((added, deleted), (1, 0));
+        let stored = repository
+            .get_all()
+            .unwrap()
+            .into_iter()
+            .find(|b| b.title == "injected-base")
+            .expect("file imported");
+        assert_eq!(
+            stored.file_path.as_deref(),
+            Some("$BKMR_INJECTED_BASE/scripts/hello.sh")
+        );
     }
 
     #[test]

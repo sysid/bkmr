@@ -505,7 +505,7 @@ pub fn edit_bookmarks(
         // Smart edit strategy: decide whether to edit source file or database content
         if !force_db && bookmark.file_path.is_some() {
             // Edit source file directly for file-imported bookmarks
-            if let Err(e) = edit_source_file_and_sync(bookmark, &bookmark_service) {
+            if let Err(e) = edit_source_file_and_sync(bookmark, &bookmark_service, settings) {
                 eprintln!("  Failed to edit source file: {}", e);
                 eprintln!("  Falling back to database content editing...");
                 // Fall back to regular database editing
@@ -709,8 +709,9 @@ pub fn clone_bookmark(
 fn edit_source_file_and_sync(
     bookmark: &Bookmark,
     bookmark_service: &Arc<dyn crate::application::services::bookmark_service::BookmarkService>,
+    settings: &crate::config::Settings,
 ) -> CliResult<()> {
-    use crate::config::{load_settings, resolve_file_path};
+    use crate::config::resolve_file_path;
     use std::path::Path;
     use std::process::Command;
 
@@ -720,12 +721,8 @@ fn edit_source_file_and_sync(
         .as_ref()
         .ok_or_else(|| CliError::CommandFailed("No file path for this bookmark".to_string()))?;
 
-    // Load settings to resolve base path variables
-    let settings = load_settings(None)
-        .map_err(|e| CliError::Other(format!("Failed to load settings: {}", e)))?;
-
     // Resolve the file path (handle base path variables and environment variables)
-    let resolved_path = resolve_file_path(&settings, file_path_str);
+    let resolved_path = resolve_file_path(&settings.base_paths, file_path_str);
     let source_file = Path::new(&resolved_path);
 
     // Check if file exists

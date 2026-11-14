@@ -1710,9 +1710,9 @@ pub fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()>
     Ok(())
 }
 
-pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     use crate::application::error::ApplicationError;
-    use crate::config::{has_base_path, load_settings};
+    use crate::config::has_base_path;
     use crate::exitcode;
 
     if let Some(Commands::ImportFiles {
@@ -1728,10 +1728,7 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     {
         // Validate base path if provided
         if let Some(ref base_path_name) = base_path {
-            let settings = load_settings(cli.config.as_deref())
-                .map_err(|e| CliError::Other(format!("Failed to load configuration: {}", e)))?;
-
-            if !has_base_path(&settings, base_path_name) {
+            if !has_base_path(settings, base_path_name) {
                 eprintln!(
                     "{}",
                     format!(
