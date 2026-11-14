@@ -681,13 +681,6 @@ Exit codes:
         #[command(subcommand)]
         command: SkillCommands,
     },
-    #[command(hide = true)]
-    Xxx {
-        /// list of ids, separated by comma, no blanks
-        ids: String,
-        #[arg(short = 't', long = "tags", help = "add tags to taglist")]
-        tags: Option<String>,
-    },
 }
 
 #[derive(Subcommand, Clone)]

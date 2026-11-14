@@ -86,10 +86,6 @@ pub fn execute_command_with_services(
                 "database-independent command should be handled in main.rs".to_string(),
             ))
         }
-        Some(Commands::Xxx { ids, tags }) => {
-            eprintln!("ids: {:?}, tags: {:?}", ids, tags);
-            Ok(())
-        }
         None => Ok(()),
     }
 }
