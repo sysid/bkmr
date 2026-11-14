@@ -5,6 +5,7 @@ use crate::config::Settings;
 use crate::infrastructure::di::ServiceContainer;
 
 pub mod args;
+pub mod backup_restore;
 pub mod bookmark_commands;
 pub mod command_handler;
 pub mod completion;

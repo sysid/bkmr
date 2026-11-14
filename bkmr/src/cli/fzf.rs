@@ -655,6 +655,58 @@ where
     rx
 }
 
+/// One restorable backup entry in the `restore --from` picker
+pub struct RestorePickItem {
+    pub id: i32,
+    pub display: String,
+    /// Unified diff from the current state to the backup's
+    pub preview: String,
+}
+
+impl SkimItem for RestorePickItem {
+    fn text(&self) -> Cow<'_, str> {
+        Cow::Borrowed(&self.display)
+    }
+
+    fn preview(&self, _context: PreviewContext) -> ItemPreview {
+        ItemPreview::AnsiText(self.preview.clone())
+    }
+
+    fn output(&self) -> Cow<'_, str> {
+        Cow::Owned(self.id.to_string())
+    }
+}
+
+/// Multi-select of backup entries with their diffs as preview. All start selected, since the
+/// user came from a plan proposing all of them. `None` if cancelled.
+pub fn pick_restore_ids(items: Vec<RestorePickItem>) -> CliResult<Option<Vec<i32>>> {
+    let mut options = SkimOptions::default();
+    options.multi = true;
+    options.pre_select_n = items.len();
+    options.ansi = true;
+    options.query = Some("".to_string());
+    options.header = Some("TAB toggle · ENTER restore selected · ESC cancel".to_string());
+    options.preview = Some("".to_string());
+    options.preview_window = "right:60%:wrap".into();
+    options.bind = vec!["enter:accept".to_string(), "esc:abort".to_string()];
+    let options = options.build();
+
+    let output = Skim::run_with(options, Some(closed_item_receiver(items)))
+        .map_err(|e| crate::cli::error::CliError::CommandFailed(format!("Skim failed: {}", e)));
+    reset_terminal_state(false);
+    let output = output?;
+    if output.is_abort {
+        return Ok(None);
+    }
+    Ok(Some(
+        output
+            .selected_items
+            .iter()
+            .filter_map(|matched| matched.item.output().parse::<i32>().ok())
+            .collect(),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

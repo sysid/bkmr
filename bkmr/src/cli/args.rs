@@ -381,15 +381,68 @@ pub enum Commands {
         )]
         patch: bool,
     },
-    /// Bring back a saved state of a memory under its own ID, also if it was deleted
+    /// Bring back old states from memory history or from a JSON backup
+    ///
+    /// Restored bookmarks keep their own ID, also when they were deleted. A backup is the output of `bkmr search --json`. Entries are matched by ID, so a snippet
+    /// whose content changed is still recognized. Without --ids, every changed or deleted
+    /// bookmark in the backup is offered. Bookmarks the backup does not contain are never
+    /// touched, and nothing is deleted.
+    #[command(after_help = "Examples:
+  bkmr restore 42                                  memory history entry 42
+  bkmr search --json > backup.json                 write a backup
+  bkmr restore --from backup.json                  show the plan, then ask: [y]es [n]o [s]elect [d]iff
+  bkmr restore --from backup.json --ids 12,40      only these bookmarks
+  bkmr restore --from backup.json --yes            everything changed or deleted, no prompt
+  bkmr restore --from backup.json --dry-run        unified diffs, nothing written
+  bkmr restore --from backup.json --dry-run --json the plan as JSON
+
+Exit codes:
+  0    restored, or nothing to restore
+  1    the backup could not be read, a write failed, or a requested ID was not restorable
+       (its URL belongs to another bookmark, or a file decides its content); others still run
+  64   invalid arguments, e.g. an ID that is not in the backup
+  130  prompt declined, picker cancelled, or no input on stdin (--yes skips the prompt)")]
     Restore {
         /// History ID, from `bkmr history`
-        history_id: i32,
+        // Conflicts with every --from-only flag, not only --from: clap waives `requires = "from"`
+        // when --from conflicts with an argument that is present, so `restore 5 --ids 1` would pass
+        #[arg(
+            required_unless_present = "from",
+            conflicts_with_all = ["from", "ids", "yes", "is_json"]
+        )]
+        history_id: Option<i32>,
+        #[arg(
+            long = "from",
+            value_name = "FILE",
+            help = "restore changed and deleted bookmarks from a JSON backup (bkmr search --json)"
+        )]
+        from: Option<String>,
+        #[arg(
+            long = "ids",
+            value_delimiter = ',',
+            num_args = 1..,
+            requires = "from",
+            help = "with --from: only these bookmark IDs (comma-separated)"
+        )]
+        ids: Vec<i32>,
+        #[arg(
+            short = 'y',
+            long = "yes",
+            requires = "from",
+            help = "with --from: do not ask, for scripts and agents"
+        )]
+        yes: bool,
         #[arg(
             long = "dry-run",
             help = "show what the restore would change as a unified diff, without writing"
         )]
         dry_run: bool,
+        #[arg(
+            long = "json",
+            requires_all = ["from", "dry_run"],
+            help = "with --from --dry-run: print the plan as JSON"
+        )]
+        is_json: bool,
     },
     /// Record that bookmarks were checked against reality and still hold
     Verify {
@@ -486,13 +539,29 @@ pub enum Commands {
   130  confirmation declined")]
     ClearEmbeddings {},
 
-    /// Bulk-create bookmarks from JSON array (skips existing Content/URLs, no update support)
+    /// Create new bookmarks from a JSON array; never changes existing ones
+    ///
+    /// Each entry needs `url`, `title`, `description` and `tags` (an array of strings). Other
+    /// fields, `id` included, are ignored, and every created bookmark gets a new ID.
+    ///
+    /// An entry is skipped when a bookmark with exactly the same URL exists. For snippets, shell
+    /// scripts, markdown and memories the URL is the content: an entry whose content was edited
+    /// since is not recognized and is created as a second bookmark. Invalid tags are reported
+    /// and dropped.
+    ///
+    /// To bring back changed or deleted bookmarks from `bkmr search --json`, use
+    /// `bkmr restore --from FILE`.
+    #[command(after_help = "Example file:
+  [{\"url\": \"https://example.com\", \"title\": \"Example\", \"description\": \"\", \"tags\": [\"web\"]}]")]
     LoadJson {
-        /// Path to JSON file: [{url, title, description, tags}, ...]
-        #[arg(help = "Path to JSON file with an array of bookmark objects")]
+        #[arg(help = "JSON file with an array of bookmark objects")]
         path: String,
 
-        #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
+        #[arg(
+            short = 'd',
+            long = "dry-run",
+            help = "only parse the file and count its entries; does not check which already exist"
+        )]
         dry_run: bool,
         #[arg(
             long = "embed",

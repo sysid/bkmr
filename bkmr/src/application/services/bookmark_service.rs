@@ -184,7 +184,8 @@ pub trait BookmarkService: Send + Sync + Debug {
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark>;
 
     /// Bulk-create bookmarks from a JSON array file. Stores full content (url, title,
-    /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates.
+    /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates,
+    /// and ignores `id`: restoring an export is `plan_backup_restore`.
     /// Use case: agent bulk imports, migrations, seeding a database.
     fn load_json_bookmarks(
         &self,
