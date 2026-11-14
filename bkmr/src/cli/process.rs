@@ -652,7 +652,7 @@ pub fn clone_bookmark(
         .get_bookmark(id)?
         .ok_or_else(|| CliError::CommandFailed(format!("No bookmark found with ID {}", id)))?;
 
-    println!(
+    eprintln!(
         "Cloning bookmark: {} (ID: {})",
         bookmark.title,
         bookmark.id.unwrap_or(0)
@@ -667,7 +667,7 @@ pub fn clone_bookmark(
     match template_service.edit_bookmark_with_template(Some(temp_bookmark)) {
         Ok((edited_bookmark, was_modified)) => {
             if !was_modified {
-                println!("No changes made in editor. Bookmark not cloned.");
+                eprintln!("No changes made in editor. Bookmark not cloned.");
                 return Ok(());
             }
 
@@ -682,7 +682,7 @@ pub fn clone_bookmark(
                 edited_bookmark.opener.as_deref(),
             ) {
                 Ok(new_bookmark) => {
-                    println!(
+                    eprintln!(
                         "Added cloned bookmark: {} (ID: {})",
                         new_bookmark.title,
                         new_bookmark.id.unwrap_or(0)
