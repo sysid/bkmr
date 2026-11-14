@@ -384,8 +384,12 @@ impl LanguageServer for BkmrLspBackend {
     }
 }
 
-/// Run the LSP server
-pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bool) {
+/// Run the LSP server on the services of the CLI's composition root
+pub async fn run_server(
+    bookmark_service: std::sync::Arc<dyn crate::application::services::BookmarkService>,
+    interpolation_service: std::sync::Arc<dyn crate::application::services::InterpolationService>,
+    no_interpolation: bool,
+) {
     // Logging is initialized in main.rs with proper color control
 
     let version = env!("CARGO_PKG_VERSION");
@@ -404,16 +408,12 @@ pub async fn run_server(settings: &crate::config::Settings, no_interpolation: bo
         std::process::exit(crate::exitcode::FAILURE);
     }
 
-    use crate::infrastructure::di::ServiceContainer;
     use crate::lsp::di::LspServiceContainer;
-
-    let service_container =
-        ServiceContainer::new(settings).expect("Failed to create service container");
 
     let (service, socket) = LspService::new(move |client| {
         let lsp_services = LspServiceContainer::new(
-            service_container.bookmark_service.clone(),
-            service_container.interpolation_service.clone(),
+            bookmark_service.clone(),
+            interpolation_service.clone(),
             config.clone(),
         );
 

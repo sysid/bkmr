@@ -79,7 +79,7 @@ pub fn execute_command_with_services(
             bookmark_commands::import_files(cli, &services, settings)
         }
         Some(Commands::Info { .. }) => bookmark_commands::info(cli, &services, settings),
-        Some(Commands::Lsp { no_interpolation }) => handle_lsp(settings, no_interpolation),
+        Some(Commands::Lsp { no_interpolation }) => handle_lsp(&services, no_interpolation),
         // main.rs handles these before any database is opened; reaching here is a dispatch bug.
         Some(Commands::CreateDb { .. } | Commands::Completion { .. } | Commands::Skill { .. }) => {
             Err(error::CliError::CommandFailed(
@@ -94,7 +94,8 @@ pub fn execute_command_with_services(
     }
 }
 
-fn handle_lsp(settings: &Settings, no_interpolation: bool) -> CliResult<()> {
+/// Runs the LSP server on this command's services, so the database is opened and migrated once
+fn handle_lsp(services: &ServiceContainer, no_interpolation: bool) -> CliResult<()> {
     use tokio::runtime::Runtime;
 
     // Create a tokio runtime for the LSP server
@@ -104,7 +105,12 @@ fn handle_lsp(settings: &Settings, no_interpolation: bool) -> CliResult<()> {
 
     // Run the LSP server
     rt.block_on(async {
-        crate::lsp::run_lsp_server(settings, no_interpolation).await;
+        crate::lsp::run_lsp_server(
+            services.bookmark_service.clone(),
+            services.interpolation_service.clone(),
+            no_interpolation,
+        )
+        .await;
     });
 
     Ok(())
