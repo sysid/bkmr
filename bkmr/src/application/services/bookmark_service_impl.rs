@@ -20,6 +20,7 @@ use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::search::{
     HybridSearch, HybridSearchResult, RrfFusion, SemanticSearch, SemanticSearchResult,
 };
+use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
@@ -1028,6 +1029,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         let mut deleted_count = 0;
 
         // Process each file import
+        // An unknown type fails the import before anything is written
+        for file_data in &file_imports {
+            Self::file_type(file_data)?;
+        }
+
         for file_data in &file_imports {
             // Check for duplicate names
             if let Some(existing) = self.find_bookmark_by_name(&file_data.name)? {
@@ -1079,9 +1085,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             for bookmark in orphaned {
                 if !dry_run {
                     if let Some(id) = bookmark.id {
-                        self.repository.delete(id)?;
-                        // Best-effort: remove embedding from vector store
-                        let _ = self.vector_repository.delete_embedding(id);
+                        self.delete_bookmark(id)?;
                     }
                 }
                 deleted_count += 1;
@@ -1099,6 +1103,25 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             "File import complete"
         );
         Ok((added_count, updated_count, deleted_count))
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn sync_from_file(&self, id: i32) -> ApplicationResult<Bookmark> {
+        let bookmark = self
+            .get_bookmark(id)?
+            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        let stored_path = bookmark.file_path.clone().ok_or_else(|| {
+            ApplicationError::Validation(format!("Bookmark {} is not imported from a file", id))
+        })?;
+        let resolved = crate::config::resolve_file_path(&self.base_paths, &stored_path);
+        let file_data = self
+            .import_repository
+            .read_file(Path::new(&resolved))
+            .with_app_context(|| format!("reading source file of bookmark {}", id))?;
+
+        let mut updated = bookmark;
+        Self::apply_file_data(&mut updated, &file_data, stored_path)?;
+        self.update_bookmark(updated, false)
     }
 }
 
@@ -1122,6 +1145,80 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(None)
     }
 
+    /// The type a file declares in its frontmatter. An unknown one is an error: a typo such as
+    /// `snippet` for `_snip_` must not store the file as some other type.
+    fn file_type(file_data: &FileImportData) -> ApplicationResult<SystemTag> {
+        SystemTag::from_tag_value(&file_data.content_type).ok_or_else(|| {
+            ApplicationError::Validation(format!(
+                "Unknown type '{}' in {}: use one of _snip_, _shell_, _md_, _env_, _imported_, _mem_",
+                file_data.content_type,
+                file_data.file_path.display()
+            ))
+        })
+    }
+
+    /// The file path to store: `$NAME/relative` under a named base path, else absolute.
+    fn stored_file_path(
+        &self,
+        file: &Path,
+        base_path_name: Option<&str>,
+    ) -> ApplicationResult<String> {
+        let Some(base_name) = base_path_name else {
+            return Ok(file.display().to_string());
+        };
+        let base_value = self.base_paths.get(base_name).ok_or_else(|| {
+            ApplicationError::Other(format!(
+                "Base path '{}' not found in configuration",
+                base_name
+            ))
+        })?;
+        let expanded = crate::config::resolve_file_path(&self.base_paths, base_value);
+        // The scanner canonicalizes file paths, so the base must be canonical too: a base
+        // that goes through a symlink (/var on macOS) is otherwise never a prefix.
+        let base = Path::new(&expanded)
+            .canonicalize()
+            .unwrap_or_else(|_| Path::new(&expanded).to_path_buf());
+        let relative = file.strip_prefix(&base).map_err(|_| {
+            ApplicationError::Other(format!(
+                "File {} is not under base path {} ({})",
+                file.display(),
+                base_name,
+                base.display()
+            ))
+        })?;
+        Ok(crate::config::create_file_path_with_base(
+            base_name,
+            &relative.to_string_lossy(),
+        ))
+    }
+
+    /// Put what a source file says into a bookmark: content, name, tags and type. The file
+    /// decides all of them; of the bookmark's own tags only unknown `_x_` ones are kept.
+    fn apply_file_data(
+        bookmark: &mut Bookmark,
+        file_data: &FileImportData,
+        file_path: String,
+    ) -> ApplicationResult<()> {
+        let file_type = Self::file_type(file_data)?;
+        let mut tags: HashSet<Tag> = bookmark
+            .tags
+            .iter()
+            .filter(|tag| tag.is_system_tag() && !tag.is_known_system_tag())
+            .cloned()
+            .collect();
+        tags.extend(file_data.tags.iter().cloned());
+        tags.insert(file_type.to_tag()?);
+        bookmark
+            .set_tags(tags)
+            .with_app_context(|| format!("setting tags from {}", file_data.file_path.display()))?;
+        bookmark.url = file_data.content.clone();
+        bookmark.title = file_data.name.clone();
+        bookmark.file_path = Some(file_path);
+        bookmark.file_mtime = Some(file_data.file_mtime as i32);
+        bookmark.file_hash = Some(file_data.file_hash.clone());
+        Ok(())
+    }
+
     /// Create a new bookmark from file import data. Stores file content in url field,
     /// sets file_path/file_mtime/file_hash for source tracking, and generates embeddings
     /// via `Bookmark::get_content_for_embedding()`.
@@ -1131,75 +1228,32 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         base_path_name: Option<&str>,
         embed: Option<bool>,
     ) -> ApplicationResult<Bookmark> {
-        use crate::domain::system_tag::SystemTag;
-
-        // Convert content type to system tag
-        let system_tag =
-            SystemTag::from_tag_value(&file_data.content_type).unwrap_or(SystemTag::Shell); // Default for unknown types
-
-        // Prepare tags (including system tag)
-        let mut all_tags = file_data.tags.clone();
-        all_tags.insert(system_tag.to_tag()?);
-        let embeddable = self.resolve_embeddable(&all_tags, embed);
-
-        // Store file content in URL column as required
+        let file_path = self.stored_file_path(&file_data.file_path, base_path_name)?;
         let mut bookmark = BookmarkBuilder::default()
             .id(None)
             .url(file_data.content.clone())
             .title(file_data.name.clone())
             .description(String::new())
-            .tags(all_tags)
+            .tags(HashSet::new())
             .access_count(0)
             .created_at(Some(chrono::Utc::now()))
             .updated_at(chrono::Utc::now())
             .embedding(None)
             .content_hash(None)
-            .embeddable(embeddable)
+            .embeddable(false)
             .file_path(None)
             .file_mtime(None)
             .file_hash(None)
             .build()
             .map_err(|e| ApplicationError::Other(format!("Failed to build bookmark: {}", e)))?;
-
-        // Set file metadata with base path handling
-        let file_path_str = if let Some(base_name) = base_path_name {
-            // User provided base path - store as relative path with base path variable
-            if let Some(base_value) = self.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(&self.base_paths, base_value);
-                let absolute_file_path = file_data.file_path.display().to_string();
-
-                // Since we resolved the scan paths, files should be under the base path
-                if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
-                    let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
-                    crate::config::create_file_path_with_base(base_name, relative_path)
-                } else {
-                    return Err(ApplicationError::Other(format!(
-                        "File {} is not under base path {} ({})",
-                        absolute_file_path, base_name, expanded_base
-                    )));
-                }
-            } else {
-                return Err(ApplicationError::Other(format!(
-                    "Base path '{}' not found in configuration",
-                    base_name
-                )));
-            }
-        } else {
-            // No base path specified - store absolute path
-            file_data.file_path.display().to_string()
-        };
-
-        bookmark.file_path = Some(file_path_str);
-        bookmark.file_mtime = Some(file_data.file_mtime as i32);
-        bookmark.file_hash = Some(file_data.file_hash.clone());
+        Self::apply_file_data(&mut bookmark, file_data, file_path)?;
+        bookmark.embeddable = self.resolve_embeddable(&bookmark.tags, embed);
 
         // Same hash as update_bookmark; only embeddable bookmarks carry one
         let embedding_content = bookmark.get_content_for_embedding();
         bookmark.content_hash = bookmark
             .embeddable
             .then(|| calc_content_hash(&embedding_content));
-
-        bookmark.embedding = None;
 
         self.repository.add(&mut bookmark)?;
 
@@ -1213,8 +1267,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(bookmark)
     }
 
-    /// Update existing bookmark from changed file data. Preserves system tags from existing
-    /// bookmark, recalculates content hash, and regenerates embeddings.
+    /// Update an existing bookmark from changed file data, through `update_bookmark`, which
+    /// embeds again only when the embedded text changed.
     fn update_bookmark_from_file(
         &self,
         existing: &Bookmark,
@@ -1222,73 +1276,9 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         base_path_name: Option<&str>,
     ) -> ApplicationResult<Bookmark> {
         let mut updated = existing.clone();
-
-        // Update content and metadata (content goes in url column for file imports)
-        updated.url = file_data.content.clone();
-        updated.title = file_data.name.clone();
-
-        // Update file path with base path handling
-        let file_path_str = if let Some(base_name) = base_path_name {
-            // User provided base path - store as relative path with base path variable
-            if let Some(base_value) = self.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(&self.base_paths, base_value);
-                let absolute_file_path = file_data.file_path.display().to_string();
-
-                // Since we resolved the scan paths, files should be under the base path
-                if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
-                    let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
-                    crate::config::create_file_path_with_base(base_name, relative_path)
-                } else {
-                    return Err(ApplicationError::Other(format!(
-                        "File {} is not under base path {} ({})",
-                        absolute_file_path, base_name, expanded_base
-                    )));
-                }
-            } else {
-                return Err(ApplicationError::Other(format!(
-                    "Base path '{}' not found in configuration",
-                    base_name
-                )));
-            }
-        } else {
-            // No base path specified - store absolute path
-            file_data.file_path.display().to_string()
-        };
-
-        updated.file_path = Some(file_path_str);
-        updated.file_mtime = Some(file_data.file_mtime as i32);
-        updated.file_hash = Some(file_data.file_hash.clone());
-
-        // Update tags (merge with existing, keeping system tags)
-        let mut new_tags = file_data.tags.clone();
-        // Preserve system tags from existing bookmark
-        for tag in &existing.tags {
-            if tag.value().starts_with('_') && tag.value().ends_with('_') {
-                new_tags.insert(tag.clone());
-            }
-        }
-        updated.tags = new_tags;
-        // The flag of an existing bookmark is sticky, except that "always" applies
-        updated.embeddable = self.resolve_embeddable(&updated.tags, Some(updated.embeddable));
-
-        // Same hash as update_bookmark (after tags are set); only embeddable bookmarks carry one
-        let embedding_content = updated.get_content_for_embedding();
-        updated.content_hash = updated
-            .embeddable
-            .then(|| calc_content_hash(&embedding_content));
-
-        updated.embedding = None;
-
-        self.repository.update(&updated)?;
-
-        // Regenerate embedding in vector repository
-        if updated.embeddable {
-            if let Some(id) = updated.id {
-                self.upsert_embedding_for_bookmark(id, &embedding_content)?;
-            }
-        }
-
-        Ok(updated)
+        let file_path = self.stored_file_path(&file_data.file_path, base_path_name)?;
+        Self::apply_file_data(&mut updated, file_data, file_path)?;
+        self.update_bookmark(updated, false)
     }
 
     /// Find orphaned bookmarks (file_path set but file no longer exists or not found in current scan)
@@ -1379,17 +1369,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             return Ok(true);
         }
 
-        // Check if content type changed (check system tags)
-        let existing_has_shell = existing.tags.iter().any(|tag| tag.value() == "_shell_");
-        let existing_has_md = existing.tags.iter().any(|tag| tag.value() == "_md_");
-        let file_is_shell = file_data.content_type == "_shell_";
-        let file_is_md = file_data.content_type == "_md_";
-
-        if (existing_has_shell != file_is_shell) || (existing_has_md != file_is_md) {
-            return Ok(true);
-        }
-
-        Ok(false)
+        // Check if the type the file declares changed
+        Ok(!existing.is_system_tag(Self::file_type(file_data)?))
     }
 }
 
@@ -1398,6 +1379,7 @@ mod tests {
     use super::*;
     use crate::domain::embedding_policy::EmbeddingMode;
     use crate::domain::error::{DomainError, DomainResult};
+    use crate::domain::system_tag::SystemTag;
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
     use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
@@ -2445,6 +2427,214 @@ mod tests {
             stored.file_path.as_deref(),
             Some("$BKMR_INJECTED_BASE/scripts/hello.sh")
         );
+    }
+
+    /// A service that imports files, with `BKMR_FILES` as a configured base path for `base`
+    fn file_service(
+        base: &Path,
+    ) -> (
+        BookmarkServiceImpl<SqliteBookmarkRepository>,
+        Arc<SqliteBookmarkRepository>,
+    ) {
+        use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
+        let repository = Arc::new(setup_test_db());
+        let service = BookmarkServiceImpl::new(
+            repository.clone(),
+            Arc::new(StubEmbedder),
+            Arc::new(RecordingVectorRepository::default()),
+            Arc::new(FileImportRepository::new()),
+        )
+        .with_base_paths(HashMap::from([(
+            "BKMR_FILES".to_string(),
+            base.to_string_lossy().to_string(),
+        )]));
+        (service, repository)
+    }
+
+    fn stored_by_title(repository: &SqliteBookmarkRepository, title: &str) -> Bookmark {
+        repository
+            .get_all()
+            .unwrap()
+            .into_iter()
+            .find(|b| b.title == title)
+            .expect("bookmark stored")
+    }
+
+    fn import_base_dir(service: &impl BookmarkService, update: bool) -> ApplicationResult<()> {
+        service
+            .import_files(
+                &[".".to_string()],
+                update,
+                false,
+                false,
+                false,
+                Some("BKMR_FILES"),
+                Some(false),
+            )
+            .map(|_| ())
+    }
+
+    #[test]
+    fn given_base_path_bookmark_when_sync_from_file_then_keeps_portable_path() {
+        // Arrange: imported as $BKMR_FILES/deploy.sh, then edited in place (bkmr edit)
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("deploy.sh");
+        std::fs::write(&file, "#!/bin/bash\n# name: sync-keeps-path\necho one\n").unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        let id = stored_by_title(&repository, "sync-keeps-path").id.unwrap();
+        std::fs::write(&file, "#!/bin/bash\n# name: sync-keeps-path\necho two\n").unwrap();
+
+        // Act
+        let synced = service.sync_from_file(id).unwrap();
+
+        // Assert
+        assert_eq!(synced.file_path.as_deref(), Some("$BKMR_FILES/deploy.sh"));
+        assert!(synced.url.contains("echo two"), "got: {}", synced.url);
+        let stored = stored_by_title(&repository, "sync-keeps-path");
+        assert_eq!(stored.file_path.as_deref(), Some("$BKMR_FILES/deploy.sh"));
+    }
+
+    #[test]
+    fn given_frontmatter_type_changed_when_import_update_then_type_follows_file() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("tool.sh");
+        std::fs::write(&file, "# name: type-on-update\n# type: _shell_\necho a\n").unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        std::fs::write(&file, "# name: type-on-update\n# type: _snip_\necho a\n").unwrap();
+
+        // Act
+        import_base_dir(&service, true).unwrap();
+
+        // Assert
+        let stored = stored_by_title(&repository, "type-on-update");
+        assert!(stored.is_snippet(), "tags: {:?}", stored.tags);
+        assert!(
+            !stored.is_system_tag(SystemTag::Shell),
+            "tags: {:?}",
+            stored.tags
+        );
+    }
+
+    #[test]
+    fn given_frontmatter_type_changed_when_sync_from_file_then_type_follows_file() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("tool.sh");
+        std::fs::write(&file, "# name: type-on-sync\n# type: _shell_\necho a\n").unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        let id = stored_by_title(&repository, "type-on-sync").id.unwrap();
+        std::fs::write(&file, "# name: type-on-sync\n# type: _snip_\necho a\n").unwrap();
+
+        // Act
+        let synced = service.sync_from_file(id).unwrap();
+
+        // Assert
+        assert!(synced.is_snippet(), "tags: {:?}", synced.tags);
+        assert!(
+            !synced.is_system_tag(SystemTag::Shell),
+            "tags: {:?}",
+            synced.tags
+        );
+    }
+
+    #[test]
+    fn given_unknown_frontmatter_type_when_import_then_fails_naming_the_file() {
+        // Arrange: `snippet` is a typo for `_snip_`
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        std::fs::write(
+            base_path.join("typo.sh"),
+            "# name: unknown-type-import\n# type: snippet\necho a\n",
+        )
+        .unwrap();
+        let (service, repository) = file_service(&base_path);
+
+        // Act
+        let result = import_base_dir(&service, false);
+
+        // Assert
+        let err = result.expect_err("an unknown type must fail").to_string();
+        assert!(err.contains("typo.sh"), "got: {err}");
+        assert!(err.contains("snippet"), "got: {err}");
+        assert!(repository
+            .get_all()
+            .unwrap()
+            .iter()
+            .all(|b| b.title != "unknown-type-import"));
+    }
+
+    #[test]
+    fn given_unknown_frontmatter_type_when_sync_from_file_then_fails_and_keeps_bookmark() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("tool.sh");
+        std::fs::write(
+            &file,
+            "# name: unknown-type-sync\n# type: _shell_\necho a\n",
+        )
+        .unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        let before = stored_by_title(&repository, "unknown-type-sync");
+        std::fs::write(
+            &file,
+            "# name: unknown-type-sync\n# type: snippet\necho b\n",
+        )
+        .unwrap();
+
+        // Act
+        let result = service.sync_from_file(before.id.unwrap());
+
+        // Assert
+        let err = result.expect_err("an unknown type must fail").to_string();
+        assert!(err.contains("tool.sh"), "got: {err}");
+        let after = stored_by_title(&repository, "unknown-type-sync");
+        assert_eq!(after.url, before.url);
+        assert_eq!(after.tags, before.tags);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_base_path_through_symlink_when_import_then_stores_base_relative_path() {
+        // Arrange: the configured base path is a symlink, as /var is on macOS. The scanner
+        // canonicalizes file paths, so the base must be compared canonicalized too.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let real = tempfile::tempdir().unwrap();
+        let links = tempfile::tempdir().unwrap();
+        let link = links.path().join("scripts-link");
+        std::os::unix::fs::symlink(real.path(), &link).unwrap();
+        std::fs::write(
+            real.path().join("hello.sh"),
+            "# name: symlinked-base\necho hi\n",
+        )
+        .unwrap();
+        let (service, repository) = file_service(&link);
+
+        // Act
+        import_base_dir(&service, false).unwrap();
+
+        // Assert
+        let stored = stored_by_title(&repository, "symlinked-base");
+        assert_eq!(stored.file_path.as_deref(), Some("$BKMR_FILES/hello.sh"));
     }
 
     #[test]

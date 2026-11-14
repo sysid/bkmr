@@ -216,4 +216,8 @@ pub trait BookmarkService: Send + Sync + Debug {
         base_path_name: Option<&str>,
         embed: Option<bool>,
     ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
+
+    /// Read a file-backed bookmark's source file again and store what it says, the way
+    /// `import-files --update` does. The stored file path, `$BASE/...` included, stays as it is.
+    fn sync_from_file(&self, id: i32) -> ApplicationResult<Bookmark>;
 }

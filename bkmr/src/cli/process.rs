@@ -755,9 +755,12 @@ fn edit_source_file_and_sync(
 
     eprintln!("  File edited successfully, syncing changes to database...");
 
-    // Sync changes by updating the specific bookmark with new file content and metadata
-    match sync_file_to_bookmark(bookmark, &resolved_path, bookmark_service) {
-        Ok(()) => {
+    // Store what the file says now, the way import-files --update does
+    let id = bookmark
+        .id
+        .ok_or_else(|| CliError::CommandFailed("Bookmark has no ID".to_string()))?;
+    match bookmark_service.sync_from_file(id) {
+        Ok(_) => {
             eprintln!("  Successfully synced changes to database");
         }
         Err(e) => {
@@ -814,83 +817,6 @@ fn edit_database_content(
         }
         Err(e) => return Err(CliError::Application(e)),
     }
-
-    Ok(())
-}
-
-/// Sync file changes to a specific bookmark in the database
-fn sync_file_to_bookmark(
-    original_bookmark: &Bookmark,
-    file_path: &str,
-    bookmark_service: &Arc<dyn crate::application::services::bookmark_service::BookmarkService>,
-) -> CliResult<()> {
-    use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
-    use std::path::Path;
-
-    // Process the file to get updated metadata and content
-    let file_repo = FileImportRepository::new();
-    let file_data = file_repo
-        .process_file(Path::new(file_path))
-        .map_err(|e| CliError::Other(format!("Failed to process file: {}", e)))?;
-
-    // Ensure the bookmark has an ID for updating
-    let _bookmark_id = original_bookmark
-        .id
-        .ok_or_else(|| CliError::CommandFailed("Bookmark has no ID".to_string()))?;
-
-    // Create an updated bookmark based on the original but with new file data
-    let mut updated_bookmark = original_bookmark.clone();
-
-    // Update core content and metadata from file
-    updated_bookmark.title = file_data.name; // frontmatter name becomes title
-    updated_bookmark.url = file_data.content; // file content goes to url field
-
-    // Parse and update tags
-    updated_bookmark.tags = file_data.tags;
-
-    // Update file tracking information
-    updated_bookmark.file_path = Some(file_data.file_path.display().to_string());
-    updated_bookmark.file_mtime = Some(file_data.file_mtime as i32);
-    updated_bookmark.file_hash = Some(file_data.file_hash);
-
-    // Update the content type if specified in frontmatter
-    if !file_data.content_type.is_empty() {
-        use crate::domain::system_tag::SystemTag;
-
-        // Remove old content type system tags
-        let system_tags_to_remove: Vec<_> = updated_bookmark
-            .tags
-            .iter()
-            .filter(|tag| tag.is_known_system_tag())
-            .cloned()
-            .collect();
-
-        for tag in system_tags_to_remove {
-            updated_bookmark.tags.remove(&tag);
-        }
-
-        // Add new content type tag
-        let system_tag = match file_data.content_type.as_str() {
-            "_snip_" => Some(SystemTag::Snippet),
-            "_shell_" => Some(SystemTag::Shell),
-            "_md_" => Some(SystemTag::Markdown),
-            "_env_" => Some(SystemTag::Env),
-            "_imported_" => Some(SystemTag::Text),
-            "_mem_" => Some(SystemTag::Memory),
-            _ => None,
-        };
-
-        if let Some(sys_tag) = system_tag {
-            if let Ok(tag) = sys_tag.to_tag() {
-                updated_bookmark.tags.insert(tag);
-            }
-        }
-    }
-
-    // Update the bookmark in the database
-    bookmark_service
-        .update_bookmark(updated_bookmark, false)
-        .map_err(CliError::Application)?;
 
     Ok(())
 }

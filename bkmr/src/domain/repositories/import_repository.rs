@@ -62,4 +62,6 @@ pub trait ImportRepository: Send + Sync + Debug {
         paths: &[String],
         options: &ImportOptions,
     ) -> DomainResult<Vec<FileImportData>>;
+    /// Read one source file, as `import_files` reads each file it finds
+    fn read_file(&self, path: &std::path::Path) -> DomainResult<FileImportData>;
 }
