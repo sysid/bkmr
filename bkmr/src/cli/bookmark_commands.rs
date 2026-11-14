@@ -1230,13 +1230,18 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                 );
             }
         } else {
-            // Process each bookmark
+            // One failed bookmark must not stop the others, so failures are reported at the end
+            let mut failed_ids = Vec::new();
             for bookmark in &bookmarks {
                 if let Some(id) = bookmark.id {
                     eprintln!("Updating embedding for: {} (ID: {})", bookmark.title, id);
-                    match bookmark_service.update_bookmark(bookmark.clone(), force) {
-                        Ok(_) => eprintln!("  Successfully updated embedding"),
-                        Err(e) => eprintln!("  Failed to update embedding: {}", e),
+                    match bookmark_service.embed_bookmark(id) {
+                        Ok(true) => eprintln!("  Successfully updated embedding"),
+                        Ok(false) => eprintln!("  No embedding produced for this content"),
+                        Err(e) => {
+                            eprintln!("  Failed to update embedding: {}", e);
+                            failed_ids.push(id);
+                        }
                     }
                 }
             }
@@ -1245,6 +1250,7 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                 "Completed embedding backfill for {} bookmarks",
                 bookmarks.len()
             );
+            report_failed_ids("embed", &failed_ids)?;
         }
     }
     Ok(())

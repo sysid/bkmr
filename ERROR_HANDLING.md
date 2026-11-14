@@ -45,7 +45,7 @@ code changes.
 | Code | Constant | Meaning | Examples |
 |---|---|---|---|
 | 0 | `SUCCESS` | Success | |
-| 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone` or `delete`, failed `delete`, `delete --force` with another process reading, missing import path, `restore --from --ids` naming a bookmark that is not restorable |
+| 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone` or `delete`, failed `delete`, a vector `backfill` could not create, `delete --force` with another process reading, missing import path, `restore --from --ids` naming a bookmark that is not restorable |
 | 64 | `USAGE` | Fix the invocation or config | unknown flag, no arguments, non-numeric ID, unsupported shell, invalid config file, `restore --from --ids` with an ID that is not in the backup |
 | 65 | `DUP` | Duplicate name | `import-files` without `--update`, `skill install` onto an existing skill without `--force` |
 | 130 | `CANCEL` | User declined a confirmation | `clear-embeddings`, `delete` (also with no input on stdin; `--yes` skips the prompt, except with `--force`), `restore --from` (also picker cancelled or no input on stdin; `--yes` skips the prompt) |

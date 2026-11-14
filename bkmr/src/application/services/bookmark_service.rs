@@ -173,6 +173,11 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Check if bookmarks need embedding backfilling
     fn get_bookmarks_without_embeddings(&self) -> ApplicationResult<Vec<Bookmark>>;
 
+    /// Store a vector for an embeddable bookmark from its current text, for backfill. Returns
+    /// whether a vector was stored. The row is written only when its content hash is missing
+    /// or stale, so that a repair does not make the bookmark look edited.
+    fn embed_bookmark(&self, id: i32) -> ApplicationResult<bool>;
+
     /// Get the IDs of all bookmarks that have an embedding
     fn get_embedded_ids(&self) -> ApplicationResult<HashSet<i32>>;
 

@@ -811,6 +811,33 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
+    fn embed_bookmark(&self, id: i32) -> ApplicationResult<bool> {
+        let bookmark = self
+            .get_bookmark(id)?
+            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        if !bookmark.embeddable {
+            return Ok(false);
+        }
+        let content = bookmark.get_content_for_embedding();
+        let Some(embedding) = self.embedder.embed_document(&content)? else {
+            return Ok(false);
+        };
+
+        let hash = calc_content_hash(&content);
+        if bookmark.content_hash.as_ref() != Some(&hash) {
+            let mut hashed = bookmark;
+            hashed.content_hash = Some(hash);
+            self.repository
+                .update(&hashed)
+                .with_app_context(|| format!("storing content hash of bookmark {}", id))?;
+        }
+        self.vector_repository
+            .upsert_embedding(id, &embedding)
+            .app_context("upserting embedding into vector repository")?;
+        Ok(true)
+    }
+
+    #[instrument(skip(self), level = "debug")]
     fn get_embedded_ids(&self) -> ApplicationResult<HashSet<i32>> {
         Ok(self.vector_repository.get_embedded_ids()?)
     }
@@ -2427,6 +2454,66 @@ mod tests {
             stored.file_path.as_deref(),
             Some("$BKMR_INJECTED_BASE/scripts/hello.sh")
         );
+    }
+
+    #[test]
+    fn given_row_with_hash_but_no_vector_when_embed_bookmark_then_stores_vector_and_keeps_row() {
+        // Arrange: add_bookmark stores the hash before it embeds, so a failed first embedding
+        // leaves exactly this state behind
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(EmbeddingPolicy::default());
+        let added = service
+            .add_bookmark(
+                "echo hashed",
+                Some("hashed"),
+                None,
+                None,
+                false,
+                Some(true),
+                None,
+            )
+            .unwrap();
+        let id = added.id.unwrap();
+        vectors.delete_embedding(id).unwrap();
+        let before = service.get_bookmark(id).unwrap().unwrap();
+        assert!(before.content_hash.is_some() && !vectors.has_vector(id));
+
+        // Act
+        let stored = service.embed_bookmark(id).unwrap();
+
+        // Assert
+        assert!(stored);
+        assert!(vectors.has_vector(id));
+        let after = service.get_bookmark(id).unwrap().unwrap();
+        assert_eq!(
+            after.updated_at, before.updated_at,
+            "the row must not look edited"
+        );
+    }
+
+    #[test]
+    fn given_non_embeddable_bookmark_when_embed_bookmark_then_stores_nothing() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(EmbeddingPolicy::default());
+        let added = service
+            .add_bookmark(
+                "echo off",
+                Some("off"),
+                None,
+                None,
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap();
+        let id = added.id.unwrap();
+
+        let stored = service.embed_bookmark(id).unwrap();
+
+        assert!(!stored);
+        assert!(!vectors.has_vector(id));
     }
 
     /// A service that imports files, with `BKMR_FILES` as a configured base path for `base`
