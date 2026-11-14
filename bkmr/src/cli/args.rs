@@ -155,7 +155,7 @@ pub enum Commands {
 
         #[arg(
             long = "stdout",
-            help = "output selected bookmark content to stdout instead of executing (for shell wrapper integration)"
+            help = "output the selected bookmark's URL/content to stdout instead of executing (for shell wrapper integration)"
         )]
         stdout: bool,
 
@@ -218,7 +218,7 @@ pub enum Commands {
                 ),
                 clap::builder::PossibleValue::new("exact").help(
                     "Keyword matches only: all words must occur, in any order, in title, \
-                     content, description or tags. Ignores case, punctuation and word endings \
+                     URL/content, description or tags. Ignores case, punctuation and word endings \
                      (deploying finds deploy). Not a phrase match. Needs no embedding model",
                 ),
             ])
@@ -240,7 +240,7 @@ pub enum Commands {
 
         #[arg(
             long = "stdout",
-            help = "output selected bookmark content to stdout instead of executing"
+            help = "output the selected bookmark's URL/content to stdout instead of executing"
         )]
         stdout: bool,
 
@@ -277,13 +277,14 @@ pub enum Commands {
 
         #[arg(
             long = "stdout",
-            help = "output bookmark content to stdout instead of executing"
+            help = "output the bookmark's URL/content to stdout instead of executing"
         )]
         stdout: bool,
     },
     /// Add a bookmark
     Add {
-        /// URL or content to store
+        /// URL/content to store: a web URL, or for other types (see --type) the content itself
+        #[arg(value_name = "URL/CONTENT")]
         url: Option<String>,
         /// Tags (comma-separated, no spaces)
         tags: Option<String>,
@@ -291,7 +292,10 @@ pub enum Commands {
         title: Option<String>,
         #[arg(short = 'd', long = "description", help = "bookmark description")]
         desc: Option<String>,
-        #[arg(long = "no-web", help = "do not fetch URL data")]
+        #[arg(
+            long = "no-web",
+            help = "do not fetch title and description from the web URL"
+        )]
         no_web: bool,
         #[arg(short = 'e', long = "edit", help = "edit the bookmark while adding")]
         edit: bool,
@@ -317,7 +321,7 @@ pub enum Commands {
         bookmark_type: String,
         #[arg(short = 'c', long = "clone", help = "clone an existing bookmark by ID")]
         clone_id: Option<i32>,
-        #[arg(long = "stdin", help = "read content from stdin into url field")]
+        #[arg(long = "stdin", help = "read the URL/content from stdin")]
         stdin: bool,
         #[arg(
             long = "open-with",
@@ -383,10 +387,11 @@ pub enum Commands {
     },
     /// Bring back old states from memory history or from a JSON backup
     ///
-    /// Restored bookmarks keep their own ID, also when they were deleted. A backup is the output of `bkmr search --json`. Entries are matched by ID, so a snippet
-    /// whose content changed is still recognized. Without --ids, every changed or deleted
-    /// bookmark in the backup is offered. Bookmarks the backup does not contain are never
-    /// touched, and nothing is deleted.
+    /// Restored bookmarks keep their own ID, also when they were deleted. A backup is the output
+    /// of `bkmr search --json`. Entries are matched by ID, so a bookmark whose URL/content
+    /// changed is still recognized. Without --ids, every changed or deleted bookmark in the
+    /// backup is offered. Bookmarks the backup does not contain are never touched, and nothing
+    /// is deleted.
     #[command(after_help = "Examples:
   bkmr restore 42                                  memory history entry 42
   bkmr search --json > backup.json                 write a backup
@@ -399,7 +404,7 @@ pub enum Commands {
 Exit codes:
   0    restored, or nothing to restore
   1    the backup could not be read, a write failed, or a requested ID was not restorable
-       (its URL belongs to another bookmark, or a file decides its content); others still run
+       (its URL/content belongs to another bookmark, or a file decides it); others still run
   64   invalid arguments, e.g. an ID that is not in the backup
   130  prompt declined, picker cancelled, or no input on stdin (--yes skips the prompt)")]
     Restore {
@@ -450,7 +455,7 @@ Exit codes:
         #[arg(required = true, num_args = 1.., value_delimiter = ',')]
         ids: Vec<i32>,
     },
-    /// Update bookmark fields non-interactively (tags, title, description, URL, opener)
+    /// Update tags, title, description, URL/content or opener non-interactively
     Update {
         /// Bookmark IDs (comma-separated)
         ids: String,
@@ -464,7 +469,11 @@ Exit codes:
         title: Option<String>,
         #[arg(short = 'd', long = "description", help = "set bookmark description")]
         description: Option<String>,
-        #[arg(long = "url", help = "set bookmark URL/content")]
+        #[arg(
+            long = "url",
+            value_name = "URL/CONTENT",
+            help = "set bookmark URL/content"
+        )]
         url: Option<String>,
         #[arg(
             long = "open-with",
@@ -482,7 +491,7 @@ Exit codes:
         ids: String,
         #[arg(
             long = "force-db",
-            help = "force edit database content instead of source file for file-imported bookmarks"
+            help = "for file-imported bookmarks: edit the URL/content stored in the database instead of the source file"
         )]
         force_db: bool,
     },
@@ -539,17 +548,17 @@ Exit codes:
   130  confirmation declined")]
     ClearEmbeddings {},
 
-    /// Create new bookmarks from a JSON array; never changes existing ones
+    /// Add bookmarks in bulk from a JSON array; existing bookmarks stay as they are
     ///
-    /// Each entry needs `url`, `title`, `description` and `tags` (an array of strings). Other
-    /// fields, `id` included, are ignored, and every created bookmark gets a new ID.
+    /// Made for bulk creation: migrations, seeding a database, agent-generated inserts. Each
+    /// entry needs `url` (the URL/content), `title`, `description` and `tags` (an array of
+    /// strings). Other fields, `id` included, are ignored; every new bookmark gets a new ID.
     ///
-    /// An entry is skipped when a bookmark with exactly the same URL exists. For snippets, shell
-    /// scripts, markdown and memories the URL is the content: an entry whose content was edited
-    /// since is not recognized and is created as a second bookmark. Invalid tags are reported
-    /// and dropped.
+    /// Loading is additive and safe to repeat: an entry whose URL/content a bookmark already
+    /// has is skipped, and existing bookmarks are never changed. An entry with different
+    /// URL/content is a different bookmark and is added. Invalid tags are reported and dropped.
     ///
-    /// To bring back changed or deleted bookmarks from `bkmr search --json`, use
+    /// To bring back changed or deleted bookmarks from a `bkmr search --json` backup, use
     /// `bkmr restore --from FILE`.
     #[command(after_help = "Example file:
   [{\"url\": \"https://example.com\", \"title\": \"Example\", \"description\": \"\", \"tags\": [\"web\"]}]")]
@@ -560,7 +569,7 @@ Exit codes:
         #[arg(
             short = 'd',
             long = "dry-run",
-            help = "only parse the file and count its entries; does not check which already exist"
+            help = "parse the file and count its entries, without touching the database"
         )]
         dry_run: bool,
         #[arg(
@@ -576,7 +585,7 @@ Exit codes:
         no_embed: bool,
     },
 
-    /// Import files from directories (stores content, tracks source file for smart editing).
+    /// Import files: their content becomes URL/content, the source file is tracked
     ///
     /// Supported file types: .sh (shell scripts), .py (python scripts), .md (markdown files)
     ///

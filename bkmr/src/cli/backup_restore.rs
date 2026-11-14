@@ -177,7 +177,7 @@ fn state_detail(state: &BackupRestoreState) -> String {
     match state {
         BackupRestoreState::Changed { fields, .. } => fields.join(", "),
         BackupRestoreState::Conflict { blocking_id } => {
-            format!("URL now used by #{}", blocking_id)
+            format!("URL/content now used by #{}", blocking_id)
         }
         BackupRestoreState::FileBacked { file_path } => {
             format!("imported from {}: change the file instead", file_path)
@@ -469,7 +469,7 @@ mod tests {
             "{table}"
         );
         assert!(
-            table.contains("conflict  Grafana  URL now used by #903"),
+            table.contains("conflict  Grafana  URL/content now used by #903"),
             "{table}"
         );
         assert!(!table.contains("Quiet"), "{table}");
