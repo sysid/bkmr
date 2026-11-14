@@ -220,9 +220,9 @@ impl BookmarkTemplate {
 
         // Extract URL section
         let binding = String::new();
-        // let url = sections.get("URL").unwrap_or(&binding).trim_matches('\n');
-        let url = sections.get("URL").unwrap_or(&binding).trim();
-        if url.is_empty() {
+        // Leading whitespace is content: the indentation of a YAML item or a Python block
+        let url = sections.get("URL").unwrap_or(&binding).trim_end();
+        if url.trim().is_empty() {
             return Err(ApplicationError::Validation(
                 "URL cannot be empty".to_string(),
             ));
@@ -470,6 +470,43 @@ mod tests {
 
         // Assert
         assert_eq!(bookmark.id, None);
+    }
+
+    #[test]
+    fn given_indented_first_line_when_round_trip_then_keeps_indentation() {
+        // Arrange: a YAML list item or an indented Python block, edited only in its title
+        let template = BookmarkTemplate {
+            id: Some(7),
+            url: "  - name: a\n    value: b".to_string(),
+            title: "yaml".to_string(),
+            tags: HashSet::new(),
+            comments: String::new(),
+            embeddable: false,
+            opener: None,
+        };
+
+        // Act
+        let parsed = BookmarkTemplate::from_string(&template.to_string()).unwrap();
+
+        // Assert
+        assert_eq!(parsed.url, "  - name: a\n    value: b");
+    }
+
+    #[test]
+    fn given_only_whitespace_as_url_when_parse_then_rejects_it() {
+        let template = BookmarkTemplate {
+            id: None,
+            url: "   ".to_string(),
+            title: "blank".to_string(),
+            tags: HashSet::new(),
+            comments: String::new(),
+            embeddable: false,
+            opener: None,
+        };
+
+        let result = BookmarkTemplate::from_string(&template.to_string());
+
+        assert!(result.is_err());
     }
 
     #[test]
