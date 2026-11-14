@@ -6,8 +6,6 @@ use crate::domain::history::HistoryEntry;
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::search::RankedResult;
 use crate::domain::tag::Tag;
-use crate::infrastructure::repositories::sqlite::connection::PooledConnection;
-use crate::infrastructure::repositories::sqlite::error::{SqliteRepositoryError, SqliteResult};
 use std::collections::HashSet;
 /*
    Repository Interface
@@ -78,15 +76,6 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// Get random bookmarks
     fn get_random(&self, count: usize) -> Result<Vec<Bookmark>, DomainError>;
 
-    /// Get bookmarks without embeddings
-    fn get_without_embeddings(&self) -> Result<Vec<Bookmark>, DomainError>;
-
-    /// Get bookmarks filtered by tags (all tags must match)
-    fn get_by_all_tags(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError>;
-
-    /// Get bookmarks filtered by tags (any tag may match)
-    fn get_by_any_tag(&self, tags: &HashSet<Tag>) -> Result<Vec<Bookmark>, DomainError>;
-
     /// Get bookmarks ordered by access date
     fn get_by_access_date(
         &self,
@@ -94,23 +83,11 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
         limit: Option<usize>,
     ) -> Result<Vec<Bookmark>, DomainError>;
 
-    /// Search bookmarks by text
-    fn search_by_text(&self, text: &str) -> Result<Vec<Bookmark>, DomainError>;
-
-    fn get_bookmarks(&self, query: &str) -> SqliteResult<Vec<Bookmark>>;
-
-    fn get_bookmarks_fts(&self, fts_query: &str) -> SqliteResult<Vec<i32>>;
-
-    /// Check if bookmark exists by URL
-    fn exists_by_url(&self, url: &str) -> Result<i32, DomainError>;
+    /// The ID of the bookmark with this URL, if there is one
+    fn exists_by_url(&self, url: &str) -> Result<Option<i32>, DomainError>;
 
     /// Get bookmarks that are marked as embeddable but don't have embeddings yet
     fn get_embeddable_without_embeddings(&self) -> Result<Vec<Bookmark>, DomainError>;
-    fn get_bookmarks_by_ids(&self, ids: &[i32]) -> Result<Vec<Bookmark>, DomainError>;
-    fn get_all_bookmark_ids(
-        &self,
-        conn: &mut PooledConnection,
-    ) -> Result<Vec<i32>, SqliteRepositoryError>;
 
     /// FTS search returning results with rank positions preserved for RRF fusion.
     /// If `filter_ids` is Some, only returns results whose IDs are in the set.

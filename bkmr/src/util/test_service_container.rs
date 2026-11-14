@@ -14,7 +14,9 @@ use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::embeddings::DummyEmbedding;
-use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+use crate::infrastructure::interpolation::minijinja_engine::{
+    MiniJinjaEngine, SystemShellExecutor,
+};
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::null_vector_repository::NullVectorRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
@@ -72,7 +74,6 @@ impl TestServiceContainer {
             &bookmark_repository,
             &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
-            &embedder,
         );
 
         Self {
@@ -102,7 +103,7 @@ impl TestServiceContainer {
 
     /// Create interpolation service for test (same logic as production ServiceContainer)
     fn create_interpolation_service() -> Arc<dyn InterpolationService> {
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         Arc::new(InterpolationServiceImpl::new(interpolation_engine))
     }
@@ -117,23 +118,15 @@ impl TestServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
-        embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionService> {
-        let resolver = Self::create_test_action_resolver(
-            repository,
-            interpolation_service,
-            clipboard_service,
-            embedder,
-        );
+        let resolver = Self::create_test_action_resolver(interpolation_service, clipboard_service);
         Arc::new(ActionServiceImpl::new(resolver, repository.clone()))
     }
 
     /// Create action resolver for tests with test-friendly settings
     fn create_test_action_resolver(
-        repository: &Arc<SqliteBookmarkRepository>,
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
-        embedder: &Arc<dyn Embedder>,
     ) -> Arc<dyn ActionResolver> {
         // Create all actions with explicit dependencies - using test-friendly settings
         let uri_action: Box<dyn BookmarkAction> = Box::new(
@@ -159,13 +152,8 @@ impl TestServiceContainer {
                 false, // non-interactive for tests
             ));
 
-        let markdown_action: Box<dyn BookmarkAction> = Box::new(
-            crate::application::actions::MarkdownAction::new_with_repository(
-                repository.clone(),
-                Arc::new(crate::infrastructure::repositories::null_vector_repository::NullVectorRepository),
-                embedder.clone(),
-            ),
-        );
+        let markdown_action: Box<dyn BookmarkAction> =
+            Box::new(crate::application::actions::MarkdownAction::new());
 
         let env_action: Box<dyn BookmarkAction> = Box::new(
             crate::application::actions::EnvAction::new(interpolation_service.clone()),
@@ -173,10 +161,6 @@ impl TestServiceContainer {
 
         let memory_action: Box<dyn BookmarkAction> =
             Box::new(crate::application::actions::MemoryAction::new());
-
-        let default_action: Box<dyn BookmarkAction> = Box::new(
-            crate::application::actions::DefaultAction::new(interpolation_service.clone()),
-        );
 
         Arc::new(SystemTagActionResolver::new(
             uri_action,
@@ -186,7 +170,6 @@ impl TestServiceContainer {
             markdown_action,
             env_action,
             memory_action,
-            default_action,
         ))
     }
 

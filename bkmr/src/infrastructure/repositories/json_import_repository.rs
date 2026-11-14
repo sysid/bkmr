@@ -168,6 +168,17 @@ impl ImportRepository for JsonImportRepository {
             ),
         ))
     }
+
+    fn read_file(
+        &self,
+        _path: &std::path::Path,
+    ) -> DomainResult<crate::domain::repositories::import_repository::FileImportData> {
+        Err(DomainError::RepositoryError(
+            crate::domain::error::RepositoryError::Other(
+                "File import not supported by JsonImportRepository".to_string(),
+            ),
+        ))
+    }
 }
 
 #[cfg(test)]

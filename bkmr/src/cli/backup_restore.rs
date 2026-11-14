@@ -318,11 +318,12 @@ fn ask<'a>(
     color: bool,
 ) -> CliResult<Option<Vec<&'a BackupRestoreItem>>> {
     loop {
-        print!("{}", question(restorable));
-        io::stdout().flush()?;
+        // The question on stderr: with `> restore.log` it still reaches the user
+        eprint!("{}", question(restorable));
+        io::stderr().flush()?;
         let mut answer = String::new();
         if io::stdin().read_line(&mut answer)? == 0 {
-            println!();
+            eprintln!();
             return Ok(None);
         }
         match answer.trim().to_lowercase().as_str() {

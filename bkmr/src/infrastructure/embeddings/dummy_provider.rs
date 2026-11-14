@@ -9,13 +9,13 @@ use tracing::{debug, instrument};
 pub struct DummyEmbedding;
 
 impl Embedder for DummyEmbedding {
-    #[instrument]
+    #[instrument(skip_all)]
     fn embed_document(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
         debug!("DummyEmbedding::embed_document() called - returns None");
         Ok(None)
     }
 
-    #[instrument]
+    #[instrument(skip_all)]
     fn embed_query(&self, _text: &str) -> DomainResult<Option<Vec<f32>>> {
         debug!("DummyEmbedding::embed_query() called - returns None");
         Ok(None)

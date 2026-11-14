@@ -28,7 +28,7 @@ fn test_base_path_configuration() {
     assert_eq!(relative_path, "$SCRIPTS_HOME/backup/daily.sh");
 
     // Test resolve_file_path function
-    let resolved = resolve_file_path(&settings, "$DOCS_HOME/readme.md");
+    let resolved = resolve_file_path(&settings.base_paths, "$DOCS_HOME/readme.md");
     assert_eq!(resolved, "/home/user/documents/readme.md");
 }
 
@@ -53,7 +53,7 @@ fn test_base_path_usage_examples() {
     };
 
     // Simulate how the system resolves paths
-    let _ = resolve_file_path(&settings, "$HOME/scripts");
+    let _ = resolve_file_path(&settings.base_paths, "$HOME/scripts");
     let _ = "backup"; // User provides relative path
 
     // The FileImportRepository would combine these to scan files
@@ -79,7 +79,7 @@ fn test_environment_variable_expansion() {
         no_color: Default::default(),
     };
 
-    let resolved = resolve_file_path(&settings, "$TEST_HOME/file.txt");
+    let resolved = resolve_file_path(&settings.base_paths, "$TEST_HOME/file.txt");
     // Should expand $HOME environment variable
     assert!(resolved.contains("/test/file.txt"));
     assert!(!resolved.contains("$HOME"));

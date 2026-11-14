@@ -21,7 +21,7 @@ fn test_import_files_with_yaml_frontmatter() {
     }
     assert!(result.is_ok(), "Import should succeed");
 
-    let (added, updated, deleted) = result.unwrap();
+    let (added, updated, deleted) = result.unwrap().counts();
     assert!(added > 0, "Should add files");
     assert_eq!(updated, 0, "Should not update files on first import");
     assert_eq!(deleted, 0, "Should not delete files on first import");
@@ -108,7 +108,7 @@ echo "version 1"
     // First import
     let result = service.import_files(&paths, false, false, false, false, None, Some(true));
     assert!(result.is_ok(), "First import should succeed");
-    let (added, _, _) = result.unwrap();
+    let (added, _, _) = result.unwrap().counts();
     assert_eq!(added, 1, "Should add one file");
 
     // Update file content
@@ -127,7 +127,7 @@ echo "version 2"
     // Import with update flag
     let result = service.import_files(&paths, true, false, false, false, None, Some(true));
     assert!(result.is_ok(), "Update import should succeed");
-    let (added, updated, _) = result.unwrap();
+    let (added, updated, _) = result.unwrap().counts();
     assert_eq!(added, 0, "Should not add new files");
     assert_eq!(updated, 1, "Should update one file");
 }
@@ -144,7 +144,7 @@ fn test_import_files_dry_run() {
     let result = service.import_files(&paths, false, false, true, false, None, Some(true));
     assert!(result.is_ok(), "Dry run should succeed");
 
-    let (added, _updated, _deleted) = result.unwrap();
+    let (added, _updated, _deleted) = result.unwrap().counts();
     // In dry run, it should report what would be done but not actually do it
     assert!(added > 0, "Should report files that would be added");
 
@@ -184,7 +184,7 @@ ls -la
     let result = service.import_files(&paths, false, false, false, false, None, Some(true));
     assert!(result.is_ok(), "Import with hash comments should succeed");
 
-    let (added, _, _) = result.unwrap();
+    let (added, _, _) = result.unwrap().counts();
     assert_eq!(added, 1, "Should add one file");
 }
 
@@ -217,7 +217,7 @@ echo "missing name field"
         "Import should succeed but skip invalid files"
     );
 
-    let (added, _, _) = result.unwrap();
+    let (added, _, _) = result.unwrap().counts();
     assert_eq!(added, 0, "Should not add files without name field");
 }
 
@@ -250,7 +250,7 @@ This is snippet content that should be tagged as _snip_, not _shell_.
     let result = service.import_files(&paths, false, false, false, false, None, Some(true));
     assert!(result.is_ok(), "Import should succeed");
 
-    let (added, _, _) = result.unwrap();
+    let (added, _, _) = result.unwrap().counts();
     assert_eq!(added, 1, "Should add one file");
 
     // Verify the bookmark has _snip_ tag, not _shell_

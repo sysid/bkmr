@@ -1,14 +1,13 @@
 // src/domain/action_resolver.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::error::DomainResult;
 use crate::domain::system_tag::SystemTag;
 use std::fmt::Debug;
 
 /// Resolves the appropriate action for a bookmark based on its tags or other properties
 pub trait ActionResolver: Debug + Send + Sync {
     /// Resolves the default action for a bookmark
-    fn resolve_action(&self, bookmark: &Bookmark) -> Box<dyn BookmarkAction + '_>;
+    fn resolve_action(&self, bookmark: &Bookmark) -> &dyn BookmarkAction;
 }
 
 /// Default implementation that uses the SystemTag to determine the action
@@ -21,7 +20,6 @@ pub struct SystemTagActionResolver {
     markdown_action: Box<dyn BookmarkAction>,
     env_action: Box<dyn BookmarkAction>,
     memory_action: Box<dyn BookmarkAction>,
-    default_action: Box<dyn BookmarkAction>,
 }
 
 impl SystemTagActionResolver {
@@ -33,7 +31,6 @@ impl SystemTagActionResolver {
         markdown_action: Box<dyn BookmarkAction>,
         env_action: Box<dyn BookmarkAction>,
         memory_action: Box<dyn BookmarkAction>,
-        default_action: Box<dyn BookmarkAction>,
     ) -> Self {
         Self {
             uri_action,
@@ -43,127 +40,28 @@ impl SystemTagActionResolver {
             markdown_action,
             env_action,
             memory_action,
-            default_action,
         }
     }
 }
 
 impl ActionResolver for SystemTagActionResolver {
-    fn resolve_action(&self, bookmark: &Bookmark) -> Box<dyn BookmarkAction + '_> {
-        if bookmark.is_snippet() {
-            Box::new(SnippetActionProxy(self.snippet_action.as_ref()))
+    fn resolve_action(&self, bookmark: &Bookmark) -> &dyn BookmarkAction {
+        // A bookmark without a known content-type tag is a URI (Bookmark::is_uri)
+        let action = if bookmark.is_snippet() {
+            &self.snippet_action
         } else if bookmark.is_system_tag(SystemTag::Text) {
-            Box::new(TextActionProxy(self.text_action.as_ref()))
+            &self.text_action
         } else if bookmark.is_system_tag(SystemTag::Shell) {
-            Box::new(ShellActionProxy(self.shell_action.as_ref()))
+            &self.shell_action
         } else if bookmark.is_system_tag(SystemTag::Markdown) {
-            Box::new(MarkdownActionProxy(self.markdown_action.as_ref()))
+            &self.markdown_action
         } else if bookmark.is_system_tag(SystemTag::Env) {
-            Box::new(EnvActionProxy(self.env_action.as_ref()))
+            &self.env_action
         } else if bookmark.is_system_tag(SystemTag::Memory) {
-            Box::new(MemoryActionProxy(self.memory_action.as_ref()))
-        } else if bookmark.is_uri() {
-            Box::new(UriActionProxy(self.uri_action.as_ref()))
+            &self.memory_action
         } else {
-            Box::new(DefaultActionProxy(self.default_action.as_ref()))
-        }
-    }
-}
-
-// Proxy types to wrap the boxed actions for returning
-#[derive(Debug)]
-struct SnippetActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct TextActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct ShellActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct MarkdownActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct EnvActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct MemoryActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct UriActionProxy<'a>(&'a dyn BookmarkAction);
-#[derive(Debug)]
-struct DefaultActionProxy<'a>(&'a dyn BookmarkAction);
-
-impl BookmarkAction for SnippetActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for TextActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for ShellActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for MarkdownActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for EnvActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for MemoryActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for UriActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
-    }
-}
-
-impl BookmarkAction for DefaultActionProxy<'_> {
-    fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        self.0.execute(bookmark)
-    }
-
-    fn description(&self) -> &'static str {
-        self.0.description()
+            &self.uri_action
+        };
+        action.as_ref()
     }
 }

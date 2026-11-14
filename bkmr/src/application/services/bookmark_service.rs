@@ -67,6 +67,25 @@ impl BackupRestoreItem {
 }
 
 /// Service interface for bookmark-related operations
+/// What an `import-files` run did, or with `--dry-run` would do, file by file. The service
+/// reports; the CLI decides what to print.
+#[derive(Debug, Default)]
+pub struct ImportReport {
+    /// Names of the files that become new bookmarks
+    pub added: Vec<String>,
+    /// Names of the changed files, with what changed: "content", "metadata" or both
+    pub updated: Vec<(String, &'static str)>,
+    /// Title and ID of the bookmarks whose source file is gone
+    pub deleted: Vec<(String, i32)>,
+}
+
+impl ImportReport {
+    /// (added, updated, deleted)
+    pub fn counts(&self) -> (usize, usize, usize) {
+        (self.added.len(), self.updated.len(), self.deleted.len())
+    }
+}
+
 pub trait BookmarkService: Send + Sync + Debug {
     /// Add a new bookmark
     ///
@@ -126,20 +145,9 @@ pub trait BookmarkService: Send + Sync + Debug {
         force_embedding: bool,
     ) -> ApplicationResult<Bookmark>;
 
-    /// Add tags to a bookmark
-    fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
-
-    /// Remove tags from a bookmark
-    fn remove_tags_from_bookmark(
-        &self,
-        id: i32,
-        tags: &HashSet<Tag>,
-    ) -> ApplicationResult<Bookmark>;
-
     /// Replace all tags on a bookmark
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark>;
 
-    fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>>;
     // Add a convenience method to create a query for text search
 
     // Replace the complex search_bookmarks method with a simpler interface
@@ -153,9 +161,6 @@ pub trait BookmarkService: Send + Sync + Debug {
 
     /// Perform hybrid search combining FTS and semantic search with RRF fusion
     fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>>;
-
-    /// Get bookmark by URL
-    fn get_bookmark_by_url(&self, url: &str) -> ApplicationResult<Option<Bookmark>>;
 
     /// Get all bookmarks
     fn get_all_bookmarks(
@@ -172,6 +177,11 @@ pub trait BookmarkService: Send + Sync + Debug {
 
     /// Check if bookmarks need embedding backfilling
     fn get_bookmarks_without_embeddings(&self) -> ApplicationResult<Vec<Bookmark>>;
+
+    /// Store a vector for an embeddable bookmark from its current text, for backfill. Returns
+    /// whether a vector was stored. The row is written only when its content hash is missing
+    /// or stale, so that a repair does not make the bookmark look edited.
+    fn embed_bookmark(&self, id: i32) -> ApplicationResult<bool>;
 
     /// Get the IDs of all bookmarks that have an embedding
     fn get_embedded_ids(&self) -> ApplicationResult<HashSet<i32>>;
@@ -215,5 +225,9 @@ pub trait BookmarkService: Send + Sync + Debug {
         verbose: bool,
         base_path_name: Option<&str>,
         embed: Option<bool>,
-    ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
+    ) -> ApplicationResult<ImportReport>;
+
+    /// Read a file-backed bookmark's source file again and store what it says, the way
+    /// `import-files --update` does. The stored file path, `$BASE/...` included, stays as it is.
+    fn sync_from_file(&self, id: i32) -> ApplicationResult<Bookmark>;
 }

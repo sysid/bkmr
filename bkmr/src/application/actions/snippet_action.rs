@@ -41,13 +41,10 @@ impl BookmarkAction for SnippetAction {
             "snippet",
         )?;
 
-        eprintln!("Copied to clipboard:\n{}", rendered_content);
-        // Copy to clipboard
         self.clipboard_service
             .copy_to_clipboard(&rendered_content)?;
-
-        // Optionally, we could print a confirmation message here, but that's UI logic
-        // and should be handled at the CLI layer
+        // After the copy: a failed copy must not be reported as done
+        eprintln!("Copied to clipboard:\n{}", rendered_content);
 
         Ok(())
     }

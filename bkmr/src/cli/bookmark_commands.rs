@@ -22,7 +22,6 @@ use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
-use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
@@ -186,6 +185,7 @@ pub fn open(
         } else {
             // Handle bookmark opening (existing logic)
 
+            let mut failed_ids = Vec::new();
             for id in get_ids(ids).cli_context("parsing bookmark IDs for opening")? {
                 if let Some(bookmark) = bookmark_service
                     .get_bookmark(id)
@@ -217,8 +217,10 @@ pub fn open(
                     }
                 } else {
                     eprintln!("Bookmark with ID {} not found", id);
+                    failed_ids.push(id);
                 }
             }
+            report_failed_ids("open", &failed_ids)?;
         }
     }
     Ok(())
@@ -246,9 +248,8 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
 
     eprintln!("Rendering file: {}", filename);
 
-    // Create markdown action with dummy embedder (reuses existing file reading logic)
-    let embedder = Arc::new(DummyEmbedding);
-    let markdown_action = MarkdownAction::new(embedder);
+    // The markdown action already reads file paths given in the url field
+    let markdown_action = MarkdownAction::new();
 
     // Create a minimal bookmark structure - the MarkdownAction already handles file paths in url field
     let mut tags = HashSet::new();
@@ -488,7 +489,7 @@ fn distinct_ids(ids: Vec<i32>) -> Vec<i32> {
     ids.into_iter().filter(|id| seen.insert(*id)).collect()
 }
 
-fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
+pub(crate) fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
     if failed_ids.is_empty() {
         return Ok(());
     }
@@ -501,7 +502,7 @@ fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
 #[instrument(skip(cli, bookmark_service))]
 pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
     if let Commands::Delete { ids, force, yes } = cli.command.unwrap() {
-        let id_list = distinct_ids(get_ids(ids)?);
+        let id_list = distinct_ids(ids);
         // One failed ID must not stop the others, so failures are reported at the end
         let mut failed_ids = Vec::new();
         let mut declined = false;
@@ -835,16 +836,20 @@ pub fn update(
         no_embed,
     } = cli.command.unwrap()
     {
-        let id_list = get_ids(ids)?;
-
         if embed && no_embed {
             return Err(CliError::InvalidInput(
                 "Cannot specify both --embed and --no-embed".to_string(),
             ));
         }
 
-        for id in id_list {
-            if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+        // One failed ID must not stop the others, so failures are reported at the end
+        let mut failed_ids = Vec::new();
+        for id in distinct_ids(ids) {
+            // Ok(false): no bookmark with this ID
+            let update_one = || -> CliResult<bool> {
+                let Some(bookmark) = bookmark_service.get_bookmark(id)? else {
+                    return Ok(false);
+                };
                 eprintln!("Updating: {} ({})", bookmark.title, bookmark.url);
 
                 // Handle embedding flag changes
@@ -869,18 +874,17 @@ pub fn update(
                     || url.is_some()
                     || open_with.is_some();
                 if !has_changes {
-                    continue;
+                    return Ok(true);
                 }
 
                 // All changes go into one write, so that one command is one undo step in history.
                 // Fetch latest version to avoid stale data after the embedding change.
                 let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? else {
-                    continue;
+                    return Ok(false);
                 };
 
-                if force && tags.is_some() {
+                if let (true, Some(tag_str)) = (force, &tags) {
                     // Replace all tags
-                    let tag_str = tags.as_ref().unwrap();
                     let parsed_tags = tag_service.parse_tag_string(tag_str)?;
                     let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
 
@@ -930,10 +934,22 @@ pub fn update(
                     }
                 }
                 bookmark_service.update_bookmark(latest_bookmark, false)?;
-            } else {
-                eprintln!("Bookmark with ID {} not found", id);
+                Ok(true)
+            };
+
+            match update_one() {
+                Ok(true) => {}
+                Ok(false) => {
+                    eprintln!("Bookmark with ID {} not found", id);
+                    failed_ids.push(id);
+                }
+                Err(e) => {
+                    eprintln!("Error updating bookmark with ID {}: {}", id, e);
+                    failed_ids.push(id);
+                }
             }
         }
+        report_failed_ids("update", &failed_ids)?;
     }
     Ok(())
 }
@@ -946,25 +962,8 @@ pub fn edit(
     settings: &crate::config::Settings,
 ) -> CliResult<()> {
     if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
-        let id_list = get_ids(ids)?;
-
-        // Get all bookmarks to edit first
-        let mut bookmarks_to_edit = Vec::new();
-        for id in &id_list {
-            if let Some(bookmark) = bookmark_service.get_bookmark(*id)? {
-                bookmarks_to_edit.push(bookmark);
-            } else {
-                eprintln!("Bookmark with ID {} not found", id);
-            }
-        }
-
-        if bookmarks_to_edit.is_empty() {
-            eprintln!("No bookmarks found to edit");
-            return Ok(());
-        }
-
         edit_bookmarks(
-            id_list,
+            distinct_ids(ids),
             force_db,
             bookmark_service,
             template_service,
@@ -979,16 +978,17 @@ pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
     if let Commands::Show { ids, is_json } = cli.command.unwrap() {
         let bookmark_service = services.bookmark_service.clone();
 
-        let id_list = get_ids(ids)?;
         let mut bookmarks = Vec::new();
+        let mut failed_ids = Vec::new();
 
-        for id in id_list {
+        for id in distinct_ids(ids) {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
                 // Report the state before this access: otherwise "last accessed" always reads "now"
                 services.action_service.record_access(&bookmark);
                 bookmarks.push(bookmark);
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
+                failed_ids.push(id);
             }
         }
 
@@ -1010,12 +1010,14 @@ pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
                 );
             }
         }
+        // After the output: the bookmarks that exist are still shown
+        report_failed_ids("show", &failed_ids)?;
     }
     Ok(())
 }
 
 /// Shows detailed information about a bookmark, can be used by both show command and FZF CTRL-P
-#[instrument(level = "debug")]
+#[instrument(level = "debug", skip_all, fields(bookmark_id = ?bookmark.id))]
 pub fn show_bookmark_details(
     bookmark: &Bookmark,
     embedded_ids: Option<&HashSet<i32>>,
@@ -1150,12 +1152,7 @@ pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()>
         return Ok(());
     }
 
-    eprint!("This will delete ALL embeddings and content hashes. Continue? [y/N] ");
-    let mut input = String::new();
-    std::io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| CliError::CommandFailed(format!("Failed to read input: {}", e)))?;
-    if !input.trim().eq_ignore_ascii_case("y") {
+    if !confirm("This will delete ALL embeddings and content hashes. Continue?") {
         return Err(CliError::OperationAborted);
     }
 
@@ -1230,13 +1227,18 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                 );
             }
         } else {
-            // Process each bookmark
+            // One failed bookmark must not stop the others, so failures are reported at the end
+            let mut failed_ids = Vec::new();
             for bookmark in &bookmarks {
                 if let Some(id) = bookmark.id {
                     eprintln!("Updating embedding for: {} (ID: {})", bookmark.title, id);
-                    match bookmark_service.update_bookmark(bookmark.clone(), force) {
-                        Ok(_) => eprintln!("  Successfully updated embedding"),
-                        Err(e) => eprintln!("  Failed to update embedding: {}", e),
+                    match bookmark_service.embed_bookmark(id) {
+                        Ok(true) => eprintln!("  Successfully updated embedding"),
+                        Ok(false) => eprintln!("  No embedding produced for this content"),
+                        Err(e) => {
+                            eprintln!("  Failed to update embedding: {}", e);
+                            failed_ids.push(id);
+                        }
                     }
                 }
             }
@@ -1245,6 +1247,7 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                 "Completed embedding backfill for {} bookmarks",
                 bookmarks.len()
             );
+            report_failed_ids("embed", &failed_ids)?;
         }
     }
     Ok(())
@@ -1549,18 +1552,18 @@ pub fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()>
             vec!["rust", "packages", "crates"],
         ),
 
-        // Shell command URLs
+        // Shell commands
         (
-            "shell::echo 'Hello, World!'",
+            "echo 'Hello, World!'",
             "Hello World Shell Command",
             "Simple shell command that prints 'Hello, World!'",
-            vec!["shell", "example", "hello_world"],
+            vec!["_shell_", "example", "hello_world"],
         ),
         (
-            "shell::ls -la | grep '.rs$'",
+            "ls -la | grep '.rs$'",
             "List Rust Files",
             "Shell command to list all Rust files in the current directory",
-            vec!["shell", "rust", "files", "list"],
+            vec!["_shell_", "rust", "files", "list"],
         ),
 
         // URL with interpolation (date)
@@ -1710,10 +1713,9 @@ pub fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()>
     Ok(())
 }
 
-pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     use crate::application::error::ApplicationError;
-    use crate::config::{has_base_path, load_settings};
-    use crate::exitcode;
+    use crate::config::has_base_path;
 
     if let Some(Commands::ImportFiles {
         paths,
@@ -1728,22 +1730,12 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
     {
         // Validate base path if provided
         if let Some(ref base_path_name) = base_path {
-            let settings = load_settings(cli.config.as_deref())
-                .map_err(|e| CliError::Other(format!("Failed to load configuration: {}", e)))?;
-
-            if !has_base_path(&settings, base_path_name) {
-                eprintln!(
-                    "{}",
-                    format!(
-                        "Error: Base path '{}' not found in configuration",
-                        base_path_name
-                    )
-                    .red()
-                );
-                eprintln!("Add it to your config.toml under [base_paths]:");
-                eprintln!("  [base_paths]");
-                eprintln!("  {} = \"$HOME/your/path\"", base_path_name);
-                std::process::exit(exitcode::USAGE);
+            if !has_base_path(settings, base_path_name) {
+                return Err(CliError::InvalidInput(format!(
+                    "Base path '{0}' not found in configuration. Add it to your config.toml:\n  \
+                     [base_paths]\n  {0} = \"$HOME/your/path\"",
+                    base_path_name
+                )));
             }
         }
 
@@ -1762,7 +1754,17 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
             base_path.as_deref(),
             embed_request(embed, no_embed),
         ) {
-            Ok((added, updated, deleted)) => {
+            Ok(report) => {
+                for name in &report.added {
+                    eprintln!("Added bookmark: {}", name);
+                }
+                for (name, changed) in &report.updated {
+                    eprintln!("Updated bookmark: {} ({} changed)", name, changed);
+                }
+                for (title, id) in &report.deleted {
+                    eprintln!("Deleted orphaned bookmark: {} (ID: {})", title, id);
+                }
+                let (added, updated, deleted) = report.counts();
                 if dry_run {
                     println!(
                         "Would add: {}, update: {}, delete: {}",
@@ -1784,22 +1786,12 @@ pub fn import_files(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
                 name,
                 existing_id,
                 file_path,
-            }) => {
-                eprintln!(
-                    "{}",
-                    format!("Error: Duplicate name '{}' found in {}", name, file_path).red()
-                );
-                eprintln!(
-                    "Existing bookmark with same name already exists (ID: {})",
-                    existing_id
-                );
-                eprintln!("Use --update flag to overwrite existing bookmarks with changed content");
-                std::process::exit(exitcode::DUP);
-            }
-            Err(e) => {
-                eprintln!("{}", format!("Import failed: {}", e).red());
-                std::process::exit(exitcode::FAILURE);
-            }
+            }) => Err(CliError::AlreadyExists(format!(
+                "Duplicate name '{}' found in {}: bookmark {} has that name already. Use --update \
+                 to overwrite existing bookmarks with changed content",
+                name, file_path, existing_id
+            ))),
+            Err(e) => Err(CliError::CommandFailed(format!("Import failed: {}", e))),
         }
     } else {
         Err(CliError::InvalidInput(
@@ -1956,8 +1948,8 @@ mod tests {
             // Regular URLs
             ("https://github.com", false),
             ("https://rust-lang.org", false),
-            // Shell command URLs
-            ("shell::", false),
+            // Shell commands
+            ("_shell_", true),
             // URL with interpolation (date)
             ("{{", false),
             // Code snippets

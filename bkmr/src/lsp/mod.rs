@@ -14,6 +14,10 @@ mod tests;
 
 pub use backend::BkmrLspBackend;
 
-pub async fn run_lsp_server(settings: &crate::config::Settings, no_interpolation: bool) {
-    backend::run_server(settings, no_interpolation).await;
+pub async fn run_lsp_server(
+    bookmark_service: std::sync::Arc<dyn crate::application::services::BookmarkService>,
+    interpolation_service: std::sync::Arc<dyn crate::application::services::InterpolationService>,
+    no_interpolation: bool,
+) -> Result<(), String> {
+    backend::run_server(bookmark_service, interpolation_service, no_interpolation).await
 }

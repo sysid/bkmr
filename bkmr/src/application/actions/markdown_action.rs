@@ -1,11 +1,7 @@
 // src/application/actions/markdown_action.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::repositories::repository::BookmarkRepository;
-use crate::domain::repositories::vector_repository::VectorRepository;
-use crate::util::helper::calc_content_hash;
 use crate::util::path::{abspath, is_file_path};
 use chrono::{DateTime, Utc};
 use markdown::{to_html_with_options, Options};
@@ -13,8 +9,7 @@ use regex::Regex;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, instrument};
 
 /// Represents a table of contents entry
 #[derive(Debug, Clone)]
@@ -24,34 +19,14 @@ struct TocEntry {
     id: String,
 }
 
-#[derive(Debug)]
-pub struct MarkdownAction {
-    repository: Option<Arc<dyn BookmarkRepository>>,
-    vector_repository: Option<Arc<dyn VectorRepository>>,
-    embedder: Arc<dyn Embedder>,
-}
+/// Renders markdown, inline or from a file, to HTML and opens it in the browser. Opening does
+/// not write: embeddings are kept by the bookmark service and `bkmr backfill`.
+#[derive(Debug, Default)]
+pub struct MarkdownAction;
 
 impl MarkdownAction {
-    #[allow(dead_code)]
-    pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self {
-            repository: None,
-            vector_repository: None,
-            embedder,
-        }
-    }
-
-    // Constructor with repository for embedding support
-    pub fn new_with_repository(
-        repository: Arc<dyn BookmarkRepository>,
-        vector_repository: Arc<dyn VectorRepository>,
-        embedder: Arc<dyn Embedder>,
-    ) -> Self {
-        Self {
-            repository: Some(repository),
-            vector_repository: Some(vector_repository),
-            embedder,
-        }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Reads markdown content from a file path
@@ -90,74 +65,8 @@ impl MarkdownAction {
         })
     }
 
-    /// Check if embedding is allowed and possible
-    fn can_update_embedding(&self, bookmark: &Bookmark) -> bool {
-        // Check if we have a repository
-        if self.repository.is_none() {
-            return false;
-        }
-
-        // Check if the bookmark is embeddable
-        if !bookmark.embeddable {
-            return false;
-        }
-
-        // Check if real embeddings are enabled (DummyEmbedding has dimensions == 0)
-        self.embedder.dimensions() > 0
-    }
-
-    /// Update bookmark with embedding if repository is available and conditions are met.
-    /// Uses bookmark.get_content_for_embedding() for consistent type-aware content.
-    fn update_embedding(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        // Check if embedding is allowed
-        if !self.can_update_embedding(bookmark) {
-            debug!("Embedding update skipped: not allowed or not possible");
-            return Ok(());
-        }
-
-        let repository = self.repository.as_ref().unwrap();
-
-        if let Some(id) = bookmark.id {
-            // Get the current state of the bookmark
-            let mut updated_bookmark = repository
-                .get_by_id(id)?
-                .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
-
-            // Use type-aware content for embedding (consistent with backfill)
-            let content = updated_bookmark.get_content_for_embedding();
-            let content_hash = calc_content_hash(&content);
-
-            // Only update if content has changed
-            if updated_bookmark.content_hash.as_ref() != Some(&content_hash) {
-                debug!("Content changed, updating embedding for bookmark ID {}", id);
-
-                // Generate embedding and store in VectorRepository
-                if let Some(embedding) = self.embedder.embed_document(&content)? {
-                    if let Some(vec_repo) = &self.vector_repository {
-                        vec_repo.upsert_embedding(id, &embedding)?;
-                    }
-                }
-
-                updated_bookmark.embedding = None;
-                updated_bookmark.content_hash = Some(content_hash);
-
-                // Save to repository
-                repository.update(&updated_bookmark)?;
-                info!("Successfully updated content hash for bookmark ID {}", id);
-            } else {
-                debug!(
-                    "Content unchanged, not updating embedding for bookmark ID {}",
-                    id
-                );
-            }
-        }
-
-        Ok(())
-    }
-
     /// Extract headers from HTML content and add IDs if missing
     fn extract_and_process_headers(&self, html_content: &str) -> (String, Vec<TocEntry>) {
-        let mut processed_html = html_content.to_string();
         let mut toc_entries: Vec<TocEntry> = Vec::new();
         let mut header_counts = std::collections::HashMap::new();
 
@@ -165,63 +74,51 @@ impl MarkdownAction {
         let header_regex = Regex::new(r"<(h[123])(?:\s+[^>]*)?>(.*?)</h[123]>").unwrap();
         let id_regex = Regex::new(r#"\s+id\s*=\s*["']([^"']+)["']"#).unwrap();
 
-        // Find all headers and process them
-        let matches: Vec<_> = header_regex.find_iter(html_content).collect();
+        // Each heading is rewritten where it stands. Replacing its text across the document
+        // would give identical headings the same ID, and the TOC links to `-1`, `-2`.
+        let processed_html = header_regex.replace_all(html_content, |caps: &regex::Captures| {
+            let full_match = &caps[0];
+            let tag = &caps[1];
+            let content = &caps[2];
+            let level = match tag {
+                "h1" => 1,
+                "h2" => 2,
+                _ => 3,
+            };
 
-        for m in matches.iter() {
-            let full_match = m.as_str();
+            // Check if header already has an ID
+            let existing_id = id_regex.captures(full_match).map(|c| c[1].to_string());
 
-            if let Some(header_cap) = header_regex.captures(full_match) {
-                let level = match &header_cap[1] {
-                    "h1" => 1,
-                    "h2" => 2,
-                    "h3" => 3,
-                    _ => continue,
-                };
+            let header_id = if let Some(ref id) = existing_id {
+                id.clone()
+            } else {
+                // Generate ID from content
+                let base_id = self.generate_header_id(content);
 
-                let content = &header_cap[2];
+                // Handle duplicates
+                let count = header_counts.entry(base_id.clone()).or_insert(0);
+                *count += 1;
 
-                // Check if header already has an ID
-                let existing_id = id_regex.captures(full_match).map(|c| c[1].to_string());
-
-                let header_id = if let Some(ref id) = existing_id {
-                    id.clone()
+                if *count > 1 {
+                    format!("{}-{}", base_id, *count - 1)
                 } else {
-                    // Generate ID from content
-                    let base_id = self.generate_header_id(content);
-
-                    // Handle duplicates
-                    let count = header_counts.entry(base_id.clone()).or_insert(0);
-                    *count += 1;
-
-                    if *count > 1 {
-                        format!("{}-{}", base_id, *count - 1)
-                    } else {
-                        base_id
-                    }
-                };
-
-                // Create TOC entry
-                toc_entries.push(TocEntry {
-                    level,
-                    title: self.clean_html_content(content),
-                    id: header_id.clone(),
-                });
-
-                // Add ID to header if it doesn't exist
-                if existing_id.is_none() {
-                    let new_header = format!(
-                        "<{} id=\"{}\">{}</{}>",
-                        &header_cap[1], header_id, content, &header_cap[1]
-                    );
-
-                    // Replace in the processed HTML
-                    processed_html = processed_html.replace(full_match, &new_header);
+                    base_id
                 }
-            }
-        }
+            };
 
-        (processed_html, toc_entries)
+            toc_entries.push(TocEntry {
+                level,
+                title: self.clean_html_content(content),
+                id: header_id.clone(),
+            });
+
+            match existing_id {
+                Some(_) => full_match.to_string(),
+                None => format!("<{} id=\"{}\">{}</{}>", tag, header_id, content, tag),
+            }
+        });
+
+        (processed_html.into_owned(), toc_entries)
     }
 
     /// Generate a URL-safe ID from header content
@@ -335,109 +232,46 @@ impl MarkdownAction {
         resources
     }
 
-    /// Resolve a resource path to its absolute location on disk
-    /// relative_path: The path from the HTML (e.g., "./images/foo.png")
-    /// source_md_path: The absolute path to the source markdown file
-    /// Returns: Some(absolute PathBuf) if the file exists, None otherwise
-    fn resolve_resource_path(
-        &self,
-        relative_path: &str,
-        source_md_path: &Path,
-    ) -> Option<std::path::PathBuf> {
-        // Get the directory containing the source markdown file
-        let source_dir = source_md_path.parent()?;
-
-        // Resolve the relative path from the source directory
-        let resource_path = if relative_path.starts_with('/') {
-            // Absolute path - use as is
-            std::path::PathBuf::from(relative_path)
-        } else {
-            // Relative path - resolve from source directory
-            source_dir.join(relative_path)
+    /// Point local resources at their source files. The HTML is written to a temp dir, where
+    /// paths relative to the markdown file no longer resolve, so each local `src`/`href` that
+    /// names an existing file becomes its absolute `file://` URL. Nothing is copied: a copy can
+    /// land on the source itself (an absolute or `../` path) and truncate the user's file.
+    /// Missing and remote resources stay as they are.
+    fn link_resources_to_source(&self, html: &str, source_md_path: &Path) -> String {
+        let Some(base) = source_md_path
+            .parent()
+            .and_then(|dir| url::Url::from_directory_path(dir).ok())
+        else {
+            debug!(
+                "No usable directory for {:?}, links stay as they are",
+                source_md_path
+            );
+            return html.to_string();
         };
 
-        // Canonicalize the path to resolve .. and . components
-        if let Ok(canonical_path) = resource_path.canonicalize() {
-            // Check if the file exists
-            if canonical_path.exists() {
-                debug!(
-                    "Resolved resource path '{}' to '{:?}'",
-                    relative_path, canonical_path
-                );
-                return Some(canonical_path);
-            } else {
-                debug!(
-                    "Resource path '{}' resolved but file does not exist: {:?}",
-                    relative_path, canonical_path
-                );
-            }
-        } else {
-            debug!("Failed to canonicalize resource path: {}", relative_path);
+        let mut linked = html.to_string();
+        for (tag, src) in self.extract_resource_paths(html) {
+            // Url::join resolves `./`, `../` and absolute paths, and decodes `%20` and the like
+            let Some(file) = base
+                .join(&src)
+                .ok()
+                .and_then(|url| url.to_file_path().ok())
+                .and_then(|path| path.canonicalize().ok())
+            else {
+                debug!("Resource not found, link stays as it is: {}", src);
+                continue;
+            };
+            let Ok(file_url) = url::Url::from_file_path(&file) else {
+                continue;
+            };
+
+            let new_tag = tag
+                .replacen(&format!("\"{}\"", src), &format!("\"{}\"", file_url), 1)
+                .replacen(&format!("'{}'", src), &format!("'{}'", file_url), 1);
+            debug!("Linked resource {} to {}", src, file_url);
+            linked = linked.replace(&tag, &new_tag);
         }
-
-        None
-    }
-
-    /// Copy local resources to the temporary directory
-    /// html: The HTML content with potentially relative resource paths
-    /// source_md_path: The absolute path to the source markdown file
-    /// temp_dir: The temporary directory where resources should be copied
-    /// Returns: Ok(()) if successful, error otherwise
-    fn copy_resources_to_temp(
-        &self,
-        html: &str,
-        source_md_path: &Path,
-        temp_dir: &Path,
-    ) -> DomainResult<()> {
-        // Extract all local resource paths from the HTML
-        let resources = self.extract_resource_paths(html);
-
-        if resources.is_empty() {
-            debug!("No local resources found in HTML");
-            return Ok(());
-        }
-
-        debug!("Found {} local resources to copy", resources.len());
-
-        // For each resource, copy it to the temp directory
-        for (_full_match, relative_path) in resources {
-            if let Some(source_file) = self.resolve_resource_path(&relative_path, source_md_path) {
-                // Determine destination path in temp directory
-                // Maintain the relative path structure to keep HTML paths valid
-                let dest_path = temp_dir.join(&relative_path);
-
-                // Create parent directories if needed
-                if let Some(parent) = dest_path.parent() {
-                    fs::create_dir_all(parent).map_err(|e| {
-                        DomainError::Other(format!(
-                            "Failed to create directory {:?}: {}",
-                            parent, e
-                        ))
-                    })?;
-                }
-
-                // Copy the file
-                fs::copy(&source_file, &dest_path).map_err(|e| {
-                    DomainError::Other(format!(
-                        "Failed to copy resource from {:?} to {:?}: {}",
-                        source_file, dest_path, e
-                    ))
-                })?;
-
-                info!(
-                    "Copied resource: {} from {:?} to {:?}",
-                    relative_path, source_file, dest_path
-                );
-            } else {
-                // Log warning but don't fail - resource might be optional
-                debug!(
-                    "Could not resolve resource path, skipping: {}",
-                    relative_path
-                );
-            }
-        }
-
-        Ok(())
+        linked
     }
 
     /// Generate TOC HTML sidebar
@@ -556,12 +390,6 @@ impl BookmarkAction for MarkdownAction {
         // that may contain template-like patterns (e.g., {%} in code blocks, documentation)
         let rendered_markdown = markdown_content.clone();
 
-        // Update embedding if possible
-        if let Err(e) = self.update_embedding(bookmark) {
-            error!("Failed to update embedding: {}", e);
-            // Continue with rendering - don't fail the whole operation if embedding fails
-        }
-
         debug!("Rendering markdown content to HTML");
 
         // Configure markdown options to properly handle tables and other features
@@ -584,6 +412,12 @@ impl BookmarkAction for MarkdownAction {
             &metadata_footer,
         );
 
+        // Relative resource paths only mean something next to the source file
+        let full_html = match self.get_source_file_path(bookmark) {
+            Some(source_path) => self.link_resources_to_source(&full_html, &source_path),
+            None => full_html,
+        };
+
         // Create a temporary HTML file with explicit .html extension
         let temp_dir = tempfile::Builder::new()
             .prefix("bkmr-markdown-")
@@ -592,14 +426,6 @@ impl BookmarkAction for MarkdownAction {
                 DomainError::Other(format!("Failed to create temporary directory: {}", e))
             })?;
 
-        // Copy local resources to temp directory if content came from a file
-        if let Some(source_path) = self.get_source_file_path(bookmark) {
-            debug!("Copying resources for file: {:?}", source_path);
-            self.copy_resources_to_temp(&full_html, &source_path, temp_dir.path())?;
-        } else {
-            debug!("Content is not from a file, skipping resource copying");
-        }
-
         // Create a file path with .html extension
         let safe_title = bookmark
             .title
@@ -607,7 +433,7 @@ impl BookmarkAction for MarkdownAction {
         let file_name = format!("{}.html", safe_title);
         let file_path = temp_dir.path().join(file_name);
 
-        // Create and write to the file (HTML paths stay relative)
+        // Create and write to the file
         let mut file = File::create(&file_path)
             .map_err(|e| DomainError::Other(format!("Failed to create HTML file: {}", e)))?;
 
@@ -620,9 +446,10 @@ impl BookmarkAction for MarkdownAction {
         open::that(&file_path)
             .map_err(|e| DomainError::Other(format!("Failed to open HTML in browser: {}", e)))?;
 
-        // Keep the temporary directory around until the program exits
-        // This prevents the file from being deleted while the browser is using it
-        std::mem::forget(temp_dir);
+        // The browser reads the page after bkmr has exited, so the directory must outlive it.
+        // ponytail: never removed by bkmr, one directory per open; the OS cleans $TMPDIR. The
+        // upgrade is one cache directory per bookmark ID, overwritten on each open.
+        let _kept = temp_dir.keep();
 
         Ok(())
     }
@@ -639,530 +466,52 @@ fn render_html_document(
     body_html: &str,
     metadata_footer: &str,
 ) -> String {
-    format!(
-        r#"<!DOCTYPE html>
-<html>
-<head>
-    <title>{}</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        :root {{
-            --background-color: #ffffff;
-            --text-color: #333333;
-            --code-background: #f5f5f5;
-            --blockquote-border: #ddd;
-            --blockquote-color: #666;
-            --link-color: #0366d6;
-            --table-border: #ddd;
-            --table-header-bg: #f2f2f2;
-            --table-row-alt-bg: #f9f9f9;
-            --base-font-size: 16px;
-            --code-font-size: 0.99;
-        }}
-
-        @media (prefers-color-scheme: dark) {{
-            :root {{
-                --background-color: #1e1e1e;
-                --text-color: #e0e0e0;
-                --code-background: #2d2d2d;
-                --blockquote-border: #555;
-                --blockquote-color: #aaa;
-                --link-color: #58a6ff;
-                --table-border: #444;
-                --table-header-bg: #2d2d2d;
-                --table-row-alt-bg: #262626;
-            }}
-        }}
-
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: var(--text-color);
-            background-color: var(--background-color);
-            margin: 0;
-            padding: 0;
-            font-size: var(--base-font-size);
-        }}
-
-        .container {{
-            display: flex;
-            min-height: 100vh;
-        }}
-
-        .main-content {{
-            flex: 1;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-            transition: margin-left 0.3s ease;
-        }}
-
-        .main-content.toc-visible {{
-            margin-left: 320px;
-        }}
-
-        .bookmark-meta {{
-            margin-top: 40px;
-            padding-top: 10px;
-            border-top: 1px solid var(--table-border);
-            color: var(--blockquote-color);
-            font-size: 0.7em;
-        }}
-
-        /* TOC Sidebar Styling */
-        .toc-sidebar {{
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 300px;
-            height: 100vh;
-            background-color: var(--background-color);
-            border-right: 1px solid var(--table-border);
-            overflow-y: auto;
-            padding: 20px;
-            box-sizing: border-box;
-            z-index: 1000;
-            transition: transform 0.3s ease;
-        }}
-
-        .toc-sidebar.hidden {{
-            transform: translateX(-100%);
-        }}
-
-        .toc-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--table-border);
-        }}
-
-        .toc-header h3 {{
-            margin: 0;
-            font-size: 1.1em;
-            font-weight: 600;
-        }}
-
-        .toc-toggle {{
-            background: none;
-            border: none;
-            font-size: 1.2em;
-            cursor: pointer;
-            color: var(--text-color);
-            padding: 5px;
-            border-radius: 3px;
-        }}
-
-        .toc-toggle:hover {{
-            background-color: var(--code-background);
-        }}
-
-        .toc-list {{
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }}
-
-        .toc-item {{
-            margin: 0;
-            padding: 0;
-        }}
-
-        .toc-link {{
-            display: block;
-            padding: 6px 0;
-            color: var(--text-color);
-            text-decoration: none;
-            border-radius: 3px;
-            transition: all 0.2s ease;
-            font-size: 0.9em;
-            line-height: 1.4;
-        }}
-
-        .toc-link:hover {{
-            background-color: var(--code-background);
-            padding-left: 8px;
-        }}
-
-        .toc-link.active {{
-            color: var(--link-color);
-            background-color: var(--code-background);
-            font-weight: 500;
-        }}
-
-        .toc-h1 .toc-link {{
-            font-weight: 600;
-            font-size: 0.95em;
-        }}
-
-        .toc-h2 .toc-link {{
-            padding-left: 16px;
-            font-size: 0.88em;
-        }}
-
-        .toc-h3 .toc-link {{
-            padding-left: 32px;
-            font-size: 0.85em;
-            color: var(--blockquote-color);
-        }}
-
-        .toc-mobile-toggle {{
-            display: none;
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background-color: var(--link-color);
-            color: white;
-            border: none;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            font-size: 1.2em;
-            cursor: pointer;
-            z-index: 1001;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        }}
-
-        /* Mobile responsive */
-        @media (max-width: 1024px) {{
-            .main-content.toc-visible {{
-                margin-left: 0;
-                padding: 20px;
-            }}
-
-            .toc-sidebar {{
-                transform: translateX(-100%);
-            }}
-
-            .toc-sidebar.mobile-visible {{
-                transform: translateX(0);
-            }}
-
-            .toc-mobile-toggle {{
-                display: block;
-            }}
-        }}
-
-        @media (max-width: 768px) {{
-            .main-content {{
-                padding: 15px;
-            }}
-
-            .toc-sidebar {{
-                width: 280px;
-            }}
-        }}
-
-        h1, h2, h3, h4, h5, h6 {{
-            margin-top: 24px;
-            margin-bottom: 16px;
-            font-weight: 600;
-            line-height: 1.25;
-        }}
-
-        h1 {{ font-size: 2em; border-bottom: 1px solid var(--table-border); padding-bottom: 0.3em; }}
-        h2 {{ font-size: 1.5em; border-bottom: 1px solid var(--table-border); padding-bottom: 0.3em; }}
-
-        a {{ color: var(--link-color); text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-
-        /* Enhanced pre/code styling with syntax highlighting support */
-        pre {{
-            background-color: var(--code-background);
-            padding: 16px;
-            border-radius: 6px;
-            overflow-x: auto;
-            margin: 16px 0;
-            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-            font-size: var(--code-font-size);
-            line-height: 1.45;
-        }}
-
-        code {{
-            font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-            background-color: var(--code-background);
-            padding: 0.2em 0.4em;
-            border-radius: 3px;
-            font-size: var(--code-font-size);
-        }}
-
-        /* Inline code should be slightly larger for better readability */
-        p code, li code, td code {{
-            font-size: calc(var(--code-font-size) * 1.05);
-        }}
-
-        pre code {{
-            padding: 0;
-            background-color: transparent;
-            white-space: pre;
-            word-break: normal;
-            overflow-wrap: normal;
-        }}
-
-        /* Syntax highlighting classes */
-        .hljs-keyword {{ color: #cf222e; }}
-        .hljs-built_in {{ color: #e36209; }}
-        .hljs-type {{ color: #953800; }}
-        .hljs-literal {{ color: #0550ae; }}
-        .hljs-number {{ color: #0550ae; }}
-        .hljs-string {{ color: #0a3069; }}
-        .hljs-comment {{ color: #6e7781; }}
-        .hljs-doctag {{ color: #0550ae; }}
-        .hljs-meta {{ color: #8250df; }}
-        .hljs-function {{ color: #8250df; }}
-
-        @media (prefers-color-scheme: dark) {{
-            .hljs-keyword {{ color: #ff7b72; }}
-            .hljs-built_in {{ color: #ffa657; }}
-            .hljs-type {{ color: #ff7b72; }}
-            .hljs-literal {{ color: #79c0ff; }}
-            .hljs-number {{ color: #79c0ff; }}
-            .hljs-string {{ color: #a5d6ff; }}
-            .hljs-comment {{ color: #8b949e; }}
-            .hljs-doctag {{ color: #79c0ff; }}
-            .hljs-meta {{ color: #d2a8ff; }}
-            .hljs-function {{ color: #d2a8ff; }}
-        }}
-
-        /* Enhanced blockquote styling */
-        blockquote {{
-            margin: 0;
-            padding-left: 16px;
-            padding-right: 16px;
-            padding-bottom: 1px;
-            padding-top: 1px;
-            background: rgba(0, 0, 0, 0.05);
-            border-left: 4px solid var(--blockquote-border);
-            color: var(--blockquote-color);
-            margin-bottom: 16px;
-        }}
-
-        @media (prefers-color-scheme: dark) {{
-            blockquote {{
-                background: rgba(255, 255, 255, 0.05);
-            }}
-        }}
-
-        /* Enhanced image styling */
-        img {{
-            max-width: 100%;
-            box-sizing: border-box;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin: 10px 0;
-            border-radius: 4px;
-        }}
-
-        /* Enhanced table styling with explicit font size control */
-        table {{
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 16px;
-            overflow: auto;
-            font-size: 1em; /* Match body font size */
-        }}
-
-        th, td {{
-            border: 1px solid var(--table-border);
-            padding: 8px 13px;
-            text-align: left;
-            font-size: 1em; /* Consistent font size */
-            vertical-align: top;
-        }}
-
-        th {{
-            background-color: var(--table-header-bg);
-            font-weight: 600;
-        }}
-
-        tr {{
-            font-size: 1em; /* Ensure rows maintain consistent font size */
-        }}
-
-        tr:nth-child(even) {{
-            background-color: var(--table-row-alt-bg);
-        }}
-
-        /* Lists styling */
-        ul, ol {{
-            padding-left: 2em;
-            margin-top: 0;
-            margin-bottom: 16px;
-        }}
-
-        li {{
-            margin-top: 0.25em;
-        }}
-
-        /* Task lists */
-        ul.contains-task-list {{
-            list-style-type: none;
-            padding-left: 1em;
-        }}
-
-        .task-list-item {{
-            position: relative;
-            padding-left: 1.5em;
-        }}
-
-        .task-list-item input {{
-            position: absolute;
-            left: 0;
-            top: 0.25em;
-        }}
-
-        /* Smooth scrolling for anchor links */
-        html {{
-            scroll-behavior: smooth;
-        }}
-
-        /* Ensure headers have some top margin for anchor positioning */
-        h1[id], h2[id], h3[id] {{
-            scroll-margin-top: 20px;
-        }}
-    </style>
-    <!-- MathJax for LaTeX rendering -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/MathJax.js?config=TeX-MML-AM_CHTML"></script>
-    <script type="text/x-mathjax-config">
-        MathJax.Hub.Config({{
-            tex2jax: {{
-                inlineMath: [['$','$'], ['\\(','\\)']],
-                displayMath: [['$$','$$'], ['\\[','\\]']],
-                processEscapes: true
-            }}
-        }});
-    </script>
-    <!-- Highlight.js for code syntax highlighting -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/rust.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/java.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/bash.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/typescript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/json.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/cpp.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/yaml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/languages/sql.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {{
-            document.querySelectorAll('pre code').forEach((block) => {{
-                hljs.highlightBlock(block);
-            }});
-
-            // Add checkbox functionality for task lists
-            document.querySelectorAll('.task-list-item input[type="checkbox"]').forEach(checkbox => {{
-                checkbox.disabled = false;
-                checkbox.addEventListener('change', function() {{
-                    this.parentElement.classList.toggle('completed');
-                }});
-            }});
-
-            // TOC functionality
-            const tocSidebar = document.getElementById('toc-sidebar');
-            const tocToggle = document.getElementById('toc-toggle');
-            const tocMobileToggle = document.getElementById('toc-mobile-toggle');
-            const mainContent = document.querySelector('.main-content');
-            const tocLinks = document.querySelectorAll('.toc-link');
-
-            // If TOC exists, add toc-visible class to main content
-            if (tocSidebar) {{
-                mainContent.classList.add('toc-visible');
-            }}
-
-            // Toggle TOC visibility
-            function toggleToc() {{
-                if (window.innerWidth <= 1024) {{
-                    tocSidebar.classList.toggle('mobile-visible');
-                }} else {{
-                    tocSidebar.classList.toggle('hidden');
-                    mainContent.classList.toggle('toc-visible');
-                }}
-            }}
-
-            // Desktop toggle
-            if (tocToggle) {{
-                tocToggle.addEventListener('click', toggleToc);
-            }}
-
-            // Mobile toggle
-            if (tocMobileToggle) {{
-                tocMobileToggle.addEventListener('click', toggleToc);
-            }}
-
-            // Close mobile TOC when clicking on a link
-            tocLinks.forEach(link => {{
-                link.addEventListener('click', () => {{
-                    if (window.innerWidth <= 1024) {{
-                        tocSidebar.classList.remove('mobile-visible');
-                    }}
-                }});
-            }});
-
-            // Active section highlighting
-            function updateActiveSection() {{
-                const headers = document.querySelectorAll('h1[id], h2[id], h3[id]');
-                const scrollPosition = window.scrollY + 100;
-
-                let activeId = null;
-                for (const header of headers) {{
-                    if (header.offsetTop <= scrollPosition) {{
-                        activeId = header.id;
-                    }} else {{
-                        break;
-                    }}
-                }}
-
-                // Update active link
-                tocLinks.forEach(link => {{
-                    link.classList.remove('active');
-                    if (activeId && link.getAttribute('href') === '#' + activeId) {{
-                        link.classList.add('active');
-                    }}
-                }});
-            }}
-
-            // Update active section on scroll
-            window.addEventListener('scroll', updateActiveSection);
-            updateActiveSection(); // Initial call
-
-            // Handle window resize
-            window.addEventListener('resize', () => {{
-                if (window.innerWidth > 1024 && tocSidebar) {{
-                    tocSidebar.classList.remove('mobile-visible');
-                    if (!tocSidebar.classList.contains('hidden')) {{
-                        mainContent.classList.add('toc-visible');
-                    }}
-                }} else {{
-                    tocSidebar.classList.remove('hidden');
-                    mainContent.classList.remove('toc-visible');
-                }}
-            }});
-        }});
-    </script>
-</head>
-<body>
-    {}
-    <div class="container">
-        <main class="main-content">
-            {}
-            {}
-        </main>
-    </div>
-</body>
-</html>"#,
-        escape_html(title),
+    // Split on the markers rather than replacing them: a document that contains a marker's
+    // text must not have it filled in.
+    let (head, rest) = split_marker(TEMPLATE, "@@TITLE@@");
+    let (before_toc, rest) = split_marker(rest, "@@TOC@@");
+    let (before_body, rest) = split_marker(rest, "@@BODY@@");
+    let (before_footer, tail) = split_marker(rest, "@@FOOTER@@");
+    [
+        head,
+        &escape_html(title),
+        before_toc,
         toc_html,
+        before_body,
         body_html,
-        metadata_footer
-    )
+        before_footer,
+        metadata_footer,
+        tail,
+    ]
+    .concat()
+}
+
+/// The page around a rendered document: styles, TOC behaviour, code highlighting and math
+const TEMPLATE: &str = include_str!("markdown_template.html");
+
+fn split_marker<'a>(text: &'a str, marker: &str) -> (&'a str, &'a str) {
+    text.split_once(marker)
+        .unwrap_or_else(|| panic!("markdown_template.html lacks {}", marker))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn given_document_containing_marker_text_when_render_document_then_leaves_it_as_text() {
+        // A note about the template itself may contain the markers
+        let html = render_html_document(
+            "T",
+            "",
+            "<p>see @@FOOTER@@ and {}</p>",
+            "<footer>F</footer>",
+        );
+
+        assert!(html.contains("<p>see @@FOOTER@@ and {}</p>"));
+        assert_eq!(html.matches("<footer>F</footer>").count(), 1);
+        assert!(html.starts_with("<!DOCTYPE html>"));
+    }
     use crate::domain::tag::Tag;
     use crate::util::testing::{init_test_env, EnvGuard};
     use std::collections::HashSet;
@@ -1176,8 +525,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a temporary markdown file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -1194,89 +542,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // Test embedding eligibility check
-    // TODO: check the purpose of this test
-    #[test]
-    fn given_action_when_check_embedding_update_then_returns_eligibility() {
-        // Setup
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        // Action without repository
-        let embedder_no_repo = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action_no_repo = MarkdownAction::new(embedder_no_repo);
-
-        // Action with repository
-        let repository = Arc::new(crate::util::testing::setup_test_db());
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let vector_repository = Arc::new(
-            crate::infrastructure::repositories::null_vector_repository::NullVectorRepository,
-        );
-        let action_with_repo =
-            MarkdownAction::new_with_repository(repository, vector_repository, embedder);
-
-        // Create test bookmarks
-        let mut tags = HashSet::new();
-        tags.insert(Tag::new("_md_").unwrap());
-
-        // Bookmark with embeddable=true
-        let embeddable_bookmark = Bookmark {
-            id: Some(1),
-            url: "# Test".to_string(),
-            title: "Test Document".to_string(),
-            description: "A test document".to_string(),
-            tags: tags.clone(),
-            access_count: 0,
-            created_at: Some(chrono::Utc::now()),
-            updated_at: chrono::Utc::now(),
-            embedding: None,
-            content_hash: None,
-            embeddable: true,
-            file_path: None,
-            file_mtime: None,
-            file_hash: None,
-            opener: None,
-            accessed_at: None,
-            verified_at: None,
-        };
-
-        // Bookmark with embeddable=false
-        let non_embeddable_bookmark = Bookmark {
-            id: Some(2),
-            url: "# Test".to_string(),
-            title: "Test Document".to_string(),
-            description: "A test document".to_string(),
-            tags,
-            access_count: 0,
-            created_at: Some(chrono::Utc::now()),
-            updated_at: chrono::Utc::now(),
-            embedding: None,
-            content_hash: None,
-            embeddable: false,
-            file_path: None,
-            file_mtime: None,
-            file_hash: None,
-            opener: None,
-            accessed_at: None,
-            verified_at: None,
-        };
-
-        // Test cases
-        assert!(
-            !action_no_repo.can_update_embedding(&embeddable_bookmark),
-            "Should return false when no repository is available"
-        );
-
-        // The DummyEmbedding is the default in test environment
-        assert!(
-            !action_with_repo.can_update_embedding(&non_embeddable_bookmark),
-            "Should return false when bookmark is not embeddable"
-        );
-
-        // This would be true with OpenAI embeddings, but we can't easily test that
-        // So we just verify that the embeddable flag is checked
-    }
-
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
     fn given_markdown_content_when_execute_then_renders_html() {
@@ -1284,8 +549,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a test bookmark with direct markdown content
         let markdown = "# Test Markdown\n\nThis is a **test** with math: $$E = mc^2$$";
@@ -1334,8 +598,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a test bookmark with markdown table content
         let markdown = "# Test Table\n\n| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |";
@@ -1384,8 +647,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a test bookmark with code blocks
         let markdown = "# Code Highlighting\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n\n```python\ndef hello():\n    print(\"Hello, world!\")\n```";
@@ -1433,8 +695,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>Main Title</h1>
 <p>Some content</p>
 <h2>Section 1</h2>
@@ -1473,8 +734,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1 id="existing-id">Title with ID</h1>
 <h2>Title without ID</h2>"#;
 
@@ -1496,8 +756,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>Introduction</h1>
 <h2>Introduction</h2>
 <h3>Introduction</h3>"#;
@@ -1518,12 +777,27 @@ mod tests {
     }
 
     #[test]
+    fn given_identical_headings_when_extract_then_each_gets_the_id_its_toc_link_names() {
+        // Same level and text, so the two tags are the same string
+        let action = MarkdownAction::new();
+        let html_content = "<h2>Setup</h2>\n<p>one</p>\n<h2>Setup</h2>";
+
+        let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
+
+        assert_eq!(toc_entries[0].id, "setup");
+        assert_eq!(toc_entries[1].id, "setup-1");
+        assert_eq!(
+            processed_html,
+            "<h2 id=\"setup\">Setup</h2>\n<p>one</p>\n<h2 id=\"setup-1\">Setup</h2>"
+        );
+    }
+
+    #[test]
     fn given_headers_with_html_content_when_extract_then_cleans_html() {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>Title with <strong>bold</strong> and <em>italic</em></h1>
 <h2>Code: <code>function()</code></h2>"#;
 
@@ -1545,8 +819,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = "<p>No headers here</p>";
 
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
@@ -1560,8 +833,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>H1 Title</h1>
 <h2>H2 Title</h2>
 <h3>H3 Title</h3>
@@ -1588,8 +860,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Test normal text
         assert_eq!(action.generate_header_id("Simple Title"), "simple-title");
@@ -1621,8 +892,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Test removing HTML tags
         assert_eq!(
@@ -1659,8 +929,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let toc_entries = vec![];
 
         let toc_html = action.generate_toc_html(&toc_entries);
@@ -1673,8 +942,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let toc_entries = vec![
             TocEntry {
                 level: 1,
@@ -1715,8 +983,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let toc_entries = vec![TocEntry {
             level: 1,
             title: "Title with & < > \" characters".to_string(),
@@ -1736,8 +1003,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a temporary markdown file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -1777,8 +1043,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create bookmark with direct markdown content
         let mut tags = HashSet::new();
@@ -1812,8 +1077,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create bookmark with non-existent file path
         let mut tags = HashSet::new();
@@ -1848,8 +1112,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <p>Some content</p>
@@ -1868,8 +1131,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <img src="./local.png" alt="Local">
@@ -1890,8 +1152,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <link rel="stylesheet" href="./styles.css">
@@ -1914,8 +1175,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = "<p>No resources here</p>";
         let resources = action.extract_resource_paths(html);
@@ -1927,8 +1187,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <img src="./single.png" alt="Single">
@@ -1941,299 +1200,91 @@ mod tests {
         assert_eq!(resources[1].1, "./double.png");
     }
 
-    // Tests for resolve_resource_path()
-    #[test]
-    fn given_relative_path_when_resolve_resource_then_returns_absolute() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
-
-        // Create temp directory with markdown file and image subdirectory
-        let temp_dir = tempfile::tempdir().unwrap();
-        let md_path = temp_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        let images_dir = temp_dir.path().join("images");
-        fs::create_dir(&images_dir).unwrap();
-        let image_path = images_dir.join("photo.png");
-        fs::write(&image_path, "fake image data").unwrap();
-
-        // Resolve relative path
-        let result = action.resolve_resource_path("./images/photo.png", &md_path);
-        assert!(result.is_some());
-        assert!(result.unwrap().exists());
-    }
-
-    #[test]
-    fn given_parent_relative_path_when_resolve_resource_then_returns_absolute() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
-
-        // Create temp directory structure: temp/docs/test.md and temp/assets/logo.png
-        let temp_dir = tempfile::tempdir().unwrap();
-        let docs_dir = temp_dir.path().join("docs");
-        fs::create_dir(&docs_dir).unwrap();
-        let md_path = docs_dir.join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        let assets_dir = temp_dir.path().join("assets");
-        fs::create_dir(&assets_dir).unwrap();
-        let logo_path = assets_dir.join("logo.png");
-        fs::write(&logo_path, "fake logo data").unwrap();
-
-        // Resolve parent relative path
-        let result = action.resolve_resource_path("../assets/logo.png", &md_path);
-        assert!(result.is_some());
-        assert!(result.unwrap().exists());
-    }
-
-    #[test]
-    fn given_absolute_path_when_resolve_resource_then_returns_path() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
-
-        // Create temp file
-        let mut temp_file = NamedTempFile::new().unwrap();
-        write!(temp_file, "image data").unwrap();
-        let absolute_path = temp_file.path().to_str().unwrap();
-
-        // Create dummy markdown file path
-        let md_path = std::path::PathBuf::from("/tmp/test.md");
-
-        // Resolve absolute path
-        let result = action.resolve_resource_path(absolute_path, &md_path);
-        assert!(result.is_some());
-    }
-
-    #[test]
-    fn given_nonexistent_path_when_resolve_resource_then_returns_none() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
-
-        let temp_dir = tempfile::tempdir().unwrap();
-        let md_path = temp_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        // Try to resolve non-existent file
-        let result = action.resolve_resource_path("./nonexistent.png", &md_path);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn given_path_with_dots_when_resolve_resource_then_canonicalizes() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
-
-        // Create structure: temp/docs/notes/test.md and temp/docs/images/photo.png
-        let temp_dir = tempfile::tempdir().unwrap();
-        let docs_dir = temp_dir.path().join("docs");
-        fs::create_dir(&docs_dir).unwrap();
-        let notes_dir = docs_dir.join("notes");
-        fs::create_dir(&notes_dir).unwrap();
+    // Tests for link_resources_to_source()
+    fn source_tree_with_image(
+        relative_image: &str,
+    ) -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+        let source_dir = tempfile::tempdir().unwrap();
+        let notes_dir = source_dir.path().join("notes");
+        fs::create_dir_all(&notes_dir).unwrap();
         let md_path = notes_dir.join("test.md");
         fs::write(&md_path, "# Test").unwrap();
-
-        let images_dir = docs_dir.join("images");
-        fs::create_dir(&images_dir).unwrap();
-        let photo_path = images_dir.join("photo.png");
-        fs::write(&photo_path, "fake photo data").unwrap();
-
-        // Resolve path with .. and . components
-        let result = action.resolve_resource_path("./../images/./photo.png", &md_path);
-        assert!(result.is_some());
-
-        let resolved = result.unwrap();
-        assert!(resolved.exists());
-        // Should not contain . or .. after canonicalization
-        assert!(!resolved.to_string_lossy().contains("/./"));
-        assert!(!resolved.to_string_lossy().contains("/../"));
+        let image_path = notes_dir.join(relative_image);
+        fs::create_dir_all(image_path.parent().unwrap()).unwrap();
+        fs::write(&image_path, "test image data").unwrap();
+        let image_path = image_path.canonicalize().unwrap();
+        (source_dir, md_path, image_path)
     }
 
-    // Tests for copy_resources_to_temp()
+    fn file_url(path: &Path) -> String {
+        url::Url::from_file_path(path).unwrap().to_string()
+    }
+
     #[test]
-    fn given_single_image_when_copy_resources_then_copies_correctly() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
+    fn given_absolute_image_path_when_link_resources_then_source_image_keeps_its_content() {
+        // Arrange: the bug this guards against truncated the user's image to 0 bytes
+        let action = MarkdownAction::new();
+        let (_dir, md_path, image_path) = source_tree_with_image("images/photo.png");
+        let html = format!(r#"<img src="{}" alt="Photo">"#, image_path.display());
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        // Act
+        let linked = action.link_resources_to_source(&html, &md_path);
 
-        // Create source structure
-        let source_dir = tempfile::tempdir().unwrap();
-        let md_path = source_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
+        // Assert
+        assert_eq!(fs::read_to_string(&image_path).unwrap(), "test image data");
+        assert!(linked.contains(&file_url(&image_path)), "got: {linked}");
+    }
 
-        let images_dir = source_dir.path().join("images");
-        fs::create_dir(&images_dir).unwrap();
-        let image_path = images_dir.join("photo.png");
-        fs::write(&image_path, "test image data").unwrap();
-
-        // Create temp directory
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        // HTML with image reference
+    #[test]
+    fn given_relative_image_when_link_resources_then_points_at_source_file() {
+        let action = MarkdownAction::new();
+        let (_dir, md_path, image_path) = source_tree_with_image("images/photo.png");
         let html = r#"<img src="./images/photo.png" alt="Photo">"#;
 
-        // Copy resources
-        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
-        assert!(result.is_ok());
+        let linked = action.link_resources_to_source(html, &md_path);
 
-        // Verify file was copied
-        let copied_file = temp_dir.path().join("images/photo.png");
-        assert!(copied_file.exists());
-        let content = fs::read_to_string(copied_file).unwrap();
-        assert_eq!(content, "test image data");
+        assert_eq!(
+            linked,
+            format!(r#"<img src="{}" alt="Photo">"#, file_url(&image_path))
+        );
     }
 
     #[test]
-    fn given_multiple_resources_when_copy_resources_then_copies_all() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
+    fn given_parent_relative_image_when_link_resources_then_points_at_source_file() {
+        let action = MarkdownAction::new();
+        let (_dir, md_path, image_path) = source_tree_with_image("../assets/logo.png");
+        let html = r#"<img src="../assets/logo.png" alt="Logo">"#;
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let linked = action.link_resources_to_source(html, &md_path);
 
-        // Create source structure
-        let source_dir = tempfile::tempdir().unwrap();
-        let md_path = source_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        // Create images directory with file
-        let images_dir = source_dir.path().join("images");
-        fs::create_dir(&images_dir).unwrap();
-        fs::write(images_dir.join("photo.png"), "photo data").unwrap();
-
-        // Create styles directory with file
-        let styles_dir = source_dir.path().join("styles");
-        fs::create_dir(&styles_dir).unwrap();
-        fs::write(styles_dir.join("main.css"), "css data").unwrap();
-
-        // Create temp directory
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        // HTML with multiple resources
-        let html = r#"
-            <link rel="stylesheet" href="./styles/main.css">
-            <img src="./images/photo.png" alt="Photo">
-        "#;
-
-        // Copy resources
-        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
-        assert!(result.is_ok());
-
-        // Verify files were copied
-        assert!(temp_dir.path().join("styles/main.css").exists());
-        assert!(temp_dir.path().join("images/photo.png").exists());
+        assert_eq!(
+            linked,
+            format!(r#"<img src="{}" alt="Logo">"#, file_url(&image_path))
+        );
     }
 
     #[test]
-    fn given_nested_directories_when_copy_resources_then_maintains_structure() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
+    fn given_directory_with_space_when_link_resources_then_url_is_percent_encoded() {
+        let action = MarkdownAction::new();
+        let (_dir, md_path, image_path) = source_tree_with_image("my images/photo.png");
+        let html = r#"<img src="my%20images/photo.png" alt="Photo">"#;
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let linked = action.link_resources_to_source(html, &md_path);
 
-        // Create source structure with nested directories
-        let source_dir = tempfile::tempdir().unwrap();
-        let md_path = source_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        let assets_dir = source_dir.path().join("assets");
-        fs::create_dir(&assets_dir).unwrap();
-        let images_dir = assets_dir.join("images");
-        fs::create_dir(&images_dir).unwrap();
-        let icons_dir = images_dir.join("icons");
-        fs::create_dir(&icons_dir).unwrap();
-        fs::write(icons_dir.join("logo.svg"), "svg data").unwrap();
-
-        // Create temp directory
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        // HTML with nested resource path
-        let html = r#"<img src="./assets/images/icons/logo.svg" alt="Logo">"#;
-
-        // Copy resources
-        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
-        assert!(result.is_ok());
-
-        // Verify directory structure was maintained
-        let copied_file = temp_dir.path().join("assets/images/icons/logo.svg");
-        assert!(copied_file.exists());
-        let content = fs::read_to_string(copied_file).unwrap();
-        assert_eq!(content, "svg data");
+        assert!(linked.contains("my%20images/photo.png"), "got: {linked}");
+        assert!(linked.contains(&file_url(&image_path)), "got: {linked}");
     }
 
     #[test]
-    fn given_nonexistent_resource_when_copy_resources_then_continues() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
+    fn given_missing_or_remote_resources_when_link_resources_then_leaves_them_unchanged() {
+        let action = MarkdownAction::new();
+        let (_dir, md_path, _image_path) = source_tree_with_image("images/photo.png");
+        let html = r#"<img src="./images/missing.png" alt="Missing">
+<img src="https://example.com/a.png" alt="Remote">"#;
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let linked = action.link_resources_to_source(html, &md_path);
 
-        // Create source structure with only one file
-        let source_dir = tempfile::tempdir().unwrap();
-        let md_path = source_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        let images_dir = source_dir.path().join("images");
-        fs::create_dir(&images_dir).unwrap();
-        fs::write(images_dir.join("existing.png"), "exists").unwrap();
-
-        // Create temp directory
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        // HTML references both existing and non-existing files
-        let html = r#"
-            <img src="./images/existing.png" alt="Exists">
-            <img src="./images/nonexistent.png" alt="Missing">
-        "#;
-
-        // Copy resources - should not fail
-        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
-        assert!(result.is_ok());
-
-        // Verify existing file was copied
-        assert!(temp_dir.path().join("images/existing.png").exists());
-        // Non-existent file should not exist in temp
-        assert!(!temp_dir.path().join("images/nonexistent.png").exists());
-    }
-
-    #[test]
-    fn given_empty_html_when_copy_resources_then_returns_ok() {
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
-
-        let source_dir = tempfile::tempdir().unwrap();
-        let md_path = source_dir.path().join("test.md");
-        fs::write(&md_path, "# Test").unwrap();
-
-        let temp_dir = tempfile::tempdir().unwrap();
-
-        // Empty HTML
-        let html = "<p>No resources</p>";
-
-        // Should succeed with no operations
-        let result = action.copy_resources_to_temp(html, &md_path, temp_dir.path());
-        assert!(result.is_ok());
+        assert_eq!(linked, html);
     }
 
     // Tests for render_html_document()
@@ -2265,8 +1316,7 @@ mod tests {
     #[test]
     fn given_stored_bookmark_when_render_footer_then_shows_metadata() {
         use chrono::{TimeZone, Utc};
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut tags = HashSet::new();
         tags.insert(Tag::new("_md_").unwrap());
@@ -2292,8 +1342,7 @@ mod tests {
 
     #[test]
     fn given_never_accessed_bookmark_when_render_footer_then_says_never() {
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
         bookmark.id = Some(1);
@@ -2308,8 +1357,7 @@ mod tests {
     #[test]
     fn given_unstored_bookmark_when_render_footer_then_returns_empty() {
         // `bkmr open --file` renders a temporary bookmark: its metadata would be made up
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
 
@@ -2318,8 +1366,7 @@ mod tests {
 
     #[test]
     fn given_imported_bookmark_when_render_footer_then_shows_escaped_source_file() {
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
         bookmark.id = Some(1);
@@ -2332,8 +1379,7 @@ mod tests {
 
     #[test]
     fn given_html_in_tag_when_render_footer_then_escapes_it() {
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut tags = HashSet::new();
         tags.insert(Tag::new("<script>").unwrap());

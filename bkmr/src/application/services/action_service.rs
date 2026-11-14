@@ -1,4 +1,5 @@
 // src/application/services/action_service.rs
+use crate::domain::action::ExecOptions;
 use crate::domain::action_resolver::ActionResolver;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::DomainResult;
@@ -44,6 +45,13 @@ impl<R: BookmarkRepository> ActionServiceImpl<R> {
             repository,
         }
     }
+
+    /// The one dispatch path: the action the bookmark's type resolves to, with these options
+    fn execute_resolved(&self, bookmark: &Bookmark, options: ExecOptions) -> DomainResult<()> {
+        let action = self.resolver.resolve_action(bookmark);
+        debug!("Executing action: {}", action.description());
+        action.execute_with(bookmark, options)
+    }
 }
 
 impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
@@ -52,10 +60,7 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         // Before the action, so that a long-running or killed shell action is still counted
         self.record_access(bookmark);
 
-        // Resolve and execute the appropriate action
-        let action = self.resolver.resolve_action(bookmark);
-        debug!("Executing action: {}", action.description());
-        action.execute(bookmark)
+        self.execute_resolved(bookmark, ExecOptions::default())
     }
 
     // todo: difference to default action execute
@@ -75,35 +80,16 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         no_edit: bool,
         script_args: &[String],
     ) -> DomainResult<()> {
-        use crate::application::actions::shell_action::ShellAction;
-        use crate::domain::action::BookmarkAction;
-        use crate::infrastructure::interpolation::minijinja_engine::{
-            MiniJinjaEngine, SafeShellExecutor,
-        };
-        use std::sync::Arc;
-
         // Before the action, so that a long-running or killed shell action is still counted
         self.record_access(bookmark);
 
-        // Use the resolver for consistent action dispatch, then apply --no-edit override
-        if no_edit && bookmark.is_shell() {
-            debug!("Executing shell action with no-edit mode");
-
-            // Create a direct (non-interactive) shell action with script arguments
-            let shell_executor = Arc::new(SafeShellExecutor::new());
-            let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
-            let interpolation_service = Arc::new(
-                crate::application::InterpolationServiceImpl::new(template_engine),
-            );
-            let shell_action =
-                ShellAction::new_direct_with_args(interpolation_service, script_args.to_vec());
-            return shell_action.execute(bookmark);
-        }
-
-        // Use the normal action resolver
-        let action = self.resolver.resolve_action(bookmark);
-        debug!("Executing action: {}", action.description());
-        action.execute(bookmark)
+        self.execute_resolved(
+            bookmark,
+            ExecOptions {
+                no_edit,
+                script_args,
+            },
+        )
     }
 
     fn get_default_action_description(&self, bookmark: &Bookmark) -> &'static str {
@@ -124,7 +110,7 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::action::BookmarkAction;
+    use crate::domain::action::{BookmarkAction, ExecOptions};
     use crate::domain::action_resolver::ActionResolver;
     use crate::domain::bookmark::Bookmark;
     use crate::domain::tag::Tag;
@@ -134,25 +120,29 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
 
-    // Mock action for testing
+    // Mock action for testing: records the options of its last run
     #[derive(Debug)]
     struct MockAction {
         description: &'static str,
-        executed: Arc<std::sync::Mutex<bool>>,
+        received: std::sync::Mutex<Option<(bool, Vec<String>)>>,
     }
 
     impl MockAction {
         fn new(description: &'static str) -> Self {
             Self {
                 description,
-                executed: Arc::new(std::sync::Mutex::new(false)),
+                received: std::sync::Mutex::new(None),
             }
         }
     }
 
     impl BookmarkAction for MockAction {
-        fn execute(&self, _bookmark: &Bookmark) -> DomainResult<()> {
-            *self.executed.lock().unwrap() = true;
+        fn execute(&self, bookmark: &Bookmark) -> DomainResult<()> {
+            self.execute_with(bookmark, ExecOptions::default())
+        }
+
+        fn execute_with(&self, _bookmark: &Bookmark, options: ExecOptions) -> DomainResult<()> {
+            *self.received.lock().unwrap() = Some((options.no_edit, options.script_args.to_vec()));
             Ok(())
         }
 
@@ -174,8 +164,8 @@ mod tests {
     }
 
     impl ActionResolver for MockActionResolver {
-        fn resolve_action(&self, _bookmark: &Bookmark) -> Box<dyn BookmarkAction> {
-            Box::new(MockAction::new(self.action.description))
+        fn resolve_action(&self, _bookmark: &Bookmark) -> &dyn BookmarkAction {
+            self.action.as_ref()
         }
     }
 
@@ -241,8 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn given_shell_bookmark_when_execute_default_action_with_no_edit_then_uses_direct_shell_action()
-    {
+    fn given_shell_bookmark_when_execute_default_action_with_no_edit_then_records_access() {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
@@ -351,6 +340,46 @@ mod tests {
             updated_bookmark.access_count, 1,
             "Access count should be incremented"
         );
+    }
+
+    #[test]
+    fn given_script_args_without_no_edit_when_execute_with_options_then_resolved_action_gets_them()
+    {
+        // Arrange: `bkmr open 5 -- a b` without --no-edit dropped the arguments
+        let (repository, _db_dir) = create_test_repository();
+        let mock_action = Arc::new(MockAction::new("Mock action"));
+        let resolver = Arc::new(MockActionResolver::new(Arc::clone(&mock_action)));
+        let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
+        let bookmark = create_test_bookmark_with_shell_tag();
+        let args = vec!["a".to_string(), "b".to_string()];
+
+        // Act
+        service
+            .execute_default_action_with_options(&bookmark, false, &args)
+            .unwrap();
+
+        // Assert: one dispatch path, with or without --no-edit
+        let received = mock_action.received.lock().unwrap().clone();
+        assert_eq!(received, Some((false, args)));
+    }
+
+    #[test]
+    fn given_no_edit_when_execute_with_options_then_resolved_action_runs_it() {
+        // Arrange: --no-edit no longer bypasses the resolver with a shell action of its own
+        let (repository, _db_dir) = create_test_repository();
+        let mock_action = Arc::new(MockAction::new("Mock action"));
+        let resolver = Arc::new(MockActionResolver::new(Arc::clone(&mock_action)));
+        let service = ActionServiceImpl::new(resolver, Arc::clone(&repository));
+        let bookmark = create_test_bookmark_with_shell_tag();
+
+        // Act
+        service
+            .execute_default_action_with_options(&bookmark, true, &[])
+            .unwrap();
+
+        // Assert
+        let received = mock_action.received.lock().unwrap().clone();
+        assert_eq!(received, Some((true, vec![])));
     }
 
     #[test]

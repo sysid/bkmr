@@ -23,6 +23,9 @@ pub enum ApplicationError {
         file_path: String,
     },
 
+    #[error("Database not found at '{0}'. Create it with 'bkmr create-db {0}', set BKMR_DB_URL to an existing database, or update db_url in ~/.config/bkmr/config.toml")]
+    DatabaseNotFound(String),
+
     #[error("{0}")]
     Other(String),
 }

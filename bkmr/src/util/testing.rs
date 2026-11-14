@@ -44,7 +44,6 @@ static TEST_ENV: OnceLock<TestEnv> = OnceLock::new();
 
 /// Initializes the global test environment exactly once.
 /// - Sets up logging
-/// - Updates global AppState
 /// - Sets BKMR_DB_URL to match `TestEnv::db_path`
 /// Returns a reference to the fully-initialized TestEnv.
 pub fn init_test_env() -> &'static TestEnv {

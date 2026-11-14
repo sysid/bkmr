@@ -1,10 +1,10 @@
 // src/application/services/bookmark_service_impl.rs
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::bookmark_service::{
-    BackupRestoreItem, BackupRestoreState, BookmarkService, RestorePreview,
+    BackupRestoreItem, BackupRestoreState, BookmarkService, ImportReport, RestorePreview,
 };
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
@@ -14,12 +14,13 @@ use crate::domain::history::HistoryEntry;
 use crate::domain::repositories::import_repository::{
     BackupEntry, FileImportData, ImportRepository,
 };
-use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
+use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::search::{
     HybridSearch, HybridSearchResult, RrfFusion, SemanticSearch, SemanticSearchResult,
 };
+use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
 use crate::util::helper::calc_content_hash;
@@ -49,6 +50,8 @@ pub struct BookmarkServiceImpl<R: BookmarkRepository> {
     vector_repository: Arc<dyn VectorRepository>,
     import_repository: Arc<dyn ImportRepository>,
     embedding_policy: EmbeddingPolicy,
+    /// Named base paths (`$NAME/...` in a stored file path), from the loaded config
+    base_paths: HashMap<String, String>,
 }
 
 impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
@@ -64,7 +67,14 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             vector_repository,
             import_repository,
             embedding_policy: EmbeddingPolicy::default(),
+            base_paths: HashMap::new(),
         }
+    }
+
+    /// Use the base paths of the loaded config, so that `--config` decides them.
+    pub fn with_base_paths(mut self, base_paths: HashMap<String, String>) -> Self {
+        self.base_paths = base_paths;
+        self
     }
 
     /// Replace the built-in embedding policy with the configured one.
@@ -145,10 +155,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             .repository
             .exists_by_url(&entry.url)
             .app_context("checking if bookmark with URL already exists")?;
-        if url_holder != -1 && url_holder != id {
-            return Ok(BackupRestoreState::Conflict {
-                blocking_id: url_holder,
-            });
+        if let Some(blocking_id) = url_holder.filter(|&holder| holder != id) {
+            return Ok(BackupRestoreState::Conflict { blocking_id });
         }
 
         match current {
@@ -244,7 +252,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .repository
             .exists_by_url(url)
             .app_context("checking if bookmark with URL already exists")?;
-        if existing_id != -1 {
+        if let Some(existing_id) = existing_id {
             return Err(ApplicationError::BookmarkExists(
                 existing_id,
                 url.to_string(),
@@ -426,7 +434,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .repository
             .exists_by_url(&entry.url)
             .app_context("checking if bookmark with URL already exists")?;
-        if existing_id != -1 && existing_id != entry.bookmark_id {
+        if let Some(existing_id) = existing_id.filter(|&holder| holder != entry.bookmark_id) {
             return Err(ApplicationError::BookmarkExists(
                 existing_id,
                 entry.url.clone(),
@@ -548,57 +556,11 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self, tags), level = "debug")]
-    fn add_tags_to_bookmark(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
-        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)
-            .with_app_context(|| {
-                format!(
-                    "validating and retrieving bookmark with ID {} for adding tags",
-                    id
-                )
-            })?;
-
-        for tag in tags {
-            bookmark
-                .add_tag(tag.clone())
-                .with_app_context(|| format!("adding tag '{}' to bookmark", tag.value()))?;
-        }
-        self.update_bookmark(bookmark, false)
-            .app_context("updating bookmark after adding tags")
-    }
-
-    #[instrument(skip(self, tags), level = "debug")]
-    fn remove_tags_from_bookmark(
-        &self,
-        id: i32,
-        tags: &HashSet<Tag>,
-    ) -> ApplicationResult<Bookmark> {
-        let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
-
-        for tag in tags {
-            let _ = bookmark.remove_tag(tag);
-        }
-        self.update_bookmark(bookmark, false)
-    }
-
-    #[instrument(skip(self, tags), level = "debug")]
     fn replace_bookmark_tags(&self, id: i32, tags: &HashSet<Tag>) -> ApplicationResult<Bookmark> {
         let mut bookmark = ValidationHelper::validate_and_get_bookmark(id, &*self.repository)?;
 
         bookmark.set_tags(tags.clone())?;
         self.update_bookmark(bookmark, false)
-    }
-
-    // Implement the convenience method for text search
-    #[instrument(skip_all, level = "debug")]
-    fn search_bookmarks_by_text(&self, query: &str) -> ApplicationResult<Vec<Bookmark>> {
-        let query = BookmarkQuery::new()
-            .with_text_query(Some(query))
-            .with_sort(SortCriteria::new(
-                SortField::Modified,
-                SortDirection::Descending,
-            ));
-
-        self.search_bookmarks(&query)
     }
 
     #[instrument(skip_all, level = "debug")]
@@ -748,12 +710,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn get_bookmark_by_url(&self, url: &str) -> ApplicationResult<Option<Bookmark>> {
-        let bookmark = self.repository.get_by_url(url)?;
-        Ok(bookmark)
-    }
-
-    #[instrument(skip(self), level = "debug")]
     fn get_all_bookmarks(
         &self,
         sort_direction: Option<SortDirection>,
@@ -798,6 +754,33 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .into_iter()
             .filter(|b| b.id.map_or(true, |id| !embedded_ids.contains(&id)))
             .collect())
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn embed_bookmark(&self, id: i32) -> ApplicationResult<bool> {
+        let bookmark = self
+            .get_bookmark(id)?
+            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        if !bookmark.embeddable {
+            return Ok(false);
+        }
+        let content = bookmark.get_content_for_embedding();
+        let Some(embedding) = self.embedder.embed_document(&content)? else {
+            return Ok(false);
+        };
+
+        let hash = calc_content_hash(&content);
+        if bookmark.content_hash.as_ref() != Some(&hash) {
+            let mut hashed = bookmark;
+            hashed.content_hash = Some(hash);
+            self.repository
+                .update(&hashed)
+                .with_app_context(|| format!("storing content hash of bookmark {}", id))?;
+        }
+        self.vector_repository
+            .upsert_embedding(id, &embedding)
+            .app_context("upserting embedding into vector repository")?;
+        Ok(true)
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -871,8 +854,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         for import in imports {
             // Check if bookmark with URL already exists
-            let existing_id = self.repository.exists_by_url(&import.url)?;
-            if existing_id != -1 {
+            if let Some(existing_id) = self.repository.exists_by_url(&import.url)? {
                 debug!(
                     "Bookmark with URL {} already exists (ID: {}), skipping",
                     import.url, existing_id
@@ -970,20 +952,16 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         verbose: bool,
         base_path_name: Option<&str>,
         embed: Option<bool>,
-    ) -> ApplicationResult<(usize, usize, usize)> {
+    ) -> ApplicationResult<ImportReport> {
         use crate::domain::repositories::import_repository::ImportOptions;
 
         debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}, verbose={}, base_path={:?}", 
                paths, update, delete_missing, dry_run, verbose, base_path_name);
 
-        // Load settings for base path resolution
-        let settings = crate::config::load_settings(None)
-            .map_err(|e| ApplicationError::Other(format!("Failed to load settings: {}", e)))?;
-
         // Resolve actual scan paths based on base path
         let actual_scan_paths = if let Some(base_name) = base_path_name {
-            if let Some(base_value) = settings.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(&settings, base_value);
+            if let Some(base_value) = self.base_paths.get(base_name) {
+                let expanded_base = crate::config::resolve_file_path(&self.base_paths, base_value);
                 // Convert relative paths to absolute paths under the base
                 paths
                     .iter()
@@ -1018,11 +996,14 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         debug!("Found {} files to process", file_imports.len());
 
-        let mut added_count = 0;
-        let mut updated_count = 0;
-        let mut deleted_count = 0;
+        let mut report = ImportReport::default();
 
         // Process each file import
+        // An unknown type fails the import before anything is written
+        for file_data in &file_imports {
+            Self::file_type(file_data)?;
+        }
+
         for file_data in &file_imports {
             // Check for duplicate names
             if let Some(existing) = self.find_bookmark_by_name(&file_data.name)? {
@@ -1044,32 +1025,22 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     continue;
                 }
 
-                // Report what changed
-                if content_changed {
-                    println!("Content changed: {}", file_data.name);
-                }
-                if metadata_changed {
-                    println!("Metadata changed: {}", file_data.name);
-                }
-
                 // Update existing bookmark
                 if !dry_run {
-                    self.update_bookmark_from_file(
-                        &existing,
-                        file_data,
-                        &settings,
-                        base_path_name,
-                    )?;
+                    self.update_bookmark_from_file(&existing, file_data, base_path_name)?;
                 }
-                updated_count += 1;
-                println!("Updated bookmark: {}", file_data.name);
+                let changed = match (content_changed, metadata_changed) {
+                    (true, true) => "content and metadata",
+                    (true, false) => "content",
+                    _ => "metadata",
+                };
+                report.updated.push((file_data.name.clone(), changed));
             } else {
                 // Create new bookmark
                 if !dry_run {
-                    self.create_bookmark_from_file(file_data, &settings, base_path_name, embed)?;
+                    self.create_bookmark_from_file(file_data, base_path_name, embed)?;
                 }
-                added_count += 1;
-                println!("Added bookmark: {}", file_data.name);
+                report.added.push(file_data.name.clone());
             }
         }
 
@@ -1077,28 +1048,36 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         if delete_missing {
             let orphaned = self.find_orphaned_bookmarks(&actual_scan_paths, &file_imports)?;
             for bookmark in orphaned {
+                let Some(id) = bookmark.id else { continue };
                 if !dry_run {
-                    if let Some(id) = bookmark.id {
-                        self.repository.delete(id)?;
-                        // Best-effort: remove embedding from vector store
-                        let _ = self.vector_repository.delete_embedding(id);
-                    }
+                    self.delete_bookmark(id)?;
                 }
-                deleted_count += 1;
-                println!(
-                    "Deleted orphaned bookmark: {} ({:?})",
-                    bookmark.title, bookmark.id
-                );
+                report.deleted.push((bookmark.title, id));
             }
         }
 
-        info!(
-            added = added_count,
-            updated = updated_count,
-            deleted = deleted_count,
-            "File import complete"
-        );
-        Ok((added_count, updated_count, deleted_count))
+        let (added, updated, deleted) = report.counts();
+        info!(added, updated, deleted, "File import complete");
+        Ok(report)
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn sync_from_file(&self, id: i32) -> ApplicationResult<Bookmark> {
+        let bookmark = self
+            .get_bookmark(id)?
+            .ok_or(ApplicationError::BookmarkNotFound(id))?;
+        let stored_path = bookmark.file_path.clone().ok_or_else(|| {
+            ApplicationError::Validation(format!("Bookmark {} is not imported from a file", id))
+        })?;
+        let resolved = crate::config::resolve_file_path(&self.base_paths, &stored_path);
+        let file_data = self
+            .import_repository
+            .read_file(Path::new(&resolved))
+            .with_app_context(|| format!("reading source file of bookmark {}", id))?;
+
+        let mut updated = bookmark;
+        Self::apply_file_data(&mut updated, &file_data, stored_path)?;
+        self.update_bookmark(updated, false)
     }
 }
 
@@ -1122,85 +1101,115 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(None)
     }
 
+    /// The type a file declares in its frontmatter. An unknown one is an error: a typo such as
+    /// `snippet` for `_snip_` must not store the file as some other type.
+    fn file_type(file_data: &FileImportData) -> ApplicationResult<SystemTag> {
+        SystemTag::from_tag_value(&file_data.content_type).ok_or_else(|| {
+            ApplicationError::Validation(format!(
+                "Unknown type '{}' in {}: use one of _snip_, _shell_, _md_, _env_, _imported_, _mem_",
+                file_data.content_type,
+                file_data.file_path.display()
+            ))
+        })
+    }
+
+    /// The file path to store: `$NAME/relative` under a named base path, else absolute.
+    fn stored_file_path(
+        &self,
+        file: &Path,
+        base_path_name: Option<&str>,
+    ) -> ApplicationResult<String> {
+        let Some(base_name) = base_path_name else {
+            return Ok(file.display().to_string());
+        };
+        let base_value = self.base_paths.get(base_name).ok_or_else(|| {
+            ApplicationError::Other(format!(
+                "Base path '{}' not found in configuration",
+                base_name
+            ))
+        })?;
+        let expanded = crate::config::resolve_file_path(&self.base_paths, base_value);
+        // The scanner canonicalizes file paths, so the base must be canonical too: a base
+        // that goes through a symlink (/var on macOS) is otherwise never a prefix.
+        let base = Path::new(&expanded)
+            .canonicalize()
+            .unwrap_or_else(|_| Path::new(&expanded).to_path_buf());
+        let relative = file.strip_prefix(&base).map_err(|_| {
+            ApplicationError::Other(format!(
+                "File {} is not under base path {} ({})",
+                file.display(),
+                base_name,
+                base.display()
+            ))
+        })?;
+        Ok(crate::config::create_file_path_with_base(
+            base_name,
+            &relative.to_string_lossy(),
+        ))
+    }
+
+    /// Put what a source file says into a bookmark: content, name, tags and type. The file
+    /// decides all of them; of the bookmark's own tags only unknown `_x_` ones are kept.
+    fn apply_file_data(
+        bookmark: &mut Bookmark,
+        file_data: &FileImportData,
+        file_path: String,
+    ) -> ApplicationResult<()> {
+        let file_type = Self::file_type(file_data)?;
+        let mut tags: HashSet<Tag> = bookmark
+            .tags
+            .iter()
+            .filter(|tag| tag.is_system_tag() && !tag.is_known_system_tag())
+            .cloned()
+            .collect();
+        tags.extend(file_data.tags.iter().cloned());
+        tags.insert(file_type.to_tag()?);
+        bookmark
+            .set_tags(tags)
+            .with_app_context(|| format!("setting tags from {}", file_data.file_path.display()))?;
+        bookmark.url = file_data.content.clone();
+        bookmark.title = file_data.name.clone();
+        bookmark.file_path = Some(file_path);
+        bookmark.file_mtime = Some(file_data.file_mtime as i32);
+        bookmark.file_hash = Some(file_data.file_hash.clone());
+        Ok(())
+    }
+
     /// Create a new bookmark from file import data. Stores file content in url field,
     /// sets file_path/file_mtime/file_hash for source tracking, and generates embeddings
     /// via `Bookmark::get_content_for_embedding()`.
     fn create_bookmark_from_file(
         &self,
         file_data: &FileImportData,
-        settings: &crate::config::Settings,
         base_path_name: Option<&str>,
         embed: Option<bool>,
     ) -> ApplicationResult<Bookmark> {
-        use crate::domain::system_tag::SystemTag;
-
-        // Convert content type to system tag
-        let system_tag =
-            SystemTag::from_tag_value(&file_data.content_type).unwrap_or(SystemTag::Shell); // Default for unknown types
-
-        // Prepare tags (including system tag)
-        let mut all_tags = file_data.tags.clone();
-        all_tags.insert(system_tag.to_tag()?);
-        let embeddable = self.resolve_embeddable(&all_tags, embed);
-
-        // Store file content in URL column as required
+        let file_path = self.stored_file_path(&file_data.file_path, base_path_name)?;
         let mut bookmark = BookmarkBuilder::default()
             .id(None)
             .url(file_data.content.clone())
             .title(file_data.name.clone())
             .description(String::new())
-            .tags(all_tags)
+            .tags(HashSet::new())
             .access_count(0)
             .created_at(Some(chrono::Utc::now()))
             .updated_at(chrono::Utc::now())
             .embedding(None)
             .content_hash(None)
-            .embeddable(embeddable)
+            .embeddable(false)
             .file_path(None)
             .file_mtime(None)
             .file_hash(None)
             .build()
             .map_err(|e| ApplicationError::Other(format!("Failed to build bookmark: {}", e)))?;
-
-        // Set file metadata with base path handling
-        let file_path_str = if let Some(base_name) = base_path_name {
-            // User provided base path - store as relative path with base path variable
-            if let Some(base_value) = settings.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(settings, base_value);
-                let absolute_file_path = file_data.file_path.display().to_string();
-
-                // Since we resolved the scan paths, files should be under the base path
-                if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
-                    let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
-                    crate::config::create_file_path_with_base(base_name, relative_path)
-                } else {
-                    return Err(ApplicationError::Other(format!(
-                        "File {} is not under base path {} ({})",
-                        absolute_file_path, base_name, expanded_base
-                    )));
-                }
-            } else {
-                return Err(ApplicationError::Other(format!(
-                    "Base path '{}' not found in configuration",
-                    base_name
-                )));
-            }
-        } else {
-            // No base path specified - store absolute path
-            file_data.file_path.display().to_string()
-        };
-
-        bookmark.file_path = Some(file_path_str);
-        bookmark.file_mtime = Some(file_data.file_mtime as i32);
-        bookmark.file_hash = Some(file_data.file_hash.clone());
+        Self::apply_file_data(&mut bookmark, file_data, file_path)?;
+        bookmark.embeddable = self.resolve_embeddable(&bookmark.tags, embed);
 
         // Same hash as update_bookmark; only embeddable bookmarks carry one
         let embedding_content = bookmark.get_content_for_embedding();
         bookmark.content_hash = bookmark
             .embeddable
             .then(|| calc_content_hash(&embedding_content));
-
-        bookmark.embedding = None;
 
         self.repository.add(&mut bookmark)?;
 
@@ -1214,83 +1223,18 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         Ok(bookmark)
     }
 
-    /// Update existing bookmark from changed file data. Preserves system tags from existing
-    /// bookmark, recalculates content hash, and regenerates embeddings.
+    /// Update an existing bookmark from changed file data, through `update_bookmark`, which
+    /// embeds again only when the embedded text changed.
     fn update_bookmark_from_file(
         &self,
         existing: &Bookmark,
         file_data: &FileImportData,
-        settings: &crate::config::Settings,
         base_path_name: Option<&str>,
     ) -> ApplicationResult<Bookmark> {
         let mut updated = existing.clone();
-
-        // Update content and metadata (content goes in url column for file imports)
-        updated.url = file_data.content.clone();
-        updated.title = file_data.name.clone();
-
-        // Update file path with base path handling
-        let file_path_str = if let Some(base_name) = base_path_name {
-            // User provided base path - store as relative path with base path variable
-            if let Some(base_value) = settings.base_paths.get(base_name) {
-                let expanded_base = crate::config::resolve_file_path(settings, base_value);
-                let absolute_file_path = file_data.file_path.display().to_string();
-
-                // Since we resolved the scan paths, files should be under the base path
-                if let Some(relative_path) = absolute_file_path.strip_prefix(&expanded_base) {
-                    let relative_path = relative_path.strip_prefix('/').unwrap_or(relative_path);
-                    crate::config::create_file_path_with_base(base_name, relative_path)
-                } else {
-                    return Err(ApplicationError::Other(format!(
-                        "File {} is not under base path {} ({})",
-                        absolute_file_path, base_name, expanded_base
-                    )));
-                }
-            } else {
-                return Err(ApplicationError::Other(format!(
-                    "Base path '{}' not found in configuration",
-                    base_name
-                )));
-            }
-        } else {
-            // No base path specified - store absolute path
-            file_data.file_path.display().to_string()
-        };
-
-        updated.file_path = Some(file_path_str);
-        updated.file_mtime = Some(file_data.file_mtime as i32);
-        updated.file_hash = Some(file_data.file_hash.clone());
-
-        // Update tags (merge with existing, keeping system tags)
-        let mut new_tags = file_data.tags.clone();
-        // Preserve system tags from existing bookmark
-        for tag in &existing.tags {
-            if tag.value().starts_with('_') && tag.value().ends_with('_') {
-                new_tags.insert(tag.clone());
-            }
-        }
-        updated.tags = new_tags;
-        // The flag of an existing bookmark is sticky, except that "always" applies
-        updated.embeddable = self.resolve_embeddable(&updated.tags, Some(updated.embeddable));
-
-        // Same hash as update_bookmark (after tags are set); only embeddable bookmarks carry one
-        let embedding_content = updated.get_content_for_embedding();
-        updated.content_hash = updated
-            .embeddable
-            .then(|| calc_content_hash(&embedding_content));
-
-        updated.embedding = None;
-
-        self.repository.update(&updated)?;
-
-        // Regenerate embedding in vector repository
-        if updated.embeddable {
-            if let Some(id) = updated.id {
-                self.upsert_embedding_for_bookmark(id, &embedding_content)?;
-            }
-        }
-
-        Ok(updated)
+        let file_path = self.stored_file_path(&file_data.file_path, base_path_name)?;
+        Self::apply_file_data(&mut updated, file_data, file_path)?;
+        self.update_bookmark(updated, false)
     }
 
     /// Find orphaned bookmarks (file_path set but file no longer exists or not found in current scan)
@@ -1316,10 +1260,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         for bookmark in all_bookmarks {
             if let Some(file_path_str) = &bookmark.file_path {
                 // Handle base path variables and resolve to absolute path
-                let settings = crate::config::load_settings(None).map_err(|e| {
-                    ApplicationError::Other(format!("Failed to load settings: {}", e))
-                })?;
-                let resolved_path = crate::config::resolve_file_path(&settings, file_path_str);
+                let resolved_path =
+                    crate::config::resolve_file_path(&self.base_paths, file_path_str);
                 let path = Path::new(&resolved_path);
 
                 // Check if file still exists at the stored path
@@ -1383,17 +1325,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
             return Ok(true);
         }
 
-        // Check if content type changed (check system tags)
-        let existing_has_shell = existing.tags.iter().any(|tag| tag.value() == "_shell_");
-        let existing_has_md = existing.tags.iter().any(|tag| tag.value() == "_md_");
-        let file_is_shell = file_data.content_type == "_shell_";
-        let file_is_md = file_data.content_type == "_md_";
-
-        if (existing_has_shell != file_is_shell) || (existing_has_md != file_is_md) {
-            return Ok(true);
-        }
-
-        Ok(false)
+        // Check if the type the file declares changed
+        Ok(!existing.is_system_tag(Self::file_type(file_data)?))
     }
 }
 
@@ -1402,11 +1335,12 @@ mod tests {
     use super::*;
     use crate::domain::embedding_policy::EmbeddingMode;
     use crate::domain::error::{DomainError, DomainResult};
+    use crate::domain::system_tag::SystemTag;
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
     use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use std::sync::Mutex;
 
     /// Embedder returning a fixed vector, so that tests can see whether embedding happened.
@@ -2222,29 +2156,6 @@ mod tests {
     }
 
     #[test]
-    fn given_non_embeddable_bookmark_when_retagged_to_always_type_then_gets_embedded() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let (service, vectors) = create_service_with_recorded_vectors();
-        let id = service
-            .add_bookmark("retag", Some("Retag"), None, None, false, Some(false), None)
-            .unwrap()
-            .id
-            .unwrap();
-        assert!(!vectors.has_vector(id));
-
-        // Act
-        let updated = service
-            .add_tags_to_bookmark(id, &tag_set(&["_mem_"]))
-            .unwrap();
-
-        // Assert
-        assert!(updated.embeddable);
-        assert!(vectors.has_vector(id));
-    }
-
-    #[test]
     fn given_non_embeddable_bookmark_when_tags_replaced_with_always_type_then_gets_embedded() {
         // Arrange
         let _env = init_test_env();
@@ -2388,6 +2299,336 @@ mod tests {
         assert!(memory.content_hash.is_some());
         assert!(vectors.has_vector(memory.id.unwrap()));
         assert!(!stored("imported-snippet").embeddable);
+    }
+
+    #[test]
+    fn given_injected_base_path_when_importing_files_then_resolves_it_without_reading_config() {
+        use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
+
+        // Arrange: the base path exists only in the settings handed to the service, as with
+        // `bkmr --config alt.toml`; the default config file does not define it.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = Arc::new(setup_test_db());
+        let base_dir = tempfile::tempdir().unwrap();
+        let scripts = base_dir.path().join("scripts");
+        std::fs::create_dir_all(&scripts).unwrap();
+        std::fs::write(
+            scripts.join("hello.sh"),
+            "#!/bin/bash\n# name: injected-base\necho hi\n",
+        )
+        .unwrap();
+        let base_paths = HashMap::from([(
+            "BKMR_INJECTED_BASE".to_string(),
+            base_dir
+                .path()
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )]);
+        let service = BookmarkServiceImpl::new(
+            repository.clone(),
+            Arc::new(DummyEmbedding),
+            Arc::new(RecordingVectorRepository::default()),
+            Arc::new(FileImportRepository::new()),
+        )
+        .with_base_paths(base_paths);
+
+        // Act: --delete-missing also resolves stored paths through the base path
+        let (added, _, deleted) = service
+            .import_files(
+                &["scripts".to_string()],
+                false,
+                true,
+                false,
+                false,
+                Some("BKMR_INJECTED_BASE"),
+                Some(false),
+            )
+            .unwrap()
+            .counts();
+
+        // Assert
+        assert_eq!((added, deleted), (1, 0));
+        let stored = repository
+            .get_all()
+            .unwrap()
+            .into_iter()
+            .find(|b| b.title == "injected-base")
+            .expect("file imported");
+        assert_eq!(
+            stored.file_path.as_deref(),
+            Some("$BKMR_INJECTED_BASE/scripts/hello.sh")
+        );
+    }
+
+    #[test]
+    fn given_row_with_hash_but_no_vector_when_embed_bookmark_then_stores_vector_and_keeps_row() {
+        // Arrange: add_bookmark stores the hash before it embeds, so a failed first embedding
+        // leaves exactly this state behind
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(EmbeddingPolicy::default());
+        let added = service
+            .add_bookmark(
+                "echo hashed",
+                Some("hashed"),
+                None,
+                None,
+                false,
+                Some(true),
+                None,
+            )
+            .unwrap();
+        let id = added.id.unwrap();
+        vectors.delete_embedding(id).unwrap();
+        let before = service.get_bookmark(id).unwrap().unwrap();
+        assert!(before.content_hash.is_some() && !vectors.has_vector(id));
+
+        // Act
+        let stored = service.embed_bookmark(id).unwrap();
+
+        // Assert
+        assert!(stored);
+        assert!(vectors.has_vector(id));
+        let after = service.get_bookmark(id).unwrap().unwrap();
+        assert_eq!(
+            after.updated_at, before.updated_at,
+            "the row must not look edited"
+        );
+    }
+
+    #[test]
+    fn given_non_embeddable_bookmark_when_embed_bookmark_then_stores_nothing() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, vectors) = create_service_with_policy(EmbeddingPolicy::default());
+        let added = service
+            .add_bookmark(
+                "echo off",
+                Some("off"),
+                None,
+                None,
+                false,
+                Some(false),
+                None,
+            )
+            .unwrap();
+        let id = added.id.unwrap();
+
+        let stored = service.embed_bookmark(id).unwrap();
+
+        assert!(!stored);
+        assert!(!vectors.has_vector(id));
+    }
+
+    /// A service that imports files, with `BKMR_FILES` as a configured base path for `base`
+    fn file_service(
+        base: &Path,
+    ) -> (
+        BookmarkServiceImpl<SqliteBookmarkRepository>,
+        Arc<SqliteBookmarkRepository>,
+    ) {
+        use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
+        let repository = Arc::new(setup_test_db());
+        let service = BookmarkServiceImpl::new(
+            repository.clone(),
+            Arc::new(StubEmbedder),
+            Arc::new(RecordingVectorRepository::default()),
+            Arc::new(FileImportRepository::new()),
+        )
+        .with_base_paths(HashMap::from([(
+            "BKMR_FILES".to_string(),
+            base.to_string_lossy().to_string(),
+        )]));
+        (service, repository)
+    }
+
+    fn stored_by_title(repository: &SqliteBookmarkRepository, title: &str) -> Bookmark {
+        repository
+            .get_all()
+            .unwrap()
+            .into_iter()
+            .find(|b| b.title == title)
+            .expect("bookmark stored")
+    }
+
+    fn import_base_dir(service: &impl BookmarkService, update: bool) -> ApplicationResult<()> {
+        service
+            .import_files(
+                &[".".to_string()],
+                update,
+                false,
+                false,
+                false,
+                Some("BKMR_FILES"),
+                Some(false),
+            )
+            .map(|_| ())
+    }
+
+    #[test]
+    fn given_base_path_bookmark_when_sync_from_file_then_keeps_portable_path() {
+        // Arrange: imported as $BKMR_FILES/deploy.sh, then edited in place (bkmr edit)
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("deploy.sh");
+        std::fs::write(&file, "#!/bin/bash\n# name: sync-keeps-path\necho one\n").unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        let id = stored_by_title(&repository, "sync-keeps-path").id.unwrap();
+        std::fs::write(&file, "#!/bin/bash\n# name: sync-keeps-path\necho two\n").unwrap();
+
+        // Act
+        let synced = service.sync_from_file(id).unwrap();
+
+        // Assert
+        assert_eq!(synced.file_path.as_deref(), Some("$BKMR_FILES/deploy.sh"));
+        assert!(synced.url.contains("echo two"), "got: {}", synced.url);
+        let stored = stored_by_title(&repository, "sync-keeps-path");
+        assert_eq!(stored.file_path.as_deref(), Some("$BKMR_FILES/deploy.sh"));
+    }
+
+    #[test]
+    fn given_frontmatter_type_changed_when_import_update_then_type_follows_file() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("tool.sh");
+        std::fs::write(&file, "# name: type-on-update\n# type: _shell_\necho a\n").unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        std::fs::write(&file, "# name: type-on-update\n# type: _snip_\necho a\n").unwrap();
+
+        // Act
+        import_base_dir(&service, true).unwrap();
+
+        // Assert
+        let stored = stored_by_title(&repository, "type-on-update");
+        assert!(stored.is_snippet(), "tags: {:?}", stored.tags);
+        assert!(
+            !stored.is_system_tag(SystemTag::Shell),
+            "tags: {:?}",
+            stored.tags
+        );
+    }
+
+    #[test]
+    fn given_frontmatter_type_changed_when_sync_from_file_then_type_follows_file() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("tool.sh");
+        std::fs::write(&file, "# name: type-on-sync\n# type: _shell_\necho a\n").unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        let id = stored_by_title(&repository, "type-on-sync").id.unwrap();
+        std::fs::write(&file, "# name: type-on-sync\n# type: _snip_\necho a\n").unwrap();
+
+        // Act
+        let synced = service.sync_from_file(id).unwrap();
+
+        // Assert
+        assert!(synced.is_snippet(), "tags: {:?}", synced.tags);
+        assert!(
+            !synced.is_system_tag(SystemTag::Shell),
+            "tags: {:?}",
+            synced.tags
+        );
+    }
+
+    #[test]
+    fn given_unknown_frontmatter_type_when_import_then_fails_naming_the_file() {
+        // Arrange: `snippet` is a typo for `_snip_`
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        std::fs::write(
+            base_path.join("typo.sh"),
+            "# name: unknown-type-import\n# type: snippet\necho a\n",
+        )
+        .unwrap();
+        let (service, repository) = file_service(&base_path);
+
+        // Act
+        let result = import_base_dir(&service, false);
+
+        // Assert
+        let err = result.expect_err("an unknown type must fail").to_string();
+        assert!(err.contains("typo.sh"), "got: {err}");
+        assert!(err.contains("snippet"), "got: {err}");
+        assert!(repository
+            .get_all()
+            .unwrap()
+            .iter()
+            .all(|b| b.title != "unknown-type-import"));
+    }
+
+    #[test]
+    fn given_unknown_frontmatter_type_when_sync_from_file_then_fails_and_keeps_bookmark() {
+        // Arrange
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let base = tempfile::tempdir().unwrap();
+        let base_path = base.path().canonicalize().unwrap();
+        let file = base_path.join("tool.sh");
+        std::fs::write(
+            &file,
+            "# name: unknown-type-sync\n# type: _shell_\necho a\n",
+        )
+        .unwrap();
+        let (service, repository) = file_service(&base_path);
+        import_base_dir(&service, false).unwrap();
+        let before = stored_by_title(&repository, "unknown-type-sync");
+        std::fs::write(
+            &file,
+            "# name: unknown-type-sync\n# type: snippet\necho b\n",
+        )
+        .unwrap();
+
+        // Act
+        let result = service.sync_from_file(before.id.unwrap());
+
+        // Assert
+        let err = result.expect_err("an unknown type must fail").to_string();
+        assert!(err.contains("tool.sh"), "got: {err}");
+        let after = stored_by_title(&repository, "unknown-type-sync");
+        assert_eq!(after.url, before.url);
+        assert_eq!(after.tags, before.tags);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn given_base_path_through_symlink_when_import_then_stores_base_relative_path() {
+        // Arrange: the configured base path is a symlink, as /var is on macOS. The scanner
+        // canonicalizes file paths, so the base must be compared canonicalized too.
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let real = tempfile::tempdir().unwrap();
+        let links = tempfile::tempdir().unwrap();
+        let link = links.path().join("scripts-link");
+        std::os::unix::fs::symlink(real.path(), &link).unwrap();
+        std::fs::write(
+            real.path().join("hello.sh"),
+            "# name: symlinked-base\necho hi\n",
+        )
+        .unwrap();
+        let (service, repository) = file_service(&link);
+
+        // Act
+        import_base_dir(&service, false).unwrap();
+
+        // Assert
+        let stored = stored_by_title(&repository, "symlinked-base");
+        assert_eq!(stored.file_path.as_deref(), Some("$BKMR_FILES/hello.sh"));
     }
 
     #[test]
@@ -2703,36 +2944,6 @@ mod tests {
     }
 
     #[test]
-    fn given_valid_url_when_get_bookmark_by_url_then_returns_correct_bookmark() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        service
-            .add_bookmark(
-                "https://get-by-url.example.com",
-                Some("Get By Url"),
-                None,
-                None,
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap();
-
-        // Act
-        let result = service
-            .get_bookmark_by_url("https://get-by-url.example.com")
-            .unwrap();
-
-        // Assert
-        assert!(result.is_some(), "Should find bookmark with URL");
-        let bookmark = result.unwrap();
-        assert_eq!(bookmark.url, "https://get-by-url.example.com");
-        assert_eq!(bookmark.title, "Get By Url");
-    }
-
-    #[test]
     fn given_new_bookmark_when_add_bookmark_then_creates_and_returns_bookmark() {
         // Arrange
         let _env = init_test_env();
@@ -2925,88 +3136,6 @@ mod tests {
     //         _ => panic!("Expected a BookmarkNotFound error"),
     //     }
     // }
-
-    #[test]
-    fn given_existing_bookmark_when_add_tags_then_adds_tags_correctly() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        let mut original_tags = HashSet::new();
-        original_tags.insert(Tag::new("original").unwrap());
-        let id = service
-            .add_bookmark(
-                "https://add-tags.example.com",
-                Some("Add Tags"),
-                None,
-                Some(&original_tags),
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap()
-            .id
-            .unwrap();
-        let mut tags = HashSet::new();
-        tags.insert(Tag::new("newtag").unwrap());
-
-        // Get original tags
-        let original = service.get_bookmark(id).unwrap().unwrap();
-        let original_tag_count = original.tags.len();
-
-        // Act
-        let updated = service.add_tags_to_bookmark(id, &tags).unwrap();
-
-        // Assert
-        assert!(updated.tags.contains(&Tag::new("newtag").unwrap()));
-        assert_eq!(updated.tags.len(), original_tag_count + 1);
-
-        // Verify changes were persisted
-        let retrieved = service.get_bookmark(id).unwrap().unwrap();
-        assert!(retrieved.tags.contains(&Tag::new("newtag").unwrap()));
-    }
-
-    #[test]
-    fn given_existing_bookmark_when_remove_tags_then_removes_tags_correctly() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        let mut original_tags = HashSet::new();
-        original_tags.insert(Tag::new("keep").unwrap());
-        original_tags.insert(Tag::new("remove").unwrap());
-        let id = service
-            .add_bookmark(
-                "https://remove-tags.example.com",
-                Some("Remove Tags"),
-                None,
-                Some(&original_tags),
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap()
-            .id
-            .unwrap();
-        let tag_to_remove = Tag::new("remove").unwrap();
-
-        let mut tags_to_remove = HashSet::new();
-        tags_to_remove.insert(tag_to_remove.clone());
-
-        // Act
-        let updated = service
-            .remove_tags_from_bookmark(id, &tags_to_remove)
-            .unwrap();
-
-        // Assert
-        assert!(!updated.tags.contains(&tag_to_remove));
-        assert!(updated.tags.contains(&Tag::new("keep").unwrap()));
-        assert_eq!(updated.tags.len(), 1);
-
-        // Verify changes were persisted
-        let retrieved = service.get_bookmark(id).unwrap().unwrap();
-        assert!(!retrieved.tags.contains(&tag_to_remove));
-    }
 
     #[test]
     fn given_existing_bookmark_when_replace_tags_then_replaces_all_tags() {
@@ -3229,43 +3358,6 @@ mod tests {
     //     let all_tag_results = service.search_bookmarks_by_all_tags(&tags).unwrap();
     //     assert!(results.len() >= all_tag_results.len());
     // }
-
-    #[test]
-    fn given_text_query_when_search_by_text_then_returns_matching_bookmarks() {
-        // Arrange
-        let _env = init_test_env();
-        let _guard = EnvGuard::new();
-        let service = create_test_service();
-        service
-            .add_bookmark(
-                "https://www.google.com",
-                Some("Google"),
-                None,
-                None,
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap();
-        service
-            .add_bookmark(
-                "https://www.rust-lang.org",
-                Some("Rust"),
-                None,
-                None,
-                false,
-                Some(true),
-                None,
-            )
-            .unwrap();
-
-        // Act
-        let results = service.search_bookmarks_by_text("Google").unwrap();
-
-        // Assert
-        assert_eq!(results.len(), 1, "Only the Google bookmark matches");
-        assert_eq!(results[0].title, "Google");
-    }
 
     #[test]
     fn given_test_database_when_get_all_bookmarks_then_returns_all_bookmarks() {

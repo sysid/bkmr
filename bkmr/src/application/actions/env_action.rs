@@ -65,14 +65,14 @@ mod tests {
     use crate::application::InterpolationServiceImpl;
     use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
-        MiniJinjaEngine, SafeShellExecutor,
+        MiniJinjaEngine, SystemShellExecutor,
     };
     use std::collections::HashSet;
 
     #[test]
     fn given_env_bookmark_when_execute_then_prints_content() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = EnvAction::new(interpolation_service);
@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn given_env_with_template_when_execute_then_interpolates_and_prints() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = EnvAction::new(interpolation_service);

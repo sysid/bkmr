@@ -40,6 +40,11 @@ pub fn is_file_path(content: &str) -> bool {
     // First trim any whitespace
     let trimmed = content.trim();
 
+    // A path is one line; inline markdown can start with `$` (math) or `/` and still be text
+    if trimmed.contains('\n') {
+        return false;
+    }
+
     // Exclude obvious URLs
     if trimmed.starts_with("http://")
         || trimmed.starts_with("https://")
@@ -169,6 +174,14 @@ mod tests {
         assert!(!is_file_path("https://example.com"));
         assert!(!is_file_path(" "));
         assert!(!is_file_path(""));
+    }
+
+    #[test]
+    fn given_multi_line_markdown_starting_like_a_path_when_is_file_path_then_false() {
+        // Inline markdown stored in a bookmark: math, or notes that open with a path
+        assert!(!is_file_path("$E = mc^2$ is famous\n\nMore text"));
+        assert!(!is_file_path("/etc/hosts maps names\nto addresses"));
+        assert!(!is_file_path("~/notes:\n- one\n- two"));
     }
 
     #[test]

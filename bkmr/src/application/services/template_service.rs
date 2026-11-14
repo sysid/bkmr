@@ -7,7 +7,6 @@ use crate::domain::system_tag::SystemTag;
 use std::fmt::Debug;
 use std::fs::{self};
 use std::io::Write;
-use std::process::Command;
 use tempfile::NamedTempFile;
 use tracing::{debug, instrument, warn};
 
@@ -31,8 +30,9 @@ impl Default for TemplateServiceImpl {
 
 impl TemplateServiceImpl {
     pub fn new() -> Self {
-        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-        Self { editor }
+        Self {
+            editor: crate::util::editor::configured_editor(),
+        }
     }
 
     pub fn with_editor(editor: String) -> Self {
@@ -74,18 +74,10 @@ impl TemplateService for TemplateServiceImpl {
         let path = temp_file.path().to_path_buf();
         let modified_before = fs::metadata(&path)?.modified()?;
 
-        // Open the editor
-        let status = Command::new(&self.editor)
-            .arg(temp_file.path())
-            .status()
-            .app_context("Failed to open editor")?;
-
-        if !status.success() {
-            warn!(editor = %self.editor, exit_code = ?status.code(), "Editor exited with error");
-            return Err(ApplicationError::Other(
-                "Editor exited with error".to_string(),
-            ));
-        }
+        crate::util::editor::edit_file(&self.editor, temp_file.path()).map_err(|e| {
+            warn!(editor = %self.editor, "{}", e);
+            ApplicationError::Other(e)
+        })?;
 
         // Get modification time after editing
         let modified_after = fs::metadata(&path)?.modified()?;

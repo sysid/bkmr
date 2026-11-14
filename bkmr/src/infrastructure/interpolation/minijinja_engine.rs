@@ -7,8 +7,11 @@ use crate::domain::interpolation::{
 use chrono::{DateTime, Utc};
 use minijinja::{Environment, Error, ErrorKind, Value};
 use std::collections::HashMap;
-use std::process::Command;
+use std::io::Read;
+use std::process::{Command, Stdio};
 use std::sync::Arc;
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 use tracing::{debug, info};
 
 // #[derive(Debug)]
@@ -141,59 +144,95 @@ impl InterpolationEngine for MiniJinjaEngine {
     }
 }
 
-// Safe shell executor implementation
-#[derive(Clone, Debug)]
-pub struct SafeShellExecutor;
+/// How long one `shell` filter command may run. Templates render while the fuzzy finder builds
+/// its list and on every LSP completion, so one slow command must not hang them.
+const SHELL_TIMEOUT: Duration = Duration::from_secs(5);
 
-impl Default for SafeShellExecutor {
+/// Runs the `shell` filter's command with `sh -c`. Templates are trusted code, like a shell
+/// script you stored: there is no filter on what a command may do. A substring blocklist cannot
+/// stop a determined command (a newline got past it) and rejected ordinary shell syntax.
+#[derive(Clone, Debug)]
+pub struct SystemShellExecutor {
+    timeout: Duration,
+}
+
+impl Default for SystemShellExecutor {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SafeShellExecutor {
+impl SystemShellExecutor {
     pub fn new() -> Self {
-        Self
+        Self::with_timeout(SHELL_TIMEOUT)
     }
 
-    fn is_command_safe(&self, cmd: &str) -> bool {
-        let dangerous_patterns = [
-            ";", "|", "&", ">", "<", "`", "$", "(", ")", "{", "}", "[", "]", "sudo", "rm", "mv",
-            "cp", "dd", "mkfs", "fork", "kill",
-        ];
-
-        !dangerous_patterns
-            .iter()
-            .any(|pattern| cmd.contains(pattern))
+    pub fn with_timeout(timeout: Duration) -> Self {
+        Self { timeout }
     }
 }
 
-impl ShellCommandExecutor for SafeShellExecutor {
+/// Reads a child's pipe to the end on its own thread, so a full pipe cannot block the child.
+fn read_to_end_in_background<R: Read + Send + 'static>(pipe: Option<R>) -> JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut buffer = Vec::new();
+        if let Some(mut pipe) = pipe {
+            let _ = pipe.read_to_end(&mut buffer);
+        }
+        buffer
+    })
+}
+
+impl ShellCommandExecutor for SystemShellExecutor {
     fn execute(&self, cmd: &str) -> Result<String, InterpolationError> {
         info!("Executing shell command: {}", cmd);
 
-        // Validate command safety in safe shell mode
-        if !self.is_command_safe(cmd) {
-            return Err(InterpolationError::Shell(
-                "Command contains forbidden patterns for safe execution".to_string(),
-            ));
-        }
-
-        let output = Command::new("sh")
+        let mut child = Command::new("sh")
             .arg("-c")
             .arg(cmd)
-            .output()
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
             .map_err(|e| InterpolationError::Shell(format!("Failed to execute command: {}", e)))?;
+        let stdout = read_to_end_in_background(child.stdout.take());
+        let stderr = read_to_end_in_background(child.stderr.take());
 
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
+        // ponytail: polls every 10 ms and kills only `sh`. A grandchild that outlives it keeps
+        // the pipes open, so the readers are left behind rather than joined; they end with the
+        // process. Killing the process group needs `setsid` (libc or command-group).
+        let deadline = Instant::now() + self.timeout;
+        let status = loop {
+            match child.try_wait() {
+                Ok(Some(status)) => break status,
+                Ok(None) if Instant::now() >= deadline => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(InterpolationError::Shell(format!(
+                        "Command timed out after {} s: {}",
+                        self.timeout.as_secs_f32(),
+                        cmd
+                    )));
+                }
+                Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+                Err(e) => {
+                    return Err(InterpolationError::Shell(format!(
+                        "Failed to wait for command: {}",
+                        e
+                    )))
+                }
+            }
+        };
+
+        let stdout = stdout.join().unwrap_or_default();
+        let stderr = stderr.join().unwrap_or_default();
+        if !status.success() {
             return Err(InterpolationError::Shell(format!(
                 "Command failed: {}",
-                error
+                String::from_utf8_lossy(&stderr)
             )));
         }
 
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        Ok(String::from_utf8_lossy(&stdout).trim().to_string())
     }
 
     fn arc_clone(&self) -> Arc<dyn ShellCommandExecutor> {
@@ -241,4 +280,57 @@ fn add_days(value: Value, args: &[Value]) -> Result<Value, Error> {
     let new_date = date + chrono::Duration::days(days);
 
     Ok(Value::from(new_date.to_rfc3339()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn given_command_list_with_variables_when_execute_then_runs_all_of_it() {
+        // Templates are trusted code: shell syntax such as `;`, `$` and `$(( ))` is allowed
+        let executor = SystemShellExecutor::new();
+
+        let output = executor.execute("echo one; echo \"$((1 + 1))\"").unwrap();
+
+        assert_eq!(output, "one\n2");
+    }
+
+    #[test]
+    fn given_documented_fallback_command_when_execute_then_returns_fallback() {
+        // The example from the wiki's Template-Interpolation page
+        let executor = SystemShellExecutor::new();
+
+        let output = executor
+            .execute("no-such-command-bkmr 2>/dev/null || echo 'unknown'")
+            .unwrap();
+
+        assert_eq!(output, "unknown");
+    }
+
+    #[test]
+    fn given_failing_command_when_execute_then_returns_error() {
+        let executor = SystemShellExecutor::new();
+
+        let result = executor.execute("echo broken >&2; exit 3");
+
+        let err = result
+            .expect_err("a failing command is an error")
+            .to_string();
+        assert!(err.contains("broken"), "got: {err}");
+    }
+
+    #[test]
+    fn given_command_slower_than_timeout_when_execute_then_stops_it_with_error() {
+        // A slow command must not hang the fuzzy finder, the LSP or an action
+        let executor = SystemShellExecutor::with_timeout(Duration::from_millis(200));
+        let started = Instant::now();
+
+        let result = executor.execute("sleep 5");
+
+        let err = result.expect_err("a slow command is an error").to_string();
+        assert!(err.contains("timed out"), "got: {err}");
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
 }

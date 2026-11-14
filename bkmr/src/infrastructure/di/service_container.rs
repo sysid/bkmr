@@ -1,6 +1,5 @@
 use crate::application::actions::{
-    DefaultAction, EnvAction, MarkdownAction, MemoryAction, ShellAction, SnippetAction, TextAction,
-    UriAction,
+    EnvAction, MarkdownAction, MemoryAction, ShellAction, SnippetAction, TextAction, UriAction,
 };
 use crate::application::error::ApplicationResult;
 use crate::application::services::action_service::{ActionService, ActionServiceImpl};
@@ -19,14 +18,15 @@ use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::embeddings::FastEmbedEmbedding;
-use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+use crate::infrastructure::interpolation::minijinja_engine::{
+    MiniJinjaEngine, SystemShellExecutor,
+};
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crate::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
-use crossterm::style::Stylize;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 /// Production service container - single source of truth for service creation
 pub struct ServiceContainer {
@@ -65,7 +65,8 @@ impl ServiceContainer {
                 vector_repository.clone(),
                 Arc::new(FileImportRepository::new()),
             )
-            .with_embedding_policy(config.embeddings.policy),
+            .with_embedding_policy(config.embeddings.policy)
+            .with_base_paths(config.base_paths.clone()),
         );
 
         let tag_service = Arc::new(TagServiceImpl::new(bookmark_repository.clone()));
@@ -74,8 +75,6 @@ impl ServiceContainer {
             &bookmark_repository,
             &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
-            &embedder,
-            &vector_repository,
             config,
         )?;
 
@@ -94,20 +93,13 @@ impl ServiceContainer {
     }
 
     fn create_repository(db_url: &str) -> ApplicationResult<Arc<SqliteBookmarkRepository>> {
-        // Check if the database file exists before trying to create the repository
+        // Checked before opening: SQLite would create an empty database instead. The caller
+        // reports the error; main prints it and exits.
         if !Path::new(db_url).exists() {
-            error!(db_url = %db_url, "Database not found");
-            eprintln!(
-                "{}",
-                format!("Error: Database not found at '{}'", db_url).red()
+            debug!(db_url = %db_url, "Database not found");
+            return Err(
+                crate::application::error::ApplicationError::DatabaseNotFound(db_url.to_string()),
             );
-            eprintln!("The configured database does not exist.");
-            eprintln!("");
-            eprintln!("You can either:");
-            eprintln!("  1. Create the database using 'bkmr create-db {}'", db_url);
-            eprintln!("  2. Set BKMR_DB_URL environment variable to point to an existing database");
-            eprintln!("  3. Update the db_url in your config file (~/.config/bkmr/config.toml)");
-            std::process::exit(crate::exitcode::FAILURE);
         }
 
         // Create the repository, runs all migrations
@@ -157,7 +149,7 @@ impl ServiceContainer {
     }
 
     fn create_interpolation_service() -> Arc<dyn InterpolationService> {
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         Arc::new(InterpolationServiceImpl::new(interpolation_engine))
     }
@@ -170,18 +162,10 @@ impl ServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
-        embedder: &Arc<dyn Embedder>,
-        vector_repository: &Arc<dyn VectorRepository>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionService>> {
-        let resolver = Self::create_action_resolver(
-            repository,
-            interpolation_service,
-            clipboard_service,
-            embedder,
-            vector_repository,
-            config,
-        )?;
+        let resolver =
+            Self::create_action_resolver(interpolation_service, clipboard_service, config)?;
         Ok(Arc::new(ActionServiceImpl::new(
             resolver,
             repository.clone(),
@@ -189,11 +173,8 @@ impl ServiceContainer {
     }
 
     fn create_action_resolver(
-        repository: &Arc<SqliteBookmarkRepository>,
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
-        embedder: &Arc<dyn Embedder>,
-        vector_repository: &Arc<dyn VectorRepository>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionResolver>> {
         // Create all actions with explicit dependencies
@@ -215,20 +196,12 @@ impl ServiceContainer {
             config.shell_opts.interactive,
         ));
 
-        let markdown_action: Box<dyn BookmarkAction> =
-            Box::new(MarkdownAction::new_with_repository(
-                repository.clone(),
-                vector_repository.clone(),
-                embedder.clone(),
-            ));
+        let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new());
 
         let env_action: Box<dyn BookmarkAction> =
             Box::new(EnvAction::new(interpolation_service.clone()));
 
         let memory_action: Box<dyn BookmarkAction> = Box::new(MemoryAction::new());
-
-        let default_action: Box<dyn BookmarkAction> =
-            Box::new(DefaultAction::new(interpolation_service.clone()));
 
         Ok(Arc::new(SystemTagActionResolver::new(
             uri_action,
@@ -238,7 +211,6 @@ impl ServiceContainer {
             markdown_action,
             env_action,
             memory_action,
-            default_action,
         )))
     }
 }
@@ -256,5 +228,27 @@ impl std::fmt::Debug for ServiceContainer {
             .field("interpolation_service", &"Arc<dyn InterpolationService>")
             .field("template_service", &"Arc<dyn TemplateService>")
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::error::ApplicationError;
+
+    #[test]
+    fn given_missing_database_when_creating_repository_then_returns_error_instead_of_exiting() {
+        // A library caller (the LSP, a test) must get a Result it can handle
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing.db");
+
+        let result = ServiceContainer::create_repository(&missing.to_string_lossy());
+
+        match result {
+            Err(ApplicationError::DatabaseNotFound(path)) => {
+                assert_eq!(path, missing.to_string_lossy())
+            }
+            other => panic!("expected DatabaseNotFound, got {:?}", other.map(|_| ())),
+        }
     }
 }

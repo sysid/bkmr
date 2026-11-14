@@ -45,11 +45,9 @@ impl FzfBookmarkItem {
         action_description: &str,
         settings: &crate::config::Settings,
     ) -> Self {
-        let display_text =
-            create_bookmark_display_text(bookmark, max_id_width, action_description, settings);
+        let (display_text, color_segments) =
+            classic_display(bookmark, max_id_width, action_description, settings);
         let preview_text = create_bookmark_preview_text(bookmark, action_description);
-        let color_segments =
-            compute_color_segments(&display_text, bookmark, max_id_width, &settings.fzf_opts);
 
         Self {
             bookmark: bookmark.clone(),
@@ -123,7 +121,7 @@ impl SkimItem for FzfBookmarkItem {
         // the cleared preview is actually painted (unlike preview_fn which doesn't
         // trigger a re-render).
         let query = context.query;
-        if !query.is_empty() && !is_fuzzy_subsequence(query, &self.display_text) {
+        if !query.is_empty() && !query_may_match(query, &self.display_text) {
             return ItemPreview::AnsiText(String::new());
         }
         ItemPreview::AnsiText(self.preview_text.clone())
@@ -138,6 +136,13 @@ impl SkimItem for SemanticSearchResult {
     fn text(&self) -> Cow<'_, str> {
         Cow::Owned(self.display())
     }
+}
+
+/// Whether skim could match `query` against `text`. Only a plain fuzzy query can be checked
+/// here: skim matches space-separated terms in any order and reads `!`, `^`, `$`, `'` and `|`
+/// as operators, so such a query may match even when it is no subsequence.
+fn query_may_match(query: &str, text: &str) -> bool {
+    query.contains([' ', '!', '^', '$', '\'', '|']) || is_fuzzy_subsequence(query, text)
 }
 
 /// Check if `query` is a case-insensitive subsequence of `text`.
@@ -157,118 +162,67 @@ fn is_fuzzy_subsequence(query: &str, text: &str) -> bool {
     true
 }
 
-/// Compute color segments sorted by position for the classic display style
-fn compute_color_segments(
-    text: &str,
-    bookmark: &Bookmark,
-    max_id_width: usize,
-    fzf_opts: &crate::config::FzfOpts,
-) -> Vec<(usize, usize, Color)> {
-    let mut segments = Vec::new();
-    let padding = max_id_width + 2; // "ID: "
-    let title_end = padding + bookmark.title.len();
-
-    // Title in green
-    segments.push((padding, title_end, Color::Green));
-
-    // URL in yellow (within angle brackets)
-    if !fzf_opts.no_url {
-        if let (Some(start), Some(end)) = (text.find('<'), text.find('>')) {
-            segments.push((start, end + 1, Color::Yellow));
-        }
-    }
-
-    // Tags in magenta (within square brackets)
-    if fzf_opts.show_tags && !bookmark.tags.is_empty() {
-        if let (Some(start), Some(end)) = (text.find('['), text.find(']')) {
-            segments.push((start, end + 1, Color::Magenta));
-        }
-    }
-
-    // Action in cyan (within parentheses)
-    if fzf_opts.show_action {
-        if let (Some(start), Some(end)) = (text.rfind('('), text.rfind(')')) {
-            segments.push((start, end + 1, Color::Cyan));
-        }
-    }
-
-    // File info in dark grey
-    if fzf_opts.show_file_info {
-        if let Some(start) = text.find("📁") {
-            let end = text[start..]
-                .find('\n')
-                .map(|p| start + p)
-                .unwrap_or(text.len());
-            segments.push((start, end, Color::DarkGray));
-        }
-    }
-
-    // Sort by start position for correct span construction
-    segments.sort_by_key(|s| s.0);
-    segments
-}
-
-/// Create display text for a bookmark with proper formatting
-fn create_bookmark_display_text(
+/// The classic picker line and its coloured segments (start, end, color), in order. Each
+/// segment is recorded while its field is appended: searching the finished line for `<` or `[`
+/// finds them inside titles and content too.
+fn classic_display(
     bookmark: &Bookmark,
     max_id_width: usize,
     action_description: &str,
     settings: &crate::config::Settings,
-) -> String {
-    let id = bookmark.id.unwrap_or(0);
-    let title = &bookmark.title;
-    let url = &bookmark.url;
-    let binding = bookmark.formatted_tags();
-    let tags_str = binding.trim_matches(',');
-
+) -> (String, Vec<(usize, usize, Color)>) {
     let fzf_opts = &settings.fzf_opts;
-
-    let tags_display = if fzf_opts.show_tags {
-        format!(" [{}]", tags_str)
-    } else {
-        String::new()
+    let mut text = format!(
+        "{:>width$}: ",
+        bookmark.id.unwrap_or(0),
+        width = max_id_width
+    );
+    let mut segments = Vec::new();
+    let mut push = |text: &mut String, field: &str, color: Option<Color>| {
+        let start = text.len();
+        text.push_str(field);
+        if let Some(color) = color {
+            segments.push((start, text.len(), color));
+        }
     };
 
-    let action_display = if fzf_opts.show_action {
-        format!(" ({})", action_description)
-    } else {
-        String::new()
-    };
-
-    let mut text = if fzf_opts.no_url {
-        format!(
-            "{:>width$}: {}{}{}",
-            id,
-            title,
-            action_display,
-            tags_display,
-            width = max_id_width
-        )
-    } else {
-        format!(
-            "{:>width$}: {} <{}>{}{}",
-            id,
-            title,
-            url,
-            action_display,
-            tags_display,
-            width = max_id_width
-        )
-    };
-
+    push(&mut text, &bookmark.title, Some(Color::Green));
+    if !fzf_opts.no_url {
+        text.push(' ');
+        push(
+            &mut text,
+            &format!("<{}>", bookmark.url),
+            Some(Color::Yellow),
+        );
+    }
+    if fzf_opts.show_action {
+        text.push(' ');
+        push(
+            &mut text,
+            &format!("({})", action_description),
+            Some(Color::Cyan),
+        );
+    }
+    if fzf_opts.show_tags {
+        let tags = bookmark.formatted_tags();
+        let color = (!bookmark.tags.is_empty()).then_some(Color::Magenta);
+        text.push(' ');
+        push(&mut text, &format!("[{}]", tags.trim_matches(',')), color);
+    }
     if fzf_opts.show_file_info {
         if let (Some(file_path), Some(file_mtime)) = (&bookmark.file_path, bookmark.file_mtime) {
-            let padding = " ".repeat(max_id_width + 2);
-            let formatted_path = format_file_path(file_path, 120);
-            let formatted_time = format_mtime(file_mtime);
-            text.push_str(&format!(
-                "\n{}📁 {} ({})",
-                padding, formatted_path, formatted_time
-            ));
+            text.push('\n');
+            text.push_str(&" ".repeat(max_id_width + 2));
+            let file_info = format!(
+                "📁 {} ({})",
+                format_file_path(file_path, 120),
+                format_mtime(file_mtime)
+            );
+            push(&mut text, &file_info, Some(Color::DarkGray));
         }
     }
 
-    text
+    (text, segments)
 }
 
 /// Create preview text for a bookmark
@@ -499,7 +453,9 @@ pub fn fzf_process(
         return Ok(());
     }
 
-    println!();
+    // Separates the action's output from the picker on the terminal. On stderr, so that
+    // `x=$(bkmr search --fzf --stdout)` captures the content alone.
+    eprintln!();
 
     handle_final_key(
         output.final_key,
@@ -710,6 +666,62 @@ pub fn pick_restore_ids(items: Vec<RestorePickItem>) -> CliResult<Option<Vec<i32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn given_extended_skim_query_when_query_may_match_then_keeps_the_preview() {
+        // skim matches `bar foo` in any order, and `!x`, `^x`, `x$`, `'x`, `a | b` are operators
+        let text = "7: foo something bar";
+        for query in ["bar foo", "!zzz", "^7", "bar$", "'foo", "zzz | foo"] {
+            assert!(query_may_match(query, text), "{query:?}");
+        }
+    }
+
+    #[test]
+    fn given_plain_query_when_query_may_match_then_checks_subsequence() {
+        let text = "7: foo something bar";
+
+        assert!(query_may_match("fsb", text));
+        assert!(!query_may_match("zzz", text));
+    }
+
+    #[test]
+    fn given_title_and_content_with_brackets_when_classic_display_then_segments_cover_their_fields()
+    {
+        // Arrange: `>`, `<`, `[` and `(` in title and content once confused the segment search
+        let tags = ["shell", "tool"]
+            .iter()
+            .map(|t| crate::domain::tag::Tag::new(t).unwrap())
+            .collect();
+        let mut bookmark =
+            Bookmark::new("[ -f x ] && echo (a > b)", "a -> b Vec<T>", "", tags).unwrap();
+        bookmark.set_id(7);
+        let mut settings = crate::config::Settings::default();
+        settings.fzf_opts.show_tags = true;
+        settings.fzf_opts.show_action = true;
+        settings.fzf_opts.no_url = false;
+
+        // Act
+        let (text, segments) = classic_display(&bookmark, 2, "Copy", &settings);
+
+        // Assert
+        let coloured: Vec<(&str, Color)> = segments
+            .iter()
+            .map(|&(start, end, color)| (&text[start..end], color))
+            .collect();
+        assert_eq!(
+            coloured,
+            vec![
+                ("a -> b Vec<T>", Color::Green),
+                ("<[ -f x ] && echo (a > b)>", Color::Yellow),
+                ("(Copy)", Color::Cyan),
+                ("[shell,tool]", Color::Magenta),
+            ]
+        );
+        assert!(
+            segments.windows(2).all(|w| w[0].1 <= w[1].0),
+            "{segments:?}"
+        );
+    }
 
     #[test]
     fn given_items_when_receiver_drained_then_all_items_delivered() {
