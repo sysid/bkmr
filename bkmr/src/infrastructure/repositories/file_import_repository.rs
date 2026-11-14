@@ -249,6 +249,13 @@ impl ImportRepository for FileImportRepository {
         self.json_import_repository.import_json_bookmarks(path)
     }
 
+    fn read_backup(
+        &self,
+        path: &str,
+    ) -> DomainResult<Vec<crate::domain::repositories::import_repository::BackupEntry>> {
+        self.json_import_repository.read_backup(path)
+    }
+
     fn import_files(
         &self,
         paths: &[String],

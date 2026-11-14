@@ -3,13 +3,17 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
-use crate::application::services::bookmark_service::{BookmarkService, RestorePreview};
+use crate::application::services::bookmark_service::{
+    BackupRestoreItem, BackupRestoreState, BookmarkService, RestorePreview,
+};
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
 use crate::domain::embedding_policy::EmbeddingPolicy;
 use crate::domain::error_context::ApplicationErrorContext;
 use crate::domain::history::HistoryEntry;
-use crate::domain::repositories::import_repository::{FileImportData, ImportRepository};
+use crate::domain::repositories::import_repository::{
+    BackupEntry, FileImportData, ImportRepository,
+};
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
@@ -22,6 +26,21 @@ use crate::util::helper::calc_content_hash;
 use crate::util::validation::ValidationHelper;
 use std::path::Path;
 use tracing::{debug, info, instrument, warn};
+
+/// Names of the fields a backup restore brings back that differ, in a fixed order
+fn changed_fields(current: &Bookmark, restored: &Bookmark) -> Vec<&'static str> {
+    [
+        ("url", current.url != restored.url),
+        ("title", current.title != restored.title),
+        ("description", current.description != restored.description),
+        ("tags", current.tags != restored.tags),
+        ("opener", current.opener != restored.opener),
+        ("embeddable", current.embeddable != restored.embeddable),
+    ]
+    .into_iter()
+    .filter_map(|(name, differs)| differs.then_some(name))
+    .collect()
+}
 
 #[derive(Debug)]
 pub struct BookmarkServiceImpl<R: BookmarkRepository> {
@@ -101,6 +120,83 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         bookmark.file_mtime = entry.file_mtime;
         bookmark.file_hash = entry.file_hash.clone();
         Ok(bookmark)
+    }
+
+    /// What restoring one backup entry would do. The checks mirror `preview_restore`, so a
+    /// backup restore refuses what a history restore refuses.
+    fn plan_backup_entry(&self, entry: &BackupEntry) -> ApplicationResult<BackupRestoreState> {
+        let Some(id) = entry.id else {
+            return Ok(BackupRestoreState::NoId);
+        };
+        let current = self
+            .repository
+            .get_by_id(id)
+            .with_app_context(|| format!("loading bookmark {}", id))?;
+
+        if let Some(file_path) = current
+            .as_ref()
+            .and_then(|b| b.file_path.clone())
+            .or_else(|| entry.file_path.clone())
+        {
+            return Ok(BackupRestoreState::FileBacked { file_path });
+        }
+
+        let url_holder = self
+            .repository
+            .exists_by_url(&entry.url)
+            .app_context("checking if bookmark with URL already exists")?;
+        if url_holder != -1 && url_holder != id {
+            return Ok(BackupRestoreState::Conflict {
+                blocking_id: url_holder,
+            });
+        }
+
+        match current {
+            Some(current) => {
+                let mut restored = current.clone();
+                restored.url = entry.url.clone();
+                restored.title = entry.title.clone();
+                restored.description = entry.description.clone();
+                restored
+                    .set_tags(entry.tags.clone())
+                    .with_app_context(|| format!("setting tags of backup entry #{}", id))?;
+                restored.opener = entry.opener.clone();
+                // An export without the field keeps the current choice
+                restored.embeddable = self.resolve_embeddable(
+                    &restored.tags,
+                    Some(entry.embeddable.unwrap_or(current.embeddable)),
+                );
+
+                let fields = changed_fields(&current, &restored);
+                if fields.is_empty() {
+                    return Ok(BackupRestoreState::Unchanged);
+                }
+                Ok(BackupRestoreState::Changed {
+                    current: Box::new(current),
+                    restored: Box::new(restored),
+                    fields,
+                })
+            }
+            None => {
+                let mut restored = Bookmark::new(
+                    &entry.url,
+                    &entry.title,
+                    &entry.description,
+                    entry.tags.clone(),
+                )
+                .with_app_context(|| format!("creating bookmark from backup entry #{}", id))?;
+                restored.set_id(id);
+                restored.set_embeddable(self.resolve_embeddable(&restored.tags, entry.embeddable));
+                restored.opener = entry.opener.clone();
+                // Unlike history, the backup has the real creation time
+                if entry.created_at.is_some() {
+                    restored.created_at = entry.created_at;
+                }
+                Ok(BackupRestoreState::Deleted {
+                    restored: Box::new(restored),
+                })
+            }
+        }
     }
 
     /// Write a deleted bookmark again under its old ID. Embeds before writing, so that a failed
@@ -814,6 +910,52 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(processed_count)
     }
 
+    #[instrument(skip(self), level = "debug")]
+    fn plan_backup_restore(&self, path: &str) -> ApplicationResult<Vec<BackupRestoreItem>> {
+        let entries = self
+            .import_repository
+            .read_backup(path)
+            .with_app_context(|| format!("reading backup {}", path))?;
+
+        let mut seen = HashSet::new();
+        for id in entries.iter().filter_map(|entry| entry.id) {
+            if !seen.insert(id) {
+                return Err(ApplicationError::Validation(format!(
+                    "Backup {} lists bookmark ID {} more than once",
+                    path, id
+                )));
+            }
+        }
+
+        entries
+            .into_iter()
+            .map(|entry| {
+                let state = self.plan_backup_entry(&entry)?;
+                Ok(BackupRestoreItem {
+                    id: entry.id,
+                    title: entry.title,
+                    state,
+                })
+            })
+            .collect()
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn apply_backup_restore(&self, item: &BackupRestoreItem) -> ApplicationResult<Bookmark> {
+        match &item.state {
+            BackupRestoreState::Changed { restored, .. } => {
+                self.update_bookmark((**restored).clone(), false)
+            }
+            BackupRestoreState::Deleted { restored } => self.reinsert((**restored).clone()),
+            other => Err(ApplicationError::Validation(format!(
+                "Backup entry {} is not restorable: {:?}",
+                item.id
+                    .map_or_else(|| format!("'{}'", item.title), |id| format!("#{}", id)),
+                other
+            ))),
+        }
+    }
+
     /// Import files from directories with frontmatter parsing. Stores full content in url,
     /// tracks source file (file_path, file_mtime, file_hash) for smart editing. Generates
     /// embeddings via `Bookmark::get_content_for_embedding()` (type-aware dispatch).
@@ -1429,6 +1571,324 @@ mod tests {
                 None,
             )
             .unwrap()
+    }
+
+    fn add_snippet(
+        service: &BookmarkServiceImpl<SqliteBookmarkRepository>,
+        content: &str,
+        title: &str,
+    ) -> Bookmark {
+        service
+            .add_bookmark(
+                content,
+                Some(title),
+                None,
+                Some(&tag_set(&["_snip_", "demo"])),
+                false,
+                None,
+                None,
+            )
+            .unwrap()
+    }
+
+    /// Writes `bookmarks` the way `bkmr search --json` does, so plans read a real export
+    fn write_backup(bookmarks: &[Bookmark]) -> tempfile::NamedTempFile {
+        let views =
+            crate::infrastructure::json::JsonBookmarkView::from_domain_collection(bookmarks, None);
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        serde_json::to_writer(&mut file, &views).unwrap();
+        file
+    }
+
+    fn plan_item(items: &[BackupRestoreItem], id: i32) -> &BackupRestoreItem {
+        items
+            .iter()
+            .find(|item| item.id == Some(id))
+            .unwrap_or_else(|| panic!("plan has no entry for #{}", id))
+    }
+
+    #[test]
+    fn given_snippet_edited_after_backup_when_planning_then_it_is_changed_in_url_and_title_and_nothing_is_written(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let snippet = add_snippet(&service, "echo v1", "Greeting");
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet.clone()]);
+        let mut edited = snippet;
+        edited.url = "echo v2".to_string();
+        edited.title = "Greeting v2".to_string();
+        service.update_bookmark(edited, false).unwrap();
+
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        match &plan_item(&plan, id).state {
+            BackupRestoreState::Changed {
+                current,
+                restored,
+                fields,
+            } => {
+                assert_eq!(current.url, "echo v2");
+                assert_eq!(restored.url, "echo v1");
+                assert_eq!(restored.title, "Greeting");
+                assert_eq!(fields, &vec!["url", "title"]);
+            }
+            other => panic!("expected Changed, got {:?}", other),
+        }
+        assert_eq!(service.get_bookmark(id).unwrap().unwrap().url, "echo v2");
+    }
+
+    #[test]
+    fn given_changed_bookmark_when_applying_restore_then_backup_state_returns_under_the_same_id() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut snippet = add_snippet(&service, "echo v1", "Greeting");
+        snippet.opener = Some("vim {}".to_string());
+        let snippet = service.update_bookmark(snippet, false).unwrap();
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet.clone()]);
+        let mut edited = snippet;
+        edited.url = "echo v2".to_string();
+        edited.description = "edited".to_string();
+        edited.opener = None;
+        edited.set_tags(tag_set(&["_snip_", "other"])).unwrap();
+        service.update_bookmark(edited, false).unwrap();
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        service.apply_backup_restore(plan_item(&plan, id)).unwrap();
+
+        let restored = service.get_bookmark(id).unwrap().unwrap();
+        assert_eq!(restored.url, "echo v1");
+        assert_eq!(restored.description, "");
+        assert_eq!(restored.tags, tag_set(&["_snip_", "demo"]));
+        assert_eq!(restored.opener.as_deref(), Some("vim {}"));
+    }
+
+    #[test]
+    fn given_deleted_bookmark_when_restoring_from_backup_then_it_returns_under_its_old_id_with_its_creation_time(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut snippet = add_snippet(&service, "echo gone", "Gone");
+        let id = snippet.id.unwrap();
+        let created = chrono::DateTime::parse_from_rfc3339("2025-03-04T05:06:07+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        snippet.created_at = Some(created);
+        let backup = write_backup(&[snippet]);
+        service.delete_bookmark(id).unwrap();
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+        assert!(matches!(
+            plan_item(&plan, id).state,
+            BackupRestoreState::Deleted { .. }
+        ));
+
+        service.apply_backup_restore(plan_item(&plan, id)).unwrap();
+
+        let restored = service.get_bookmark(id).unwrap().unwrap();
+        assert_eq!(restored.url, "echo gone");
+        assert_eq!(restored.tags, tag_set(&["_snip_", "demo"]));
+        assert_eq!(restored.created_at, Some(created));
+    }
+
+    #[test]
+    fn given_bookmark_unchanged_since_backup_when_planning_then_it_is_unchanged_and_not_restorable()
+    {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let snippet = add_snippet(&service, "echo same", "Same");
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet]);
+
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        let item = plan_item(&plan, id);
+        assert!(matches!(item.state, BackupRestoreState::Unchanged));
+        assert!(!item.is_restorable());
+    }
+
+    #[test]
+    fn given_bookmark_added_after_backup_when_planning_then_the_plan_does_not_mention_it() {
+        // Restore never deletes: what the backup does not know stays as it is
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let old = add_snippet(&service, "echo old", "Old");
+        let backup = write_backup(&[old]);
+        let newer = add_snippet(&service, "echo newer", "Newer");
+
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        assert!(plan.iter().all(|item| item.id != newer.id));
+        assert_eq!(plan.len(), 1);
+    }
+
+    #[test]
+    fn given_deleted_bookmark_whose_url_another_bookmark_now_has_when_planning_then_it_is_a_conflict_naming_that_bookmark(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let snippet = add_snippet(&service, "echo taken", "Original");
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet]);
+        service.delete_bookmark(id).unwrap();
+        let other = add_snippet(&service, "echo taken", "Successor");
+
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        match plan_item(&plan, id).state {
+            BackupRestoreState::Conflict { blocking_id } => {
+                assert_eq!(Some(blocking_id), other.id)
+            }
+            ref other => panic!("expected Conflict, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn given_changed_bookmark_whose_old_url_another_bookmark_now_has_when_planning_then_it_is_a_conflict(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let snippet = add_snippet(&service, "echo a", "A");
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet.clone()]);
+        let mut edited = snippet;
+        edited.url = "echo b".to_string();
+        service.update_bookmark(edited, false).unwrap();
+        let other = add_snippet(&service, "echo a", "Holder");
+
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        match plan_item(&plan, id).state {
+            BackupRestoreState::Conflict { blocking_id } => {
+                assert_eq!(Some(blocking_id), other.id)
+            }
+            ref other => panic!("expected Conflict, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn given_bookmark_imported_from_a_file_when_planning_then_it_is_file_backed_and_not_restorable()
+    {
+        // Same rule as history restore: the file decides the content
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut snippet = add_snippet(&service, "echo file v1", "From file");
+        snippet.file_path = Some("/tmp/script.sh".to_string());
+        let snippet = service.update_bookmark(snippet, false).unwrap();
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet.clone()]);
+        let mut edited = snippet;
+        edited.url = "echo file v2".to_string();
+        service.update_bookmark(edited, false).unwrap();
+
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        let item = plan_item(&plan, id);
+        match &item.state {
+            BackupRestoreState::FileBacked { file_path } => {
+                assert_eq!(file_path, "/tmp/script.sh")
+            }
+            other => panic!("expected FileBacked, got {:?}", other),
+        }
+        assert!(!item.is_restorable());
+    }
+
+    #[test]
+    fn given_entry_without_id_when_planning_then_it_is_listed_as_without_id() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        std::io::Write::write_all(
+            &mut file,
+            br#"[{"url": "https://example.com/x", "title": "Hand", "description": "", "tags": []}]"#,
+        )
+        .unwrap();
+
+        let plan = service
+            .plan_backup_restore(file.path().to_str().unwrap())
+            .unwrap();
+
+        assert_eq!(plan.len(), 1);
+        assert!(matches!(plan[0].state, BackupRestoreState::NoId));
+        assert_eq!(plan[0].title, "Hand");
+    }
+
+    #[test]
+    fn given_backup_listing_an_id_twice_when_planning_then_it_fails() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let snippet = add_snippet(&service, "echo twice", "Twice");
+        let backup = write_backup(&[snippet.clone(), snippet]);
+
+        let result = service.plan_backup_restore(backup.path().to_str().unwrap());
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn given_unchanged_entry_when_applying_restore_then_it_fails() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let snippet = add_snippet(&service, "echo same", "Same");
+        let id = snippet.id.unwrap();
+        let backup = write_backup(&[snippet]);
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        assert!(service.apply_backup_restore(plan_item(&plan, id)).is_err());
+    }
+
+    #[test]
+    fn given_memory_corrected_after_backup_when_restored_from_backup_then_history_keeps_the_correction(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let memory = add_memory(&service, "old fact");
+        let id = memory.id.unwrap();
+        let backup = write_backup(&[memory.clone()]);
+        let mut corrected = memory;
+        corrected.url = "corrected fact".to_string();
+        service.update_bookmark(corrected, false).unwrap();
+        let plan = service
+            .plan_backup_restore(backup.path().to_str().unwrap())
+            .unwrap();
+
+        service.apply_backup_restore(plan_item(&plan, id)).unwrap();
+
+        assert_eq!(service.get_bookmark(id).unwrap().unwrap().url, "old fact");
+        assert_eq!(
+            service.get_history(Some(id), 1).unwrap()[0].url,
+            "corrected fact"
+        );
     }
 
     #[test]

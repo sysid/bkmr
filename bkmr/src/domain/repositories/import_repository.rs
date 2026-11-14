@@ -1,6 +1,7 @@
 // src/domain/repositories/import_repository.rs
 use crate::domain::error::DomainResult;
 use crate::domain::tag::Tag;
+use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::path::PathBuf;
@@ -10,6 +11,24 @@ pub struct BookmarkImportData {
     pub title: String,
     pub content: String,
     pub tags: HashSet<Tag>,
+}
+
+/// One bookmark as bkmr's own JSON export (`bkmr search --json`) wrote it, read back for a
+/// restore. `id` is what ties it to a row: content can change, an ID never means another bookmark.
+#[derive(Debug, Clone)]
+pub struct BackupEntry {
+    /// `None` for an entry that bkmr did not export, e.g. a hand-written `load-json` file
+    pub id: Option<i32>,
+    pub url: String,
+    pub title: String,
+    pub description: String,
+    pub tags: HashSet<Tag>,
+    pub opener: Option<String>,
+    /// `None` if the export predates the field
+    pub embeddable: Option<bool>,
+    /// Set for a bookmark imported from a file, which then decides its content
+    pub file_path: Option<String>,
+    pub created_at: Option<DateTime<Utc>>,
 }
 
 /// File import data with metadata for tracking file-based bookmarks
@@ -35,6 +54,9 @@ pub struct ImportOptions {
 
 pub trait ImportRepository: Send + Sync + Debug {
     fn import_json_bookmarks(&self, path: &str) -> DomainResult<Vec<BookmarkImportData>>;
+    /// Read a JSON export for `restore --from`. Fails on any entry it cannot take as written,
+    /// since a restore must bring back exactly what was saved.
+    fn read_backup(&self, path: &str) -> DomainResult<Vec<BackupEntry>>;
     fn import_files(
         &self,
         paths: &[String],
