@@ -1721,7 +1721,6 @@ pub fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()>
 pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliResult<()> {
     use crate::application::error::ApplicationError;
     use crate::config::has_base_path;
-    use crate::exitcode;
 
     if let Some(Commands::ImportFiles {
         paths,
@@ -1737,18 +1736,11 @@ pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) 
         // Validate base path if provided
         if let Some(ref base_path_name) = base_path {
             if !has_base_path(settings, base_path_name) {
-                eprintln!(
-                    "{}",
-                    format!(
-                        "Error: Base path '{}' not found in configuration",
-                        base_path_name
-                    )
-                    .red()
-                );
-                eprintln!("Add it to your config.toml under [base_paths]:");
-                eprintln!("  [base_paths]");
-                eprintln!("  {} = \"$HOME/your/path\"", base_path_name);
-                std::process::exit(exitcode::USAGE);
+                return Err(CliError::InvalidInput(format!(
+                    "Base path '{0}' not found in configuration. Add it to your config.toml:\n  \
+                     [base_paths]\n  {0} = \"$HOME/your/path\"",
+                    base_path_name
+                )));
             }
         }
 
@@ -1767,7 +1759,17 @@ pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) 
             base_path.as_deref(),
             embed_request(embed, no_embed),
         ) {
-            Ok((added, updated, deleted)) => {
+            Ok(report) => {
+                for name in &report.added {
+                    eprintln!("Added bookmark: {}", name);
+                }
+                for (name, changed) in &report.updated {
+                    eprintln!("Updated bookmark: {} ({} changed)", name, changed);
+                }
+                for (title, id) in &report.deleted {
+                    eprintln!("Deleted orphaned bookmark: {} (ID: {})", title, id);
+                }
+                let (added, updated, deleted) = report.counts();
                 if dry_run {
                     println!(
                         "Would add: {}, update: {}, delete: {}",
@@ -1789,22 +1791,12 @@ pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) 
                 name,
                 existing_id,
                 file_path,
-            }) => {
-                eprintln!(
-                    "{}",
-                    format!("Error: Duplicate name '{}' found in {}", name, file_path).red()
-                );
-                eprintln!(
-                    "Existing bookmark with same name already exists (ID: {})",
-                    existing_id
-                );
-                eprintln!("Use --update flag to overwrite existing bookmarks with changed content");
-                std::process::exit(exitcode::DUP);
-            }
-            Err(e) => {
-                eprintln!("{}", format!("Import failed: {}", e).red());
-                std::process::exit(exitcode::FAILURE);
-            }
+            }) => Err(CliError::AlreadyExists(format!(
+                "Duplicate name '{}' found in {}: bookmark {} has that name already. Use --update \
+                 to overwrite existing bookmarks with changed content",
+                name, file_path, existing_id
+            ))),
+            Err(e) => Err(CliError::CommandFailed(format!("Import failed: {}", e))),
         }
     } else {
         Err(CliError::InvalidInput(

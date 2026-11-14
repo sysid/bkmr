@@ -99,15 +99,10 @@ fn handle_lsp(services: &ServiceContainer, no_interpolation: bool) -> CliResult<
         error::CliError::CommandFailed(format!("Failed to create async runtime: {}", e))
     })?;
 
-    // Run the LSP server
-    rt.block_on(async {
-        crate::lsp::run_lsp_server(
-            services.bookmark_service.clone(),
-            services.interpolation_service.clone(),
-            no_interpolation,
-        )
-        .await;
-    });
-
-    Ok(())
+    rt.block_on(crate::lsp::run_lsp_server(
+        services.bookmark_service.clone(),
+        services.interpolation_service.clone(),
+        no_interpolation,
+    ))
+    .map_err(error::CliError::CommandFailed)
 }

@@ -24,10 +24,9 @@ use crate::infrastructure::interpolation::minijinja_engine::{
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crate::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
-use crossterm::style::Stylize;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, error, info};
+use tracing::{debug, info};
 
 /// Production service container - single source of truth for service creation
 pub struct ServiceContainer {
@@ -94,20 +93,13 @@ impl ServiceContainer {
     }
 
     fn create_repository(db_url: &str) -> ApplicationResult<Arc<SqliteBookmarkRepository>> {
-        // Check if the database file exists before trying to create the repository
+        // Checked before opening: SQLite would create an empty database instead. The caller
+        // reports the error; main prints it and exits.
         if !Path::new(db_url).exists() {
-            error!(db_url = %db_url, "Database not found");
-            eprintln!(
-                "{}",
-                format!("Error: Database not found at '{}'", db_url).red()
+            debug!(db_url = %db_url, "Database not found");
+            return Err(
+                crate::application::error::ApplicationError::DatabaseNotFound(db_url.to_string()),
             );
-            eprintln!("The configured database does not exist.");
-            eprintln!("");
-            eprintln!("You can either:");
-            eprintln!("  1. Create the database using 'bkmr create-db {}'", db_url);
-            eprintln!("  2. Set BKMR_DB_URL environment variable to point to an existing database");
-            eprintln!("  3. Update the db_url in your config file (~/.config/bkmr/config.toml)");
-            std::process::exit(crate::exitcode::FAILURE);
         }
 
         // Create the repository, runs all migrations
@@ -236,5 +228,27 @@ impl std::fmt::Debug for ServiceContainer {
             .field("interpolation_service", &"Arc<dyn InterpolationService>")
             .field("template_service", &"Arc<dyn TemplateService>")
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::error::ApplicationError;
+
+    #[test]
+    fn given_missing_database_when_creating_repository_then_returns_error_instead_of_exiting() {
+        // A library caller (the LSP, a test) must get a Result it can handle
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing.db");
+
+        let result = ServiceContainer::create_repository(&missing.to_string_lossy());
+
+        match result {
+            Err(ApplicationError::DatabaseNotFound(path)) => {
+                assert_eq!(path, missing.to_string_lossy())
+            }
+            other => panic!("expected DatabaseNotFound, got {:?}", other.map(|_| ())),
+        }
     }
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use crate::application::error::{ApplicationError, ApplicationResult};
 use crate::application::services::bookmark_service::{
-    BackupRestoreItem, BackupRestoreState, BookmarkService, RestorePreview,
+    BackupRestoreItem, BackupRestoreState, BookmarkService, ImportReport, RestorePreview,
 };
 use crate::domain::bookmark::{Bookmark, BookmarkBuilder};
 use crate::domain::embedding::Embedder;
@@ -1007,7 +1007,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         verbose: bool,
         base_path_name: Option<&str>,
         embed: Option<bool>,
-    ) -> ApplicationResult<(usize, usize, usize)> {
+    ) -> ApplicationResult<ImportReport> {
         use crate::domain::repositories::import_repository::ImportOptions;
 
         debug!("Starting file import: paths={:?}, update={}, delete_missing={}, dry_run={}, verbose={}, base_path={:?}", 
@@ -1051,9 +1051,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
         debug!("Found {} files to process", file_imports.len());
 
-        let mut added_count = 0;
-        let mut updated_count = 0;
-        let mut deleted_count = 0;
+        let mut report = ImportReport::default();
 
         // Process each file import
         // An unknown type fails the import before anything is written
@@ -1082,27 +1080,22 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                     continue;
                 }
 
-                // Report what changed
-                if content_changed {
-                    println!("Content changed: {}", file_data.name);
-                }
-                if metadata_changed {
-                    println!("Metadata changed: {}", file_data.name);
-                }
-
                 // Update existing bookmark
                 if !dry_run {
                     self.update_bookmark_from_file(&existing, file_data, base_path_name)?;
                 }
-                updated_count += 1;
-                println!("Updated bookmark: {}", file_data.name);
+                let changed = match (content_changed, metadata_changed) {
+                    (true, true) => "content and metadata",
+                    (true, false) => "content",
+                    _ => "metadata",
+                };
+                report.updated.push((file_data.name.clone(), changed));
             } else {
                 // Create new bookmark
                 if !dry_run {
                     self.create_bookmark_from_file(file_data, base_path_name, embed)?;
                 }
-                added_count += 1;
-                println!("Added bookmark: {}", file_data.name);
+                report.added.push(file_data.name.clone());
             }
         }
 
@@ -1110,26 +1103,17 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         if delete_missing {
             let orphaned = self.find_orphaned_bookmarks(&actual_scan_paths, &file_imports)?;
             for bookmark in orphaned {
+                let Some(id) = bookmark.id else { continue };
                 if !dry_run {
-                    if let Some(id) = bookmark.id {
-                        self.delete_bookmark(id)?;
-                    }
+                    self.delete_bookmark(id)?;
                 }
-                deleted_count += 1;
-                println!(
-                    "Deleted orphaned bookmark: {} ({:?})",
-                    bookmark.title, bookmark.id
-                );
+                report.deleted.push((bookmark.title, id));
             }
         }
 
-        info!(
-            added = added_count,
-            updated = updated_count,
-            deleted = deleted_count,
-            "File import complete"
-        );
-        Ok((added_count, updated_count, deleted_count))
+        let (added, updated, deleted) = report.counts();
+        info!(added, updated, deleted, "File import complete");
+        Ok(report)
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -2440,7 +2424,8 @@ mod tests {
                 Some("BKMR_INJECTED_BASE"),
                 Some(false),
             )
-            .unwrap();
+            .unwrap()
+            .counts();
 
         // Assert
         assert_eq!((added, deleted), (1, 0));

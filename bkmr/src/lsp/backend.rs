@@ -389,7 +389,7 @@ pub async fn run_server(
     bookmark_service: std::sync::Arc<dyn crate::application::services::BookmarkService>,
     interpolation_service: std::sync::Arc<dyn crate::application::services::InterpolationService>,
     no_interpolation: bool,
-) {
+) -> Result<(), String> {
     // Logging is initialized in main.rs with proper color control
 
     let version = env!("CARGO_PKG_VERSION");
@@ -403,10 +403,9 @@ pub async fn run_server(
     info!("Configuration: {:?}", config);
 
     // Validate environment before starting
-    if let Err(e) = validate_environment().await {
-        error!("Environment validation failed: {}", e);
-        std::process::exit(crate::exitcode::FAILURE);
-    }
+    validate_environment()
+        .await
+        .map_err(|e| format!("Environment validation failed: {}", e))?;
 
     use crate::lsp::di::LspServiceContainer;
 
@@ -434,6 +433,7 @@ pub async fn run_server(
     Server::new(stdin, stdout, socket).serve(service).await;
 
     info!("Server shutdown gracefully");
+    Ok(())
 }
 
 /// Validate that the environment is suitable for running the LSP server

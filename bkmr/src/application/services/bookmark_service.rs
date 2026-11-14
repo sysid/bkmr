@@ -67,6 +67,25 @@ impl BackupRestoreItem {
 }
 
 /// Service interface for bookmark-related operations
+/// What an `import-files` run did, or with `--dry-run` would do, file by file. The service
+/// reports; the CLI decides what to print.
+#[derive(Debug, Default)]
+pub struct ImportReport {
+    /// Names of the files that become new bookmarks
+    pub added: Vec<String>,
+    /// Names of the changed files, with what changed: "content", "metadata" or both
+    pub updated: Vec<(String, &'static str)>,
+    /// Title and ID of the bookmarks whose source file is gone
+    pub deleted: Vec<(String, i32)>,
+}
+
+impl ImportReport {
+    /// (added, updated, deleted)
+    pub fn counts(&self) -> (usize, usize, usize) {
+        (self.added.len(), self.updated.len(), self.deleted.len())
+    }
+}
+
 pub trait BookmarkService: Send + Sync + Debug {
     /// Add a new bookmark
     ///
@@ -220,7 +239,7 @@ pub trait BookmarkService: Send + Sync + Debug {
         verbose: bool,
         base_path_name: Option<&str>,
         embed: Option<bool>,
-    ) -> ApplicationResult<(usize, usize, usize)>; // Returns (added, updated, deleted)
+    ) -> ApplicationResult<ImportReport>;
 
     /// Read a file-backed bookmark's source file again and store what it says, the way
     /// `import-files --update` does. The stored file path, `$BASE/...` included, stays as it is.
