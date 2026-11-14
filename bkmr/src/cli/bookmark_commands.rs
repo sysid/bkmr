@@ -22,7 +22,6 @@ use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
-use crate::infrastructure::embeddings::DummyEmbedding;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonBookmarkView};
 use crate::infrastructure::repositories::sqlite::repository::{
     print_db_schema, SqliteBookmarkRepository,
@@ -249,9 +248,8 @@ fn handle_file_viewing(file_path: &str) -> CliResult<()> {
 
     eprintln!("Rendering file: {}", filename);
 
-    // Create markdown action with dummy embedder (reuses existing file reading logic)
-    let embedder = Arc::new(DummyEmbedding);
-    let markdown_action = MarkdownAction::new(embedder);
+    // The markdown action already reads file paths given in the url field
+    let markdown_action = MarkdownAction::new();
 
     // Create a minimal bookmark structure - the MarkdownAction already handles file paths in url field
     let mut tags = HashSet::new();

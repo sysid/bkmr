@@ -76,8 +76,6 @@ impl ServiceContainer {
             &bookmark_repository,
             &interpolation_service,
             &(clipboard_service.clone() as Arc<dyn ClipboardService>),
-            &embedder,
-            &vector_repository,
             config,
         )?;
 
@@ -172,18 +170,10 @@ impl ServiceContainer {
         repository: &Arc<SqliteBookmarkRepository>,
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
-        embedder: &Arc<dyn Embedder>,
-        vector_repository: &Arc<dyn VectorRepository>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionService>> {
-        let resolver = Self::create_action_resolver(
-            repository,
-            interpolation_service,
-            clipboard_service,
-            embedder,
-            vector_repository,
-            config,
-        )?;
+        let resolver =
+            Self::create_action_resolver(interpolation_service, clipboard_service, config)?;
         Ok(Arc::new(ActionServiceImpl::new(
             resolver,
             repository.clone(),
@@ -191,11 +181,8 @@ impl ServiceContainer {
     }
 
     fn create_action_resolver(
-        repository: &Arc<SqliteBookmarkRepository>,
         interpolation_service: &Arc<dyn InterpolationService>,
         clipboard_service: &Arc<dyn ClipboardService>,
-        embedder: &Arc<dyn Embedder>,
-        vector_repository: &Arc<dyn VectorRepository>,
         config: &Settings,
     ) -> ApplicationResult<Arc<dyn ActionResolver>> {
         // Create all actions with explicit dependencies
@@ -217,12 +204,7 @@ impl ServiceContainer {
             config.shell_opts.interactive,
         ));
 
-        let markdown_action: Box<dyn BookmarkAction> =
-            Box::new(MarkdownAction::new_with_repository(
-                repository.clone(),
-                vector_repository.clone(),
-                embedder.clone(),
-            ));
+        let markdown_action: Box<dyn BookmarkAction> = Box::new(MarkdownAction::new());
 
         let env_action: Box<dyn BookmarkAction> =
             Box::new(EnvAction::new(interpolation_service.clone()));

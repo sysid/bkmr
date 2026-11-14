@@ -1,11 +1,7 @@
 // src/application/actions/markdown_action.rs
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::embedding::Embedder;
 use crate::domain::error::{DomainError, DomainResult};
-use crate::domain::repositories::repository::BookmarkRepository;
-use crate::domain::repositories::vector_repository::VectorRepository;
-use crate::util::helper::calc_content_hash;
 use crate::util::path::{abspath, is_file_path};
 use chrono::{DateTime, Utc};
 use markdown::{to_html_with_options, Options};
@@ -13,8 +9,7 @@ use regex::Regex;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
-use std::sync::Arc;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, instrument};
 
 /// Represents a table of contents entry
 #[derive(Debug, Clone)]
@@ -24,34 +19,14 @@ struct TocEntry {
     id: String,
 }
 
-#[derive(Debug)]
-pub struct MarkdownAction {
-    repository: Option<Arc<dyn BookmarkRepository>>,
-    vector_repository: Option<Arc<dyn VectorRepository>>,
-    embedder: Arc<dyn Embedder>,
-}
+/// Renders markdown, inline or from a file, to HTML and opens it in the browser. Opening does
+/// not write: embeddings are kept by the bookmark service and `bkmr backfill`.
+#[derive(Debug, Default)]
+pub struct MarkdownAction;
 
 impl MarkdownAction {
-    #[allow(dead_code)]
-    pub fn new(embedder: Arc<dyn Embedder>) -> Self {
-        Self {
-            repository: None,
-            vector_repository: None,
-            embedder,
-        }
-    }
-
-    // Constructor with repository for embedding support
-    pub fn new_with_repository(
-        repository: Arc<dyn BookmarkRepository>,
-        vector_repository: Arc<dyn VectorRepository>,
-        embedder: Arc<dyn Embedder>,
-    ) -> Self {
-        Self {
-            repository: Some(repository),
-            vector_repository: Some(vector_repository),
-            embedder,
-        }
+    pub fn new() -> Self {
+        Self
     }
 
     /// Reads markdown content from a file path
@@ -88,71 +63,6 @@ impl MarkdownAction {
                 resolved_path, e
             ))
         })
-    }
-
-    /// Check if embedding is allowed and possible
-    fn can_update_embedding(&self, bookmark: &Bookmark) -> bool {
-        // Check if we have a repository
-        if self.repository.is_none() {
-            return false;
-        }
-
-        // Check if the bookmark is embeddable
-        if !bookmark.embeddable {
-            return false;
-        }
-
-        // Check if real embeddings are enabled (DummyEmbedding has dimensions == 0)
-        self.embedder.dimensions() > 0
-    }
-
-    /// Update bookmark with embedding if repository is available and conditions are met.
-    /// Uses bookmark.get_content_for_embedding() for consistent type-aware content.
-    fn update_embedding(&self, bookmark: &Bookmark) -> DomainResult<()> {
-        // Check if embedding is allowed
-        if !self.can_update_embedding(bookmark) {
-            debug!("Embedding update skipped: not allowed or not possible");
-            return Ok(());
-        }
-
-        let repository = self.repository.as_ref().unwrap();
-
-        if let Some(id) = bookmark.id {
-            // Get the current state of the bookmark
-            let mut updated_bookmark = repository
-                .get_by_id(id)?
-                .ok_or_else(|| DomainError::BookmarkNotFound(id.to_string()))?;
-
-            // Use type-aware content for embedding (consistent with backfill)
-            let content = updated_bookmark.get_content_for_embedding();
-            let content_hash = calc_content_hash(&content);
-
-            // Only update if content has changed
-            if updated_bookmark.content_hash.as_ref() != Some(&content_hash) {
-                debug!("Content changed, updating embedding for bookmark ID {}", id);
-
-                // Generate embedding and store in VectorRepository
-                if let Some(embedding) = self.embedder.embed_document(&content)? {
-                    if let Some(vec_repo) = &self.vector_repository {
-                        vec_repo.upsert_embedding(id, &embedding)?;
-                    }
-                }
-
-                updated_bookmark.embedding = None;
-                updated_bookmark.content_hash = Some(content_hash);
-
-                // Save to repository
-                repository.update(&updated_bookmark)?;
-                info!("Successfully updated content hash for bookmark ID {}", id);
-            } else {
-                debug!(
-                    "Content unchanged, not updating embedding for bookmark ID {}",
-                    id
-                );
-            }
-        }
-
-        Ok(())
     }
 
     /// Extract headers from HTML content and add IDs if missing
@@ -479,12 +389,6 @@ impl BookmarkAction for MarkdownAction {
         // Skip template processing for markdown content to avoid conflicts with markdown syntax
         // that may contain template-like patterns (e.g., {%} in code blocks, documentation)
         let rendered_markdown = markdown_content.clone();
-
-        // Update embedding if possible
-        if let Err(e) = self.update_embedding(bookmark) {
-            error!("Failed to update embedding: {}", e);
-            // Continue with rendering - don't fail the whole operation if embedding fails
-        }
 
         debug!("Rendering markdown content to HTML");
 
@@ -1098,8 +1002,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a temporary markdown file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -1116,89 +1019,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // Test embedding eligibility check
-    // TODO: check the purpose of this test
-    #[test]
-    fn given_action_when_check_embedding_update_then_returns_eligibility() {
-        // Setup
-        let _ = init_test_env();
-        let _guard = EnvGuard::new();
-
-        // Action without repository
-        let embedder_no_repo = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action_no_repo = MarkdownAction::new(embedder_no_repo);
-
-        // Action with repository
-        let repository = Arc::new(crate::util::testing::setup_test_db());
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let vector_repository = Arc::new(
-            crate::infrastructure::repositories::null_vector_repository::NullVectorRepository,
-        );
-        let action_with_repo =
-            MarkdownAction::new_with_repository(repository, vector_repository, embedder);
-
-        // Create test bookmarks
-        let mut tags = HashSet::new();
-        tags.insert(Tag::new("_md_").unwrap());
-
-        // Bookmark with embeddable=true
-        let embeddable_bookmark = Bookmark {
-            id: Some(1),
-            url: "# Test".to_string(),
-            title: "Test Document".to_string(),
-            description: "A test document".to_string(),
-            tags: tags.clone(),
-            access_count: 0,
-            created_at: Some(chrono::Utc::now()),
-            updated_at: chrono::Utc::now(),
-            embedding: None,
-            content_hash: None,
-            embeddable: true,
-            file_path: None,
-            file_mtime: None,
-            file_hash: None,
-            opener: None,
-            accessed_at: None,
-            verified_at: None,
-        };
-
-        // Bookmark with embeddable=false
-        let non_embeddable_bookmark = Bookmark {
-            id: Some(2),
-            url: "# Test".to_string(),
-            title: "Test Document".to_string(),
-            description: "A test document".to_string(),
-            tags,
-            access_count: 0,
-            created_at: Some(chrono::Utc::now()),
-            updated_at: chrono::Utc::now(),
-            embedding: None,
-            content_hash: None,
-            embeddable: false,
-            file_path: None,
-            file_mtime: None,
-            file_hash: None,
-            opener: None,
-            accessed_at: None,
-            verified_at: None,
-        };
-
-        // Test cases
-        assert!(
-            !action_no_repo.can_update_embedding(&embeddable_bookmark),
-            "Should return false when no repository is available"
-        );
-
-        // The DummyEmbedding is the default in test environment
-        assert!(
-            !action_with_repo.can_update_embedding(&non_embeddable_bookmark),
-            "Should return false when bookmark is not embeddable"
-        );
-
-        // This would be true with OpenAI embeddings, but we can't easily test that
-        // So we just verify that the embeddable flag is checked
-    }
-
     #[test]
     #[ignore = "This test opens a browser which might not be available in CI"]
     fn given_markdown_content_when_execute_then_renders_html() {
@@ -1206,8 +1026,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a test bookmark with direct markdown content
         let markdown = "# Test Markdown\n\nThis is a **test** with math: $$E = mc^2$$";
@@ -1256,8 +1075,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a test bookmark with markdown table content
         let markdown = "# Test Table\n\n| Column 1 | Column 2 | Column 3 |\n| -------- | -------- | -------- |\n| Cell 1   | Cell 2   | Cell 3   |\n| Cell 4   | Cell 5   | Cell 6   |";
@@ -1306,8 +1124,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a test bookmark with code blocks
         let markdown = "# Code Highlighting\n\n```rust\nfn main() {\n    println!(\"Hello, world!\");\n}\n```\n\n```python\ndef hello():\n    print(\"Hello, world!\")\n```";
@@ -1355,8 +1172,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>Main Title</h1>
 <p>Some content</p>
 <h2>Section 1</h2>
@@ -1395,8 +1211,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1 id="existing-id">Title with ID</h1>
 <h2>Title without ID</h2>"#;
 
@@ -1418,8 +1233,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>Introduction</h1>
 <h2>Introduction</h2>
 <h3>Introduction</h3>"#;
@@ -1442,8 +1256,7 @@ mod tests {
     #[test]
     fn given_identical_headings_when_extract_then_each_gets_the_id_its_toc_link_names() {
         // Same level and text, so the two tags are the same string
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = "<h2>Setup</h2>\n<p>one</p>\n<h2>Setup</h2>";
 
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
@@ -1461,8 +1274,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>Title with <strong>bold</strong> and <em>italic</em></h1>
 <h2>Code: <code>function()</code></h2>"#;
 
@@ -1484,8 +1296,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = "<p>No headers here</p>";
 
         let (processed_html, toc_entries) = action.extract_and_process_headers(html_content);
@@ -1499,8 +1310,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let html_content = r#"<h1>H1 Title</h1>
 <h2>H2 Title</h2>
 <h3>H3 Title</h3>
@@ -1527,8 +1337,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Test normal text
         assert_eq!(action.generate_header_id("Simple Title"), "simple-title");
@@ -1560,8 +1369,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Test removing HTML tags
         assert_eq!(
@@ -1598,8 +1406,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let toc_entries = vec![];
 
         let toc_html = action.generate_toc_html(&toc_entries);
@@ -1612,8 +1419,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let toc_entries = vec![
             TocEntry {
                 level: 1,
@@ -1654,8 +1460,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let toc_entries = vec![TocEntry {
             level: 1,
             title: "Title with & < > \" characters".to_string(),
@@ -1675,8 +1480,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create a temporary markdown file
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -1716,8 +1520,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create bookmark with direct markdown content
         let mut tags = HashSet::new();
@@ -1751,8 +1554,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         // Create bookmark with non-existent file path
         let mut tags = HashSet::new();
@@ -1787,8 +1589,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <p>Some content</p>
@@ -1807,8 +1608,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <img src="./local.png" alt="Local">
@@ -1829,8 +1629,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <link rel="stylesheet" href="./styles.css">
@@ -1853,8 +1652,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = "<p>No resources here</p>";
         let resources = action.extract_resource_paths(html);
@@ -1866,8 +1664,7 @@ mod tests {
         let _ = init_test_env();
         let _guard = EnvGuard::new();
 
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
 
         let html = r#"
             <img src="./single.png" alt="Single">
@@ -1903,8 +1700,7 @@ mod tests {
     #[test]
     fn given_absolute_image_path_when_link_resources_then_source_image_keeps_its_content() {
         // Arrange: the bug this guards against truncated the user's image to 0 bytes
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let (_dir, md_path, image_path) = source_tree_with_image("images/photo.png");
         let html = format!(r#"<img src="{}" alt="Photo">"#, image_path.display());
 
@@ -1918,8 +1714,7 @@ mod tests {
 
     #[test]
     fn given_relative_image_when_link_resources_then_points_at_source_file() {
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let (_dir, md_path, image_path) = source_tree_with_image("images/photo.png");
         let html = r#"<img src="./images/photo.png" alt="Photo">"#;
 
@@ -1933,8 +1728,7 @@ mod tests {
 
     #[test]
     fn given_parent_relative_image_when_link_resources_then_points_at_source_file() {
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let (_dir, md_path, image_path) = source_tree_with_image("../assets/logo.png");
         let html = r#"<img src="../assets/logo.png" alt="Logo">"#;
 
@@ -1948,8 +1742,7 @@ mod tests {
 
     #[test]
     fn given_directory_with_space_when_link_resources_then_url_is_percent_encoded() {
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let (_dir, md_path, image_path) = source_tree_with_image("my images/photo.png");
         let html = r#"<img src="my%20images/photo.png" alt="Photo">"#;
 
@@ -1961,8 +1754,7 @@ mod tests {
 
     #[test]
     fn given_missing_or_remote_resources_when_link_resources_then_leaves_them_unchanged() {
-        let embedder = Arc::new(crate::infrastructure::embeddings::DummyEmbedding);
-        let action = MarkdownAction::new(embedder);
+        let action = MarkdownAction::new();
         let (_dir, md_path, _image_path) = source_tree_with_image("images/photo.png");
         let html = r#"<img src="./images/missing.png" alt="Missing">
 <img src="https://example.com/a.png" alt="Remote">"#;
@@ -2001,8 +1793,7 @@ mod tests {
     #[test]
     fn given_stored_bookmark_when_render_footer_then_shows_metadata() {
         use chrono::{TimeZone, Utc};
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut tags = HashSet::new();
         tags.insert(Tag::new("_md_").unwrap());
@@ -2028,8 +1819,7 @@ mod tests {
 
     #[test]
     fn given_never_accessed_bookmark_when_render_footer_then_says_never() {
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
         bookmark.id = Some(1);
@@ -2044,8 +1834,7 @@ mod tests {
     #[test]
     fn given_unstored_bookmark_when_render_footer_then_returns_empty() {
         // `bkmr open --file` renders a temporary bookmark: its metadata would be made up
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
 
@@ -2054,8 +1843,7 @@ mod tests {
 
     #[test]
     fn given_imported_bookmark_when_render_footer_then_shows_escaped_source_file() {
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut bookmark = Bookmark::new("# Notes", "Notes", "", HashSet::new()).unwrap();
         bookmark.id = Some(1);
@@ -2068,8 +1856,7 @@ mod tests {
 
     #[test]
     fn given_html_in_tag_when_render_footer_then_escapes_it() {
-        let action =
-            MarkdownAction::new(Arc::new(crate::infrastructure::embeddings::DummyEmbedding));
+        let action = MarkdownAction::new();
 
         let mut tags = HashSet::new();
         tags.insert(Tag::new("<script>").unwrap());
