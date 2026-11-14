@@ -499,7 +499,9 @@ pub fn fzf_process(
         return Ok(());
     }
 
-    println!();
+    // Separates the action's output from the picker on the terminal. On stderr, so that
+    // `x=$(bkmr search --fzf --stdout)` captures the content alone.
+    eprintln!();
 
     handle_final_key(
         output.final_key,
