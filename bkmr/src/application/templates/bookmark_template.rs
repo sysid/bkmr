@@ -171,7 +171,7 @@ impl BookmarkTemplate {
 
         format!(
             "# Bookmark Template\n\
-            # Lines starting with '#' are comments and will be ignored.\n\
+            # These '#' lines above the first section are ignored; inside a section '#' is content.\n\
             # Section markers (=== SECTION_NAME ===) are required and must not be removed.\n\
             # ID: clear it to save a new bookmark; another ID is refused.\n\
             # EMBEDDABLE: true or false; a type set to \"always\" in [embeddings.policy] stays true.\n\
