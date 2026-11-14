@@ -20,9 +20,9 @@ impl Default for InterpolationServiceImpl {
     fn default() -> Self {
         // This is used only in tests, create a dummy engine
         use crate::infrastructure::interpolation::minijinja_engine::{
-            MiniJinjaEngine, SafeShellExecutor,
+            MiniJinjaEngine, SystemShellExecutor,
         };
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         Self::new(engine)
     }
@@ -55,11 +55,11 @@ mod tests {
     use super::*;
     use crate::domain::bookmark::BookmarkBuilder;
     use crate::infrastructure::interpolation::minijinja_engine::{
-        MiniJinjaEngine, SafeShellExecutor,
+        MiniJinjaEngine, SystemShellExecutor,
     };
 
     fn create_test_service() -> InterpolationServiceImpl {
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         InterpolationServiceImpl::new(engine)
     }

@@ -237,14 +237,14 @@ mod tests {
     use crate::application::InterpolationServiceImpl;
     use crate::domain::tag::Tag;
     use crate::infrastructure::interpolation::minijinja_engine::{
-        MiniJinjaEngine, SafeShellExecutor,
+        MiniJinjaEngine, SystemShellExecutor,
     };
     use std::collections::HashSet;
 
     #[test]
     fn given_shell_script_when_execute_direct_then_runs_without_edit() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(interpolation_service);
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn given_script_with_template_when_execute_direct_then_interpolates_content() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor.clone()));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(interpolation_service);
@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn given_failing_script_when_execute_direct_then_returns_error() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(interpolation_service);
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn given_interactive_mode_when_create_shell_action_then_uses_defaults() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
 
@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn given_shell_script_when_execute_method_called_then_returns_success() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(interpolation_service);
@@ -410,7 +410,7 @@ mod tests {
     #[test]
     fn given_script_with_parameters_when_execute_then_passes_args() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(interpolation_service);
@@ -431,7 +431,7 @@ mod tests {
     fn given_script_when_execute_then_script_file_is_readable_by_owner_only() {
         // Arrange: the script may hold interpolated secrets, so while it runs no other local
         // user may read it. It records its own mode, as the shell sees it, into a file.
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new_direct(interpolation_service);
@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn given_environment_when_detect_edit_mode_then_returns_appropriate_mode() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new(interpolation_service, true);
@@ -469,7 +469,7 @@ mod tests {
     #[test]
     fn given_home_directory_when_get_history_path_then_returns_history_file() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new(interpolation_service, true);
@@ -487,7 +487,7 @@ mod tests {
     #[test]
     fn given_configuration_when_create_editor_then_returns_configured_editor() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let action = ShellAction::new(interpolation_service, true);
@@ -505,7 +505,7 @@ mod tests {
     #[test]
     fn given_template_service_and_args_when_new_direct_then_creates_action_with_args() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
         let args = vec![
@@ -525,7 +525,7 @@ mod tests {
     #[test]
     fn given_script_with_arguments_when_execute_then_passes_to_shell() {
         // Arrange
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         let interpolation_service = Arc::new(InterpolationServiceImpl::new(interpolation_engine));
 

@@ -78,7 +78,7 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
         use crate::application::actions::shell_action::ShellAction;
         use crate::domain::action::BookmarkAction;
         use crate::infrastructure::interpolation::minijinja_engine::{
-            MiniJinjaEngine, SafeShellExecutor,
+            MiniJinjaEngine, SystemShellExecutor,
         };
         use std::sync::Arc;
 
@@ -90,7 +90,7 @@ impl<R: BookmarkRepository> ActionService for ActionServiceImpl<R> {
             debug!("Executing shell action with no-edit mode");
 
             // Create a direct (non-interactive) shell action with script arguments
-            let shell_executor = Arc::new(SafeShellExecutor::new());
+            let shell_executor = Arc::new(SystemShellExecutor::new());
             let template_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
             let interpolation_service = Arc::new(
                 crate::application::InterpolationServiceImpl::new(template_engine),

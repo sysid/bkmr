@@ -19,7 +19,9 @@ use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
 use crate::infrastructure::embeddings::FastEmbedEmbedding;
-use crate::infrastructure::interpolation::minijinja_engine::{MiniJinjaEngine, SafeShellExecutor};
+use crate::infrastructure::interpolation::minijinja_engine::{
+    MiniJinjaEngine, SystemShellExecutor,
+};
 use crate::infrastructure::repositories::file_import_repository::FileImportRepository;
 use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepository;
 use crate::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
@@ -157,7 +159,7 @@ impl ServiceContainer {
     }
 
     fn create_interpolation_service() -> Arc<dyn InterpolationService> {
-        let shell_executor = Arc::new(SafeShellExecutor::new());
+        let shell_executor = Arc::new(SystemShellExecutor::new());
         let interpolation_engine = Arc::new(MiniJinjaEngine::new(shell_executor));
         Arc::new(InterpolationServiceImpl::new(interpolation_engine))
     }
