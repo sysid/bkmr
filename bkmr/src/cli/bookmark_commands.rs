@@ -1552,18 +1552,18 @@ pub fn pre_fill_database(repository: &SqliteBookmarkRepository) -> CliResult<()>
             vec!["rust", "packages", "crates"],
         ),
 
-        // Shell command URLs
+        // Shell commands
         (
-            "shell::echo 'Hello, World!'",
+            "echo 'Hello, World!'",
             "Hello World Shell Command",
             "Simple shell command that prints 'Hello, World!'",
-            vec!["shell", "example", "hello_world"],
+            vec!["_shell_", "example", "hello_world"],
         ),
         (
-            "shell::ls -la | grep '.rs$'",
+            "ls -la | grep '.rs$'",
             "List Rust Files",
             "Shell command to list all Rust files in the current directory",
-            vec!["shell", "rust", "files", "list"],
+            vec!["_shell_", "rust", "files", "list"],
         ),
 
         // URL with interpolation (date)
@@ -1948,8 +1948,8 @@ mod tests {
             // Regular URLs
             ("https://github.com", false),
             ("https://rust-lang.org", false),
-            // Shell command URLs
-            ("shell::", false),
+            // Shell commands
+            ("_shell_", true),
             // URL with interpolation (date)
             ("{{", false),
             // Code snippets

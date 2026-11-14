@@ -3,7 +3,6 @@ use crate::application::services::InterpolationService;
 use crate::domain::action::BookmarkAction;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, DomainResult};
-use crossterm::style::Stylize;
 use std::sync::Arc;
 use tracing::{debug, instrument};
 
@@ -68,34 +67,14 @@ impl UriAction {
     fn open_url(&self, url: &str) -> DomainResult<()> {
         debug!("Opening URL: {}", url);
 
+        // The old way to store a command. Refused rather than handed to the OS opener, which
+        // would fail with an error that says nothing about the cause.
         if url.starts_with("shell::") {
-            // Extract the shell command
-            let cmd = url.replace("shell::", "");
-            eprintln!("Executing shell command: {}", cmd);
-            eprintln!(
-                "{}",
-                "'shell::' is deprecated. Use SystemTag '_shell_' instead.".yellow()
-            );
-
-            // Create a child process with inherited stdio
-            let mut child = std::process::Command::new("sh")
-                .arg("-c")
-                .arg(cmd)
-                .stdin(std::process::Stdio::inherit())
-                .stdout(std::process::Stdio::inherit())
-                .stderr(std::process::Stdio::inherit())
-                .spawn()
-                .map_err(|e| {
-                    DomainError::Other(format!("Failed to execute shell command: {}", e))
-                })?;
-
-            // Wait for the process to complete
-            let status = child
-                .wait()
-                .map_err(|e| DomainError::Other(format!("Failed to wait on command: {}", e)))?;
-
-            debug!("Shell command exit status: {:?}", status);
-            return Ok(());
+            return Err(DomainError::Other(
+                "'shell::' bookmarks are no longer run: store the command without 'shell::' and \
+                 tag the bookmark _shell_"
+                    .to_string(),
+            ));
         }
 
         // Handle regular URLs or file paths
@@ -147,5 +126,34 @@ impl BookmarkAction for UriAction {
 
     fn description(&self) -> &'static str {
         "Open in browser or application"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::InterpolationServiceImpl;
+    use crate::infrastructure::interpolation::minijinja_engine::{
+        MiniJinjaEngine, SystemShellExecutor,
+    };
+    use std::collections::HashSet;
+
+    #[test]
+    fn given_legacy_shell_url_when_execute_then_refuses_with_migration_hint_and_runs_nothing() {
+        // Arrange: `shell::` was the old way to store a command, replaced by the _shell_ type
+        let engine = Arc::new(MiniJinjaEngine::new(Arc::new(SystemShellExecutor::new())));
+        let action = UriAction::new(Arc::new(InterpolationServiceImpl::new(engine)));
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("ran");
+        let url = format!("shell::touch '{}'", marker.display());
+        let bookmark = Bookmark::new(url.as_str(), "legacy", "", HashSet::new()).unwrap();
+
+        // Act
+        let result = action.execute(&bookmark);
+
+        // Assert
+        let err = result.expect_err("shell:: is no longer run").to_string();
+        assert!(err.contains("_shell_"), "got: {err}");
+        assert!(!marker.exists(), "the command must not run");
     }
 }
