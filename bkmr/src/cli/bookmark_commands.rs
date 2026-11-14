@@ -1017,7 +1017,7 @@ pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
 }
 
 /// Shows detailed information about a bookmark, can be used by both show command and FZF CTRL-P
-#[instrument(level = "debug")]
+#[instrument(level = "debug", skip_all, fields(bookmark_id = ?bookmark.id))]
 pub fn show_bookmark_details(
     bookmark: &Bookmark,
     embedded_ids: Option<&HashSet<i32>>,

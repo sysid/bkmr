@@ -201,8 +201,8 @@ impl BookmarkTemplate {
         )
     }
 
-    // #[instrument(level = "debug", skip(content))]
-    #[instrument(level = "debug")]
+    // Content stays out of the span: it can hold secrets, e.g. an _env_ snippet
+    #[instrument(level = "debug", skip_all)]
     pub fn from_string(content: &str) -> ApplicationResult<Self> {
         // Split the content by section markers
         let sections = parse_sections(content)?;
@@ -282,7 +282,7 @@ impl BookmarkTemplate {
         })
     }
 
-    #[instrument(level = "debug")]
+    #[instrument(level = "debug", skip_all)]
     pub fn to_bookmark(&self, original: Option<&Bookmark>) -> ApplicationResult<Bookmark> {
         // The ID decides which row the edit writes: another one would overwrite that bookmark.
         // Clearing it is allowed, and saves the edit as a new bookmark.
@@ -331,7 +331,7 @@ impl BookmarkTemplate {
     }
 }
 
-#[instrument(level = "trace")]
+#[instrument(level = "trace", skip_all)]
 fn parse_sections(content: &str) -> ApplicationResult<std::collections::HashMap<String, String>> {
     let mut sections = std::collections::HashMap::new();
 
