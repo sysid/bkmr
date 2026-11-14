@@ -186,6 +186,7 @@ pub fn open(
         } else {
             // Handle bookmark opening (existing logic)
 
+            let mut failed_ids = Vec::new();
             for id in get_ids(ids).cli_context("parsing bookmark IDs for opening")? {
                 if let Some(bookmark) = bookmark_service
                     .get_bookmark(id)
@@ -217,8 +218,10 @@ pub fn open(
                     }
                 } else {
                     eprintln!("Bookmark with ID {} not found", id);
+                    failed_ids.push(id);
                 }
             }
+            report_failed_ids("open", &failed_ids)?;
         }
     }
     Ok(())
@@ -488,7 +491,7 @@ fn distinct_ids(ids: Vec<i32>) -> Vec<i32> {
     ids.into_iter().filter(|id| seen.insert(*id)).collect()
 }
 
-fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
+pub(crate) fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
     if failed_ids.is_empty() {
         return Ok(());
     }
@@ -501,7 +504,7 @@ fn report_failed_ids(action: &str, failed_ids: &[i32]) -> CliResult<()> {
 #[instrument(skip(cli, bookmark_service))]
 pub fn delete(cli: Cli, bookmark_service: Arc<dyn BookmarkService>) -> CliResult<()> {
     if let Commands::Delete { ids, force, yes } = cli.command.unwrap() {
-        let id_list = distinct_ids(get_ids(ids)?);
+        let id_list = distinct_ids(ids);
         // One failed ID must not stop the others, so failures are reported at the end
         let mut failed_ids = Vec::new();
         let mut declined = false;
@@ -835,16 +838,20 @@ pub fn update(
         no_embed,
     } = cli.command.unwrap()
     {
-        let id_list = get_ids(ids)?;
-
         if embed && no_embed {
             return Err(CliError::InvalidInput(
                 "Cannot specify both --embed and --no-embed".to_string(),
             ));
         }
 
-        for id in id_list {
-            if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
+        // One failed ID must not stop the others, so failures are reported at the end
+        let mut failed_ids = Vec::new();
+        for id in distinct_ids(ids) {
+            // Ok(false): no bookmark with this ID
+            let update_one = || -> CliResult<bool> {
+                let Some(bookmark) = bookmark_service.get_bookmark(id)? else {
+                    return Ok(false);
+                };
                 eprintln!("Updating: {} ({})", bookmark.title, bookmark.url);
 
                 // Handle embedding flag changes
@@ -869,18 +876,17 @@ pub fn update(
                     || url.is_some()
                     || open_with.is_some();
                 if !has_changes {
-                    continue;
+                    return Ok(true);
                 }
 
                 // All changes go into one write, so that one command is one undo step in history.
                 // Fetch latest version to avoid stale data after the embedding change.
                 let Some(mut latest_bookmark) = bookmark_service.get_bookmark(id)? else {
-                    continue;
+                    return Ok(false);
                 };
 
-                if force && tags.is_some() {
+                if let (true, Some(tag_str)) = (force, &tags) {
                     // Replace all tags
-                    let tag_str = tags.as_ref().unwrap();
                     let parsed_tags = tag_service.parse_tag_string(tag_str)?;
                     let tag_set = parsed_tags.into_iter().collect::<HashSet<_>>();
 
@@ -930,10 +936,22 @@ pub fn update(
                     }
                 }
                 bookmark_service.update_bookmark(latest_bookmark, false)?;
-            } else {
-                eprintln!("Bookmark with ID {} not found", id);
+                Ok(true)
+            };
+
+            match update_one() {
+                Ok(true) => {}
+                Ok(false) => {
+                    eprintln!("Bookmark with ID {} not found", id);
+                    failed_ids.push(id);
+                }
+                Err(e) => {
+                    eprintln!("Error updating bookmark with ID {}: {}", id, e);
+                    failed_ids.push(id);
+                }
             }
         }
+        report_failed_ids("update", &failed_ids)?;
     }
     Ok(())
 }
@@ -946,25 +964,8 @@ pub fn edit(
     settings: &crate::config::Settings,
 ) -> CliResult<()> {
     if let Commands::Edit { ids, force_db } = cli.command.unwrap() {
-        let id_list = get_ids(ids)?;
-
-        // Get all bookmarks to edit first
-        let mut bookmarks_to_edit = Vec::new();
-        for id in &id_list {
-            if let Some(bookmark) = bookmark_service.get_bookmark(*id)? {
-                bookmarks_to_edit.push(bookmark);
-            } else {
-                eprintln!("Bookmark with ID {} not found", id);
-            }
-        }
-
-        if bookmarks_to_edit.is_empty() {
-            eprintln!("No bookmarks found to edit");
-            return Ok(());
-        }
-
         edit_bookmarks(
-            id_list,
+            distinct_ids(ids),
             force_db,
             bookmark_service,
             template_service,
@@ -979,16 +980,17 @@ pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
     if let Commands::Show { ids, is_json } = cli.command.unwrap() {
         let bookmark_service = services.bookmark_service.clone();
 
-        let id_list = get_ids(ids)?;
         let mut bookmarks = Vec::new();
+        let mut failed_ids = Vec::new();
 
-        for id in id_list {
+        for id in distinct_ids(ids) {
             if let Some(bookmark) = bookmark_service.get_bookmark(id)? {
                 // Report the state before this access: otherwise "last accessed" always reads "now"
                 services.action_service.record_access(&bookmark);
                 bookmarks.push(bookmark);
             } else {
                 eprintln!("Bookmark with ID {} not found", id);
+                failed_ids.push(id);
             }
         }
 
@@ -1010,6 +1012,8 @@ pub fn show(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
                 );
             }
         }
+        // After the output: the bookmarks that exist are still shown
+        report_failed_ids("show", &failed_ids)?;
     }
     Ok(())
 }

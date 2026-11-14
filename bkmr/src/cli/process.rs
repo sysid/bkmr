@@ -9,7 +9,7 @@ use crate::application::services::action_service::ActionService;
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::application::services::interpolation_service::InterpolationService;
 use crate::application::services::template_service::TemplateService;
-use crate::cli::bookmark_commands::format_action_description;
+use crate::cli::bookmark_commands::{format_action_description, report_failed_ids};
 use crate::cli::display::{
     lookup_embedded_ids, show_bookmarks, DisplayBookmark, ALL_FIELDS, DEFAULT_FIELDS,
 };
@@ -470,19 +470,21 @@ pub fn edit_bookmarks(
 ) -> CliResult<()> {
     let mut bookmarks_to_edit = Vec::new();
     let mut updated_count = 0;
+    let mut failed_ids = Vec::new();
 
     // Fetch bookmarks
     for id in &ids {
-        if let Ok(Some(bookmark)) = bookmark_service.get_bookmark(*id) {
+        if let Some(bookmark) = bookmark_service.get_bookmark(*id)? {
             bookmarks_to_edit.push(bookmark);
         } else {
             eprintln!("Bookmark with ID {} not found", id);
+            failed_ids.push(*id);
         }
     }
 
     if bookmarks_to_edit.is_empty() {
         eprintln!("No bookmarks found to edit");
-        return Ok(());
+        return report_failed_ids("edit", &failed_ids);
     }
 
     // Display bookmarks before editing
@@ -530,7 +532,7 @@ pub fn edit_bookmarks(
     }
 
     eprintln!("Updated {} bookmarks", updated_count);
-    Ok(())
+    report_failed_ids("edit", &failed_ids)
 }
 
 /// Delete bookmarks by their indices in the displayed list

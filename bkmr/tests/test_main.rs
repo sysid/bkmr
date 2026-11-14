@@ -2769,3 +2769,71 @@ fn given_ids_without_from_when_restoring_then_exit_64() {
 
     assert_eq!(output.status.code(), Some(64));
 }
+
+#[test]
+fn given_unknown_id_among_ids_when_update_then_updates_the_rest_and_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("update.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["update", "9999", &id, "--title", "Fixed"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("9999"));
+
+    assert_eq!(search_all(&db)[0]["title"], "Fixed");
+}
+
+#[test]
+fn given_unknown_id_among_ids_when_show_json_then_prints_the_rest_and_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("show.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &format!("{},9999", id), "--json"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("9999"))
+        .get_output()
+        .stdout
+        .clone();
+
+    let shown: Vec<serde_json::Value> = serde_json::from_slice(&output).unwrap();
+    assert_eq!(shown.len(), 1);
+}
+
+#[test]
+fn given_unknown_id_when_edit_or_open_then_exits_failure() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("edit.db");
+    create_db_with_one_bookmark(&db);
+
+    for command in ["edit", "open"] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args([command, "9999"])
+            .assert()
+            .code(1)
+            .stderr(predicate::str::contains("9999"));
+    }
+}
+
+#[test]
+fn given_space_separated_ids_when_show_then_accepts_them_like_verify() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("show.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["show", &id, &id, "--json"])
+        .assert()
+        .success();
+}

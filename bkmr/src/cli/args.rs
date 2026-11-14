@@ -347,8 +347,9 @@ pub enum Commands {
   64   invalid ID format
   130  confirmation declined or no input on stdin (--yes skips the prompt, except with --force)")]
     Delete {
-        /// Bookmark IDs (comma-separated)
-        ids: String,
+        /// Bookmark IDs (space- or comma-separated)
+        #[arg(required = true, num_args = 1.., value_delimiter = ',')]
+        ids: Vec<i32>,
         #[arg(
             short = 'f',
             long = "force",
@@ -457,8 +458,9 @@ Exit codes:
     },
     /// Update tags, title, description, URL/content or opener non-interactively
     Update {
-        /// Bookmark IDs (comma-separated)
-        ids: String,
+        /// Bookmark IDs (space- or comma-separated)
+        #[arg(required = true, num_args = 1.., value_delimiter = ',')]
+        ids: Vec<i32>,
         #[arg(short = 't', long = "tags", help = "add tags to taglist")]
         tags: Option<String>,
         #[arg(short = 'n', long = "ntags", help = "remove tags from taglist")]
@@ -487,8 +489,9 @@ Exit codes:
     },
     /// Edit bookmarks interactively in $EDITOR (smart: opens source file for imports)
     Edit {
-        /// Bookmark IDs (comma-separated)
-        ids: String,
+        /// Bookmark IDs (space- or comma-separated)
+        #[arg(required = true, num_args = 1.., value_delimiter = ',')]
+        ids: Vec<i32>,
         #[arg(
             long = "force-db",
             help = "for file-imported bookmarks: edit URL/content stored in the database instead of the source file"
@@ -497,8 +500,9 @@ Exit codes:
     },
     /// Show bookmark details
     Show {
-        /// Bookmark IDs (comma-separated)
-        ids: String,
+        /// Bookmark IDs (space- or comma-separated)
+        #[arg(required = true, num_args = 1.., value_delimiter = ',')]
+        ids: Vec<i32>,
         #[arg(long = "json", help = "output as JSON")]
         is_json: bool,
     },
