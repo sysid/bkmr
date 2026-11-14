@@ -156,11 +156,11 @@ bkmr search --fzf
 | `update` | Change tags, title, description, content, opener or embedding, non-interactively |
 | `delete` | Delete bookmarks by ID (`--yes`: no prompt; `--force`: also purge history, permanently) |
 | `history` | Show saved old states of agent memories (`_mem_`); `-p`: each change as a unified diff |
-| `restore` | Bring back a saved state from `history`, also of a deleted memory; `--dry-run`: show the diff only |
+| `restore` | Bring back a saved state from `history`, also of a deleted memory; `--from FILE`: changed and deleted bookmarks of any type from a `search --json` backup; `--dry-run`: show the diff only |
 | `verify` | Record that bookmarks were checked against reality (`verified_at`) |
 | `show` | Display bookmark details |
 | `import-files` | Import files/directories with frontmatter parsing |
-| `load-json` | Bulk-create bookmarks from a JSON array |
+| `load-json` | Add bookmarks in bulk from a JSON array; skips entries whose URL/content exists, leaves existing bookmarks as they are |
 | `tags` | View tag taxonomy with usage counts |
 | `info` | Show configuration, database path, embedding status |
 | `create-db` | Initialize a bookmark database |
@@ -172,6 +172,19 @@ bkmr search --fzf
 | `surprise` | Open random URL bookmarks |
 
 **Complete command documentation**: See **[Basic Usage](https://github.com/sysid/bkmr/wiki/Basic-Usage)** for detailed examples.
+
+### Backup and Restore
+
+A backup is the JSON export of `search`. `restore --from` brings back every bookmark that changed or was deleted since, whatever its type, under its own ID:
+
+```bash
+bkmr search --json > ~/backup/bkmr.json            # write a backup
+bkmr restore --from ~/backup/bkmr.json             # show the plan, then [y]es [n]o [s]elect [d]iff
+bkmr restore --from ~/backup/bkmr.json --ids 12,40 # only these bookmarks
+bkmr restore --from ~/backup/bkmr.json --dry-run   # unified diffs, nothing written
+```
+
+Entries are matched by ID, so a bookmark whose URL/content changed is still recognized. Bookmarks the backup does not contain are never touched. See **[Restoring from a JSON Backup](https://github.com/sysid/bkmr/wiki/Basic-Usage#restoring-from-a-json-backup)**.
 
 ## Smart Content Actions
 
@@ -188,6 +201,8 @@ bkmr intelligently handles different content types with appropriate actions:
 | Agent Memory          | Display to stdout             | `_mem_`      |
 
 > **Rule:** A bookmark can have at most **one** system tag. Local files without a system tag open with the default application.
+
+> **URL/content:** every bookmark keeps its payload in one field, named URL for historical reasons. For a web bookmark it is a web address; for every other type it is the content itself: the snippet, script, markdown, env vars or memory text. Help texts and docs therefore say *URL/content*; in JSON the field is `url`.
 
 Learn more: **[Content Types](https://github.com/sysid/bkmr/wiki/Content-Types)** | **[Core Concepts](https://github.com/sysid/bkmr/wiki/Core-Concepts)**
 

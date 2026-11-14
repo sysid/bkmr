@@ -8,6 +8,7 @@ use crate::application::services::tag_service::TagService;
 use crate::application::services::template_service::TemplateService;
 use crate::application::templates::bookmark_template::BookmarkTemplate;
 use crate::cli::args::{Cli, Commands};
+use crate::cli::backup_restore::{restore_from_backup, BackupRestoreRequest};
 use crate::cli::display::lookup_embedded_ids;
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::history_diff::{render_patch, MemoryState};
@@ -736,9 +737,28 @@ pub fn restore(
 ) -> CliResult<()> {
     if let Commands::Restore {
         history_id,
+        from,
+        ids,
+        yes,
         dry_run,
+        is_json,
     } = cli.command.unwrap()
     {
+        if let Some(path) = from {
+            let request = BackupRestoreRequest {
+                path: &path,
+                ids: &ids,
+                yes,
+                dry_run,
+                is_json,
+                color: diff_color(settings),
+            };
+            return restore_from_backup(&request, bookmark_service);
+        }
+        // clap requires one of the two
+        let history_id = history_id.ok_or_else(|| {
+            CliError::InvalidInput("a history ID or --from is required".to_string())
+        })?;
         if dry_run {
             let preview = bookmark_service.preview_restore(history_id)?;
             let old_label = match &preview.current {

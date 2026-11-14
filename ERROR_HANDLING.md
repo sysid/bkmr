@@ -38,17 +38,17 @@ Infrastructure → Domain → Application → CLI / LSP → exit code
 
 Exit codes are a contract for scripts. `CliError::exit_code()` maps errors to codes, and
 `bkmr/tests/test_main.rs` tests them (`skill install`: `bkmr/tests/test_skill.rs`). `bkmr --help` repeats
-the table, and `delete`, `clear-embeddings`, `import-files` and `skill install` list their codes in
+the table, and `delete`, `restore`, `clear-embeddings`, `import-files` and `skill install` list their codes in
 their own help; keep `bkmr/src/cli/args.rs` in sync when a
 code changes.
 
 | Code | Constant | Meaning | Examples |
 |---|---|---|---|
 | 0 | `SUCCESS` | Success | |
-| 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone` or `delete`, failed `delete`, `delete --force` with another process reading, missing import path |
-| 64 | `USAGE` | Fix the invocation or config | unknown flag, no arguments, non-numeric ID, unsupported shell, invalid config file |
+| 1 | `FAILURE` | Valid invocation, but the operation failed | missing database, unknown bookmark ID in `add --clone` or `delete`, failed `delete`, `delete --force` with another process reading, missing import path, `restore --from --ids` naming a bookmark that is not restorable |
+| 64 | `USAGE` | Fix the invocation or config | unknown flag, no arguments, non-numeric ID, unsupported shell, invalid config file, `restore --from --ids` with an ID that is not in the backup |
 | 65 | `DUP` | Duplicate name | `import-files` without `--update`, `skill install` onto an existing skill without `--force` |
-| 130 | `CANCEL` | User declined a confirmation | `clear-embeddings`, `delete` (also with no input on stdin; `--yes` skips the prompt, except with `--force`) |
+| 130 | `CANCEL` | User declined a confirmation | `clear-embeddings`, `delete` (also with no input on stdin; `--yes` skips the prompt, except with `--force`), `restore --from` (also picker cancelled or no input on stdin; `--yes` skips the prompt) |
 
 A new `CliError` variant exits 1 unless `exit_code()` says otherwise. Use `InvalidInput` only when
 the user can fix the failure by changing the arguments; for a state problem such as an unknown ID,

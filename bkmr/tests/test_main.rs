@@ -2446,3 +2446,326 @@ fn given_memory_deleted_without_history_after_last_update_when_history_with_patc
         "{stdout}"
     );
 }
+
+// --- restore --from: bring back bookmarks from a JSON export ---
+
+/// A database with two snippets, `echo one` and `echo two`, and a `search --json` export of both.
+/// Returns the database, the backup file and the two IDs.
+fn db_with_two_snippets_and_backup(
+    dir: &std::path::Path,
+) -> (std::path::PathBuf, std::path::PathBuf, String, String) {
+    let db = dir.join("restore.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    for (content, title) in [("echo one", "One"), ("echo two", "Two")] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args([
+                "add",
+                content,
+                "demo",
+                "--title",
+                title,
+                "-t",
+                "snip",
+                "--no-web",
+                "--no-embed",
+            ])
+            .assert()
+            .success();
+    }
+    let export = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--np", "--json", ""])
+        .output()
+        .expect("run bkmr search");
+    let backup = dir.join("backup.json");
+    std::fs::write(&backup, &export.stdout).unwrap();
+    let bookmarks = search_all(&db);
+    let id_of = |url: &str| {
+        bookmarks
+            .iter()
+            .find(|b| b["url"] == url)
+            .expect("snippet exists")["id"]
+            .to_string()
+    };
+    let (one, two) = (id_of("echo one"), id_of("echo two"));
+    (db, backup, one, two)
+}
+
+fn bkmr_in(db: &std::path::Path, args: &[&str], stdin: &str) -> std::process::Output {
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args(args)
+        .write_stdin(stdin)
+        .output()
+        .expect("run bkmr")
+}
+
+fn url_of(db: &std::path::Path, id: &str) -> Option<String> {
+    search_all(db)
+        .into_iter()
+        .find(|b| b["id"].to_string() == id)
+        .map(|b| b["url"].as_str().unwrap().to_string())
+}
+
+#[test]
+fn given_edited_and_deleted_snippets_when_restoring_from_backup_with_yes_then_both_return_under_their_ids(
+) {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+    bkmr_in(&db, &["delete", "--yes", &two], "");
+
+    let output = bkmr_in(
+        &db,
+        &["restore", "--from", backup.to_str().unwrap(), "--yes"],
+        "",
+    );
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo one"));
+    assert_eq!(url_of(&db, &two).as_deref(), Some("echo two"));
+    assert_eq!(search_all(&db).len(), 2, "no duplicates");
+}
+
+#[test]
+fn given_plan_when_user_declines_the_prompt_then_nothing_changes_and_exit_is_130() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, _two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+
+    let output = bkmr_in(&db, &["restore", "--from", backup.to_str().unwrap()], "n\n");
+
+    assert_eq!(output.status.code(), Some(130));
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo ONE"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("changed"), "plan lists the state: {stdout}");
+    assert!(
+        stdout.contains("url"),
+        "plan names the changed field: {stdout}"
+    );
+}
+
+#[test]
+fn given_plan_when_input_ends_without_an_answer_then_nothing_changes_and_exit_is_130() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, _two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+
+    let output = bkmr_in(&db, &["restore", "--from", backup.to_str().unwrap()], "");
+
+    assert_eq!(output.status.code(), Some(130));
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo ONE"));
+}
+
+#[test]
+fn given_plan_when_user_asks_for_diff_then_confirms_then_diff_is_shown_and_restore_runs() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, _two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+
+    let output = bkmr_in(
+        &db,
+        &["restore", "--from", backup.to_str().unwrap()],
+        "d\ny\n",
+    );
+
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("-echo ONE"), "{stdout}");
+    assert!(stdout.contains("+echo one"), "{stdout}");
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo one"));
+}
+
+#[test]
+fn given_dry_run_when_restoring_from_backup_then_diff_is_printed_and_nothing_is_written() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+    bkmr_in(&db, &["delete", "--yes", &two], "");
+
+    let output = bkmr_in(
+        &db,
+        &["restore", "--from", backup.to_str().unwrap(), "--dry-run"],
+        "",
+    );
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("+echo one"), "{stdout}");
+    assert!(
+        stdout.contains("+echo two"),
+        "deleted one diffs from nothing: {stdout}"
+    );
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo ONE"));
+    assert_eq!(url_of(&db, &two), None);
+}
+
+#[test]
+fn given_dry_run_json_when_restoring_from_backup_then_plan_lists_state_and_changed_fields_per_id() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+    bkmr_in(&db, &["delete", "--yes", &two], "");
+
+    let output = bkmr_in(
+        &db,
+        &[
+            "restore",
+            "--from",
+            backup.to_str().unwrap(),
+            "--dry-run",
+            "--json",
+        ],
+        "",
+    );
+
+    assert!(output.status.success());
+    let plan: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let entry = |id: &str| {
+        plan.iter()
+            .find(|e| e["id"].to_string() == id)
+            .unwrap_or_else(|| panic!("no plan entry for {id}"))
+            .clone()
+    };
+    assert_eq!(entry(&one)["state"], "changed");
+    assert_eq!(entry(&one)["changed_fields"], serde_json::json!(["url"]));
+    assert_eq!(entry(&two)["state"], "deleted");
+}
+
+#[test]
+fn given_ids_when_restoring_from_backup_then_only_those_bookmarks_are_restored() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+    bkmr_in(&db, &["update", "--url", "echo TWO", &two], "");
+
+    let output = bkmr_in(
+        &db,
+        &[
+            "restore",
+            "--from",
+            backup.to_str().unwrap(),
+            "--ids",
+            &two,
+            "--yes",
+        ],
+        "",
+    );
+
+    assert!(output.status.success());
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo ONE"));
+    assert_eq!(url_of(&db, &two).as_deref(), Some("echo two"));
+}
+
+#[test]
+fn given_id_not_in_backup_when_restoring_then_exit_64_and_nothing_changes() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, _two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+
+    let output = bkmr_in(
+        &db,
+        &[
+            "restore",
+            "--from",
+            backup.to_str().unwrap(),
+            "--ids",
+            &format!("{one},99999"),
+            "--yes",
+        ],
+        "",
+    );
+
+    assert_eq!(output.status.code(), Some(64));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("99999"));
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo ONE"));
+}
+
+#[test]
+fn given_requested_id_whose_url_another_bookmark_has_when_restoring_then_exit_1_and_the_others_are_restored(
+) {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, one, two) = db_with_two_snippets_and_backup(dir.path());
+    bkmr_in(&db, &["update", "--url", "echo ONE", &one], "");
+    bkmr_in(&db, &["delete", "--yes", &two], "");
+    bkmr_in(
+        &db,
+        &[
+            "add",
+            "echo two",
+            "x",
+            "--title",
+            "Taker",
+            "-t",
+            "snip",
+            "--no-web",
+            "--no-embed",
+        ],
+        "",
+    );
+
+    let output = bkmr_in(
+        &db,
+        &[
+            "restore",
+            "--from",
+            backup.to_str().unwrap(),
+            "--ids",
+            &format!("{one},{two}"),
+            "--yes",
+        ],
+        "",
+    );
+
+    assert_eq!(output.status.code(), Some(1));
+    assert_eq!(url_of(&db, &one).as_deref(), Some("echo one"));
+    assert_eq!(url_of(&db, &two), None);
+}
+
+#[test]
+fn given_nothing_changed_since_backup_when_restoring_then_success_without_prompt() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, _one, _two) = db_with_two_snippets_and_backup(dir.path());
+
+    let output = bkmr_in(&db, &["restore", "--from", backup.to_str().unwrap()], "");
+
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("Nothing to restore"));
+}
+
+#[test]
+fn given_history_id_and_from_when_restoring_then_exit_64() {
+    let dir = TempDir::new().unwrap();
+    let (db, backup, _one, _two) = db_with_two_snippets_and_backup(dir.path());
+
+    let output = bkmr_in(
+        &db,
+        &["restore", "5", "--from", backup.to_str().unwrap()],
+        "",
+    );
+
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_ids_without_from_when_restoring_then_exit_64() {
+    let dir = TempDir::new().unwrap();
+    let (db, _backup, _one, _two) = db_with_two_snippets_and_backup(dir.path());
+
+    let output = bkmr_in(&db, &["restore", "5", "--ids", "1"], "");
+
+    assert_eq!(output.status.code(), Some(64));
+}

@@ -21,6 +21,51 @@ pub struct RestorePreview {
     pub restored: Bookmark,
 }
 
+/// What `restore --from` does with one entry of a backup, decided before anything is written
+#[derive(Debug, Clone)]
+pub enum BackupRestoreState {
+    /// Differs from the bookmark under its ID, in the named fields: the restore overwrites it
+    Changed {
+        current: Box<Bookmark>,
+        restored: Box<Bookmark>,
+        fields: Vec<&'static str>,
+    },
+    /// No bookmark has its ID any more: the restore adds it again under that ID
+    Deleted {
+        restored: Box<Bookmark>,
+    },
+    /// Restoring would give it the URL that bookmark `blocking_id` has now
+    Conflict {
+        blocking_id: i32,
+    },
+    /// Imported from a file, which decides its content: change or re-import the file instead
+    FileBacked {
+        file_path: String,
+    },
+    Unchanged,
+    /// Not from a bkmr export, so nothing ties it to a bookmark
+    NoId,
+}
+
+/// One entry of a backup with what restoring it would do
+#[derive(Debug, Clone)]
+pub struct BackupRestoreItem {
+    pub id: Option<i32>,
+    /// The title in the backup
+    pub title: String,
+    pub state: BackupRestoreState,
+}
+
+impl BackupRestoreItem {
+    /// Whether `apply_backup_restore` would write something
+    pub fn is_restorable(&self) -> bool {
+        matches!(
+            self.state,
+            BackupRestoreState::Changed { .. } | BackupRestoreState::Deleted { .. }
+        )
+    }
+}
+
 /// Service interface for bookmark-related operations
 pub trait BookmarkService: Send + Sync + Debug {
     /// Add a new bookmark
@@ -139,7 +184,8 @@ pub trait BookmarkService: Send + Sync + Debug {
     fn record_bookmark_access(&self, id: i32) -> ApplicationResult<Bookmark>;
 
     /// Bulk-create bookmarks from a JSON array file. Stores full content (url, title,
-    /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates.
+    /// description, tags). Skips bookmarks whose URL already exists. Does NOT support updates,
+    /// and ignores `id`: restoring an export is `plan_backup_restore`.
     /// Use case: agent bulk imports, migrations, seeding a database.
     fn load_json_bookmarks(
         &self,
@@ -147,6 +193,14 @@ pub trait BookmarkService: Send + Sync + Debug {
         dry_run: bool,
         embed: Option<bool>,
     ) -> ApplicationResult<usize>;
+
+    /// Compare a JSON export (`bkmr search --json`) with the database, entry by entry, by ID.
+    /// Writes nothing. Fails on an unreadable file or an ID the backup lists twice.
+    fn plan_backup_restore(&self, path: &str) -> ApplicationResult<Vec<BackupRestoreItem>>;
+
+    /// Write one planned entry: overwrite a changed bookmark, or add a deleted one again under
+    /// its old ID. Fails for an entry that is not restorable.
+    fn apply_backup_restore(&self, item: &BackupRestoreItem) -> ApplicationResult<Bookmark>;
 
     /// Import files from directories with frontmatter metadata. Stores full content AND
     /// tracks source file (path, mtime, hash) for smart editing and change detection.
