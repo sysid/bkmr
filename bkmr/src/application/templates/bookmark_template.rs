@@ -173,6 +173,7 @@ impl BookmarkTemplate {
             "# Bookmark Template\n\
             # Lines starting with '#' are comments and will be ignored.\n\
             # Section markers (=== SECTION_NAME ===) are required and must not be removed.\n\
+            # ID: clear it to save a new bookmark; another ID is refused.\n\
             # EMBEDDABLE: true or false; a type set to \"always\" in [embeddings.policy] stays true.\n\
             \n\
             === ID ===\n\
@@ -283,6 +284,18 @@ impl BookmarkTemplate {
 
     #[instrument(level = "debug")]
     pub fn to_bookmark(&self, original: Option<&Bookmark>) -> ApplicationResult<Bookmark> {
+        // The ID decides which row the edit writes: another one would overwrite that bookmark.
+        // Clearing it is allowed, and saves the edit as a new bookmark.
+        if let Some(original) = original {
+            if self.id.is_some() && self.id != original.id {
+                return Err(ApplicationError::Validation(format!(
+                    "The ID cannot be changed in the editor (was {}, now {})",
+                    original.id.map_or("empty".to_string(), |id| id.to_string()),
+                    self.id.map_or("empty".to_string(), |id| id.to_string()),
+                )));
+            }
+        }
+
         // Create a binding to extend the lifetime of the BookmarkBuilder
         let mut binding = BookmarkBuilder::default();
         let mut builder = binding
@@ -298,11 +311,15 @@ impl BookmarkTemplate {
             .opener(self.opener.clone())
             .accessed_at(original.and_then(|b| b.accessed_at));
 
-        // Preserve embedding and content hash if available from original
+        // Preserve embedding, content hash and the link to an imported source file. The form
+        // does not show the file fields, and the repository writes a missing one as NULL.
         if let Some(bookmark) = original {
             builder = builder
                 .embedding(bookmark.embedding.clone())
-                .content_hash(bookmark.content_hash.clone());
+                .content_hash(bookmark.content_hash.clone())
+                .file_path(bookmark.file_path.clone())
+                .file_mtime(bookmark.file_mtime)
+                .file_hash(bookmark.file_hash.clone());
         } else {
             // Initialize with None for new bookmarks
             builder = builder.embedding(None).content_hash(None);
@@ -399,6 +416,60 @@ mod tests {
         assert!(result.is_err());
         let err = result.err().unwrap().to_string();
         assert!(err.contains("at most one system tag"), "got: {err}");
+    }
+
+    #[test]
+    fn given_file_backed_original_when_to_bookmark_then_keeps_link_to_source_file() {
+        // Arrange: a bookmark imported from a file, edited in the database (edit --force-db)
+        let mut original = Bookmark::new("echo hi", "deploy", "", HashSet::new()).unwrap();
+        original.set_id(12);
+        original.file_path = Some("$SCRIPTS/deploy.sh".to_string());
+        original.file_mtime = Some(1_700_000_000);
+        original.file_hash = Some("abc123".to_string());
+        let mut template = BookmarkTemplate::from_bookmark(&original);
+        template.title = "deploy prod".to_string();
+
+        // Act
+        let bookmark = template.to_bookmark(Some(&original)).unwrap();
+
+        // Assert
+        assert_eq!(bookmark.file_path.as_deref(), Some("$SCRIPTS/deploy.sh"));
+        assert_eq!(bookmark.file_mtime, Some(1_700_000_000));
+        assert_eq!(bookmark.file_hash.as_deref(), Some("abc123"));
+    }
+
+    #[test]
+    fn given_id_changed_in_editor_when_to_bookmark_then_refuses_to_write_another_bookmark() {
+        // Arrange: bkmr edit 12, and the user types 34 into the ID section
+        let mut original = Bookmark::new("https://a.example", "a", "", HashSet::new()).unwrap();
+        original.set_id(12);
+        let mut template = BookmarkTemplate::from_bookmark(&original);
+        template.id = Some(34);
+        template.url = "https://b.example".to_string();
+
+        // Act
+        let result = template.to_bookmark(Some(&original));
+
+        // Assert
+        let err = result
+            .expect_err("a changed ID must be refused")
+            .to_string();
+        assert!(err.contains("ID cannot be changed"), "got: {err}");
+    }
+
+    #[test]
+    fn given_id_cleared_in_editor_when_to_bookmark_then_returns_new_bookmark() {
+        // Arrange: bkmr edit 12, and the user empties the ID section to save a copy
+        let mut original = Bookmark::new("https://a.example", "a", "", HashSet::new()).unwrap();
+        original.set_id(12);
+        let mut template = BookmarkTemplate::from_bookmark(&original);
+        template.id = None;
+
+        // Act
+        let bookmark = template.to_bookmark(Some(&original)).unwrap();
+
+        // Assert
+        assert_eq!(bookmark.id, None);
     }
 
     #[test]
