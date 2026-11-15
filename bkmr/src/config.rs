@@ -103,6 +103,8 @@ impl Default for EmbeddingOpts {
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+// Like HistoryRetention: a mistyped table would silently keep the default history
+#[serde(deny_unknown_fields)]
 pub struct HistoryOpts {
     /// Saved states kept per bookmark, by type
     #[serde(default)]
@@ -468,6 +470,14 @@ mod tests {
         assert_eq!(retention.memory, 3);
         assert_eq!(retention.snippet, 10);
         assert_eq!(retention.uri, 10);
+    }
+
+    #[test]
+    fn given_mistyped_history_table_when_parsing_config_then_fails() {
+        // Ignored, it would keep the default history the user meant to turn off
+        let result = toml::from_str::<Settings>("[history.retension]\n_env_ = 0\n");
+
+        assert!(result.unwrap_err().to_string().contains("retension"));
     }
 
     #[test]
