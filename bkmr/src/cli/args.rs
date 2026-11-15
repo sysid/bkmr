@@ -369,6 +369,23 @@ pub enum Commands {
         /// Bookmark ID (without it: all bookmarks, which finds the ID of a deleted one)
         id: Option<i32>,
         #[arg(
+            short = 't',
+            long = "type",
+            help = "only entries of this bookmark type, e.g. mem to find a deleted memory",
+            ignore_case = true,
+            // The types of add --type, except uri: a URI bookmark has no type tag to filter by.
+            // Mapped like add, in bookmark_commands::system_tag_for_type.
+            value_parser = clap::builder::PossibleValuesParser::new([
+                clap::builder::PossibleValue::new("snip"),
+                clap::builder::PossibleValue::new("text"),
+                clap::builder::PossibleValue::new("shell"),
+                clap::builder::PossibleValue::new("md").alias("markdown"),
+                clap::builder::PossibleValue::new("env"),
+                clap::builder::PossibleValue::new("mem").alias("memory"),
+            ])
+        )]
+        bookmark_type: Option<String>,
+        #[arg(
             short = 'l',
             long = "limit",
             default_value_t = 20,

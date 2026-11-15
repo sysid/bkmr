@@ -309,6 +309,20 @@ fn embed_request(embed: bool, no_embed: bool) -> Option<bool> {
     }
 }
 
+/// The system tag of a bookmark type as `add --type` and `history --type` name it. Anything
+/// else is a URI, which has no system tag.
+fn system_tag_for_type(bookmark_type: &str) -> SystemTag {
+    match bookmark_type.to_lowercase().as_str() {
+        "snip" => SystemTag::Snippet,
+        "text" => SystemTag::Text,
+        "shell" => SystemTag::Shell,
+        "md" | "markdown" => SystemTag::Markdown,
+        "env" => SystemTag::Env,
+        "mem" | "memory" => SystemTag::Memory,
+        _ => SystemTag::Uri,
+    }
+}
+
 #[instrument(skip(cli, bookmark_service, template_service))]
 pub fn add(
     cli: Cli,
@@ -332,16 +346,7 @@ pub fn add(
     {
         let requested = embed_request(embed, no_embed);
 
-        // Convert bookmark_type string to SystemTag
-        let system_tag = match bookmark_type.to_lowercase().as_str() {
-            "snip" => SystemTag::Snippet,
-            "text" => SystemTag::Text,
-            "shell" => SystemTag::Shell,
-            "md" | "markdown" => SystemTag::Markdown,
-            "env" => SystemTag::Env,
-            "mem" | "memory" => SystemTag::Memory,
-            _ => SystemTag::Uri, // Default to Uri for anything else
-        };
+        let system_tag = system_tag_for_type(&bookmark_type);
 
         // Parse tags using centralized argument processor
         let mut tag_set = ArgumentProcessor::parse_tags_with_error_handling(&tags)?;
@@ -575,7 +580,7 @@ fn purge_with_confirmation(
     id: i32,
 ) -> CliResult<PurgeOutcome> {
     let bookmark = bookmark_service.get_bookmark(id)?;
-    let history_count = bookmark_service.get_history(Some(id), i64::MAX)?.len();
+    let history_count = bookmark_service.count_history(id)?;
 
     match &bookmark {
         // Not the content: this command exists to remove secrets, and terminal scrollback and agent
@@ -618,6 +623,7 @@ pub fn history(
 ) -> CliResult<()> {
     if let Commands::History {
         id,
+        bookmark_type,
         limit,
         is_json,
         patch,
@@ -628,7 +634,12 @@ pub fn history(
                 "Limit must be a positive integer".to_string(),
             ));
         }
-        let entries = bookmark_service.get_history(id, limit)?;
+        // clap admits only types with a system tag, so a failure here is a bug
+        let type_tag = bookmark_type
+            .map(|t| system_tag_for_type(&t).to_tag())
+            .transpose()
+            .map_err(|e| CliError::Other(format!("bookmark type without a tag: {}", e)))?;
+        let entries = bookmark_service.get_history(id, type_tag.as_ref(), limit)?;
 
         if is_json {
             let json: Vec<serde_json::Value> = entries

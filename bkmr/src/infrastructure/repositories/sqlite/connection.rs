@@ -232,6 +232,50 @@ mod tests {
         conn.run_pending_migrations(MIGRATIONS).unwrap();
     }
 
+    #[test]
+    fn given_history_for_all_types_reverted_when_bookmarks_change_then_only_memories_get_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("bkmr.db");
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+        loop {
+            let reverted = conn.revert_last_migration(MIGRATIONS).unwrap().to_string();
+            if reverted == "20261115100000" {
+                break;
+            }
+        }
+        conn.batch_execute(
+            "INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+             VALUES ('memory', 'title', ',_mem_,', '', 0);
+             INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+             VALUES ('echo hi', 'title', ',_snip_,', '', 0);
+             UPDATE bookmarks SET URL = URL || ' changed';
+             UPDATE bookmarks SET opener = 'less {}';
+             DELETE FROM bookmarks;",
+        )
+        .unwrap();
+        drop(conn);
+
+        // Back to the old rule: memories only, and an opener change is not one worth keeping
+        let reader = rusqlite::Connection::open(&db).unwrap();
+        let changes: Vec<(String, String)> = reader
+            .prepare("SELECT URL, change FROM bookmark_history ORDER BY history_id")
+            .unwrap()
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(
+            changes,
+            vec![
+                ("memory".to_string(), "update".to_string()),
+                ("memory changed".to_string(), "delete".to_string()),
+            ]
+        );
+        let mut conn = SqliteConnection::establish(db.to_str().unwrap()).unwrap();
+        conn.run_pending_migrations(MIGRATIONS).unwrap();
+    }
+
     /// Later migrations are reverted too, so that this keeps reaching the history migration.
     fn revert_through_history_migration(conn: &mut SqliteConnection) {
         loop {

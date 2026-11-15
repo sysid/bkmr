@@ -155,7 +155,7 @@ bkmr search --fzf
 | `edit` | Edit bookmarks (smart: opens source file for imports) |
 | `update` | Change tags, title, description, content, opener or embedding, non-interactively |
 | `delete` | Delete bookmarks by ID (`--yes`: no prompt; `--force`: also purge history, permanently) |
-| `history` | Show saved old states of bookmarks, deleted ones included; `-p`: each change as a unified diff |
+| `history` | Show saved old states of bookmarks of every type, deleted ones included; `--type`: one type only; `-p`: each change as a unified diff |
 | `restore` | Bring back a saved state from `history`, also of a deleted bookmark; `--from FILE`: changed and deleted bookmarks of any type from a `search --json` backup; `--dry-run`: show the diff only |
 | `verify` | Record that bookmarks were checked against reality (`verified_at`) |
 | `show` | Display bookmark details |

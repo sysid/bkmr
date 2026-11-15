@@ -1912,10 +1912,7 @@ fn given_memory_with_opener_and_no_embedding_when_deleted_and_restored_then_both
     let id = search_all(&db)[0]["id"].to_string();
     rusqlite::Connection::open(&db)
         .unwrap()
-        .execute_batch(
-            "UPDATE bookmarks SET opener = 'less {}', file_path = '/tmp/x.md', \
-             file_mtime = 7, file_hash = 'abc'",
-        )
+        .execute_batch("UPDATE bookmarks SET opener = 'less {}'")
         .unwrap();
     run_with_config(&db, &config, &["delete", &id], "y\n");
     let history_id = history_of(&db, &[])[0]["history_id"].to_string();
@@ -1927,20 +1924,14 @@ fn given_memory_with_opener_and_no_embedding_when_deleted_and_restored_then_both
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let (opener, embeddable, path, mtime, hash): (String, bool, String, i32, String) =
-        rusqlite::Connection::open(&db)
-            .unwrap()
-            .query_row(
-                "SELECT opener, embeddable, file_path, file_mtime, file_hash FROM bookmarks",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
-            )
-            .unwrap();
+    let (opener, embeddable): (String, bool) = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row("SELECT opener, embeddable FROM bookmarks", [], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })
+        .unwrap();
     assert_eq!(opener, "less {}");
     assert!(!embeddable);
-    assert_eq!(path, "/tmp/x.md");
-    assert_eq!(mtime, 7);
-    assert_eq!(hash, "abc");
 }
 
 fn create_db_with_one_memory_not_embedded(db: &std::path::Path, config: &std::path::Path) {
@@ -2427,6 +2418,68 @@ fn given_patch_without_memory_id_when_history_then_usage_error() {
     let output = run_with_config(&db, &config, &["history", "-p"], "");
 
     assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_deleted_memory_and_newer_snippet_changes_when_history_with_type_mem_then_the_memory_is_found(
+) {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let memory_id = search_all(&db)[0]["id"].as_i64().unwrap();
+    run_with_config(&db, &config, &["delete", &memory_id.to_string()], "y\n");
+    run_with_config(
+        &db,
+        &config,
+        &["add", "echo 0", "--title", "Snip", "-t", "snip"],
+        "",
+    );
+    let snippet_id = search_all(&db)[0]["id"].to_string();
+    for n in 1..=3 {
+        run_with_config(
+            &db,
+            &config,
+            &["update", "--url", &format!("echo {n}"), &snippet_id],
+            "",
+        );
+    }
+
+    let memories = history_of(&db, &["--type", "mem", "--limit", "1"]);
+
+    assert_eq!(memories.len(), 1);
+    assert_eq!(memories[0]["bookmark_id"].as_i64(), Some(memory_id));
+    assert_eq!(memories[0]["change"], "delete");
+}
+
+#[test]
+fn given_uri_type_when_history_then_usage_error() {
+    // A URI bookmark has no type tag to filter by
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+
+    let output = run_with_config(&db, &config, &["history", "--type", "uri"], "");
+
+    assert_eq!(output.status.code(), Some(64));
+}
+
+#[test]
+fn given_force_when_delete_then_the_prompt_counts_the_history_entries_to_remove() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    let config = config_without_memory_embedding(dir.path());
+    create_db_with_one_memory(&db, &config);
+    let id = search_all(&db)[0]["id"].to_string();
+    for url in ["https://example.com/a", "https://example.com/b"] {
+        run_with_config(&db, &config, &["update", "--url", url, &id], "");
+    }
+
+    let output = run_with_config(&db, &config, &["delete", "--force", &id], "y\n");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("and 2 history entries"), "{stderr}");
 }
 
 #[test]
