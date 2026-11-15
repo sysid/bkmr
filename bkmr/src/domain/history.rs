@@ -1,5 +1,18 @@
 // src/domain/history.rs
+use crate::domain::per_type::PerType;
 use chrono::{DateTime, Utc};
+
+/// How many saved states history holds, for `bkmr info`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryCounts {
+    /// By the type of each saved state, which after a change of type differs between states of
+    /// one bookmark
+    pub per_type: PerType<usize>,
+    /// Bookmarks that are deleted but have saved states
+    pub deleted_bookmarks: usize,
+    /// Saved states of those bookmarks
+    pub deleted_states: usize,
+}
 
 /// What happened to the bookmark when its old state was saved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

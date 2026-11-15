@@ -46,6 +46,19 @@ impl<T: Copy> PerType<T> {
         }
     }
 
+    /// A value computed for each type
+    pub fn from_fn(value_for: impl Fn(SystemTag) -> T) -> Self {
+        Self {
+            uri: value_for(SystemTag::Uri),
+            snippet: value_for(SystemTag::Snippet),
+            text: value_for(SystemTag::Text),
+            shell: value_for(SystemTag::Shell),
+            markdown: value_for(SystemTag::Markdown),
+            env: value_for(SystemTag::Env),
+            memory: value_for(SystemTag::Memory),
+        }
+    }
+
     /// The value for a bookmark of this type
     pub fn for_type(&self, bookmark_type: SystemTag) -> T {
         match bookmark_type {
@@ -75,17 +88,6 @@ impl<T: Copy> PerType<T> {
             (SystemTag::Env.as_str(), self.env),
             (SystemTag::Memory.as_str(), self.memory),
         ]
-    }
-}
-
-impl<T: Copy + std::fmt::Display> PerType<T> {
-    /// "uri=10, _snip_=10, ...", for `bkmr info`
-    pub fn display(&self) -> String {
-        self.entries()
-            .iter()
-            .map(|(key, value)| format!("{key}={value}"))
-            .collect::<Vec<_>>()
-            .join(", ")
     }
 }
 
@@ -123,16 +125,21 @@ mod tests {
     }
 
     #[test]
-    fn given_unknown_system_tag_when_asking_then_follows_uri() {
-        assert_eq!(numbered().for_tags(&tags(&["_custom_"])), 1);
-        assert_eq!(numbered().for_tags(&tags(&[])), 1);
+    fn given_function_of_type_when_building_then_each_type_gets_its_own_value() {
+        let per_type = PerType::from_fn(|t| t.as_str().len());
+
+        assert_eq!(per_type.uri, 0);
+        assert_eq!(per_type.snippet, "_snip_".len());
+        assert_eq!(per_type.text, "_imported_".len());
+        assert_eq!(per_type.shell, "_shell_".len());
+        assert_eq!(per_type.markdown, "_md_".len());
+        assert_eq!(per_type.env, "_env_".len());
+        assert_eq!(per_type.memory, "_mem_".len());
     }
 
     #[test]
-    fn given_values_when_displaying_then_lists_each_config_key_in_order() {
-        assert_eq!(
-            numbered().display(),
-            "uri=1, _snip_=2, _imported_=3, _shell_=4, _md_=5, _env_=6, _mem_=7"
-        );
+    fn given_unknown_system_tag_when_asking_then_follows_uri() {
+        assert_eq!(numbered().for_tags(&tags(&["_custom_"])), 1);
+        assert_eq!(numbered().for_tags(&tags(&[])), 1);
     }
 }

@@ -511,12 +511,17 @@ fn given_config_with_snippets_off_when_adding_through_binary_then_not_embedded()
 }
 
 #[test]
-fn given_config_with_policy_when_showing_info_then_prints_effective_policy() {
+fn given_config_with_policy_and_retention_when_showing_info_then_prints_effective_values_per_type()
+{
     // Arrange
     let dir = TempDir::new().unwrap();
     let db = dir.path().join("info.db");
     let config = dir.path().join("config.toml");
-    std::fs::write(&config, "[embeddings.policy]\n_snip_ = \"off\"\n").unwrap();
+    std::fs::write(
+        &config,
+        "[embeddings.policy]\n_snip_ = \"off\"\n[history.retention]\n_mem_ = 50\n",
+    )
+    .unwrap();
     cargo_bin_cmd!("bkmr")
         .arg("create-db")
         .arg(&db)
@@ -531,8 +536,10 @@ fn given_config_with_policy_when_showing_info_then_prints_effective_policy() {
         .arg("info")
         .assert()
         .success()
-        .stdout(predicate::str::contains("_snip_=off"))
-        .stdout(predicate::str::contains("_mem_=always"));
+        // Rows of the type table: type, tag, bookmarks, embedding, keep, saved
+        .stdout(predicate::str::is_match(r"Snippet +_snip_ +\d+ +off +10 +\d+").unwrap())
+        .stdout(predicate::str::is_match(r"Memory +_mem_ +\d+ +always +50 +\d+").unwrap())
+        .stdout(predicate::str::is_match(r"URI +- +\d+ +on +10 +\d+").unwrap());
 }
 
 #[test]

@@ -11,8 +11,9 @@ use super::connection::{ConnectionPool, PooledConnection};
 use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, RepositoryError};
-use crate::domain::history::{HistoryChange, HistoryEntry};
+use crate::domain::history::{HistoryChange, HistoryCounts, HistoryEntry};
 use crate::domain::history_retention::HistoryRetention;
+use crate::domain::per_type::PerType;
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::RankedResult;
@@ -32,6 +33,15 @@ use diesel::QueryableByName;
 struct CheckpointResult {
     #[diesel(sql_type = diesel::sql_types::Integer)]
     busy: i32,
+}
+
+/// Saved states of deleted bookmarks, for history_counts.
+#[derive(Debug, QueryableByName)]
+struct DeletedHistoryCounts {
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    states: i64,
+    #[diesel(sql_type = diesel::sql_types::BigInt)]
+    bookmarks: i64,
 }
 
 #[derive(Debug, QueryableByName)]
@@ -147,6 +157,40 @@ impl SqliteBookmarkRepository {
             .map_err(SqliteRepositoryError::DatabaseError)?;
         debug!(removed, "Trimmed history to the configured limits");
         Ok(removed)
+    }
+
+    /// Saved states by type, and those of deleted bookmarks, for `bkmr info`.
+    pub fn history_counts(&self) -> Result<HistoryCounts, DomainError> {
+        use diesel::dsl::count_star;
+        let mut conn = self.get_connection()?;
+
+        // Grouped by the stored tag text, then typed the way trimming types them
+        let by_tags: Vec<(String, i64)> = bookmark_history::table
+            .group_by(bookmark_history::tags)
+            .select((bookmark_history::tags, count_star()))
+            .load(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+        let per_type = PerType::from_fn(|bookmark_type| {
+            by_tags
+                .iter()
+                .filter(|(tags, _)| SystemTag::of_stored_tags(tags) == bookmark_type)
+                .map(|(_, count)| *count as usize)
+                .sum()
+        });
+
+        let deleted = sql_query(
+            "SELECT COUNT(*) AS states, COUNT(DISTINCT bookmark_id) AS bookmarks
+             FROM bookmark_history
+             WHERE bookmark_id NOT IN (SELECT id FROM bookmarks)",
+        )
+        .get_result::<DeletedHistoryCounts>(&mut conn)
+        .map_err(SqliteRepositoryError::DatabaseError)?;
+
+        Ok(HistoryCounts {
+            per_type,
+            deleted_bookmarks: deleted.bookmarks as usize,
+            deleted_states: deleted.states as usize,
+        })
     }
 
     /// Keep only the newest `keep` saved states of a bookmark.
@@ -2041,6 +2085,40 @@ mod tests {
         assert_eq!(history[1].title, "Port");
         assert_eq!(history[1].description, "Test description");
         assert_eq!(history[1].tags, ",_mem_,fact,");
+        Ok(())
+    }
+
+    #[test]
+    fn given_history_of_several_types_when_counting_then_counts_by_type_and_deleted(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut memory = create_test_bookmark("Port", "Runs on 5430", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        memory.url = "Runs on 5431".to_string();
+        repo.update(&memory)?;
+        memory.url = "Runs on 5432".to_string();
+        repo.update(&memory)?;
+        let mut snippet = create_test_bookmark("Snip", "echo 1", vec!["_snip_"])?;
+        repo.add(&mut snippet)?;
+        snippet.url = "echo 2".to_string();
+        repo.update(&snippet)?;
+        let mut env = create_test_bookmark("Env", "export A=1", vec!["_env_"])?;
+        repo.add(&mut env)?;
+        env.url = "export A=2".to_string();
+        repo.update(&env)?;
+        repo.delete(env.id.unwrap())?;
+
+        let counts = repo.history_counts()?;
+
+        assert_eq!(counts.per_type.memory, 2);
+        assert_eq!(counts.per_type.snippet, 1);
+        assert_eq!(counts.per_type.env, 2);
+        assert_eq!(counts.per_type.uri, 0);
+        // The env bookmark is gone: its change and its delete are left
+        assert_eq!(counts.deleted_bookmarks, 1);
+        assert_eq!(counts.deleted_states, 2);
         Ok(())
     }
 

@@ -15,8 +15,11 @@ use crate::cli::history_diff::{render_patch, BookmarkState};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::get_config_file_path;
 use crate::domain::bookmark::Bookmark;
+use crate::domain::embedding_policy::EmbeddingPolicy;
 use crate::domain::error_context::CliErrorContext;
-use crate::domain::history::{HistoryChange, HistoryEntry};
+use crate::domain::history::{HistoryChange, HistoryCounts, HistoryEntry};
+use crate::domain::history_retention::HistoryRetention;
+use crate::domain::per_type::PerType;
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
@@ -1435,7 +1438,6 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             "  Embedded: {} of {} embeddable bookmarks",
             vec_embedded_count, embeddable_count
         );
-        println!("  Policy: {}", settings.embeddings.policy.display());
         if let Some(dims) = vec_dims {
             println!(
                 "  Vector table: vec_bookmarks ({} dims, {} rows)",
@@ -1445,12 +1447,26 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             println!("  Vector table: vec_bookmarks (empty)");
         }
 
+        let history = repository.history_counts()?;
         println!("\nHistory:");
-        println!("  Retention: {}", settings.history.retention.display());
+        println!("  {}", format_history_summary(&history));
 
-        // Add system tag statistics
-        println!("\nSystem Tags:");
-        display_system_tag_stats(&repository)?;
+        // Per type: counts, embedding policy and history retention side by side
+        let per_type = PerType::from_fn(|bookmark_type| {
+            bookmarks
+                .iter()
+                .filter(|b| SystemTag::of_bookmark(&b.tags) == bookmark_type)
+                .count()
+        });
+        println!("\nBookmark Types:");
+        for line in format_type_table(
+            &per_type,
+            &settings.embeddings.policy,
+            &settings.history.retention,
+            &history.per_type,
+        ) {
+            println!("  {line}");
+        }
 
         // Show schema if requested
         if show_schema {
@@ -1494,48 +1510,66 @@ fn display_env_var(name: &str, mask_value: bool) {
     }
 }
 
-fn display_system_tag_stats(repository: &SqliteBookmarkRepository) -> CliResult<()> {
-    // Define known system tags
-    let system_tags = [
-        (
-            "_snip_",
-            "Snippet",
-            "Code snippets that are copied to clipboard",
-        ),
-        ("_imported_", "Text", "Imported text documents"),
-        ("_shell_", "Shell", "Shell scripts that are executed"),
-        (
-            "_md_",
-            "Markdown",
-            "Markdown documents that are rendered as HTML",
-        ),
-        (
-            "_env_",
-            "Environment",
-            "Environment variables for shell sourcing",
-        ),
-    ];
+/// Display name of each bookmark type, in config order
+const BOOKMARK_TYPES: [(SystemTag, &str); 7] = [
+    (SystemTag::Uri, "URI"),
+    (SystemTag::Snippet, "Snippet"),
+    (SystemTag::Text, "Text"),
+    (SystemTag::Shell, "Shell"),
+    (SystemTag::Markdown, "Markdown"),
+    (SystemTag::Env, "Environment"),
+    (SystemTag::Memory, "Memory"),
+];
 
-    // Get all bookmarks
-    let bookmarks = repository.get_all()?;
-
-    // Count usage of each system tag
-    for (tag_value, tag_name, description) in &system_tags {
-        let count = bookmarks
-            .iter()
-            .filter(|b| b.tags.iter().any(|t| t.value() == *tag_value))
-            .count();
-
-        println!(
-            "  {} ({}): {} entries - {}",
-            tag_name.cyan(),
-            tag_value.yellow(),
-            count,
-            description
-        );
+/// One row per bookmark type: how many there are, how they are embedded, how many saved states
+/// each keeps, and how many saved states of the type history holds.
+fn format_type_table(
+    bookmarks: &PerType<usize>,
+    embedding: &EmbeddingPolicy,
+    retention: &HistoryRetention,
+    saved: &PerType<usize>,
+) -> Vec<String> {
+    let row = |name: &str, tag: &str, count: &str, mode: &str, keep: &str, saved: &str| {
+        format!("{name:<12} {tag:<11} {count:>9}  {mode:<10} {keep:>4} {saved:>6}")
+    };
+    let mut lines = vec![row(
+        "Type",
+        "Tag",
+        "Bookmarks",
+        "Embedding",
+        "Keep",
+        "Saved",
+    )];
+    for (bookmark_type, name) in BOOKMARK_TYPES {
+        let tag = match bookmark_type {
+            SystemTag::Uri => "-",
+            other => other.as_str(),
+        };
+        lines.push(row(
+            name,
+            tag,
+            &bookmarks.for_type(bookmark_type).to_string(),
+            &embedding.for_type(bookmark_type).to_string(),
+            &retention.for_type(bookmark_type).to_string(),
+            &saved.for_type(bookmark_type).to_string(),
+        ));
     }
+    lines
+}
 
-    Ok(())
+/// "Saved states: 5, of which 2 belong to 1 deleted bookmark"
+fn format_history_summary(counts: &HistoryCounts) -> String {
+    let total: usize = counts.per_type.entries().iter().map(|(_, n)| n).sum();
+    match (counts.deleted_bookmarks, counts.deleted_states) {
+        (0, _) => format!("Saved states: {total}"),
+        (1, 1) => format!("Saved states: {total}, of which 1 belongs to 1 deleted bookmark"),
+        (1, states) => {
+            format!("Saved states: {total}, of which {states} belong to 1 deleted bookmark")
+        }
+        (bookmarks, states) => format!(
+            "Saved states: {total}, of which {states} belong to {bookmarks} deleted bookmarks"
+        ),
+    }
 }
 
 /// Pre-fills the database with a variety of demo entries to showcase bkmr's features
@@ -1814,6 +1848,113 @@ pub fn import_files(cli: Cli, services: &ServiceContainer, settings: &Settings) 
 mod tests {
     use super::*;
     use crate::util::testing::{init_test_env, setup_test_db, EnvGuard};
+
+    #[test]
+    fn given_counts_and_settings_when_formatting_type_table_then_one_row_per_type_in_order() {
+        let bookmarks = PerType {
+            uri: 120,
+            memory: 3,
+            ..PerType::all(0)
+        };
+        let embedding = EmbeddingPolicy::default();
+        let retention = HistoryRetention {
+            env: 0,
+            memory: 50,
+            ..HistoryRetention::default()
+        };
+        let saved = PerType {
+            uri: 4,
+            memory: 7,
+            ..PerType::all(0)
+        };
+
+        let lines = format_type_table(&bookmarks, &embedding, &retention, &saved);
+
+        let rows: Vec<Vec<&str>> = lines
+            .iter()
+            .map(|l| l.split_whitespace().collect())
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                vec!["Type", "Tag", "Bookmarks", "Embedding", "Keep", "Saved"],
+                vec!["URI", "-", "120", "on", "10", "4"],
+                vec!["Snippet", "_snip_", "0", "on", "10", "0"],
+                vec!["Text", "_imported_", "0", "on", "10", "0"],
+                vec!["Shell", "_shell_", "0", "on", "10", "0"],
+                vec!["Markdown", "_md_", "0", "on", "10", "0"],
+                vec!["Environment", "_env_", "0", "on", "0", "0"],
+                vec!["Memory", "_mem_", "3", "always", "50", "7"],
+            ]
+        );
+    }
+
+    #[test]
+    fn given_type_table_when_formatting_then_columns_line_up() {
+        let lines = format_type_table(
+            &PerType::all(1000),
+            &EmbeddingPolicy::default(),
+            &HistoryRetention::default(),
+            &PerType::all(0),
+        );
+
+        assert_eq!(lines.len(), 8, "header and one row per type");
+        // Right-aligned counts end in the same column in every row, the header included
+        let ends: Vec<usize> = lines
+            .iter()
+            .map(|l| {
+                l.find("Bookmarks")
+                    .map_or_else(|| l.find("1000").unwrap() + 4, |i| i + 9)
+            })
+            .collect();
+        assert!(ends.windows(2).all(|w| w[0] == w[1]), "{lines:#?}");
+    }
+
+    #[test]
+    fn given_deleted_bookmarks_when_formatting_history_summary_then_counts_them() {
+        let counts = HistoryCounts {
+            per_type: PerType {
+                uri: 3,
+                memory: 2,
+                ..PerType::all(0)
+            },
+            deleted_bookmarks: 2,
+            deleted_states: 4,
+        };
+
+        assert_eq!(
+            format_history_summary(&counts),
+            "Saved states: 5, of which 4 belong to 2 deleted bookmarks"
+        );
+    }
+
+    #[test]
+    fn given_one_deleted_bookmark_when_formatting_history_summary_then_uses_singular() {
+        let counts = HistoryCounts {
+            per_type: PerType {
+                env: 1,
+                ..PerType::all(0)
+            },
+            deleted_bookmarks: 1,
+            deleted_states: 1,
+        };
+
+        assert_eq!(
+            format_history_summary(&counts),
+            "Saved states: 1, of which 1 belongs to 1 deleted bookmark"
+        );
+    }
+
+    #[test]
+    fn given_no_deleted_bookmarks_when_formatting_history_summary_then_shows_total_only() {
+        let counts = HistoryCounts {
+            per_type: PerType::all(0),
+            deleted_bookmarks: 0,
+            deleted_states: 0,
+        };
+
+        assert_eq!(format_history_summary(&counts), "Saved states: 0");
+    }
 
     #[test]
     fn given_stored_bookmark_when_format_details_then_shows_all_metadata() {
