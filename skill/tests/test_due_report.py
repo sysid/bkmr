@@ -311,6 +311,25 @@ def test_edit_passes_on_the_editor_exit_code(monkeypatch):
     assert due_report.main(["--edit"]) == 1
 
 
+def test_edit_with_empty_editor_falls_back_to_vi(tmp_path, monkeypatch):
+    # An empty EDITOR would leave only the script path, which runs the script instead of editing it
+    fake_vi = tmp_path / "vi"
+    fake_vi.write_text(f'#!/bin/sh\necho "$@" > {tmp_path / "args"}\n')
+    fake_vi.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=":")
+    monkeypatch.setenv("EDITOR", "")
+
+    assert due_report.main(["-e"]) == 0
+    assert (tmp_path / "args").read_text().split() == [str(SCRIPT)]
+
+
+def test_edit_with_missing_editor_reports_error_instead_of_traceback(monkeypatch, capsys):
+    monkeypatch.setenv("EDITOR", "/nonexistent/editor")
+
+    assert due_report.main(["-e"]) == 1
+    assert "/nonexistent/editor" in capsys.readouterr().err
+
+
 # --- debug logging -----------------------------------------------------------------------------------
 
 

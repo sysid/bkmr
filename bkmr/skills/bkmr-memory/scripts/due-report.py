@@ -141,8 +141,13 @@ def load_from_bkmr(bkmr, db):
 
 def edit_script():
     # EDITOR may carry flags ("code -w"), so split it like a shell would.
-    editor = shlex.split(os.environ.get("EDITOR", "vi"))
-    return subprocess.run([*editor, os.path.abspath(__file__)]).returncode
+    # An empty EDITOR counts as unset: without an editor, the command would run this script.
+    editor = shlex.split(os.environ.get("EDITOR") or "vi")
+    try:
+        return subprocess.run([*editor, os.path.abspath(__file__)]).returncode
+    except FileNotFoundError:
+        print(f"error: editor not found: {editor[0]}", file=sys.stderr)
+        return 1
 
 
 def print_table(due, total):
