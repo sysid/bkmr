@@ -43,7 +43,7 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// or title clears it, by a database trigger.
     fn mark_verified(&self, id: i32) -> Result<(), DomainError>;
 
-    /// Delete a bookmark by ID. A memory keeps its old state in history.
+    /// Delete a bookmark by ID. Its old state stays in history.
     fn delete(&self, id: i32) -> Result<bool, DomainError>;
 
     /// Delete a bookmark and all history stored under its ID. True if anything was removed. Their
@@ -57,12 +57,17 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// deleted, because history refers to it by that ID.
     fn reinsert(&self, bookmark: &Bookmark) -> Result<(), DomainError>;
 
-    /// History entries, newest first, of one bookmark ID or of all bookmarks
+    /// History entries, newest first, of one bookmark ID or of all bookmarks. With a tag, only
+    /// entries whose saved state has that tag: the limit then counts these alone.
     fn get_history(
         &self,
         bookmark_id: Option<i32>,
+        tag: Option<&Tag>,
         limit: i64,
     ) -> Result<Vec<HistoryEntry>, DomainError>;
+
+    /// Number of history entries stored under a bookmark ID
+    fn count_history(&self, bookmark_id: i32) -> Result<usize, DomainError>;
 
     /// One history entry by its own ID
     fn get_history_entry(&self, history_id: i32) -> Result<Option<HistoryEntry>, DomainError>;

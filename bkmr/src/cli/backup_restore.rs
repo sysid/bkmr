@@ -9,7 +9,7 @@ use crate::application::services::bookmark_service::{
 };
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::fzf::{pick_restore_ids, RestorePickItem};
-use crate::cli::history_diff::{render_patch, MemoryState};
+use crate::cli::history_diff::{render_patch, BookmarkState};
 use std::collections::HashSet;
 use std::io::{self, IsTerminal, Write};
 use std::sync::Arc;
@@ -276,14 +276,14 @@ fn item_patch(item: &BackupRestoreItem, color: bool) -> String {
             fields,
         } => {
             let patch = render_patch(
-                Some(&MemoryState::from_bookmark(current)),
-                Some(&MemoryState::from_bookmark(restored)),
+                Some(&BookmarkState::from_bookmark(current)),
+                Some(&BookmarkState::from_bookmark(restored)),
                 &format!("#{} current", id),
                 &backup_label,
                 color,
             );
             if patch.is_empty() {
-                // The diff covers text fields only; opener and embeddable show up here
+                // The diff covers what history keeps; embeddable shows up here
                 format!("#{}: only {} differ\n", id, fields.join(", "))
             } else {
                 patch
@@ -291,7 +291,7 @@ fn item_patch(item: &BackupRestoreItem, color: bool) -> String {
         }
         BackupRestoreState::Deleted { restored } => render_patch(
             None,
-            Some(&MemoryState::from_bookmark(restored)),
+            Some(&BookmarkState::from_bookmark(restored)),
             "/dev/null",
             &backup_label,
             color,
@@ -502,8 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn given_change_only_in_opener_when_rendering_patch_then_names_the_field_instead_of_an_empty_diff(
-    ) {
+    fn given_change_only_in_opener_when_rendering_patch_then_the_diff_shows_the_opener() {
         let current = bookmark(3, "same");
         let mut restored = bookmark(3, "same");
         restored.opener = Some("vim {}".to_string());
@@ -517,7 +516,28 @@ mod tests {
             },
         );
 
-        assert_eq!(item_patch(&changed, false), "#3: only opener differ\n");
+        let patch = item_patch(&changed, false);
+
+        assert!(patch.contains("\n+opener: vim {}\n"), "{patch}");
+    }
+
+    #[test]
+    fn given_change_only_in_embeddable_when_rendering_patch_then_names_the_field_instead_of_an_empty_diff(
+    ) {
+        let current = bookmark(3, "same");
+        let mut restored = bookmark(3, "same");
+        restored.set_embeddable(!current.embeddable);
+        let changed = item(
+            Some(3),
+            "a",
+            BackupRestoreState::Changed {
+                current,
+                restored,
+                fields: vec!["embeddable"],
+            },
+        );
+
+        assert_eq!(item_patch(&changed, false), "#3: only embeddable differ\n");
     }
 
     #[test]

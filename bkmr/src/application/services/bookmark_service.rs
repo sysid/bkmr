@@ -109,7 +109,7 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Record that a bookmark was checked against reality just now
     fn verify_bookmark(&self, id: i32) -> ApplicationResult<()>;
 
-    /// Delete a bookmark by ID. A memory keeps its old state in history.
+    /// Delete a bookmark by ID. Its old state stays in history.
     fn delete_bookmark(&self, id: i32) -> ApplicationResult<bool>;
 
     /// Permanently remove a bookmark and all history stored under its ID, and the traces of deleted
@@ -117,16 +117,21 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// under this ID. After a failure, running it again finishes the job.
     fn purge_bookmark(&self, id: i32) -> ApplicationResult<bool>;
 
-    /// History entries, newest first, of one bookmark ID or of all bookmarks
+    /// History entries, newest first, of one bookmark ID or of all bookmarks. With a tag, only
+    /// entries whose saved state has that tag: the limit then counts these alone.
     fn get_history(
         &self,
         bookmark_id: Option<i32>,
+        tag: Option<&Tag>,
         limit: i64,
     ) -> ApplicationResult<Vec<HistoryEntry>>;
 
+    /// Number of history entries stored under a bookmark ID
+    fn count_history(&self, bookmark_id: i32) -> ApplicationResult<usize>;
+
     /// Bring back the state saved in a history entry, always under the bookmark's own ID: in place
-    /// if it still exists, otherwise by adding it again. A bookmark imported from a file is refused
-    /// in place, because the file decides its content.
+    /// if it still exists, otherwise by adding it again. A bookmark imported from a file is refused,
+    /// deleted or not, because the file decides its content: its history is there to compare.
     fn restore_bookmark(&self, history_id: i32) -> ApplicationResult<Bookmark>;
 
     /// What `restore_bookmark` would write, without writing it. Runs the same checks, so it

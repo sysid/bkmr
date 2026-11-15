@@ -495,11 +495,12 @@ if you checked it yourself, not if the user told you.
 bkmr update -d 'Obsolete: the guard was removed in 2.0' 42 && bkmr delete --yes 42
 ```
 
-**To undo** a correction or delete, find the saved state and restore it. Without an ID, `history`
-lists all memories, which finds a deleted one.
+**To undo** a correction or delete, find the saved state and restore it. History covers every
+bookmark type, so to find a deleted memory without its ID, list memories only: `--type mem`.
 
 ```bash
 bkmr history 42 --json
+bkmr history --type mem --json        # newest memory changes, deleted memories included
 bkmr restore <history_id> --dry-run   # unified diff of what the restore changes, writes nothing
 bkmr restore <history_id>
 ```

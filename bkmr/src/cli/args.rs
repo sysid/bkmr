@@ -360,14 +360,31 @@ pub enum Commands {
             short = 'y',
             long = "yes",
             conflicts_with = "force",
-            help = "do not ask for confirmation, for scripts and agents; a memory stays restorable"
+            help = "do not ask for confirmation, for scripts and agents; the bookmark stays restorable"
         )]
         yes: bool,
     },
-    /// Show saved old states of agent memories, newest first
+    /// Show saved old states of bookmarks, newest first
     History {
-        /// Memory ID (without it: all memories, which finds the ID of a deleted one)
+        /// Bookmark ID (without it: all bookmarks, which finds the ID of a deleted one)
         id: Option<i32>,
+        #[arg(
+            short = 't',
+            long = "type",
+            help = "only entries of this bookmark type, e.g. mem to find a deleted memory",
+            ignore_case = true,
+            // The types of add --type, except uri: a URI bookmark has no type tag to filter by.
+            // Mapped like add, in bookmark_commands::system_tag_for_type.
+            value_parser = clap::builder::PossibleValuesParser::new([
+                clap::builder::PossibleValue::new("snip"),
+                clap::builder::PossibleValue::new("text"),
+                clap::builder::PossibleValue::new("shell"),
+                clap::builder::PossibleValue::new("md").alias("markdown"),
+                clap::builder::PossibleValue::new("env"),
+                clap::builder::PossibleValue::new("mem").alias("memory"),
+            ])
+        )]
+        bookmark_type: Option<String>,
         #[arg(
             short = 'l',
             long = "limit",
@@ -386,7 +403,7 @@ pub enum Commands {
         )]
         patch: bool,
     },
-    /// Bring back old states from memory history or from a JSON backup
+    /// Bring back old states from history or from a JSON backup
     ///
     /// Restored bookmarks keep their own ID, also when they were deleted. A backup is the output
     /// of `bkmr search --json`. Entries are matched by ID, so a bookmark whose URL/content
@@ -394,7 +411,7 @@ pub enum Commands {
     /// backup is offered. Bookmarks the backup does not contain are never touched, and nothing
     /// is deleted.
     #[command(after_help = "Examples:
-  bkmr restore 42                                  memory history entry 42
+  bkmr restore 42                                  history entry 42
   bkmr search --json > backup.json                 write a backup
   bkmr restore --from backup.json                  show the plan, then ask: [y]es [n]o [s]elect [d]iff
   bkmr restore --from backup.json --ids 12,40      only these bookmarks

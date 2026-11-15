@@ -115,7 +115,8 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
 
 impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
     /// A deleted bookmark built again from its history entry, under its old ID. Creation time
-    /// and access count start anew: history does not keep them.
+    /// and access count start anew: history does not keep them. Never one imported from a file:
+    /// `preview_restore` refuses those, so the file columns stay empty.
     fn rebuild_from_history(
         &self,
         entry: &HistoryEntry,
@@ -126,9 +127,6 @@ impl<R: BookmarkRepository> BookmarkServiceImpl<R> {
         bookmark.set_id(entry.bookmark_id);
         bookmark.set_embeddable(self.resolve_embeddable(&bookmark.tags, Some(entry.embeddable)));
         bookmark.opener = entry.opener.clone();
-        bookmark.file_path = entry.file_path.clone();
-        bookmark.file_mtime = entry.file_mtime;
-        bookmark.file_hash = entry.file_hash.clone();
         Ok(bookmark)
     }
 
@@ -386,6 +384,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     fn get_history(
         &self,
         bookmark_id: Option<i32>,
+        tag: Option<&Tag>,
         limit: i64,
     ) -> ApplicationResult<Vec<HistoryEntry>> {
         if let Some(id) = bookmark_id {
@@ -393,8 +392,15 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 .app_context("validating bookmark ID for history")?;
         }
         self.repository
-            .get_history(bookmark_id, limit)
+            .get_history(bookmark_id, tag, limit)
             .app_context("loading history")
+    }
+
+    #[instrument(skip(self), level = "debug")]
+    fn count_history(&self, bookmark_id: i32) -> ApplicationResult<usize> {
+        self.repository
+            .count_history(bookmark_id)
+            .app_context("counting history entries")
     }
 
     #[instrument(skip(self), level = "debug")]
@@ -420,13 +426,35 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .repository
             .get_by_id(entry.bookmark_id)
             .with_app_context(|| format!("loading bookmark {}", entry.bookmark_id))?;
-        // Writing back to the file is not ours to do, and with the file left newer, the next
-        // edit or import would silently undo the restore.
-        if let Some(path) = current.as_ref().and_then(|b| b.file_path.as_ref()) {
-            return Err(ApplicationError::Other(format!(
-                "Bookmark {} is imported from {}, which decides its content: change that file instead",
-                entry.bookmark_id, path
-            )));
+        // Imported bookmarks keep history so that a diff shows what each import changed, but the
+        // file decides their content. Writing back to it is not ours to do, and with the file left
+        // newer, the next edit or import would silently undo the restore. A deleted one added
+        // again would point at a file that may be gone, and the next import-files
+        // --delete-missing would delete it again. The bookmark as it is now decides, so one
+        // detached from its file can be restored.
+        match &current {
+            Some(bookmark) => {
+                if let Some(path) = &bookmark.file_path {
+                    return Err(ApplicationError::Other(format!(
+                        "Bookmark {id} is imported from {path}, which decides its content: change \
+                         that file instead. History keeps its old states to compare \
+                         (bkmr history -p {id}), but a restore would be undone by the next edit \
+                         or import",
+                        id = entry.bookmark_id,
+                    )));
+                }
+            }
+            None => {
+                if let Some(path) = &entry.file_path {
+                    return Err(ApplicationError::Other(format!(
+                        "Bookmark {id} was imported from {path}: to bring it back, restore that \
+                         file and run bkmr import-files. History keeps its last state to compare \
+                         (bkmr history -p {id}), but added again here it would point at a file \
+                         that may be gone",
+                        id = entry.bookmark_id,
+                    )));
+                }
+            }
         }
 
         // Checked here rather than left to the database, so a preview fails like the restore
@@ -448,6 +476,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 restored.url = entry.url.clone();
                 restored.title = entry.title.clone();
                 restored.description = entry.description.clone();
+                restored.opener = entry.opener.clone();
                 restored
                     .set_tags(tags)
                     .app_context("setting tags of history entry")?;
@@ -1820,7 +1849,7 @@ mod tests {
 
         assert_eq!(service.get_bookmark(id).unwrap().unwrap().url, "old fact");
         assert_eq!(
-            service.get_history(Some(id), 1).unwrap()[0].url,
+            service.get_history(Some(id), None, 1).unwrap()[0].url,
             "corrected fact"
         );
     }
@@ -1839,7 +1868,7 @@ mod tests {
         assert!(service.purge_bookmark(id).unwrap());
 
         assert!(service.get_bookmark(id).unwrap().is_none());
-        assert!(service.get_history(Some(id), 10).unwrap().is_empty());
+        assert!(service.get_history(Some(id), None, 10).unwrap().is_empty());
         assert!(!vectors.has_vector(id));
     }
 
@@ -1883,7 +1912,7 @@ mod tests {
         let id = memory.id.unwrap();
         memory.url = "new text".to_string();
         service.update_bookmark(memory, false).unwrap();
-        let history_id = service.get_history(Some(id), 10).unwrap()[0].history_id;
+        let history_id = service.get_history(Some(id), None, 10).unwrap()[0].history_id;
 
         let preview = service.preview_restore(history_id).unwrap();
 
@@ -1893,7 +1922,7 @@ mod tests {
         assert_eq!(preview.restored.url, "old text");
         assert_eq!(preview.restored.tags, tag_set(&["_mem_", "fact"]));
         assert_eq!(service.get_bookmark(id).unwrap().unwrap().url, "new text");
-        assert_eq!(service.get_history(Some(id), 10).unwrap().len(), 1);
+        assert_eq!(service.get_history(Some(id), None, 10).unwrap().len(), 1);
     }
 
     #[test]
@@ -1904,7 +1933,7 @@ mod tests {
         let (service, _vectors) = create_service_with_recorded_vectors();
         let id = add_memory(&service, "deleted text").id.unwrap();
         service.delete_bookmark(id).unwrap();
-        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
 
         let preview = service.preview_restore(history_id).unwrap();
 
@@ -1924,7 +1953,7 @@ mod tests {
         let id = add_memory(&service, "shared text").id.unwrap();
         service.delete_bookmark(id).unwrap();
         let other_id = add_memory(&service, "shared text").id.unwrap();
-        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
 
         let error = service.preview_restore(history_id).unwrap_err();
 
@@ -1945,7 +1974,7 @@ mod tests {
         memory.url = "text b".to_string();
         service.update_bookmark(memory, false).unwrap();
         let other_id = add_memory(&service, "text a").id.unwrap();
-        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
 
         let error = service.preview_restore(history_id).unwrap_err();
 
@@ -1953,6 +1982,89 @@ mod tests {
             matches!(&error, ApplicationError::BookmarkExists(existing, _) if *existing == other_id),
             "{error}"
         );
+    }
+
+    #[test]
+    fn given_bookmark_imported_from_a_file_when_restoring_its_old_state_then_it_fails_and_says_why_and_what_to_do(
+    ) {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut snippet = add_snippet(&service, "echo file v1", "From file");
+        let id = snippet.id.unwrap();
+        snippet.file_path = Some("/scripts/hello.sh".to_string());
+        let mut snippet = service.update_bookmark(snippet, false).unwrap();
+        snippet.url = "echo file v2".to_string();
+        service.update_bookmark(snippet, false).unwrap();
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
+
+        let error = service
+            .restore_bookmark(history_id)
+            .unwrap_err()
+            .to_string();
+
+        assert!(error.contains("/scripts/hello.sh"), "{error}");
+        assert!(error.contains(&format!("bkmr history -p {id}")), "{error}");
+        assert!(error.contains("change that file"), "{error}");
+        assert_eq!(
+            service.get_bookmark(id).unwrap().unwrap().url,
+            "echo file v2"
+        );
+    }
+
+    #[test]
+    fn given_deleted_bookmark_imported_from_a_file_when_restoring_then_it_fails_and_stays_deleted()
+    {
+        // Added again, it would point at a file that may be gone, and the next
+        // import-files --delete-missing would delete it again
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut snippet = add_snippet(&service, "echo gone", "Gone");
+        let id = snippet.id.unwrap();
+        snippet.file_path = Some("/scripts/gone.sh".to_string());
+        service.update_bookmark(snippet, false).unwrap();
+        service.delete_bookmark(id).unwrap();
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
+
+        let preview_error = service.preview_restore(history_id).unwrap_err().to_string();
+        let restore_error = service
+            .restore_bookmark(history_id)
+            .unwrap_err()
+            .to_string();
+
+        assert_eq!(preview_error, restore_error);
+        assert!(
+            restore_error.contains("/scripts/gone.sh"),
+            "{restore_error}"
+        );
+        assert!(
+            restore_error.contains(&format!("bkmr history -p {id}")),
+            "{restore_error}"
+        );
+        assert!(restore_error.contains("import-files"), "{restore_error}");
+        assert!(service.get_bookmark(id).unwrap().is_none());
+    }
+
+    #[test]
+    fn given_bookmark_no_longer_imported_when_restoring_a_state_from_its_file_then_the_text_comes_back_and_it_stays_detached(
+    ) {
+        // The bookmark as it is now decides: detached from its file, it is the user's to restore
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let (service, _vectors) = create_service_with_recorded_vectors();
+        let mut snippet = add_snippet(&service, "echo detached", "Detached");
+        let id = snippet.id.unwrap();
+        snippet.file_path = Some("/scripts/detached.sh".to_string());
+        let mut snippet = service.update_bookmark(snippet, false).unwrap();
+        snippet.file_path = None;
+        service.update_bookmark(snippet, false).unwrap();
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
+
+        let restored = service.restore_bookmark(history_id).unwrap();
+
+        assert_eq!(restored.url, "echo detached");
+        assert_eq!(restored.file_path, None);
     }
 
     #[test]
@@ -1978,7 +2090,7 @@ mod tests {
         let id = memory.id.unwrap();
         service.delete_bookmark(id).unwrap();
         assert!(!vectors.has_vector(id));
-        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
 
         let restored = service.restore_bookmark(history_id).unwrap();
 
@@ -2011,7 +2123,7 @@ mod tests {
         let memory = add_memory(&working, "restore fails");
         let id = memory.id.unwrap();
         working.delete_bookmark(id).unwrap();
-        let history_id = working.get_history(Some(id), 1).unwrap()[0].history_id;
+        let history_id = working.get_history(Some(id), None, 1).unwrap()[0].history_id;
 
         assert!(failing.restore_bookmark(history_id).is_err());
 
@@ -2028,7 +2140,7 @@ mod tests {
         memory.url = "text b".to_string();
         service.update_bookmark(memory, false).unwrap();
         add_memory(&service, "text a");
-        let history_id = service.get_history(Some(id), 1).unwrap()[0].history_id;
+        let history_id = service.get_history(Some(id), None, 1).unwrap()[0].history_id;
         let upserts_before = vectors.upserts.load(std::sync::atomic::Ordering::SeqCst);
 
         assert!(service.restore_bookmark(history_id).is_err());
@@ -2046,7 +2158,7 @@ mod tests {
         let _guard = EnvGuard::new();
         let (service, _vectors) = create_service_with_recorded_vectors();
 
-        assert!(service.get_history(Some(0), 10).is_err());
+        assert!(service.get_history(Some(0), None, 10).is_err());
     }
 
     #[test]
