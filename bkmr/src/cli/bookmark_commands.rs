@@ -1435,14 +1435,7 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             "  Embedded: {} of {} embeddable bookmarks",
             vec_embedded_count, embeddable_count
         );
-        let policy: Vec<String> = settings
-            .embeddings
-            .policy
-            .entries()
-            .iter()
-            .map(|(key, mode)| format!("{}={}", key, mode))
-            .collect();
-        println!("  Policy: {}", policy.join(", "));
+        println!("  Policy: {}", settings.embeddings.policy.display());
         if let Some(dims) = vec_dims {
             println!(
                 "  Vector table: vec_bookmarks ({} dims, {} rows)",
@@ -1452,15 +1445,8 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             println!("  Vector table: vec_bookmarks (empty)");
         }
 
-        let retention: Vec<String> = settings
-            .history
-            .retention
-            .entries()
-            .iter()
-            .map(|(key, keep)| format!("{}={}", key, keep))
-            .collect();
         println!("\nHistory:");
-        println!("  Retention: {}", retention.join(", "));
+        println!("  Retention: {}", settings.history.retention.display());
 
         // Add system tag statistics
         println!("\nSystem Tags:");

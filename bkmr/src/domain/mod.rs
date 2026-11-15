@@ -8,6 +8,7 @@ pub mod error_context;
 pub mod history;
 pub mod history_retention;
 pub mod interpolation;
+pub mod per_type;
 pub mod repositories;
 pub mod search;
 pub mod services;

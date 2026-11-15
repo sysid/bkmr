@@ -27,7 +27,7 @@ use crate::infrastructure::repositories::sqlite::repository::SqliteBookmarkRepos
 use crate::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 /// Production service container - single source of truth for service creation
 pub struct ServiceContainer {
@@ -116,6 +116,13 @@ impl ServiceContainer {
                 ))
             })?
             .with_history_retention(history_retention);
+
+        // Applies a lowered limit to every bookmark, deleted ones included. Only writes when some
+        // history is over its limit. A failure (database busy beyond the timeout) must not stop
+        // the command; the next start tries again.
+        if let Err(e) = repository.trim_all_history() {
+            warn!(error = %e, "Could not trim history to the configured limits");
+        }
 
         Ok(Arc::new(repository))
     }
@@ -242,6 +249,35 @@ impl std::fmt::Debug for ServiceContainer {
 mod tests {
     use super::*;
     use crate::application::error::ApplicationError;
+
+    #[test]
+    fn given_history_over_a_lowered_limit_when_creating_repository_then_it_is_trimmed() {
+        use crate::domain::bookmark::Bookmark;
+        use crate::domain::repositories::repository::BookmarkRepository;
+        use crate::domain::tag::Tag;
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_url = db_path.to_string_lossy().to_string();
+        let before = SqliteBookmarkRepository::from_url(&db_url).unwrap();
+        let tags = [Tag::new("_env_").unwrap()].into_iter().collect();
+        let mut secret = Bookmark::new("export TOKEN=v1", "Token", "", tags).unwrap();
+        before.add(&mut secret).unwrap();
+        let id = secret.id.unwrap();
+        before.delete(id).unwrap();
+        assert_eq!(before.count_history(id).unwrap(), 1);
+
+        let repository = ServiceContainer::create_repository(
+            &db_url,
+            HistoryRetention {
+                env: 0,
+                ..HistoryRetention::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(repository.count_history(id).unwrap(), 0);
+    }
 
     #[test]
     fn given_missing_database_when_creating_repository_then_returns_error_instead_of_exiting() {

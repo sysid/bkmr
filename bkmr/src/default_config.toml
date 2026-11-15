@@ -52,7 +52,8 @@ _env_ = "on"
 _mem_ = "always"
 
 # How many saved states (bkmr history) each bookmark keeps, by type. Older ones are removed when
-# the bookmark is next changed or deleted. 0 keeps none: changes and plain deletes cannot be undone.
+# the bookmark is changed or deleted, and for all bookmarks (deleted ones too) when bkmr starts.
+# 0 keeps none: changes and plain deletes cannot be undone.
 [history.retention]
 uri = 10 # bookmarks without a system tag
 _snip_ = 10
