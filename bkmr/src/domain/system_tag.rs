@@ -1,6 +1,7 @@
 // src/domain/tag.rs
 use crate::domain::error::DomainError;
 use crate::domain::tag::Tag;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemTag {
@@ -45,6 +46,14 @@ impl SystemTag {
 
     pub fn is_known_system_tag(tag_str: &str) -> bool {
         Self::from_tag_value(tag_str).is_some()
+    }
+
+    /// The type of a bookmark with these tags: its known system tag, or `Uri` if it has none.
+    /// A bookmark has at most one known system tag (Bookmark::validate).
+    pub fn of_bookmark(tags: &HashSet<Tag>) -> Self {
+        tags.iter()
+            .find_map(|t| Self::from_tag_value(t.value()))
+            .unwrap_or(Self::Uri)
     }
 }
 

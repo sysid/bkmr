@@ -14,6 +14,7 @@ use crate::config::Settings;
 use crate::domain::action::BookmarkAction;
 use crate::domain::action_resolver::{ActionResolver, SystemTagActionResolver};
 use crate::domain::embedding::Embedder;
+use crate::domain::history_retention::HistoryRetention;
 use crate::domain::repositories::vector_repository::VectorRepository;
 use crate::domain::services::clipboard::ClipboardService;
 use crate::infrastructure::clipboard::ClipboardServiceImpl;
@@ -50,7 +51,8 @@ impl ServiceContainer {
         debug!(db_url = %config.db_url, "Creating ServiceContainer");
 
         // Base infrastructure
-        let bookmark_repository = Self::create_repository(&config.db_url)?;
+        let bookmark_repository =
+            Self::create_repository(&config.db_url, config.history.retention)?;
         let embedder = Self::create_embedder(config)?;
         let vector_repository = Self::create_vector_repository(&config.db_url, &embedder)?;
         let clipboard_service = Arc::new(ClipboardServiceImpl::new());
@@ -92,7 +94,10 @@ impl ServiceContainer {
         })
     }
 
-    fn create_repository(db_url: &str) -> ApplicationResult<Arc<SqliteBookmarkRepository>> {
+    fn create_repository(
+        db_url: &str,
+        history_retention: HistoryRetention,
+    ) -> ApplicationResult<Arc<SqliteBookmarkRepository>> {
         // Checked before opening: SQLite would create an empty database instead. The caller
         // reports the error; main prints it and exits.
         if !Path::new(db_url).exists() {
@@ -103,12 +108,14 @@ impl ServiceContainer {
         }
 
         // Create the repository, runs all migrations
-        let repository = SqliteBookmarkRepository::from_url(db_url).map_err(|e| {
-            crate::application::error::ApplicationError::Other(format!(
-                "Failed to create SQLite bookmark repository: {}",
-                e
-            ))
-        })?;
+        let repository = SqliteBookmarkRepository::from_url(db_url)
+            .map_err(|e| {
+                crate::application::error::ApplicationError::Other(format!(
+                    "Failed to create SQLite bookmark repository: {}",
+                    e
+                ))
+            })?
+            .with_history_retention(history_retention);
 
         Ok(Arc::new(repository))
     }
@@ -242,7 +249,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("missing.db");
 
-        let result = ServiceContainer::create_repository(&missing.to_string_lossy());
+        let result = ServiceContainer::create_repository(
+            &missing.to_string_lossy(),
+            HistoryRetention::default(),
+        );
 
         match result {
             Err(ApplicationError::DatabaseNotFound(path)) => {

@@ -94,18 +94,14 @@ impl EmbeddingPolicy {
     }
 
     fn mode_for(&self, tags: &HashSet<Tag>) -> EmbeddingMode {
-        // A bookmark has at most one known system tag (Bookmark::validate)
-        match tags
-            .iter()
-            .find_map(|t| SystemTag::from_tag_value(t.value()))
-        {
-            Some(SystemTag::Snippet) => self.snippet,
-            Some(SystemTag::Text) => self.text,
-            Some(SystemTag::Shell) => self.shell,
-            Some(SystemTag::Markdown) => self.markdown,
-            Some(SystemTag::Env) => self.env,
-            Some(SystemTag::Memory) => self.memory,
-            Some(SystemTag::Uri) | None => self.uri,
+        match SystemTag::of_bookmark(tags) {
+            SystemTag::Snippet => self.snippet,
+            SystemTag::Text => self.text,
+            SystemTag::Shell => self.shell,
+            SystemTag::Markdown => self.markdown,
+            SystemTag::Env => self.env,
+            SystemTag::Memory => self.memory,
+            SystemTag::Uri => self.uri,
         }
     }
 }

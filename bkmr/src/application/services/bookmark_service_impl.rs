@@ -1364,6 +1364,7 @@ mod tests {
     use super::*;
     use crate::domain::embedding_policy::EmbeddingMode;
     use crate::domain::error::{DomainError, DomainResult};
+    use crate::domain::history_retention::HistoryRetention;
     use crate::domain::system_tag::SystemTag;
     use crate::infrastructure::embeddings::dummy_provider::DummyEmbedding;
     use crate::infrastructure::repositories::json_import_repository::JsonImportRepository;
@@ -2098,6 +2099,43 @@ mod tests {
         assert!(restored.tags.contains(&Tag::new("_mem_").unwrap()));
         assert!(restored.tags.contains(&Tag::new("fact").unwrap()));
         assert!(vectors.has_vector(id));
+    }
+
+    #[test]
+    fn given_memory_at_its_history_limit_when_oldest_state_restored_then_history_stays_at_limit() {
+        let _env = init_test_env();
+        let _guard = EnvGuard::new();
+        let repository = setup_test_db().with_history_retention(HistoryRetention {
+            memory: 2,
+            ..HistoryRetention::default()
+        });
+        let service = BookmarkServiceImpl::new(
+            Arc::new(repository),
+            Arc::new(StubEmbedder),
+            Arc::new(RecordingVectorRepository::default()),
+            Arc::new(JsonImportRepository::new()),
+        )
+        .with_embedding_policy(EmbeddingPolicy::default());
+        let mut memory = add_memory(&service, "port 5430");
+        let id = memory.id.unwrap();
+        for port in ["port 5431", "port 5432"] {
+            memory.url = port.to_string();
+            memory = service.update_bookmark(memory, false).unwrap();
+        }
+        let oldest = service.get_history(Some(id), None, 10).unwrap()[1].clone();
+        assert_eq!(oldest.url, "port 5430");
+
+        let restored = service.restore_bookmark(oldest.history_id).unwrap();
+
+        // The restore saved "port 5432" and pushed the restored entry out: the two newest remain
+        assert_eq!(restored.url, "port 5430");
+        let urls: Vec<String> = service
+            .get_history(Some(id), None, 10)
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.url)
+            .collect();
+        assert_eq!(urls, ["port 5432", "port 5431"]);
     }
 
     #[test]

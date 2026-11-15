@@ -1452,6 +1452,16 @@ pub fn info(cli: Cli, services: &ServiceContainer, settings: &Settings) -> CliRe
             println!("  Vector table: vec_bookmarks (empty)");
         }
 
+        let retention: Vec<String> = settings
+            .history
+            .retention
+            .entries()
+            .iter()
+            .map(|(key, keep)| format!("{}={}", key, keep))
+            .collect();
+        println!("\nHistory:");
+        println!("  Retention: {}", retention.join(", "));
+
         // Add system tag statistics
         println!("\nSystem Tags:");
         display_system_tag_stats(&repository)?;

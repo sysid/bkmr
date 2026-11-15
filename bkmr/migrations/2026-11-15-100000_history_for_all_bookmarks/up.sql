@@ -1,12 +1,12 @@
--- History for every bookmark, not only _mem_: a plain delete can always be undone, and
--- `delete --force` is the one way to remove a bookmark for good, secrets included. One rule for all
--- types, with no exception for any tag, rather than undo that depends on a tag.
+-- History for every bookmark, not only _mem_: a plain delete can be undone, and `delete --force` is
+-- the one way to remove a bookmark for good, secrets included. One rule for all types, with no
+-- exception for any tag, rather than undo that depends on a tag. How many saved states each bookmark
+-- keeps is set per type in [history.retention] (HistoryRetention); with 0 nothing can be undone.
 --
 -- An update counts when what the bookmark says or how it opens changes: URL, title (metadata), tags,
 -- description, opener or source file path. Access counts, verify stamps, embeddings, timestamps and
 -- a file's mtime and hash do not: a touched file with unchanged content is no change worth undoing.
 -- The one known gap: INSERT OR REPLACE fires no delete trigger. Nothing in bkmr uses it.
--- ponytail: history grows without bound; add a prune by age when the table gets large.
 DROP TRIGGER bookmarks_history_au;
 DROP TRIGGER bookmarks_history_ad;
 

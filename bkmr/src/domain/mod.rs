@@ -6,6 +6,7 @@ pub mod embedding_policy;
 pub mod error;
 pub mod error_context;
 pub mod history;
+pub mod history_retention;
 pub mod interpolation;
 pub mod repositories;
 pub mod search;

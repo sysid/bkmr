@@ -1,5 +1,6 @@
 use crate::domain::embedding_policy::EmbeddingPolicy;
 use crate::domain::error::{DomainError, DomainResult};
+use crate::domain::history_retention::HistoryRetention;
 use crate::util::path::expand_path;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -101,6 +102,13 @@ impl Default for EmbeddingOpts {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct HistoryOpts {
+    /// Saved states kept per bookmark, by type
+    #[serde(default)]
+    pub retention: HistoryRetention,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
     /// Path to the SQLite database file
@@ -122,6 +130,10 @@ pub struct Settings {
     /// Embedding model configuration
     #[serde(default)]
     pub embeddings: EmbeddingOpts,
+
+    /// History options
+    #[serde(default)]
+    pub history: HistoryOpts,
 
     /// Tracks configuration source (not serialized)
     #[serde(skip)]
@@ -178,6 +190,7 @@ impl Default for Settings {
             shell_opts: ShellOpts::default(),
             base_paths: HashMap::new(),
             embeddings: EmbeddingOpts::default(),
+            history: HistoryOpts::default(),
             config_source: ConfigSource::Default,
             no_color: false,
         }
@@ -448,6 +461,61 @@ mod tests {
     }
 
     #[test]
+    fn given_partial_retention_when_parsing_config_then_keeps_ten_for_the_rest() {
+        let settings: Settings = toml::from_str("[history.retention]\n_mem_ = 3\n").unwrap();
+
+        let retention = settings.history.retention;
+        assert_eq!(retention.memory, 3);
+        assert_eq!(retention.snippet, 10);
+        assert_eq!(retention.uri, 10);
+    }
+
+    #[test]
+    fn given_no_history_section_when_parsing_config_then_uses_default_retention() {
+        let settings: Settings = toml::from_str("[embeddings]\nmodel = \"BGEM3\"\n").unwrap();
+
+        assert_eq!(settings.history.retention, HistoryRetention::default());
+    }
+
+    #[test]
+    fn given_zero_retention_when_parsing_config_then_accepts_it() {
+        let settings: Settings = toml::from_str("[history.retention]\n_env_ = 0\n").unwrap();
+
+        assert_eq!(settings.history.retention.env, 0);
+    }
+
+    #[test]
+    fn given_mistyped_retention_key_when_parsing_config_then_fails() {
+        // A silently ignored key would keep more or less history than the user asked for
+        let result = toml::from_str::<Settings>("[history.retention]\n_snp_ = 3\n");
+
+        assert!(result.unwrap_err().to_string().contains("_snp_"));
+    }
+
+    #[test]
+    fn given_negative_retention_when_parsing_config_then_fails() {
+        let result = toml::from_str::<Settings>("[history.retention]\n_mem_ = -1\n");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn given_documented_default_config_when_parsing_then_matches_default_retention() {
+        let settings: Settings = toml::from_str(include_str!("default_config.toml")).unwrap();
+
+        assert_eq!(settings.history.retention, HistoryRetention::default());
+        // Spelled out: a default of 0 in both places would also match
+        assert_eq!(settings.history.retention.memory, 10);
+    }
+
+    #[test]
+    fn given_generated_default_config_when_parsing_then_matches_default_retention() {
+        let settings: Settings = toml::from_str(&generate_default_config()).unwrap();
+
+        assert_eq!(settings.history.retention, HistoryRetention::default());
+    }
+
+    #[test]
     fn given_invalid_config_file_when_load_settings_then_returns_error_naming_file() {
         // Arrange
         let _guard = EnvGuard::new();
@@ -664,6 +732,7 @@ mod tests {
             shell_opts: ShellOpts { interactive: true },
             base_paths: HashMap::new(),
             embeddings: EmbeddingOpts::default(),
+            history: HistoryOpts::default(),
             config_source: ConfigSource::ConfigFile,
             no_color: false,
         };
