@@ -12,9 +12,11 @@ use super::error::{SqliteRepositoryError, SqliteResult};
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error::{DomainError, RepositoryError};
 use crate::domain::history::{HistoryChange, HistoryEntry};
+use crate::domain::history_retention::HistoryRetention;
 use crate::domain::repositories::query::{BookmarkQuery, SortCriteria, SortDirection, SortField};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::search::RankedResult;
+use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::repositories::sqlite::model::DbHistoryEntry;
 use crate::infrastructure::repositories::sqlite::model::{
@@ -58,12 +60,122 @@ pub fn print_db_schema(repo: &SqliteBookmarkRepository) {
 #[derive(Clone, Debug)]
 pub struct SqliteBookmarkRepository {
     pool: ConnectionPool,
+    history_retention: HistoryRetention,
 }
 
 impl SqliteBookmarkRepository {
     /// Create a new SQLite repository with the provided connection pool
     pub fn new(pool: ConnectionPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            history_retention: HistoryRetention::default(),
+        }
+    }
+
+    /// Replace the built-in history retention with the configured one.
+    pub fn with_history_retention(mut self, history_retention: HistoryRetention) -> Self {
+        self.history_retention = history_retention;
+        self
+    }
+
+    /// Trim a bookmark's saved states to its limit: the larger of the limits of the type in its
+    /// newest saved state and of its current type, if it still exists. After a change that is the
+    /// type before and after it, so a change of type, maybe by mistake, keeps the states it takes
+    /// to undo it; the next change applies the new type's limit. After a delete it is the type the
+    /// bookmark had. Every repository write whose history trigger saves a state (update, delete)
+    /// calls it in the same transaction; trim_all_history covers everything else.
+    fn trim_history(
+        &self,
+        conn: &mut SqliteConnection,
+        bookmark_id: i32,
+    ) -> diesel::QueryResult<usize> {
+        let Some(newest_tags) = bookmark_history::table
+            .filter(bookmark_history::bookmark_id.eq(bookmark_id))
+            .order(bookmark_history::history_id.desc())
+            .select(bookmark_history::tags)
+            .first::<String>(conn)
+            .optional()?
+        else {
+            return Ok(0); // No history
+        };
+        let current_tags = dsl::bookmarks
+            .filter(dsl::id.eq(bookmark_id))
+            .select(dsl::tags)
+            .first::<String>(conn)
+            .optional()?;
+
+        let retention = &self.history_retention;
+        let mut keep = retention.for_type(SystemTag::of_stored_tags(&newest_tags));
+        if let Some(current) = current_tags {
+            keep = keep.max(retention.for_type(SystemTag::of_stored_tags(&current)));
+        }
+        Self::prune_history(conn, bookmark_id, keep)
+    }
+
+    /// Trim every bookmark's history to its limit, deleted bookmarks included: they are never
+    /// written again, so a lowered limit (`_env_ = 0` for secrets) reaches their states only here.
+    /// Also trims states written outside bkmr. Returns the number of states removed.
+    pub fn trim_all_history(&self) -> Result<usize, DomainError> {
+        let mut conn = self.get_connection()?;
+        let fewest = self
+            .history_retention
+            .entries()
+            .iter()
+            .map(|(_, keep)| *keep)
+            .min()
+            .unwrap_or(0);
+
+        // Read first, outside a write transaction: usually nothing is over and no lock is taken.
+        // ponytail: a limit of 0 for any type makes every bookmark with history a candidate, read
+        // one by one in trim_history; fine for thousands, for far more filter by type in SQL.
+        let candidates: Vec<i32> = bookmark_history::table
+            .group_by(bookmark_history::bookmark_id)
+            .having(diesel::dsl::count_star().gt(i64::from(fewest)))
+            .select(bookmark_history::bookmark_id)
+            .load(&mut conn)
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+        if candidates.is_empty() {
+            return Ok(0);
+        }
+
+        let removed = conn
+            .immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                candidates
+                    .iter()
+                    .try_fold(0, |sum, id| Ok(sum + self.trim_history(conn, *id)?))
+            })
+            .map_err(SqliteRepositoryError::DatabaseError)?;
+        debug!(removed, "Trimmed history to the configured limits");
+        Ok(removed)
+    }
+
+    /// Keep only the newest `keep` saved states of a bookmark.
+    fn prune_history(
+        conn: &mut SqliteConnection,
+        bookmark_id: i32,
+        keep: u32,
+    ) -> diesel::QueryResult<usize> {
+        // LIMIT 0 keeps nothing, so a limit of 0 needs no special case
+        sql_query(
+            "DELETE FROM bookmark_history
+             WHERE bookmark_id = ?1
+               AND history_id NOT IN (SELECT history_id FROM bookmark_history
+                                      WHERE bookmark_id = ?1
+                                      ORDER BY history_id DESC LIMIT ?2)",
+        )
+        .bind::<Integer, _>(bookmark_id)
+        .bind::<diesel::sql_types::BigInt, _>(i64::from(keep))
+        .execute(conn)
+    }
+
+    fn newest_history_id(
+        conn: &mut SqliteConnection,
+        bookmark_id: i32,
+    ) -> diesel::QueryResult<Option<i32>> {
+        bookmark_history::table
+            .filter(bookmark_history::bookmark_id.eq(bookmark_id))
+            .select(diesel::dsl::max(bookmark_history::history_id))
+            .first(conn)
     }
 
     fn to_history_entry(entry: DbHistoryEntry) -> HistoryEntry {
@@ -485,25 +597,37 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         let mut changes = self.to_db_model(bookmark);
         // Auto-stamp updated_at (replaces the old UpdateLastTime trigger)
         changes.last_update_ts = chrono::Utc::now().naive_utc();
-        // Keep tags stored in another form ('' or unsorted, from an older bkmr or another tool)
-        // when they are the same tags: rewriting them would read as a change to the history
-        // trigger. No transaction needed: the read only picks how the same tags are spelled.
-        let stored_tags = dsl::bookmarks
-            .filter(dsl::id.eq(id))
-            .select(dsl::tags)
-            .first::<String>(&mut conn)
-            .optional()
-            .map_err(SqliteRepositoryError::DatabaseError)?;
-        if let Some(stored) = stored_tags {
-            if Tag::parse_tags(&stored).is_ok_and(|tags| tags == bookmark.tags) {
-                changes.tags = stored;
-            }
-        }
 
-        // Update the bookmark
-        let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
-            .set(&changes)
-            .execute(&mut conn)
+        // One transaction, so that the state the trigger saves and the trim commit together.
+        // Immediate for the same reason as in add: a deferred transaction that reads first cannot
+        // wait for another writer and fails with "database is locked".
+        let result = conn
+            .immediate_transaction::<usize, diesel::result::Error, _>(|conn| {
+                // Keep tags stored in another form ('' or unsorted, from an older bkmr or another
+                // tool) when they are the same tags: rewriting them would read as a change to the
+                // history trigger.
+                let stored_tags = dsl::bookmarks
+                    .filter(dsl::id.eq(id))
+                    .select(dsl::tags)
+                    .first::<String>(conn)
+                    .optional()?;
+                if let Some(stored) = stored_tags {
+                    if Tag::parse_tags(&stored).is_ok_and(|tags| tags == bookmark.tags) {
+                        changes.tags = stored;
+                    }
+                }
+
+                // The trigger saves a state only when something it tracks changed; trim only then.
+                // A save of an unchanged bookmark (mtime, hash, embedding, verify) stays cheap.
+                let newest_before = Self::newest_history_id(conn, id)?;
+                let result = diesel::update(dsl::bookmarks.filter(dsl::id.eq(id)))
+                    .set(&changes)
+                    .execute(conn)?;
+                if result > 0 && Self::newest_history_id(conn, id)? != newest_before {
+                    self.trim_history(conn, id)?;
+                }
+                Ok(result)
+            })
             .map_err(SqliteRepositoryError::DatabaseError)?;
 
         if result == 0 {
@@ -556,10 +680,11 @@ impl BookmarkRepository for SqliteBookmarkRepository {
         // Immediate for the same reason as in add: the delete trigger connects the FTS5 vtab
         let deleted = conn
             .immediate_transaction::<bool, diesel::result::Error, _>(|conn| {
-                let result = diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)?;
-                if result == 0 {
-                    return Ok(false); // No bookmark was deleted
+                if diesel::delete(dsl::bookmarks.filter(dsl::id.eq(id))).execute(conn)? == 0 {
+                    return Ok(false); // No bookmark to delete
                 }
+                // The deleted state, now the newest saved one, decides the limit
+                self.trim_history(conn, id)?;
                 Ok(true)
             })
             .map_err(SqliteRepositoryError::DatabaseError)?;
@@ -1916,6 +2041,357 @@ mod tests {
         assert_eq!(history[1].title, "Port");
         assert_eq!(history[1].description, "Test description");
         assert_eq!(history[1].tags, ",_mem_,fact,");
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_limit_when_memory_changed_more_often_then_keeps_only_newest_states(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                memory: 3,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5430", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+
+        for port in 5431..=5435 {
+            memory.url = format!("Runs on {port}");
+            repo.update(&memory)?;
+        }
+
+        // Five changes saved the states 5430..5434; the three newest survive
+        let urls: Vec<String> = repo
+            .get_history(Some(id), None, 100)?
+            .into_iter()
+            .map(|entry| entry.url)
+            .collect();
+        assert_eq!(urls, ["Runs on 5434", "Runs on 5433", "Runs on 5432"]);
+        Ok(())
+    }
+
+    #[test]
+    fn given_zero_limit_when_memory_changed_then_keeps_no_history() -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                memory: 0,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+
+        memory.url = "Runs on 5433".to_string();
+        repo.update(&memory)?;
+
+        assert_eq!(repo.count_history(memory.id.unwrap())?, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn given_zero_limit_when_memory_deleted_then_nothing_is_left_to_restore(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                memory: 0,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+
+        assert!(repo.delete(id)?);
+
+        assert_eq!(repo.count_history(id)?, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn given_limit_of_two_when_memory_deleted_then_delete_state_is_kept_as_newest(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                memory: 2,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5431", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        memory.url = "Runs on 5432".to_string();
+        repo.update(&memory)?;
+        memory.url = "Runs on 5433".to_string();
+        repo.update(&memory)?;
+
+        repo.delete(id)?;
+
+        let history = repo.get_history(Some(id), None, 100)?;
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].change, HistoryChange::Delete);
+        assert_eq!(history[0].url, "Runs on 5433");
+        assert_eq!(history[1].url, "Runs on 5432");
+        Ok(())
+    }
+
+    #[test]
+    fn given_snippet_retagged_as_memory_when_updated_then_memory_limit_applies(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                snippet: 1,
+                memory: 3,
+                ..HistoryRetention::default()
+            });
+        let mut bookmark = create_test_bookmark("Note", "v0", vec!["_snip_"])?;
+        repo.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+        for version in 1..=4 {
+            bookmark.url = format!("v{version}");
+            repo.update(&bookmark)?;
+        }
+        assert_eq!(repo.count_history(id)?, 1);
+
+        // The limit is that of the type after the write: 2 states fit under _mem_ = 3, where the
+        // snippet limit would leave 1
+        bookmark.tags = [Tag::new("_mem_")?].into_iter().collect();
+        bookmark.url = "v5".to_string();
+        repo.update(&bookmark)?;
+
+        assert_eq!(repo.count_history(id)?, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_retagged_to_type_without_history_when_updated_then_memory_history_survives(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                uri: 0,
+                memory: 10,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5431", vec!["_mem_", "fact"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        memory.url = "Runs on 5432".to_string();
+        repo.update(&memory)?;
+
+        // Removing _mem_ by mistake makes it a uri, which keeps no history. The write that changes
+        // the type must not destroy the states it would take to undo it.
+        memory.tags = [Tag::new("fact")?].into_iter().collect();
+        repo.update(&memory)?;
+
+        let history = repo.get_history(Some(id), None, 100)?;
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].tags, ",_mem_,fact,");
+        assert_eq!(history[0].url, "Runs on 5432");
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_with_tag_bkmr_cannot_read_when_deleted_then_memory_limit_applies(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                uri: 0,
+                memory: 10,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5432", vec!["_mem_"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        // Another tool writes a tag with a space, which bkmr cannot parse
+        rusqlite::Connection::open(&db_path)
+            .unwrap()
+            .execute_batch("UPDATE bookmarks SET tags = ',_mem_,bad tag,'")
+            .unwrap();
+
+        repo.delete(id)?;
+
+        // The state from the outside write and the delete state: still a memory, so restorable
+        let history = repo.get_history(Some(id), None, 100)?;
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].change, HistoryChange::Delete);
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_limit_when_snippet_deleted_then_snippet_limit_applies(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                snippet: 1,
+                memory: 5,
+                ..HistoryRetention::default()
+            });
+        let mut snippet = create_test_bookmark("Note", "v1", vec!["_snip_"])?;
+        repo.add(&mut snippet)?;
+        let id = snippet.id.unwrap();
+        snippet.url = "v2".to_string();
+        repo.update(&snippet)?;
+
+        repo.delete(id)?;
+
+        let history = repo.get_history(Some(id), None, 100)?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].change, HistoryChange::Delete);
+        Ok(())
+    }
+
+    #[test]
+    fn given_limit_when_one_bookmark_changed_often_then_other_bookmarks_keep_their_history(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                memory: 2,
+                ..HistoryRetention::default()
+            });
+        let mut busy = create_test_bookmark("Busy", "busy v0", vec!["_mem_"])?;
+        let mut quiet = create_test_bookmark("Quiet", "quiet v0", vec!["_mem_"])?;
+        repo.add(&mut busy)?;
+        repo.add(&mut quiet)?;
+        quiet.url = "quiet v1".to_string();
+        repo.update(&quiet)?;
+        quiet.url = "quiet v2".to_string();
+        repo.update(&quiet)?;
+
+        for version in 1..=4 {
+            busy.url = format!("busy v{version}");
+            repo.update(&busy)?;
+        }
+
+        assert_eq!(repo.count_history(busy.id.unwrap())?, 2);
+        assert_eq!(repo.count_history(quiet.id.unwrap())?, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn given_history_beyond_the_limit_when_bookmark_saved_unchanged_then_history_is_left_alone(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        // States saved under a higher limit, as by an older bkmr without retention
+        let generous =
+            SqliteBookmarkRepository::from_url(db_path)?.with_history_retention(HistoryRetention {
+                memory: 100,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "v0", vec!["_mem_"])?;
+        generous.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        for version in 1..=15 {
+            memory.url = format!("v{version}");
+            generous.update(&memory)?;
+        }
+
+        // A save that changes nothing saves no state, so it does not trim either: that is the
+        // job of trim_all_history at startup
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+        repo.update(&memory)?;
+
+        assert_eq!(repo.count_history(id)?, 15);
+        Ok(())
+    }
+
+    #[test]
+    fn given_history_beyond_the_limit_when_trimming_all_history_then_each_bookmark_keeps_its_limit(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        let generous =
+            SqliteBookmarkRepository::from_url(db_path)?.with_history_retention(HistoryRetention {
+                memory: 100,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "v0", vec!["_mem_"])?;
+        generous.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        for version in 1..=15 {
+            memory.url = format!("v{version}");
+            generous.update(&memory)?;
+        }
+
+        let repo = SqliteBookmarkRepository::from_url(db_path)?;
+        let removed = repo.trim_all_history()?;
+
+        assert_eq!(removed, 5);
+        assert_eq!(repo.count_history(id)?, 10);
+        assert_eq!(repo.get_history(Some(id), None, 1)?[0].url, "v14");
+        Ok(())
+    }
+
+    #[test]
+    fn given_deleted_env_bookmark_when_its_limit_is_lowered_to_zero_then_trimming_removes_its_states(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let db_path = db_path.to_str().unwrap();
+        let before = SqliteBookmarkRepository::from_url(db_path)?;
+        let mut secret = create_test_bookmark("Token", "export TOKEN=v1", vec!["_env_"])?;
+        let mut note = create_test_bookmark("Note", "https://example.com/v1", vec!["topic"])?;
+        before.add(&mut secret)?;
+        before.add(&mut note)?;
+        secret.url = "export TOKEN=v2".to_string();
+        before.update(&secret)?;
+        before.delete(secret.id.unwrap())?;
+        note.url = "https://example.com/v2".to_string();
+        before.update(&note)?;
+
+        // A deleted bookmark is never written again, so only the sweep reaches its states
+        let after =
+            SqliteBookmarkRepository::from_url(db_path)?.with_history_retention(HistoryRetention {
+                env: 0,
+                ..HistoryRetention::default()
+            });
+        after.trim_all_history()?;
+
+        assert_eq!(after.count_history(secret.id.unwrap())?, 0);
+        assert_eq!(after.count_history(note.id.unwrap())?, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn given_memory_just_retagged_to_type_without_history_when_trimming_all_then_its_history_survives(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?
+            .with_history_retention(HistoryRetention {
+                uri: 0,
+                memory: 10,
+                ..HistoryRetention::default()
+            });
+        let mut memory = create_test_bookmark("Port", "Runs on 5431", vec!["_mem_", "fact"])?;
+        repo.add(&mut memory)?;
+        let id = memory.id.unwrap();
+        memory.url = "Runs on 5432".to_string();
+        repo.update(&memory)?;
+        memory.tags = [Tag::new("fact")?].into_iter().collect();
+        repo.update(&memory)?;
+
+        // The next start must not take away the undo the retagging write kept
+        repo.trim_all_history()?;
+
+        assert_eq!(repo.count_history(id)?, 2);
         Ok(())
     }
 

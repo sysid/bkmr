@@ -1,5 +1,5 @@
 // src/domain/embedding_policy.rs
-use crate::domain::system_tag::SystemTag;
+use crate::domain::per_type::PerType;
 use crate::domain::tag::Tag;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -31,36 +31,14 @@ impl std::fmt::Display for EmbeddingMode {
 /// The policy decides the value of the `embeddable` flag whenever a bookmark is written; the
 /// flag remains the only per-bookmark truth. Changing the policy therefore does not touch
 /// existing bookmarks until they are written again.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct EmbeddingPolicy {
-    /// Bookmarks without a known system tag
-    pub uri: EmbeddingMode,
-    #[serde(rename = "_snip_")]
-    pub snippet: EmbeddingMode,
-    #[serde(rename = "_imported_")]
-    pub text: EmbeddingMode,
-    #[serde(rename = "_shell_")]
-    pub shell: EmbeddingMode,
-    #[serde(rename = "_md_")]
-    pub markdown: EmbeddingMode,
-    #[serde(rename = "_env_")]
-    pub env: EmbeddingMode,
-    #[serde(rename = "_mem_")]
-    pub memory: EmbeddingMode,
-}
+pub type EmbeddingPolicy = PerType<EmbeddingMode>;
 
 impl Default for EmbeddingPolicy {
     fn default() -> Self {
         Self {
-            uri: EmbeddingMode::On,
-            snippet: EmbeddingMode::On,
-            text: EmbeddingMode::On,
-            shell: EmbeddingMode::On,
-            markdown: EmbeddingMode::On,
-            env: EmbeddingMode::On,
             // Agent memory is retrieved through semantic search
             memory: EmbeddingMode::Always,
+            ..Self::all(EmbeddingMode::On)
         }
     }
 }
@@ -72,40 +50,11 @@ impl EmbeddingPolicy {
     ///
     /// Precedence: `always` > explicit request > mode default.
     pub fn resolve(&self, tags: &HashSet<Tag>, requested: Option<bool>) -> bool {
-        match (self.mode_for(tags), requested) {
+        match (self.for_tags(tags), requested) {
             (EmbeddingMode::Always, _) => true,
             (_, Some(explicit)) => explicit,
             (EmbeddingMode::On, None) => true,
             (EmbeddingMode::Off, None) => false,
-        }
-    }
-
-    /// Config key and mode of each bookmark type, for display.
-    pub fn entries(&self) -> [(&'static str, EmbeddingMode); 7] {
-        [
-            ("uri", self.uri),
-            (SystemTag::Snippet.as_str(), self.snippet),
-            (SystemTag::Text.as_str(), self.text),
-            (SystemTag::Shell.as_str(), self.shell),
-            (SystemTag::Markdown.as_str(), self.markdown),
-            (SystemTag::Env.as_str(), self.env),
-            (SystemTag::Memory.as_str(), self.memory),
-        ]
-    }
-
-    fn mode_for(&self, tags: &HashSet<Tag>) -> EmbeddingMode {
-        // A bookmark has at most one known system tag (Bookmark::validate)
-        match tags
-            .iter()
-            .find_map(|t| SystemTag::from_tag_value(t.value()))
-        {
-            Some(SystemTag::Snippet) => self.snippet,
-            Some(SystemTag::Text) => self.text,
-            Some(SystemTag::Shell) => self.shell,
-            Some(SystemTag::Markdown) => self.markdown,
-            Some(SystemTag::Env) => self.env,
-            Some(SystemTag::Memory) => self.memory,
-            Some(SystemTag::Uri) | None => self.uri,
         }
     }
 }

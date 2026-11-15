@@ -288,6 +288,48 @@ def test_the_table_shows_a_summary_line(tmp_path, capsys):
     assert "7" in out
 
 
+# --- editing the script ------------------------------------------------------------------------------
+
+
+def test_edit_opens_the_script_itself_in_editor_and_reads_no_memories(tmp_path, monkeypatch):
+    # The windows are opinions; -e is how a user adjusts them in their installed copy.
+    fake_editor = tmp_path / "editor"
+    fake_editor.write_text(f'#!/bin/sh\necho "$@" > {tmp_path / "args"}\n')
+    fake_editor.chmod(0o755)
+    # EDITOR may carry flags, e.g. "code -w".
+    monkeypatch.setenv("EDITOR", f"{fake_editor} -w")
+
+    exit_code = due_report.main(["-e", "--bkmr", "/nonexistent/bkmr"])
+
+    assert exit_code == 0
+    assert (tmp_path / "args").read_text().split() == ["-w", str(SCRIPT)]
+
+
+def test_edit_passes_on_the_editor_exit_code(monkeypatch):
+    monkeypatch.setenv("EDITOR", "false")
+
+    assert due_report.main(["--edit"]) == 1
+
+
+def test_edit_with_empty_editor_falls_back_to_vi(tmp_path, monkeypatch):
+    # An empty EDITOR would leave only the script path, which runs the script instead of editing it
+    fake_vi = tmp_path / "vi"
+    fake_vi.write_text(f'#!/bin/sh\necho "$@" > {tmp_path / "args"}\n')
+    fake_vi.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path), prepend=":")
+    monkeypatch.setenv("EDITOR", "")
+
+    assert due_report.main(["-e"]) == 0
+    assert (tmp_path / "args").read_text().split() == [str(SCRIPT)]
+
+
+def test_edit_with_missing_editor_reports_error_instead_of_traceback(monkeypatch, capsys):
+    monkeypatch.setenv("EDITOR", "/nonexistent/editor")
+
+    assert due_report.main(["-e"]) == 1
+    assert "/nonexistent/editor" in capsys.readouterr().err
+
+
 # --- debug logging -----------------------------------------------------------------------------------
 
 

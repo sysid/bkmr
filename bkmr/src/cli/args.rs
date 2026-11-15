@@ -360,7 +360,7 @@ pub enum Commands {
             short = 'y',
             long = "yes",
             conflicts_with = "force",
-            help = "do not ask for confirmation, for scripts and agents; the bookmark stays restorable"
+            help = "do not ask for confirmation, for scripts and agents; the bookmark stays restorable unless its type keeps no history ([history.retention] = 0)"
         )]
         yes: bool,
     },

@@ -1,6 +1,7 @@
 // src/domain/tag.rs
 use crate::domain::error::DomainError;
 use crate::domain::tag::Tag;
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemTag {
@@ -46,6 +47,23 @@ impl SystemTag {
     pub fn is_known_system_tag(tag_str: &str) -> bool {
         Self::from_tag_value(tag_str).is_some()
     }
+
+    /// The type of a bookmark with these tags: its known system tag, or `Uri` if it has none.
+    /// A bookmark has at most one known system tag (Bookmark::validate).
+    pub fn of_bookmark(tags: &HashSet<Tag>) -> Self {
+        tags.iter()
+            .find_map(|t| Self::from_tag_value(t.value()))
+            .unwrap_or(Self::Uri)
+    }
+
+    /// The type of a bookmark from its tags as stored (",_mem_,fact,"). Reads each tag on its
+    /// own, so one tag bkmr cannot parse does not hide the system tag next to it.
+    pub fn of_stored_tags(stored: &str) -> Self {
+        stored
+            .split(',')
+            .find_map(|t| Self::from_tag_value(&t.trim().to_lowercase()))
+            .unwrap_or(Self::Uri)
+    }
 }
 
 impl Tag {
@@ -68,6 +86,17 @@ mod tests {
     use crate::domain::bookmark::Bookmark;
     use crate::util::testing::init_test_env;
     use std::collections::HashSet;
+
+    #[test]
+    fn given_stored_tags_with_unparseable_tag_when_reading_type_then_finds_system_tag() {
+        assert_eq!(
+            SystemTag::of_stored_tags(",_mem_,bad tag,"),
+            SystemTag::Memory
+        );
+        assert_eq!(SystemTag::of_stored_tags(", _MEM_ ,"), SystemTag::Memory);
+        assert_eq!(SystemTag::of_stored_tags(",fact,bad tag,"), SystemTag::Uri);
+        assert_eq!(SystemTag::of_stored_tags(""), SystemTag::Uri);
+    }
 
     #[test]
     fn given_tag_when_checking_is_known_system_tag_then_returns_correctly() {

@@ -455,7 +455,8 @@ bkmr update 87 -t redis,security
 A memory is a dated claim, and nothing marks it when the world changes. Maintaining the store is
 part of your job: act on evidence yourself instead of asking the user, except in the cases listed
 under "Who decides". bkmr saves the old state of a memory on every change and delete, outside
-search, so these actions can be undone. Mention each one in your reply.
+search, so these actions can be undone; each memory keeps its newest states, 10 unless
+`[history.retention]` says otherwise. Mention each one in your reply.
 
 To find memories past their review window, run `scripts/due-report.py --json` from this skill's
 directory. It only reads the store; the rules below decide what to do with each hit.

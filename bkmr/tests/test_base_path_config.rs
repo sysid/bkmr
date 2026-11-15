@@ -14,6 +14,7 @@ fn test_base_path_configuration() {
         shell_opts: Default::default(),
         base_paths,
         embeddings: Default::default(),
+        history: Default::default(),
         config_source: Default::default(),
         no_color: Default::default(),
     };
@@ -48,6 +49,7 @@ fn test_base_path_usage_examples() {
         shell_opts: Default::default(),
         base_paths,
         embeddings: Default::default(),
+        history: Default::default(),
         config_source: Default::default(),
         no_color: Default::default(),
     };
@@ -75,6 +77,7 @@ fn test_environment_variable_expansion() {
         shell_opts: Default::default(),
         base_paths,
         embeddings: Default::default(),
+        history: Default::default(),
         config_source: Default::default(),
         no_color: Default::default(),
     };
