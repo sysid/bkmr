@@ -1902,49 +1902,16 @@ mod tests {
     }
 
     #[test]
-    fn given_tag_strings_that_read_as_a_memory_when_written_outside_bkmr_then_history_keeps_them(
+    fn given_any_type_when_changed_and_deleted_then_history_keeps_each_state(
     ) -> Result<(), DomainError> {
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("bkmr.db");
         let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
-        let writer = rusqlite::Connection::open(&db_path).unwrap();
-
-        // Tag::parse_tags reads each of these as containing _mem_
-        for (index, tags) in [
-            "_mem_",
-            "_mem_,fact,",
-            ",fact,_mem_",
-            ",_MEM_,",
-            ", _mem_ ,",
-        ]
-        .iter()
-        .enumerate()
+        // No type is special: a plain delete can be undone, delete --force removes for good
+        for (index, tag) in ["_env_", "_snip_", "_shell_", "_md_", "plain"]
+            .iter()
+            .enumerate()
         {
-            writer
-                .execute(
-                    "INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
-                     VALUES (?1, 'title', ?2, '', 0)",
-                    rusqlite::params![format!("memory {index}"), tags],
-                )
-                .unwrap();
-        }
-        writer
-            .execute_batch("UPDATE bookmarks SET URL = URL || ' changed'; DELETE FROM bookmarks;")
-            .unwrap();
-
-        assert_eq!(repo.get_history(None, 100)?.len(), 10);
-        Ok(())
-    }
-
-    #[test]
-    fn given_other_types_when_changed_and_deleted_then_no_history_is_kept(
-    ) -> Result<(), DomainError> {
-        let dir = tempfile::tempdir().unwrap();
-        let db_path = dir.path().join("bkmr.db");
-        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
-        // Deleting a secret from _env_ must remove it. The last tag only looks like a system tag:
-        // in a LIKE pattern, each underscore of _mem_ would match any character.
-        for (index, tag) in ["_env_", "_snip_", "plain", "xmemx"].iter().enumerate() {
             let url = format!("https://example.com/{index}");
             let mut bookmark = create_test_bookmark("Other", &url, vec![*tag])?;
             repo.add(&mut bookmark)?;
@@ -1954,7 +1921,88 @@ mod tests {
             repo.delete(bookmark.id.unwrap())?;
         }
 
-        assert!(repo.get_history(None, 10)?.is_empty());
+        assert_eq!(repo.get_history(None, 100)?.len(), 10);
+        Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_without_tags_when_written_outside_bkmr_then_history_keeps_the_old_state(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let writer = rusqlite::Connection::open(&db_path).unwrap();
+        writer
+            .execute_batch(
+                "INSERT INTO bookmarks (URL, metadata, tags, desc, flags)
+                 VALUES ('untagged', 'title', '', '', 0);
+                 UPDATE bookmarks SET URL = 'untagged changed';
+                 DELETE FROM bookmarks;",
+            )
+            .unwrap();
+
+        assert_eq!(repo.get_history(None, 100)?.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_when_only_opener_changes_then_history_keeps_the_old_opener(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut bookmark = create_test_bookmark("Doc", "https://example.com/doc", vec!["plain"])?;
+        bookmark.opener = Some("less {}".to_string());
+        repo.add(&mut bookmark)?;
+
+        bookmark.opener = Some("bat {}".to_string());
+        repo.update(&bookmark)?;
+
+        let history = repo.get_history(bookmark.id, 10)?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].opener.as_deref(), Some("less {}"));
+        Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_when_only_file_path_changes_then_history_keeps_the_old_path(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut bookmark = create_test_bookmark("Script", "echo hi", vec!["_shell_"])?;
+        bookmark.file_path = Some("/scripts/old.sh".to_string());
+        repo.add(&mut bookmark)?;
+
+        bookmark.file_path = Some("/scripts/new.sh".to_string());
+        repo.update(&bookmark)?;
+
+        let history = repo.get_history(bookmark.id, 10)?;
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].file_path.as_deref(), Some("/scripts/old.sh"));
+        Ok(())
+    }
+
+    #[test]
+    fn given_bookmark_when_verified_or_only_file_stamp_changes_then_no_history_entry(
+    ) -> Result<(), DomainError> {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("bkmr.db");
+        let repo = SqliteBookmarkRepository::from_url(db_path.to_str().unwrap())?;
+        let mut bookmark = create_test_bookmark("Script", "echo hi", vec!["_shell_"])?;
+        bookmark.file_path = Some("/scripts/a.sh".to_string());
+        bookmark.file_mtime = Some(1);
+        bookmark.file_hash = Some("aaa".to_string());
+        repo.add(&mut bookmark)?;
+        let id = bookmark.id.unwrap();
+
+        // A touched file with the same content changes only its stamp, not what the bookmark says
+        repo.mark_verified(id)?;
+        bookmark.file_mtime = Some(2);
+        bookmark.file_hash = Some("bbb".to_string());
+        repo.update(&bookmark)?;
+
+        assert!(repo.get_history(Some(id), 10)?.is_empty());
         Ok(())
     }
 

@@ -1,7 +1,7 @@
 // src/domain/history.rs
 use chrono::{DateTime, Utc};
 
-/// What happened to the memory when its old state was saved.
+/// What happened to the bookmark when its old state was saved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HistoryChange {
     Update,
@@ -18,8 +18,8 @@ impl HistoryChange {
     }
 }
 
-/// The state of an agent memory just before it was changed or deleted. Embeddings are not kept: a
-/// restored memory is embedded again.
+/// The state of a bookmark just before it was changed or deleted. Embeddings are not kept: a
+/// restored bookmark is embedded again.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryEntry {
     pub history_id: i32,

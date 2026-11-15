@@ -1,5 +1,5 @@
 // src/cli/history_diff.rs
-//! Unified diffs between states of an agent memory, for `history -p` and `restore --dry-run`.
+//! Unified diffs between states of a bookmark, for `history -p` and `restore --dry-run`.
 
 use crate::domain::bookmark::Bookmark;
 use crate::domain::history::HistoryEntry;
@@ -23,22 +23,27 @@ fn display_stored_tags(stored: &str) -> String {
     }
 }
 
-/// The fields of a memory that history keeps and restore brings back
+/// The fields of a bookmark that history keeps: what it says, how it opens and which file it
+/// comes from
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MemoryState {
+pub struct BookmarkState {
     pub title: String,
     /// Sorted and comma-separated, without the stored format's outer commas
     pub tags: String,
     pub description: String,
+    pub opener: Option<String>,
+    pub file_path: Option<String>,
     pub url: String,
 }
 
-impl MemoryState {
+impl BookmarkState {
     pub fn from_entry(entry: &HistoryEntry) -> Self {
         Self {
             title: entry.title.clone(),
             tags: display_stored_tags(&entry.tags),
             description: entry.description.clone(),
+            opener: entry.opener.clone(),
+            file_path: entry.file_path.clone(),
             url: entry.url.clone(),
         }
     }
@@ -48,35 +53,47 @@ impl MemoryState {
             title: bookmark.title.clone(),
             tags: display_tags(&bookmark.tags),
             description: bookmark.description.clone(),
+            opener: bookmark.opener.clone(),
+            file_path: bookmark.file_path.clone(),
             url: bookmark.url.clone(),
         }
     }
 
     /// One document per state, so a single line diff covers every field: metadata as
-    /// `key: value` lines, then the content after a blank line
+    /// `key: value` lines, then the content after a blank line. Opener and file appear only
+    /// when set, as most bookmarks have neither.
     fn to_text(&self) -> String {
-        format!(
-            "title: {}\ntags: {}\ndescription: {}\n\n{}",
-            self.title, self.tags, self.description, self.url
-        )
+        let mut text = format!(
+            "title: {}\ntags: {}\ndescription: {}\n",
+            self.title, self.tags, self.description
+        );
+        if let Some(opener) = &self.opener {
+            text.push_str(&format!("opener: {}\n", opener));
+        }
+        if let Some(file_path) = &self.file_path {
+            text.push_str(&format!("file: {}\n", file_path));
+        }
+        text.push('\n');
+        text.push_str(&self.url);
+        text
     }
 }
 
-/// A unified diff from `old` to `new`, where `None` is a memory that does not exist. Empty if
+/// A unified diff from `old` to `new`, where `None` is a bookmark that does not exist. Empty if
 /// nothing differs.
 pub fn render_patch(
-    old: Option<&MemoryState>,
-    new: Option<&MemoryState>,
+    old: Option<&BookmarkState>,
+    new: Option<&BookmarkState>,
     old_label: &str,
     new_label: &str,
     color: bool,
 ) -> String {
-    let mut old_text = old.map(MemoryState::to_text).unwrap_or_default();
-    let mut new_text = new.map(MemoryState::to_text).unwrap_or_default();
+    let mut old_text = old.map(BookmarkState::to_text).unwrap_or_default();
+    let mut new_text = new.map(BookmarkState::to_text).unwrap_or_default();
     if old_text == new_text {
         return String::new();
     }
-    // Most memories end without a newline, and the "No newline at end of file" marker would
+    // Most bookmarks end without a newline, and the "No newline at end of file" marker would
     // then follow nearly every changed last line. With neither side ending in one, both get
     // it; when only one side does, the newline is part of the change and the marker shows it.
     let lacks_newline = |text: &str| !text.ends_with('\n');
@@ -134,11 +151,13 @@ fn colorize(patch: &str) -> String {
 mod tests {
     use super::*;
 
-    fn state(title: &str, tags: &str, url: &str) -> MemoryState {
-        MemoryState {
+    fn state(title: &str, tags: &str, url: &str) -> BookmarkState {
+        BookmarkState {
             title: title.to_string(),
             tags: tags.to_string(),
             description: String::new(),
+            opener: None,
+            file_path: None,
             url: url.to_string(),
         }
     }
@@ -162,7 +181,7 @@ mod tests {
             opener: None,
         };
 
-        let state = MemoryState::from_entry(&entry);
+        let state = BookmarkState::from_entry(&entry);
 
         assert_eq!(state.tags, "_mem_,fact");
         assert_eq!(state.url, "text");
@@ -209,6 +228,54 @@ mod tests {
         );
         assert!(!patch.contains("-unchanged text"), "{patch}");
         assert!(!patch.contains("+unchanged text"), "{patch}");
+    }
+
+    #[test]
+    fn given_only_opener_changed_when_rendering_then_the_opener_line_shows_the_change() {
+        let old = BookmarkState {
+            opener: Some("less {}".to_string()),
+            ..state("T", "plain", "text")
+        };
+        let new = BookmarkState {
+            opener: Some("bat {}".to_string()),
+            ..state("T", "plain", "text")
+        };
+
+        let patch = render_patch(Some(&old), Some(&new), "a", "b", false);
+
+        assert!(
+            patch.contains("\n-opener: less {}\n+opener: bat {}\n"),
+            "{patch}"
+        );
+    }
+
+    #[test]
+    fn given_only_file_path_changed_when_rendering_then_the_file_line_shows_the_change() {
+        let old = BookmarkState {
+            file_path: Some("/scripts/old.sh".to_string()),
+            ..state("T", "_shell_", "echo hi")
+        };
+        let new = BookmarkState {
+            file_path: Some("/scripts/new.sh".to_string()),
+            ..state("T", "_shell_", "echo hi")
+        };
+
+        let patch = render_patch(Some(&old), Some(&new), "a", "b", false);
+
+        assert!(
+            patch.contains("\n-file: /scripts/old.sh\n+file: /scripts/new.sh\n"),
+            "{patch}"
+        );
+    }
+
+    #[test]
+    fn given_no_opener_and_no_file_when_rendering_then_neither_line_appears() {
+        let new = state("T", "plain", "text");
+
+        let patch = render_patch(None, Some(&new), "/dev/null", "b", false);
+
+        assert!(!patch.contains("opener:"), "{patch}");
+        assert!(!patch.contains("file:"), "{patch}");
     }
 
     #[test]

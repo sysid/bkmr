@@ -43,7 +43,7 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// or title clears it, by a database trigger.
     fn mark_verified(&self, id: i32) -> Result<(), DomainError>;
 
-    /// Delete a bookmark by ID. A memory keeps its old state in history.
+    /// Delete a bookmark by ID. Its old state stays in history.
     fn delete(&self, id: i32) -> Result<bool, DomainError>;
 
     /// Delete a bookmark and all history stored under its ID. True if anything was removed. Their

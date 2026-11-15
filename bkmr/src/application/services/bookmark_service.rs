@@ -109,7 +109,7 @@ pub trait BookmarkService: Send + Sync + Debug {
     /// Record that a bookmark was checked against reality just now
     fn verify_bookmark(&self, id: i32) -> ApplicationResult<()>;
 
-    /// Delete a bookmark by ID. A memory keeps its old state in history.
+    /// Delete a bookmark by ID. Its old state stays in history.
     fn delete_bookmark(&self, id: i32) -> ApplicationResult<bool>;
 
     /// Permanently remove a bookmark and all history stored under its ID, and the traces of deleted

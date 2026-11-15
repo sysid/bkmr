@@ -448,6 +448,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
                 restored.url = entry.url.clone();
                 restored.title = entry.title.clone();
                 restored.description = entry.description.clone();
+                restored.opener = entry.opener.clone();
                 restored
                     .set_tags(tags)
                     .app_context("setting tags of history entry")?;

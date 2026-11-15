@@ -438,12 +438,12 @@ mod tests {
         .unwrap();
         assert_eq!(fts_hits(&conn, "zqinserted"), 1);
 
-        // bookmarks_au, also for a row that is not a memory
+        // bookmarks_au and bookmarks_history_au, also for a row that is not a memory
         conn.execute_batch("UPDATE bookmarks SET metadata = 'zqplainnew' WHERE id = 5")
             .unwrap();
         assert_eq!(fts_hits(&conn, "zqtitle5"), 0);
         assert_eq!(fts_hits(&conn, "zqplainnew"), 1);
-        assert_eq!(all_history(), 0, "only memories keep history");
+        assert_eq!(all_history(), 1, "every bookmark keeps history");
 
         // bookmarks_au and bookmarks_history_au
         conn.execute_batch("UPDATE bookmarks SET URL = 'zqmemorynew' WHERE id = 50")
@@ -458,11 +458,11 @@ mod tests {
         assert_eq!(fts_hits(&conn, "zqmemorynew"), 0);
         assert_eq!(history("delete"), 1);
 
-        // bookmarks_ad for a row that is not a memory
+        // bookmarks_ad and bookmarks_history_ad for a row that is not a memory
         conn.execute_batch("DELETE FROM bookmarks WHERE id = 9")
             .unwrap();
         assert_eq!(fts_hits(&conn, "zqtitle9"), 0);
-        assert_eq!(all_history(), 2, "only memories keep history");
+        assert_eq!(all_history(), 4, "every bookmark keeps history");
 
         assert_index_matches_rows(&conn);
     }

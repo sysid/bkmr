@@ -1498,20 +1498,106 @@ fn given_memory_when_url_changes_then_history_keeps_the_old_text() {
 }
 
 #[test]
-fn given_other_type_when_url_changes_then_no_history_is_kept() {
+fn given_plain_bookmark_when_deleted_then_it_can_be_restored() {
     let dir = TempDir::new().unwrap();
     let db = dir.path().join("history.db");
     create_db_with_one_bookmark(&db);
     let id = search_all(&db)[0]["id"].to_string();
-
-    // Only agent memories keep history.
     cargo_bin_cmd!("bkmr")
         .env("BKMR_DB_URL", &db)
-        .args(["update", "--url", "https://example.com/new", &id])
+        .args(["delete", "--yes", &id])
+        .assert()
+        .success();
+    let history = history_of(&db, &[&id]);
+    assert_eq!(history.len(), 1);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["restore", &history[0]["history_id"].to_string()])
         .assert()
         .success();
 
-    assert!(history_of(&db, &[&id]).is_empty());
+    let restored = search_all(&db);
+    assert_eq!(restored.len(), 1);
+    assert_eq!(restored[0]["id"].to_string(), id);
+    assert_eq!(restored[0]["url"], "https://example.com");
+}
+
+#[test]
+fn given_opener_changed_when_restored_then_the_old_opener_returns() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    create_db_with_one_bookmark(&db);
+    let id = search_all(&db)[0]["id"].to_string();
+    for opener in ["less {}", "bat {}"] {
+        cargo_bin_cmd!("bkmr")
+            .env("BKMR_DB_URL", &db)
+            .args(["update", "--open-with", opener, &id])
+            .assert()
+            .success();
+    }
+    let newest = history_of(&db, &[&id])[0].clone();
+    assert_eq!(newest["opener"], "less {}");
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["restore", &newest["history_id"].to_string()])
+        .assert()
+        .success();
+
+    let opener: String = rusqlite::Connection::open(&db)
+        .unwrap()
+        .query_row(
+            "SELECT opener FROM bookmarks WHERE id = ?1",
+            [id.parse::<i32>().unwrap()],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(opener, "less {}");
+}
+
+#[test]
+fn given_deleted_snippet_when_force_deleted_then_no_trace_is_left_in_history_or_files() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("history.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args([
+            "add",
+            "curl -H 'Authorization: zqsnipsecret'",
+            "--title",
+            "Token",
+            "-t",
+            "snip",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+    let id = search_all(&db)[0]["id"].to_string();
+
+    // A plain delete can be undone, so the text is still in history
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "--yes", &id])
+        .assert()
+        .success();
+    assert_eq!(history_of(&db, &[&id]).len(), 1);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["delete", "--force", &id])
+        .write_stdin("y\n")
+        .assert()
+        .success();
+
+    assert!(history_of(&db, &[]).is_empty());
+    assert!(!database_files_contain(&db, "zqsnipsecret"));
 }
 
 #[test]
@@ -2030,7 +2116,8 @@ fn add_env_secret(db: &std::path::Path, secret: &str) {
 }
 
 #[test]
-fn given_plain_deleted_env_secret_when_force_delete_then_it_is_gone_from_the_database_files() {
+fn given_bookmark_deleted_without_history_when_force_delete_then_it_is_gone_from_the_database_files(
+) {
     let dir = TempDir::new().unwrap();
     let db = dir.path().join("history.db");
     cargo_bin_cmd!("bkmr")
@@ -2046,6 +2133,11 @@ fn given_plain_deleted_env_secret_when_force_delete_then_it_is_gone_from_the_dat
         .write_stdin("y\n")
         .assert()
         .success();
+    // Before 8.7.0 only memories kept history, so such a delete left no entry
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch("DELETE FROM bookmark_history")
+        .unwrap();
     assert!(database_files_contain(&db, "qrlfqmrhlgggddx"));
 
     let output = cargo_bin_cmd!("bkmr")
@@ -2445,10 +2537,14 @@ fn given_memory_deleted_without_history_after_last_update_when_history_with_patc
     let config = config_without_memory_embedding(dir.path());
     create_db_with_one_memory(&db, &config);
     let id = search_all(&db)[0]["id"].to_string();
-    // Recorded, because the row was a memory before the change
     run_with_config(&db, &config, &["update", "-n", "_mem_", &id], "");
-    // Not recorded, because it is no longer a memory
     run_with_config(&db, &config, &["delete", "--yes", &id], "");
+    // A delete without its entry: before 8.7.0 only memories kept history, so a database can
+    // hold the update of a row that stopped being a memory but not its later delete
+    rusqlite::Connection::open(&db)
+        .unwrap()
+        .execute_batch("DELETE FROM bookmark_history WHERE change = 'delete'")
+        .unwrap();
     assert_eq!(history_of(&db, &[&id]).len(), 1);
 
     let output = run_with_config(&db, &config, &["--no-color", "history", &id, "-p"], "");

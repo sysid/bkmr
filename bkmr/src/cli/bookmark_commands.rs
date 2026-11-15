@@ -11,7 +11,7 @@ use crate::cli::args::{Cli, Commands};
 use crate::cli::backup_restore::{restore_from_backup, BackupRestoreRequest};
 use crate::cli::display::lookup_embedded_ids;
 use crate::cli::error::{CliError, CliResult};
-use crate::cli::history_diff::{render_patch, MemoryState};
+use crate::cli::history_diff::{render_patch, BookmarkState};
 use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
 use crate::config::get_config_file_path;
 use crate::domain::bookmark::Bookmark;
@@ -642,6 +642,8 @@ pub fn history(
                         "title": entry.title,
                         "description": entry.description,
                         "tags": entry.tags,
+                        "opener": entry.opener,
+                        "file_path": entry.file_path,
                         "changed_at": entry.changed_at.to_rfc3339(),
                     })
                 })
@@ -658,11 +660,11 @@ pub fn history(
             // entry, or for the newest one the bookmark as it is now.
             let mut newer = bookmark_service
                 .get_bookmark(id)?
-                .map(|b| MemoryState::from_bookmark(&b));
+                .map(|b| BookmarkState::from_bookmark(&b));
             let mut newer_label = current_label(id);
             for entry in &entries {
                 println!("{}", history_line(entry));
-                let older = MemoryState::from_entry(entry);
+                let older = BookmarkState::from_entry(entry);
                 let older_label = history_label(entry);
                 match (&entry.change, &newer) {
                     (HistoryChange::Delete, _) => print!(
@@ -679,8 +681,9 @@ pub fn history(
                             use_color
                         )
                     ),
-                    // Deleted after it stopped being a memory, which history does not record, so
-                    // the state this update led to is gone
+                    // Deleted without a history entry: before 8.7.0 only memories kept history, so
+                    // a row deleted after it stopped being a memory left none, and the state this
+                    // update led to is gone
                     (HistoryChange::Update, None) => println!(
                         "(no diff: #{} no longer exists, and its state after this update was not kept)",
                         id
@@ -771,9 +774,9 @@ pub fn restore(
                 preview
                     .current
                     .as_ref()
-                    .map(MemoryState::from_bookmark)
+                    .map(BookmarkState::from_bookmark)
                     .as_ref(),
-                Some(&MemoryState::from_bookmark(&preview.restored)),
+                Some(&BookmarkState::from_bookmark(&preview.restored)),
                 &old_label,
                 &history_label(&preview.entry),
                 diff_color(settings),
