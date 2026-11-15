@@ -288,6 +288,29 @@ def test_the_table_shows_a_summary_line(tmp_path, capsys):
     assert "7" in out
 
 
+# --- editing the script ------------------------------------------------------------------------------
+
+
+def test_edit_opens_the_script_itself_in_editor_and_reads_no_memories(tmp_path, monkeypatch):
+    # The windows are opinions; -e is how a user adjusts them in their installed copy.
+    fake_editor = tmp_path / "editor"
+    fake_editor.write_text(f'#!/bin/sh\necho "$@" > {tmp_path / "args"}\n')
+    fake_editor.chmod(0o755)
+    # EDITOR may carry flags, e.g. "code -w".
+    monkeypatch.setenv("EDITOR", f"{fake_editor} -w")
+
+    exit_code = due_report.main(["-e", "--bkmr", "/nonexistent/bkmr"])
+
+    assert exit_code == 0
+    assert (tmp_path / "args").read_text().split() == ["-w", str(SCRIPT)]
+
+
+def test_edit_passes_on_the_editor_exit_code(monkeypatch):
+    monkeypatch.setenv("EDITOR", "false")
+
+    assert due_report.main(["--edit"]) == 1
+
+
 # --- debug logging -----------------------------------------------------------------------------------
 
 

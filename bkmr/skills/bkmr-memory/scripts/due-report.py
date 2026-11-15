@@ -9,6 +9,7 @@
                                           older debug build without verified_at.
   due-report.py --input FILE [--json]     Read a saved `bkmr search -t _mem_ --json` instead.
   due-report.py -v ...                    Log why each memory is or is not due, to stderr.
+  due-report.py -e                        Open this script in $EDITOR to adjust the windows.
 
 A memory is due when its age reaches its review window. Age counts from `verified_at`, the last
 `bkmr verify`, or from `created_at` if it was never stamped or changed since. Due means "audit",
@@ -22,7 +23,9 @@ those go stale when the tool changes, not with age.
 import argparse
 import json
 import logging
+import os
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -136,6 +139,12 @@ def load_from_bkmr(bkmr, db):
     return memories
 
 
+def edit_script():
+    # EDITOR may carry flags ("code -w"), so split it like a shell would.
+    editor = shlex.split(os.environ.get("EDITOR", "vi"))
+    return subprocess.run([*editor, os.path.abspath(__file__)]).returncode
+
+
 def print_table(due, total):
     print(f"{len(due)} of {total} memories due")
     if not due:
@@ -160,9 +169,15 @@ def main(argv=None):
     )
     parser.add_argument("--json", action="store_true", help="print JSON for the audit")
     parser.add_argument("--now", help="reference date, YYYY-MM-DD (default: today)")
+    parser.add_argument(
+        "-e", "--edit", action="store_true", help="open this script in $EDITOR (default: vi)"
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging to stderr")
     args = parser.parse_args(argv)
     setup_logging(args.verbose)
+
+    if args.edit:
+        return edit_script()
 
     if args.input:
         log.debug("reading memories from %s", args.input)

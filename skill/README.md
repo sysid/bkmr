@@ -89,6 +89,7 @@ Run it from the installed skill directory; it needs bkmr ≥ 8.2.0 and `uv`:
 scripts/due-report.py                       # table, most overdue first
 scripts/due-report.py --json                # same, for an agent
 scripts/due-report.py --db ~/other/bm.db    # default: BKMR_DB_URL or config.toml
+scripts/due-report.py -e                    # open the script in $EDITOR to adjust the rules
 ```
 
 ```
