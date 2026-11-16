@@ -683,9 +683,9 @@ Exit codes:
         #[arg(short = 's', long = "schema", help = "Show database schema")]
         show_schema: bool,
     },
-    /// Generate shell completions for bash, zsh, or fish
+    /// Generate shell completions for bash, zsh, fish, or nushell
     Completion {
-        /// Shell to generate completions for (bash, zsh, fish)
+        /// Shell to generate completions for (bash, zsh, fish, nushell)
         shell: String,
     },
     /// Start LSP server for editor snippet completion (VS Code, Neovim, IntelliJ)

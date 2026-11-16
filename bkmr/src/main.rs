@@ -247,6 +247,13 @@ fn handle_completion_command(shell: String) -> Result<(), Box<dyn std::error::Er
             eprintln!("# - bkmr completion fish > ~/.config/fish/completions/bkmr.fish # permanent install");
             eprintln!("#");
         }
+        "nushell" | "nu" => {
+            eprintln!("# Outputting nushell completion script for bkmr");
+            eprintln!("# To use, save it and source it from your config:");
+            eprintln!("# - bkmr completion nushell | save -f ($nu.default-config-dir | path join bkmr.nu)");
+            eprintln!("# - then add 'source bkmr.nu' to your config.nu");
+            eprintln!("#");
+        }
         _ => {}
     }
 

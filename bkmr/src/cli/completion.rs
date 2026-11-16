@@ -5,6 +5,7 @@ use clap_complete::{
     generate,
     shells::{Bash, Fish, Zsh},
 };
+use clap_complete_nushell::Nushell;
 use std::io::{self};
 use tracing::{debug, instrument};
 
@@ -12,7 +13,8 @@ use tracing::{debug, instrument};
 ///
 /// # Arguments
 ///
-/// * `shell` - The name of the shell to generate completions for: "bash", "zsh", or "fish"
+/// * `shell` - The name of the shell to generate completions for: "bash", "zsh", "fish",
+///   or "nushell" (alias "nu")
 ///
 /// # Returns
 ///
@@ -48,10 +50,15 @@ pub fn generate_completion(shell: &str) -> io::Result<()> {
             generate(Fish, &mut cmd, bin_name, &mut io::stdout());
             Ok(())
         }
+        "nushell" | "nu" => {
+            debug!("Generating nushell completion");
+            generate(Nushell, &mut cmd, bin_name, &mut io::stdout());
+            Ok(())
+        }
         _ => Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!(
-                "Unsupported shell: {}. Supported shells: bash, zsh, fish",
+                "Unsupported shell: {}. Supported shells: bash, zsh, fish, nushell",
                 shell
             ),
         )),
@@ -143,6 +150,28 @@ mod tests {
         assert!(content.contains("complete") && content.contains("-c bkmr"));
 
         Ok(())
+    }
+
+    #[test]
+    fn given_nushell_shell_when_generate_completion_then_creates_valid_completion_script() {
+        let mut buffer = Vec::new();
+        {
+            let mut cmd = Cli::command();
+            let bin_name = cmd.get_name().to_string();
+            generate(Nushell, &mut cmd, bin_name, &mut buffer);
+        }
+
+        let content = String::from_utf8_lossy(&buffer);
+
+        // Nushell completions are `extern` signatures for the command and its subcommands
+        assert!(content.contains("export extern bkmr ["));
+        assert!(content.contains("export extern \"bkmr search\""));
+    }
+
+    #[test]
+    fn given_nushell_or_nu_when_generate_completion_then_succeeds() {
+        assert!(generate_completion("nushell").is_ok());
+        assert!(generate_completion("nu").is_ok());
     }
 
     #[test]
