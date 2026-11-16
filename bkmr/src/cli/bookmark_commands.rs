@@ -853,12 +853,6 @@ pub fn update(
         no_embed,
     } = cli.command.unwrap()
     {
-        if embed && no_embed {
-            return Err(CliError::InvalidInput(
-                "Cannot specify both --embed and --no-embed".to_string(),
-            ));
-        }
-
         // One failed ID must not stop the others, so failures are reported at the end
         let mut failed_ids = Vec::new();
         for id in distinct_ids(ids) {

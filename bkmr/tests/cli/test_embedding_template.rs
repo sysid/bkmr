@@ -363,7 +363,15 @@ fn given_embed_and_no_embed_when_parsing_then_rejected() {
         vec!["bkmr", "add", "x", "--embed", "--no-embed"],
         vec!["bkmr", "load-json", "f.json", "--embed", "--no-embed"],
         vec!["bkmr", "import-files", "d", "--embed", "--no-embed"],
+        vec!["bkmr", "update", "1", "--embed", "--no-embed"],
     ] {
-        assert!(Cli::try_parse_from(&command).is_err(), "{command:?}");
+        let err = Cli::try_parse_from(&command)
+            .err()
+            .unwrap_or_else(|| panic!("{command:?} must be rejected"));
+        assert_eq!(
+            err.kind(),
+            clap::error::ErrorKind::ArgumentConflict,
+            "{command:?}"
+        );
     }
 }

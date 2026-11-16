@@ -23,7 +23,6 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
 
     // Create a sample CLI command with tag prefixes
     let _ = Cli {
-        name: None,
         config: None,
         db: None,
         debug: 0,
@@ -53,7 +52,6 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
             interpolate: false,
             shell_stubs: false,
             stdout: false,
-            embeddable: false,
         }),
     };
 
@@ -91,7 +89,6 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
 
     // Create a CLI command with some tag prefixes
     let _ = Cli {
-        name: None,
         config: None,
         db: None,
         debug: 0,
@@ -121,7 +118,6 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
             interpolate: false,
             shell_stubs: false,
             stdout: false,
-            embeddable: false,
         }),
     };
 
@@ -184,7 +180,6 @@ fn test_search_command_structure_with_interpolate() {
 
     // Create a CLI command with interpolate flag set
     let cli = Cli {
-        name: None,
         config: None,
         db: None,
         debug: 0,
@@ -214,7 +209,6 @@ fn test_search_command_structure_with_interpolate() {
             interpolate: true, // Test with interpolation enabled
             shell_stubs: false,
             stdout: false,
-            embeddable: false,
         }),
     };
 
