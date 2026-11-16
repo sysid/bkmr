@@ -3013,3 +3013,54 @@ fn given_space_separated_ids_when_show_then_accepts_them_like_verify() {
         .assert()
         .success();
 }
+
+#[test]
+fn given_shell_bookmark_when_stubs_sourced_in_bash_then_function_reaches_child_shell() {
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("stubs.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args([
+            "add",
+            "./deploy.sh",
+            "deploy",
+            "--title",
+            "Deploy App",
+            "-t",
+            "shell",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--shell-stubs"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stubs = dir.path().join("stubs.sh");
+    std::fs::write(&stubs, &output.stdout).unwrap();
+
+    // Act: source the stubs, then look the function up in a child shell, which only sees it
+    // if it was exported
+    let status = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(r#"set -eu; source "$1"; bash -c 'declare -F deploy_app'"#)
+        .arg("bash")
+        .arg(&stubs)
+        .status()
+        .unwrap();
+
+    // Assert
+    assert!(
+        status.success(),
+        "stubs:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
