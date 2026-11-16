@@ -524,7 +524,7 @@ Exit codes:
         #[arg(long = "json", help = "output as JSON")]
         is_json: bool,
     },
-    /// Open random URL bookmarks for serendipitous discovery
+    /// Open random web links (plain http/https, no custom opener) for serendipitous discovery
     Surprise {
         #[arg(short = 'n', help = "number of URLs to open", default_value_t = 1)]
         n: i32,

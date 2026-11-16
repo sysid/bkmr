@@ -1118,7 +1118,8 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         let bookmark_service = services.bookmark_service.clone();
         let action_service = services.action_service.clone();
 
-        // URI bookmarks only: the default action of other types can run code
+        // Plain http(s) links only: other types, custom openers, templates and local paths can
+        // run code
         let count = if n < 1 { 1 } else { n as usize };
         let bookmarks = bookmark_service.get_random_uris(count)?;
 

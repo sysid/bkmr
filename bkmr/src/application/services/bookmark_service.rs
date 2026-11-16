@@ -174,7 +174,7 @@ pub trait BookmarkService: Send + Sync + Debug {
         limit: Option<usize>,
     ) -> ApplicationResult<Vec<Bookmark>>;
 
-    /// Random bookmarks of type URI (no system tag), at most `count`
+    /// Random URI bookmarks with a plain http(s) URL and no custom opener, at most `count`
     fn get_random_uris(&self, count: usize) -> ApplicationResult<Vec<Bookmark>>;
 
     /// Get bookmarks for forced backfill (all embeddable bookmarks)

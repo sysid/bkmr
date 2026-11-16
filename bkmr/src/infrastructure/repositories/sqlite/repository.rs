@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::sql_query;
-use diesel::sql_types::{Integer, Text};
+use diesel::sql_types::{Integer, Nullable, Text};
 use std::collections::HashSet;
 use tracing::{debug, error, info, instrument};
 
@@ -446,6 +446,18 @@ impl SqliteBookmarkRepository {
 
         Ok(ids)
     }
+}
+
+/// A URL whose default action only hands an http(s) link to the browser. A custom opener runs
+/// through `sh -c`, a template can call the `shell` filter, and a local path goes to the OS
+/// opener, which may execute it.
+fn is_plain_web_link(url: &str, opener: Option<&str>) -> bool {
+    let url = url.trim();
+    let lower = url.to_ascii_lowercase();
+    let is_web = lower.starts_with("http://") || lower.starts_with("https://");
+    let is_template = url.contains("{{") || url.contains("{%");
+    let has_opener = opener.is_some_and(|o| !o.trim().is_empty());
+    is_web && !is_template && !has_opener
 }
 
 impl BookmarkRepository for SqliteBookmarkRepository {
@@ -962,20 +974,27 @@ impl BookmarkRepository for SqliteBookmarkRepository {
             #[diesel(sql_type = Integer)]
             pub id: i32,
             #[diesel(sql_type = Text)]
+            pub url: String,
+            #[diesel(sql_type = Text)]
             pub tags: String,
+            #[diesel(sql_type = Nullable<Text>)]
+            pub opener: Option<String>,
         }
 
         // The type is decided in Rust by SystemTag, the single source of the system tags: a SQL
         // LIKE filter would repeat the tag list, and `_` in `_snip_` is a LIKE wildcard.
-        // ponytail: reads id and tags of every bookmark, O(n) per call. Fine for interactive use
-        // at thousands of rows; if that grows, store the type in a column and filter in SQL.
-        let rows: Vec<RandomRow> = sql_query("SELECT id, tags FROM bookmarks ORDER BY RANDOM()")
-            .load(&mut conn)
-            .map_err(SqliteRepositoryError::DatabaseError)?;
+        // ponytail: reads id, url, tags and opener of every bookmark, O(n) per call. Fine for
+        // interactive use at thousands of rows; if that grows, store the type in a column and
+        // filter in SQL.
+        let rows: Vec<RandomRow> =
+            sql_query("SELECT id, URL AS url, tags, opener FROM bookmarks ORDER BY RANDOM()")
+                .load(&mut conn)
+                .map_err(SqliteRepositoryError::DatabaseError)?;
 
         let ids: Vec<i32> = rows
             .into_iter()
             .filter(|row| SystemTag::of_stored_tags(&row.tags) == SystemTag::Uri)
+            .filter(|row| is_plain_web_link(&row.url, row.opener.as_deref()))
             .take(count)
             .map(|row| row.id)
             .collect();
@@ -1443,6 +1462,8 @@ mod tests {
     fn given_more_uris_than_requested_when_get_random_uris_then_returns_requested_count(
     ) -> Result<(), DomainError> {
         let repo = setup_test_db();
+
+        // Add multiple bookmarks
         for i in 1..=5 {
             let mut bookmark = create_test_bookmark(
                 &format!("Test {}", i),
@@ -1454,7 +1475,10 @@ mod tests {
 
         let random = repo.get_random_uris(2)?;
 
+        // Verify count
         assert_eq!(random.len(), 2);
+
+        // Verify they're valid bookmarks
         for bookmark in &random {
             assert!(bookmark.id.is_some());
             assert_eq!(SystemTag::of_bookmark(&bookmark.tags), SystemTag::Uri);
@@ -1506,6 +1530,56 @@ mod tests {
         for bookmark in &random {
             assert_eq!(SystemTag::of_bookmark(&bookmark.tags), SystemTag::Uri);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn given_uri_bookmarks_that_can_run_code_when_get_random_uris_then_only_plain_web_links(
+    ) -> Result<(), DomainError> {
+        // Arrange: URI bookmarks run code through a custom opener (`sh -c`), a template in the
+        // URL (`| shell` filter), or a local file the OS may execute; `shell::` always fails
+        let repo = setup_test_db();
+        let mut plain_ids = HashSet::new();
+        for url in ["https://plain.example.com", "http://plain.example.org/page"] {
+            let mut bookmark = create_test_bookmark("Plain web link", url, vec!["surprise"])?;
+            repo.add(&mut bookmark)?;
+            plain_ids.insert(bookmark.id.unwrap());
+        }
+        let mut code_ids = HashSet::new();
+        for url in [
+            "https://templated.example.com/{{ \"touch /tmp/x\" | shell }}",
+            "https://block.example.com/{% if true %}x{% endif %}",
+            "~/bin/deploy.command",
+            "/usr/local/bin/deploy",
+            "shell::make deploy",
+        ] {
+            let mut bookmark = create_test_bookmark("Runs code", url, vec!["surprise"])?;
+            repo.add(&mut bookmark)?;
+            code_ids.insert(bookmark.id.unwrap());
+        }
+        let mut with_opener = create_test_bookmark(
+            "Custom opener",
+            "https://opener.example.com",
+            vec!["surprise"],
+        )?;
+        with_opener.opener = Some("sh -c 'touch /tmp/x' --".to_string());
+        repo.add(&mut with_opener)?;
+        code_ids.insert(with_opener.id.unwrap());
+
+        // Act: ask for more than exist, so every eligible bookmark is returned
+        let random = repo.get_random_uris(10_000)?;
+
+        // Assert
+        let returned_ids: HashSet<i32> = random.iter().filter_map(|b| b.id).collect();
+        assert!(
+            plain_ids.is_subset(&returned_ids),
+            "plain http(s) links must be returned"
+        );
+        assert!(
+            returned_ids.is_disjoint(&code_ids),
+            "bookmarks with an opener, a template, a local path or shell:: must never be returned"
+        );
 
         Ok(())
     }

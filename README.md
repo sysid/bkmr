@@ -169,7 +169,7 @@ bkmr search --fzf
 | `skill install` | Install the bkmr-memory agent skill into an agent's skills directory |
 | `lsp` | Start LSP server for editor snippet completion |
 | `completion` | Generate shell completions (bash, zsh, fish) |
-| `surprise` | Open random URL bookmarks |
+| `surprise` | Open random web links (plain http/https, no custom opener) |
 
 **Complete command documentation**: See **[Basic Usage](https://github.com/sysid/bkmr/wiki/Basic-Usage)** for detailed examples.
 
