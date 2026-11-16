@@ -409,6 +409,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "clap_complete_nushell",
  "crossterm",
  "derive_builder",
  "diesel",
