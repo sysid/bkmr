@@ -14,9 +14,6 @@ use std::path::PathBuf;
   130  confirmation declined (delete, clear-embeddings, restore --from)")]
 /// Knowledge management for humans and agents — bookmarks, snippets, scripts, and semantic search
 pub struct Cli {
-    /// Optional name to operate on
-    pub name: Option<String>,
-
     /// Sets a custom config file
     #[arg(short, long, value_name = "FILE")]
     pub config: Option<PathBuf>,
@@ -158,9 +155,6 @@ pub enum Commands {
             help = "output the selected bookmark's URL/content to stdout instead of executing (for shell wrapper integration)"
         )]
         stdout: bool,
-
-        #[arg(long = "embeddable", help = "filter to show only embeddable bookmarks")]
-        embeddable: bool,
     },
     /// Search by keywords and by meaning, merged into one ranking
     #[command(name = "hsearch")]
@@ -499,9 +493,16 @@ Exit codes:
             help = "set custom command to open this bookmark (use empty string to clear)"
         )]
         open_with: Option<String>,
-        #[arg(long = "embed", help = "enable embedding for semantic search")]
+        #[arg(
+            long = "embed",
+            conflicts_with = "no_embed",
+            help = "enable embedding for semantic search, overriding [embeddings.policy]"
+        )]
         embed: bool,
-        #[arg(long = "no-embed", help = "disable embedding for semantic search")]
+        #[arg(
+            long = "no-embed",
+            help = "disable embedding for semantic search, overriding [embeddings.policy] unless the type is set to \"always\""
+        )]
         no_embed: bool,
     },
     /// Edit bookmarks interactively in $EDITOR (smart: opens source file for imports)
@@ -523,7 +524,7 @@ Exit codes:
         #[arg(long = "json", help = "output as JSON")]
         is_json: bool,
     },
-    /// Open random bookmarks for serendipitous discovery
+    /// Open random web links (plain http/https, no custom opener) for serendipitous discovery
     Surprise {
         #[arg(short = 'n', help = "number of URLs to open", default_value_t = 1)]
         n: i32,
@@ -910,6 +911,30 @@ mod tests {
         let err = parsed_add_type(&["bkmr", "add", "x", "-t", "memo"]).unwrap_err();
 
         assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn given_word_without_subcommand_when_parsing_then_rejected() {
+        let result = Cli::try_parse_from(["bkmr", "foo"]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn given_top_level_help_when_rendered_then_has_no_name_argument() {
+        let help = rendered_help(&["bkmr", "--help"]);
+
+        assert!(!help.contains("[NAME]"), "{help}");
+    }
+
+    #[test]
+    fn given_embeddable_flag_when_search_then_rejected() {
+        // Removed: it filtered after --limit, and `search --json` reports embeddable anyway
+        let err = Cli::try_parse_from(["bkmr", "search", "--embeddable"])
+            .err()
+            .expect("--embeddable must be rejected");
+
+        assert_eq!(err.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     #[test]

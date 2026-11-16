@@ -78,8 +78,10 @@ pub trait BookmarkRepository: std::fmt::Debug + Send + Sync {
     /// Get tags related to a specific tag (co-occurring)
     fn get_related_tags(&self, tag: &Tag) -> Result<Vec<(Tag, usize)>, DomainError>;
 
-    /// Get random bookmarks
-    fn get_random(&self, count: usize) -> Result<Vec<Bookmark>, DomainError>;
+    /// Random URI bookmarks (no system tag) with a plain http(s) URL, at most `count`. Never a
+    /// typed bookmark, a custom opener, a templated URL or a local path: their default action
+    /// can run code.
+    fn get_random_uris(&self, count: usize) -> Result<Vec<Bookmark>, DomainError>;
 
     /// Get bookmarks ordered by access date
     fn get_by_access_date(

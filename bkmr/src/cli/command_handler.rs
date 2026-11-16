@@ -270,7 +270,6 @@ impl SearchCommandHandler {
             interpolate,
             shell_stubs,
             stdout,
-            embeddable,
         } = cli.command.unwrap()
         {
             let mut fields = crate::cli::display::DEFAULT_FIELDS.to_vec();
@@ -281,6 +280,16 @@ impl SearchCommandHandler {
             if is_modified_sort {
                 fields.push(DisplayField::LastUpdateTs);
             }
+
+            // Stubs exist only for shell bookmarks: filter in the query, so --limit counts them
+            let tags_all = if shell_stubs {
+                Some(match tags_all {
+                    Some(tags) => format!("{tags},_shell_"),
+                    None => "_shell_".to_string(),
+                })
+            } else {
+                tags_all
+            };
 
             // Build search query
             let query = self.build_search_query(
@@ -303,11 +312,6 @@ impl SearchCommandHandler {
 
             // Execute search
             let mut bookmarks = self.services.bookmark_service.search_bookmarks(&query)?;
-
-            // Filter to embeddable only if requested
-            if embeddable {
-                bookmarks.retain(|b| b.embeddable);
-            }
 
             // Apply interpolation if requested
             if interpolate {
@@ -337,38 +341,86 @@ impl SearchCommandHandler {
 impl SearchCommandHandler {
     /// Output shell function stubs for shell script bookmarks
     fn output_shell_stubs(&self, bookmarks: &[Bookmark]) -> CliResult<()> {
-        // Filter for shell script bookmarks
-        let shell_bookmarks: Vec<&Bookmark> = bookmarks
-            .iter()
-            .filter(|bookmark| {
-                bookmark
-                    .tags
-                    .iter()
-                    .any(|tag| tag.is_system_tag_of(SystemTag::Shell))
-            })
-            .collect();
-
-        // Generate shell function stubs
-        for bookmark in shell_bookmarks {
-            if let Some(id) = bookmark.id {
-                // Create a valid shell function name from the bookmark title
-                let function_name = create_shell_function_name(&bookmark.title);
-
-                // Output the shell function
-                println!(
-                    "{}() {{ bkmr open --no-edit {} -- \"$@\"; }}",
-                    function_name, id
-                );
-                println!("export -f {}", function_name);
-            }
-        }
+        print!("{}", shell_stubs(bookmarks));
         Ok(())
     }
+}
+
+/// Shell function stubs, two lines per shell script bookmark, to be sourced by bash or zsh
+fn shell_stubs(bookmarks: &[Bookmark]) -> String {
+    let mut stubs = String::new();
+    let shell_bookmarks = bookmarks.iter().filter(|bookmark| {
+        bookmark
+            .tags
+            .iter()
+            .any(|tag| tag.is_system_tag_of(SystemTag::Shell))
+    });
+    for bookmark in shell_bookmarks {
+        if let Some(id) = bookmark.id {
+            // Create a valid shell function name from the bookmark title
+            let function_name = create_shell_function_name(&bookmark.title);
+
+            // Output the shell function. `function NAME` because `NAME()` is a parse error when
+            // NAME is a keyword (`if`) or an alias (`ll`); `command` so a stub named `bkmr`
+            // does not call itself.
+            stubs.push_str(&format!(
+                "function {} {{ command bkmr open --no-edit {} -- \"$@\"; }}\n",
+                function_name, id
+            ));
+            // zsh reads `export -f` as "print the function". `if` rather than `[ ] &&`, which
+            // would leave status 1 in zsh and make `source <(...)` look failed. `builtin` so a
+            // stub named `export` is not called while sourcing.
+            stubs.push_str(&format!(
+                "if [ -n \"${{BASH_VERSION-}}\" ]; then builtin export -f {}; fi\n",
+                function_name
+            ));
+        }
+    }
+    stubs
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::tag::Tag;
+    use std::collections::HashSet;
+
+    fn stored_bookmark(id: i32, title: &str, content: &str, tags: &[&str]) -> Bookmark {
+        let tags: HashSet<Tag> = tags.iter().map(|t| Tag::new(t).unwrap()).collect();
+        let mut bookmark = Bookmark::new(content, title, "", tags).unwrap();
+        bookmark.id = Some(id);
+        bookmark
+    }
+
+    #[test]
+    fn given_shell_bookmark_when_shell_stubs_then_export_is_guarded_for_bash() {
+        // zsh reads `export -f NAME` as "print the function", so every sourcing would dump the
+        // function bodies; only bash exports functions to child processes
+        let bookmarks = vec![stored_bookmark(
+            12,
+            "Deploy App",
+            "./deploy.sh",
+            &["_shell_"],
+        )];
+
+        let stubs = shell_stubs(&bookmarks);
+
+        assert_eq!(
+            stubs,
+            "function deploy_app { command bkmr open --no-edit 12 -- \"$@\"; }\n\
+             if [ -n \"${BASH_VERSION-}\" ]; then builtin export -f deploy_app; fi\n"
+        );
+    }
+
+    #[test]
+    fn given_non_shell_bookmarks_when_shell_stubs_then_empty() {
+        let bookmarks = vec![
+            stored_bookmark(1, "Site", "https://example.com", &["web"]),
+            stored_bookmark(2, "Snippet", "echo hi", &["_snip_"]),
+        ];
+
+        assert_eq!(shell_stubs(&bookmarks), "");
+    }
 
     #[test]
     fn given_no_flags_when_determine_sort_criteria_then_returns_id_ascending() {

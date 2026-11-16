@@ -853,12 +853,6 @@ pub fn update(
         no_embed,
     } = cli.command.unwrap()
     {
-        if embed && no_embed {
-            return Err(CliError::InvalidInput(
-                "Cannot specify both --embed and --no-embed".to_string(),
-            ));
-        }
-
         // One failed ID must not stop the others, so failures are reported at the end
         let mut failed_ids = Vec::new();
         for id in distinct_ids(ids) {
@@ -1124,16 +1118,17 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         let bookmark_service = services.bookmark_service.clone();
         let action_service = services.action_service.clone();
 
-        // Get random bookmarks
+        // Plain http(s) links only: other types, custom openers, templates and local paths can
+        // run code
         let count = if n < 1 { 1 } else { n as usize };
-        let bookmarks = bookmark_service.get_random_bookmarks(count)?;
+        let bookmarks = bookmark_service.get_random_uris(count)?;
 
         if bookmarks.is_empty() {
-            eprintln!("No bookmarks found");
+            eprintln!("No URL bookmarks found");
             return Ok(());
         }
 
-        eprintln!("Processing {} random bookmarks:", bookmarks.len());
+        eprintln!("Opening {} random URL bookmarks:", bookmarks.len());
 
         for bookmark in &bookmarks {
             // Get the action description, incorporating custom opener if present
