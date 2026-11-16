@@ -1124,16 +1124,16 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         let bookmark_service = services.bookmark_service.clone();
         let action_service = services.action_service.clone();
 
-        // Get random bookmarks
+        // URI bookmarks only: the default action of other types can run code
         let count = if n < 1 { 1 } else { n as usize };
-        let bookmarks = bookmark_service.get_random_bookmarks(count)?;
+        let bookmarks = bookmark_service.get_random_uris(count)?;
 
         if bookmarks.is_empty() {
-            eprintln!("No bookmarks found");
+            eprintln!("No URL bookmarks found");
             return Ok(());
         }
 
-        eprintln!("Processing {} random bookmarks:", bookmarks.len());
+        eprintln!("Opening {} random URL bookmarks:", bookmarks.len());
 
         for bookmark in &bookmarks {
             // Get the action description, incorporating custom opener if present

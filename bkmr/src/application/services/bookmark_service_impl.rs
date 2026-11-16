@@ -759,8 +759,8 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn get_random_bookmarks(&self, count: usize) -> ApplicationResult<Vec<Bookmark>> {
-        let bookmarks = self.repository.get_random(count)?;
+    fn get_random_uris(&self, count: usize) -> ApplicationResult<Vec<Bookmark>> {
+        let bookmarks = self.repository.get_random_uris(count)?;
         Ok(bookmarks)
     }
 
@@ -3537,7 +3537,7 @@ mod tests {
     }
 
     #[test]
-    fn given_count_when_get_random_bookmarks_then_returns_random_selection() {
+    fn given_count_when_get_random_uris_then_returns_random_selection() {
         // Arrange
         let _env = init_test_env();
         let _guard = EnvGuard::new();
@@ -3559,7 +3559,7 @@ mod tests {
         let count = 3;
 
         // Act
-        let bookmarks = service.get_random_bookmarks(count).unwrap();
+        let bookmarks = service.get_random_uris(count).unwrap();
 
         // Assert
         assert_eq!(
@@ -3570,7 +3570,7 @@ mod tests {
 
         // Get another random selection and verify it's likely different
         // (This is probabilistic, so there's a small chance it could be the same)
-        let another_set = service.get_random_bookmarks(count).unwrap();
+        let another_set = service.get_random_uris(count).unwrap();
 
         // Convert to sets of IDs for comparison
         let first_ids: HashSet<_> = bookmarks.iter().filter_map(|b| b.id).collect();
