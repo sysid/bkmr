@@ -3064,3 +3064,179 @@ fn given_shell_bookmark_when_stubs_sourced_in_bash_then_function_reaches_child_s
         String::from_utf8_lossy(&output.stdout)
     );
 }
+
+/// Adds a shell script bookmark titled `title` to the database at `db`.
+fn add_shell_script(db: &std::path::Path, title: &str) {
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args([
+            "add",
+            &format!("./{title}.sh"),
+            "stubs",
+            "--title",
+            title,
+            "-t",
+            "shell",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+}
+
+fn is_installed(shell: &str) -> bool {
+    std::process::Command::new(shell)
+        .args(["-c", "exit 0"])
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
+#[test]
+fn given_shell_bookmark_when_stubs_sourced_in_zsh_then_succeeds_silently_and_defines_function() {
+    // zsh reads `export -f NAME` as "print the function", and `[ ... ] && export -f` leaves
+    // status 1, so `source <(bkmr search --shell-stubs)` printed bodies or looked failed
+    if !is_installed("zsh") {
+        eprintln!("zsh not installed, skipping");
+        return;
+    }
+    // Arrange
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("stubs.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    add_shell_script(&db, "Deploy App");
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--shell-stubs"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stubs = dir.path().join("stubs.sh");
+    std::fs::write(&stubs, &output.stdout).unwrap();
+
+    // Act
+    let sourced = std::process::Command::new("zsh")
+        .arg("-c")
+        .arg(r#"source "$1" && whence -w deploy_app"#)
+        .arg("zsh")
+        .arg(&stubs)
+        .output()
+        .unwrap();
+
+    // Assert: only the `whence` line, no function body printed by sourcing
+    let stdout = String::from_utf8_lossy(&sourced.stdout);
+    assert!(
+        sourced.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&sourced.stderr)
+    );
+    assert_eq!(stdout, "deploy_app: function\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn given_titles_naming_keywords_aliases_or_bkmr_when_stubs_sourced_then_nothing_runs_and_it_succeeds(
+) {
+    use std::os::unix::fs::PermissionsExt;
+
+    // Arrange: a fake `bkmr` first on PATH records any call, so a regression cannot open a
+    // real bookmark. `export` was called by the export line, `if` and the alias `ll` were
+    // parse errors, and a `bkmr` stub called itself.
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("stubs.db");
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(&db)
+        .assert()
+        .success();
+    for title in ["Export", "if", "ll", "bkmr"] {
+        add_shell_script(&db, title);
+    }
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--shell-stubs"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stubs = dir.path().join("stubs.sh");
+    std::fs::write(&stubs, &output.stdout).unwrap();
+
+    let fake_bin = dir.path().join("bin");
+    std::fs::create_dir(&fake_bin).unwrap();
+    let marker = dir.path().join("bkmr-was-called");
+    let fake_bkmr = fake_bin.join("bkmr");
+    std::fs::write(
+        &fake_bkmr,
+        format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake_bkmr, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!(
+        "{}:{}",
+        fake_bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    for (shell, setup) in [
+        ("bash", "shopt -s expand_aliases; alias ll='ls -l';"),
+        ("zsh", "alias ll='ls -l';"),
+    ] {
+        if !is_installed(shell) {
+            eprintln!("{shell} not installed, skipping");
+            continue;
+        }
+
+        // Act: source, then call the `bkmr` stub, which must reach the real command once
+        let sourced = std::process::Command::new(shell)
+            .env("PATH", &path)
+            .arg("-c")
+            .arg(format!(
+                r#"{setup} source "$1" || exit 90; [ -e "$2" ] && exit 91; bkmr"#
+            ))
+            .arg(shell)
+            .arg(&stubs)
+            .arg(&marker)
+            .output()
+            .unwrap();
+
+        // Assert
+        assert!(
+            sourced.status.success(),
+            "{shell}: status {:?}, stderr: {}\nstubs:\n{}",
+            sourced.status.code(),
+            String::from_utf8_lossy(&sourced.stderr),
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(
+            marker.exists(),
+            "{shell}: `bkmr` stub never reached the command"
+        );
+        std::fs::remove_file(&marker).unwrap();
+    }
+}
+
+#[test]
+fn given_limit_when_shell_stubs_then_limit_counts_only_shell_bookmarks() {
+    // Arrange: the URL bookmark sorts first, so filtering after the limit left no stub
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("stubs.db");
+    create_db_with_one_bookmark(&db);
+    add_shell_script(&db, "Deploy App");
+
+    // Act
+    let output = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["search", "--shell-stubs", "-l", "1"])
+        .output()
+        .unwrap();
+
+    // Assert
+    assert!(output.status.success());
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("deploy_app"),
+        "stubs:\n{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}

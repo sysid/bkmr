@@ -281,6 +281,16 @@ impl SearchCommandHandler {
                 fields.push(DisplayField::LastUpdateTs);
             }
 
+            // Stubs exist only for shell bookmarks: filter in the query, so --limit counts them
+            let tags_all = if shell_stubs {
+                Some(match tags_all {
+                    Some(tags) => format!("{tags},_shell_"),
+                    None => "_shell_".to_string(),
+                })
+            } else {
+                tags_all
+            };
+
             // Build search query
             let query = self.build_search_query(
                 fts_query,
@@ -347,15 +357,21 @@ fn shell_stubs(bookmarks: &[Bookmark]) -> String {
     });
     for bookmark in shell_bookmarks {
         if let Some(id) = bookmark.id {
+            // Create a valid shell function name from the bookmark title
             let function_name = create_shell_function_name(&bookmark.title);
+
+            // Output the shell function. `function NAME` because `NAME()` is a parse error when
+            // NAME is a keyword (`if`) or an alias (`ll`); `command` so a stub named `bkmr`
+            // does not call itself.
             stubs.push_str(&format!(
-                "{}() {{ bkmr open --no-edit {} -- \"$@\"; }}\n",
+                "function {} {{ command bkmr open --no-edit {} -- \"$@\"; }}\n",
                 function_name, id
             ));
             // zsh reads `export -f` as "print the function". `if` rather than `[ ] &&`, which
-            // would leave status 1 in zsh and make `source <(...)` look failed.
+            // would leave status 1 in zsh and make `source <(...)` look failed. `builtin` so a
+            // stub named `export` is not called while sourcing.
             stubs.push_str(&format!(
-                "if [ -n \"${{BASH_VERSION-}}\" ]; then export -f {}; fi\n",
+                "if [ -n \"${{BASH_VERSION-}}\" ]; then builtin export -f {}; fi\n",
                 function_name
             ));
         }
@@ -391,8 +407,8 @@ mod tests {
 
         assert_eq!(
             stubs,
-            "deploy_app() { bkmr open --no-edit 12 -- \"$@\"; }\n\
-             if [ -n \"${BASH_VERSION-}\" ]; then export -f deploy_app; fi\n"
+            "function deploy_app { command bkmr open --no-edit 12 -- \"$@\"; }\n\
+             if [ -n \"${BASH_VERSION-}\" ]; then builtin export -f deploy_app; fi\n"
         );
     }
 
