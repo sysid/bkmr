@@ -917,3 +917,44 @@ fn given_exact_mode_when_hybrid_search_then_every_hit_is_a_keyword_match_without
         assert_eq!(result.similarity, None);
     }
 }
+
+// --- hybrid_search: embedding model and stored vectors disagree on dimensions ---
+
+#[test]
+fn given_stored_vectors_of_other_dimension_when_hybrid_search_then_error_names_backfill_force() {
+    use bkmr::domain::repositories::vector_repository::VectorRepository;
+    use bkmr::infrastructure::repositories::sqlite::register_sqlite_vec;
+    use bkmr::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
+
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    // Vectors stored by a 768-dimension model; the current embedder produces 384
+    let dir = tempfile::TempDir::new().unwrap();
+    let vector_db = dir.path().join("vectors.db");
+    register_sqlite_vec();
+    let vectors = SqliteVectorRepository::new(vector_db.to_str().unwrap()).unwrap();
+    vectors.init_vec_table(768).unwrap();
+    vectors.upsert_embedding(1, &vec![0.1; 768]).unwrap();
+    let service = BookmarkServiceImpl::new(
+        Arc::new(setup_test_db()),
+        Arc::new(ConstantQueryEmbedder),
+        Arc::new(vectors),
+        Arc::new(JsonImportRepository::new()),
+    );
+
+    for mode in [
+        bkmr::domain::search::SearchMode::Hybrid,
+        bkmr::domain::search::SearchMode::Semantic,
+    ] {
+        let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+        search.mode = mode.clone();
+        let error = service
+            .hybrid_search(&search)
+            .expect_err("a dimension mismatch must not pass silently");
+
+        assert!(
+            error.to_string().contains("bkmr backfill --force"),
+            "{mode:?}: error should say how to fix it, got: {error}"
+        );
+    }
+}

@@ -710,6 +710,16 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         {
             vec![]
         } else {
+            // sqlite-vec rejects the query too, but its message does not say how to fix it
+            let model_dims = self.embedder.dimensions();
+            if let Some(stored_dims) = self.vector_repository.get_dimensions()? {
+                if stored_dims != model_dims {
+                    return Err(ApplicationError::Other(format!(
+                        "Embedding dimension mismatch: model={}, stored={}. Run `bkmr backfill --force` to regenerate.",
+                        model_dims, stored_dims
+                    )));
+                }
+            }
             match self.embedder.embed_query(&search.query)? {
                 Some(embedding) => self.vector_repository.search_nearest_filtered(
                     &embedding,
