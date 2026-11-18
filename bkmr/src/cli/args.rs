@@ -246,17 +246,6 @@ pub enum Commands {
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
     },
-    /// Semantic search using embeddings only
-    SemSearch {
-        /// Search query (natural language)
-        query: String,
-
-        #[arg(short = 'l', long = "limit", help = "limit number of results")]
-        limit: Option<i32>,
-
-        #[arg(long = "np", help = "no prompt")]
-        non_interactive: bool,
-    },
     /// Open bookmark (smart action based on content type)
     Open {
         /// Bookmark IDs (comma-separated) or file path with --file
@@ -852,6 +841,12 @@ mod tests {
         assert!(help.contains("- exact:"), "{help}");
         assert!(help.contains("- semantic:"), "{help}");
         assert!(help.contains("default: 10"), "{help}");
+    }
+
+    #[test]
+    fn given_sem_search_when_parsing_then_rejected() {
+        // Replaced by `hsearch --mode semantic`
+        assert!(Cli::try_parse_from(["bkmr", "sem-search", "q"]).is_err());
     }
 
     #[test]

@@ -11,7 +11,6 @@ use crate::cli::process::{
     edit_bookmarks, execute_bookmark_default_action,
 };
 use crate::domain::bookmark::Bookmark;
-use crate::domain::search::SemanticSearchResult;
 use crate::domain::system_tag::SystemTag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::util::helper::{format_file_path, format_mtime};
@@ -129,12 +128,6 @@ impl SkimItem for FzfBookmarkItem {
 
     fn output(&self) -> Cow<'_, str> {
         Cow::Owned(self.bookmark.id.unwrap_or(0).to_string())
-    }
-}
-
-impl SkimItem for SemanticSearchResult {
-    fn text(&self) -> Cow<'_, str> {
-        Cow::Owned(self.display())
     }
 }
 

@@ -17,9 +17,7 @@ use crate::domain::repositories::import_repository::{
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
-use crate::domain::search::{
-    HybridSearch, HybridSearchResult, RrfFusion, SemanticSearch, SemanticSearchResult,
-};
+use crate::domain::search::{HybridSearch, HybridSearchResult, RrfFusion};
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
@@ -599,65 +597,6 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         let bookmarks = self.repository.search(query)?;
         debug!(result_count = bookmarks.len(), "Search complete");
         Ok(bookmarks)
-    }
-
-    #[instrument(skip(self, search), level = "debug")]
-    fn semantic_search(
-        &self,
-        search: &SemanticSearch,
-    ) -> ApplicationResult<Vec<SemanticSearchResult>> {
-        // 1. Embed the query
-        let query_embedding = match self.embedder.embed_query(&search.query)? {
-            Some(emb) => emb,
-            None => {
-                debug!("Embedder returned None for query — returning empty results");
-                return Ok(Vec::new());
-            }
-        };
-
-        // 2. Dimension mismatch detection
-        let embedder_dims = self.embedder.dimensions();
-        if let Ok(Some(stored_dims)) = self.vector_repository.get_dimensions() {
-            if stored_dims != embedder_dims {
-                warn!(
-                    "Dimension mismatch: embedder produces {} dims but vector store has {} dims. \
-                     Run `bkmr backfill --force` to regenerate embeddings.",
-                    embedder_dims, stored_dims
-                );
-                return Err(ApplicationError::Other(format!(
-                    "Embedding dimension mismatch: model={}, stored={}. Run `bkmr backfill --force` to regenerate.",
-                    embedder_dims, stored_dims
-                )));
-            }
-        }
-
-        // 3. Search nearest neighbors
-        let limit = search.limit.unwrap_or(10);
-        let nearest = self
-            .vector_repository
-            .search_nearest(&query_embedding, limit)
-            .app_context("searching nearest embeddings in vector repository")?;
-
-        // 4. Fetch bookmarks and build results
-        let mut results = Vec::with_capacity(nearest.len());
-        for (bookmark_id, distance) in nearest {
-            match self.repository.get_by_id(bookmark_id)? {
-                Some(bookmark) => {
-                    // Convert distance to similarity: 1 / (1 + distance)
-                    let similarity = 1.0 / (1.0 + distance);
-                    results.push(SemanticSearchResult::new(bookmark, similarity));
-                }
-                None => {
-                    debug!(
-                        "Bookmark {} found in vector store but not in bookmarks table — skipping",
-                        bookmark_id
-                    );
-                }
-            }
-        }
-
-        debug!(query = %search.query, result_count = results.len(), "Semantic search complete");
-        Ok(results)
     }
 
     #[instrument(skip(self, search), level = "debug", fields(query = %search.query, mode = ?search.mode))]

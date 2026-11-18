@@ -12,7 +12,7 @@ use crate::cli::backup_restore::{restore_from_backup, BackupRestoreRequest};
 use crate::cli::display::lookup_embedded_ids;
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::history_diff::{render_patch, BookmarkState};
-use crate::cli::process::{edit_bookmarks, execute_bookmark_default_action};
+use crate::cli::process::edit_bookmarks;
 use crate::config::get_config_file_path;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::embedding_policy::EmbeddingPolicy;
@@ -21,7 +21,6 @@ use crate::domain::history::{HistoryChange, HistoryCounts, HistoryEntry};
 use crate::domain::history_retention::HistoryRetention;
 use crate::domain::per_type::PerType;
 use crate::domain::repositories::repository::BookmarkRepository;
-use crate::domain::search::SemanticSearch;
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
@@ -35,10 +34,9 @@ use crate::util::helper::{format_file_path, format_mtime};
 use chrono;
 use crossterm::style::{Color, Stylize};
 use std::collections::HashSet;
-use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
-use std::{fs, io};
+use std::fs;
 use tracing::{info, instrument, warn};
 
 // Helper function to get and validate IDs
@@ -56,113 +54,6 @@ pub fn format_action_description(base_description: &str, opener: Option<&String>
         Some(o) => format!("Open with {}", o),
         None => base_description.to_string(),
     }
-}
-
-#[instrument(skip(cli, services))]
-pub fn semantic_search(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
-    let mut stderr = std::io::stderr();
-    if let Commands::SemSearch {
-        query,
-        limit,
-        non_interactive,
-    } = cli.command.unwrap()
-    {
-        // Check if real embeddings are available (DummyEmbedding has dimensions == 0)
-        if services.embedder.dimensions() == 0 {
-            writeln!(
-                stderr,
-                "{}",
-                "Error: Semantic search requires embeddings. Configure an embedding provider."
-                    .red()
-            )
-            .cli_context("writing no-embedder error message to stderr")?;
-            return Err(CliError::CommandFailed(
-                "No embeddings available - configure an embedding provider".to_string(),
-            ));
-        }
-
-        // Create the semantic search domain object
-        let search = SemanticSearch::new(query, limit.map(|l| l as usize));
-
-        // Perform semantic search
-        let results = services
-            .bookmark_service
-            .semantic_search(&search)
-            .cli_context("performing semantic search on bookmarks")?;
-
-        if results.is_empty() {
-            writeln!(stderr, "{}", "No bookmarks found".yellow())
-                .cli_context("writing empty search result to stderr")?;
-            return Ok(());
-        }
-
-        let is_piped = is_stdout_piped();
-
-        if is_piped {
-            // Generate plain-text output for piping
-            for result in &results {
-                println!(
-                    "{}\t{}\t{}\t{}",
-                    result.bookmark.id.unwrap_or(0),
-                    result.bookmark.title,
-                    result.bookmark.url,
-                    result.similarity_percentage()
-                );
-            }
-        } else {
-            // Format and display results with similarity scores for interactive use
-            for result in &results {
-                writeln!(
-                    stderr,
-                    "{} {} [{}] ({})",
-                    result
-                        .bookmark
-                        .id
-                        .map_or("?".to_string(), |id| id.to_string())
-                        .blue(),
-                    result.bookmark.title.clone().green(),
-                    result.bookmark.formatted_tags().yellow(),
-                    result.similarity_percentage().cyan()
-                )?;
-                writeln!(stderr, "  {}", result.bookmark.url)?;
-                if !result.bookmark.description.is_empty() {
-                    writeln!(stderr, "  {}", result.bookmark.description)?;
-                }
-                writeln!(stderr)?;
-            }
-        }
-
-        writeln!(stderr, "{} bookmarks found", results.len())?;
-
-        // In interactive mode, prompt for actions
-        if !non_interactive && !is_piped && !results.is_empty() && confirm("Open bookmark(s)?") {
-            // Prompt for which bookmark to open
-            print!("Enter ID(s) to open (comma-separated): ");
-            io::stdout()
-                .flush()
-                .cli_context("flushing stdout after prompt")?;
-
-            let mut input = String::new();
-            io::stdin()
-                .read_line(&mut input)
-                .cli_context("reading user input for bookmark IDs")?;
-
-            let ids = get_ids(input.trim().to_string())
-                .cli_context("parsing bookmark IDs from user input")?;
-            for id in ids {
-                if let Some(result) = results.iter().find(|r| r.bookmark.id == Some(id)) {
-                    execute_bookmark_default_action(
-                        &result.bookmark,
-                        services.action_service.clone(),
-                    )
-                    .cli_context("executing default action for selected bookmark")?;
-                } else {
-                    writeln!(stderr, "Bookmark with ID {} not found in results", id)?;
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 #[instrument(skip(cli, bookmark_service, action_service, interpolation_service))]
