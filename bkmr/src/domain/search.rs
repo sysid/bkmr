@@ -214,18 +214,6 @@ impl RrfFusion {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::tag::Tag;
-    use std::collections::HashSet;
-
-    fn create_test_bookmark(title: &str, content: &str, has_embedding: bool) -> Bookmark {
-        let mut tags = HashSet::new();
-        tags.insert(Tag::new("test").unwrap());
-
-        let mut bookmark = Bookmark::new("https://example.com", title, content, tags).unwrap();
-
-        bookmark.set_embeddable(has_embedding);
-        bookmark
-    }
 
     // === RRF Fusion Tests ===
 
