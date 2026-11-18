@@ -40,7 +40,7 @@ use std::sync::Arc;
 use tracing::{info, instrument, warn};
 
 // Helper function to get and validate IDs
-fn get_ids(ids: String) -> CliResult<Vec<i32>> {
+pub(crate) fn get_ids(ids: String) -> CliResult<Vec<i32>> {
     // ensure_int_vector(&ids.split(',').map(String::from).collect())
     //     .ok_or_else(|| CliError::InvalidIdFormat(format!("Invalid ID format: {}", ids)))
     let string_vec: Vec<String> = ids.split(',').map(|s| s.trim().to_string()).collect();
@@ -1052,6 +1052,8 @@ fn purge_all_embeddings(services: &ServiceContainer) -> CliResult<()> {
 fn clear_embeddings(services: &ServiceContainer) -> CliResult<()> {
     let has = services.vector_repository.has_embeddings()?;
     if !has {
+        // Hashes without vectors are stale cache keys, cheap to rebuild, so no prompt
+        services.bookmark_repository.clear_all_content_hashes()?;
         eprintln!("No embeddings found — nothing to clear.");
         return Ok(());
     }

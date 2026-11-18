@@ -787,6 +787,34 @@ fn given_no_vectors_when_backfill_clear_then_succeeds_without_prompt() {
 }
 
 #[test]
+fn given_content_hashes_but_no_vectors_when_backfill_clear_then_hashes_are_reset() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("stale-hash.db");
+    create_db_with_one_bookmark(&db);
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute("UPDATE bookmarks SET content_hash = x'01020304'", [])
+        .unwrap();
+    drop(conn);
+
+    // No stdin: hashes alone are cheap to rebuild, so clearing them needs no prompt
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--clear"])
+        .assert()
+        .success();
+
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    let hashed: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM bookmarks WHERE content_hash IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(hashed, 0, "backfill --clear left content hashes in place");
+}
+
+#[test]
 fn given_clear_with_another_mode_when_running_backfill_then_rejected() {
     for other in ["--force", "--prune", "--dry-run"] {
         cargo_bin_cmd!("bkmr")

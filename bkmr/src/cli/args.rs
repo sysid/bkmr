@@ -199,30 +199,11 @@ pub enum Commands {
 
         #[arg(
             long = "mode",
+            value_enum,
             default_value = "hybrid",
-            help = "how to match the search text",
-            // Must match the mode mapping in hsearch_handler. Listing the values rejects typos
-            // that would otherwise silently run in hybrid mode. Exact mode is not a phrase or
-            // literal match, which its name suggests, so the help spells out what it does.
-            value_parser = clap::builder::PossibleValuesParser::new([
-                clap::builder::PossibleValue::new("hybrid").help(
-                    "Keyword matches plus the bookmarks closest in meaning, even if they share \
-                     no words, merged into one ranking. Closeness has no cutoff, so results can \
-                     be loosely related. Without embeddings, keyword matches only",
-                ),
-                clap::builder::PossibleValue::new("exact").help(
-                    "Keyword matches only: all words must occur, in any order, in title, \
-                     URL/content, description or tags. Ignores case, punctuation and word endings \
-                     (deploying finds deploy). Not a phrase match. Needs no embedding model",
-                ),
-                clap::builder::PossibleValue::new("semantic").help(
-                    "Only the bookmarks closest in meaning, ranked by similarity (1 = same \
-                     meaning); the words themselves play no role. Needs embeddings: run `bkmr \
-                     backfill` first",
-                ),
-            ])
+            help = "how to match the search text"
         )]
-        mode: String,
+        mode: HSearchMode,
 
         #[arg(
             short = 'l',
@@ -722,6 +703,35 @@ Exit codes:
     },
 }
 
+/// `hsearch --mode` values. The doc comments are the per-value help; exact mode is not a phrase
+/// or literal match, which its name suggests, so its help spells out what it does.
+// Mirrors domain SearchMode instead of deriving clap's ValueEnum there, because the
+// domain layer has no external dependencies. The exhaustive `From` keeps both in step.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HSearchMode {
+    /// Keyword matches plus the bookmarks closest in meaning, even if they share no words,
+    /// merged into one ranking. Closeness has no cutoff, so results can be loosely related.
+    /// Without embeddings, keyword matches only
+    Hybrid,
+    /// Keyword matches only: all words must occur, in any order, in title, URL/content,
+    /// description or tags. Ignores case, punctuation and word endings (deploying finds deploy).
+    /// Not a phrase match. Needs no embedding model
+    Exact,
+    /// Only the bookmarks closest in meaning, ranked by similarity (1 = same meaning); the words
+    /// themselves play no role. Needs embeddings: run `bkmr backfill` first
+    Semantic,
+}
+
+impl From<HSearchMode> for crate::domain::search::SearchMode {
+    fn from(mode: HSearchMode) -> Self {
+        match mode {
+            HSearchMode::Hybrid => Self::Hybrid,
+            HSearchMode::Exact => Self::Exact,
+            HSearchMode::Semantic => Self::Semantic,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -859,7 +869,38 @@ mod tests {
         let cli = Cli::try_parse_from(["bkmr", "hsearch", "x", "--mode", "semantic"])
             .expect("semantic is a valid mode");
 
-        assert!(matches!(cli.command, Some(Commands::HSearch { mode, .. }) if mode == "semantic"));
+        assert!(matches!(
+            cli.command,
+            Some(Commands::HSearch {
+                mode: HSearchMode::Semantic,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn given_no_mode_when_hsearch_then_defaults_to_hybrid() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x"]).unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Commands::HSearch {
+                mode: HSearchMode::Hybrid,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn given_each_mode_flag_when_mapped_then_becomes_the_same_search_mode() {
+        use crate::domain::search::SearchMode;
+
+        assert_eq!(SearchMode::from(HSearchMode::Hybrid), SearchMode::Hybrid);
+        assert_eq!(SearchMode::from(HSearchMode::Exact), SearchMode::Exact);
+        assert_eq!(
+            SearchMode::from(HSearchMode::Semantic),
+            SearchMode::Semantic
+        );
     }
 
     fn rendered_help(args: &[&str]) -> String {

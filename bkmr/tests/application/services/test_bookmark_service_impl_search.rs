@@ -677,7 +677,8 @@ fn given_query_with_fts_operator_characters_when_hybrid_search_then_matches_lite
     for query in ["c++", "node.js", "foo-bar", "AND", "tips:"] {
         let results = service
             .hybrid_search(&bkmr::domain::search::HybridSearch::new(query))
-            .unwrap_or_else(|e| panic!("query {query:?} must not be parsed as FTS5 syntax: {e}"));
+            .unwrap_or_else(|e| panic!("query {query:?} must not be parsed as FTS5 syntax: {e}"))
+            .hits;
 
         assert!(
             results.iter().any(|r| r.bookmark.id == Some(id)),
@@ -828,7 +829,7 @@ fn search_with_mode(
 ) -> Vec<bkmr::domain::search::HybridSearchResult> {
     let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
     search.mode = mode;
-    service.hybrid_search(&search).unwrap()
+    service.hybrid_search(&search).unwrap().hits
 }
 
 fn hit(
@@ -874,7 +875,7 @@ fn given_semantic_mode_and_tag_filter_when_hybrid_search_then_only_filtered_book
     let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
     search.mode = bkmr::domain::search::SearchMode::Semantic;
     search.tags_all = Some(parse_tags("ops"));
-    let results = service.hybrid_search(&search).unwrap();
+    let results = service.hybrid_search(&search).unwrap().hits;
 
     let found: Vec<i32> = results.iter().filter_map(|r| r.bookmark.id).collect();
     assert_eq!(found, vec![both]);
@@ -916,6 +917,120 @@ fn given_exact_mode_when_hybrid_search_then_every_hit_is_a_keyword_match_without
         assert_eq!(result.keyword_match, Some(true));
         assert_eq!(result.similarity, None);
     }
+}
+
+#[test]
+fn given_keyword_hit_ranked_below_the_fts_cut_when_hybrid_search_then_still_a_keyword_match() {
+    use bkmr::domain::repositories::repository::BookmarkRepository;
+
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let repository = Arc::new(setup_test_db());
+    let seeding = BookmarkServiceImpl::new(
+        repository.clone(),
+        Arc::new(DummyEmbedding),
+        Arc::new(NullVectorRepository),
+        Arc::new(JsonImportRepository::new()),
+    );
+    for i in 0..25 {
+        add(
+            &seeding,
+            &format!("https://k{i}.example.com"),
+            &format!("kubernetes note {i}"),
+            "ops",
+        );
+    }
+    // limit 5 keeps the 20 best keyword hits for fusion; the vector store returns the rest
+    let below_cut: Vec<i32> = repository
+        .get_bookmarks_fts_ranked("\"kubernetes\"", None)
+        .unwrap()
+        .into_iter()
+        .skip(20)
+        .map(|r| r.bookmark_id)
+        .collect();
+    assert_eq!(below_cut.len(), 5);
+    let service = BookmarkServiceImpl::new(
+        repository,
+        Arc::new(ConstantQueryEmbedder),
+        Arc::new(FixedNeighboursVectorRepository {
+            neighbours: below_cut.iter().map(|id| (*id, 0.6)).collect(),
+        }),
+        Arc::new(JsonImportRepository::new()),
+    );
+
+    let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+    search.limit = Some(5);
+    let results = service.hybrid_search(&search).unwrap().hits;
+
+    assert!(
+        results
+            .iter()
+            .any(|r| below_cut.contains(&r.bookmark.id.unwrap())),
+        "a bookmark below the cut must reach the results, or this test proves nothing"
+    );
+    // Every bookmark contains the word, whatever its keyword rank
+    for result in &results {
+        assert_eq!(
+            result.keyword_match,
+            Some(true),
+            "bookmark {:?}",
+            result.bookmark.id
+        );
+    }
+}
+
+// --- hybrid_search: reports when semantic search had no vectors to search ---
+
+#[test]
+fn given_no_stored_vectors_when_semantic_search_then_outcome_reports_missing_embeddings() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let service = BookmarkServiceImpl::new(
+        Arc::new(setup_test_db()),
+        Arc::new(ConstantQueryEmbedder),
+        Arc::new(NullVectorRepository),
+        Arc::new(JsonImportRepository::new()),
+    );
+
+    let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+    search.mode = bkmr::domain::search::SearchMode::Semantic;
+    let outcome = service.hybrid_search(&search).unwrap();
+
+    assert!(outcome.hits.is_empty());
+    assert!(outcome.missing_embeddings);
+}
+
+#[test]
+fn given_stored_vectors_when_semantic_search_then_outcome_does_not_report_missing_embeddings() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let (service, _keyword_only, _both, _meaning_only) = service_with_keyword_and_meaning_hits();
+
+    let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+    search.mode = bkmr::domain::search::SearchMode::Semantic;
+    let outcome = service.hybrid_search(&search).unwrap();
+
+    assert!(!outcome.hits.is_empty());
+    assert!(!outcome.missing_embeddings);
+}
+
+#[test]
+fn given_exact_mode_without_vectors_when_hybrid_search_then_missing_embeddings_is_not_reported() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let service = BookmarkServiceImpl::new(
+        Arc::new(setup_test_db()),
+        Arc::new(ConstantQueryEmbedder),
+        Arc::new(NullVectorRepository),
+        Arc::new(JsonImportRepository::new()),
+    );
+
+    let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+    search.mode = bkmr::domain::search::SearchMode::Exact;
+    let outcome = service.hybrid_search(&search).unwrap();
+
+    // Exact mode never wanted vectors, so their absence is not news
+    assert!(!outcome.missing_embeddings);
 }
 
 // --- hybrid_search: embedding model and stored vectors disagree on dimensions ---

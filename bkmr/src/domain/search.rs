@@ -170,6 +170,15 @@ impl HybridSearchResult {
     }
 }
 
+/// What a hybrid search returned, and why semantic search may have contributed nothing.
+#[derive(Debug, Clone)]
+pub struct HybridSearchOutcome {
+    /// Hits, best first
+    pub hits: Vec<HybridSearchResult>,
+    /// The mode wanted semantic search, but no vectors are stored (`bkmr backfill` makes them)
+    pub missing_embeddings: bool,
+}
+
 /// Cosine similarity from the L2 distance between two unit vectors: `1 - d²/2`.
 ///
 /// Exact only for unit vectors under the L2 metric. Both hold for stored embeddings: FastEmbed

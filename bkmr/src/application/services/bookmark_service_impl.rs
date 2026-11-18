@@ -17,7 +17,7 @@ use crate::domain::repositories::import_repository::{
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
-use crate::domain::search::{HybridSearch, HybridSearchResult, RrfFusion};
+use crate::domain::search::{HybridSearch, HybridSearchOutcome, HybridSearchResult, RrfFusion};
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
@@ -600,7 +600,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
     }
 
     #[instrument(skip(self, search), level = "debug", fields(query = %search.query, mode = ?search.mode))]
-    fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>> {
+    fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<HybridSearchOutcome> {
         use crate::domain::search::{cosine_from_l2, RankedResult, SearchMode};
 
         if search.query.trim().is_empty() {
@@ -621,31 +621,42 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             let ids: std::collections::HashSet<i32> =
                 filtered.into_iter().filter_map(|b| b.id).collect();
             if ids.is_empty() {
-                return Ok(vec![]);
+                return Ok(HybridSearchOutcome {
+                    hits: vec![],
+                    missing_embeddings: false,
+                });
             }
             Some(ids)
         } else {
             None
         };
 
-        // Step 1: FTS ranked search (skipped in semantic mode)
-        let fts_ranked: Vec<RankedResult> = if search.mode == SearchMode::Semantic {
-            vec![]
+        // Step 1: FTS ranked search, `None` in semantic mode: then no hit can claim a
+        // keyword match either way
+        let mut fts_ranked: Option<Vec<RankedResult>> = if search.mode == SearchMode::Semantic {
+            None
         } else {
-            self.repository
-                .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?
-                .into_iter()
-                .take(internal_limit)
-                .collect()
+            Some(
+                self.repository
+                    .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?,
+            )
         };
-        // `None` when FTS did not run: then no hit can claim a keyword match either way
-        let fts_ids: Option<HashSet<i32>> = (search.mode != SearchMode::Semantic)
-            .then(|| fts_ranked.iter().map(|r| r.bookmark_id).collect());
+        // Taken before the cut below: a keyword hit ranked past it can still enter through
+        // semantic search, and must not then be reported as a meaning-only match
+        let fts_ids: Option<HashSet<i32>> = fts_ranked
+            .as_ref()
+            .map(|ranked| ranked.iter().map(|r| r.bookmark_id).collect());
+        if let Some(ranked) = fts_ranked.as_mut() {
+            ranked.truncate(internal_limit);
+        }
 
         // Step 2: Semantic search (skip if exact mode or no embeddings), as (id, L2 distance)
+        let missing_embeddings = search.mode != SearchMode::Exact
+            && self.embedder.dimensions() > 0
+            && !self.vector_repository.has_embeddings()?;
         let nearest: Vec<(i32, f64)> = if search.mode == SearchMode::Exact
             || self.embedder.dimensions() == 0
-            || !self.vector_repository.has_embeddings()?
+            || missing_embeddings
         {
             vec![]
         } else {
@@ -682,7 +693,12 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             .collect();
 
         // Step 3: RRF fusion
-        let fused = RrfFusion::fuse(&fts_ranked, &sem_ranked, k, limit);
+        let fused = RrfFusion::fuse(
+            fts_ranked.as_deref().unwrap_or_default(),
+            &sem_ranked,
+            k,
+            limit,
+        );
 
         // Step 4: Hydrate bookmarks
         let mut results = Vec::with_capacity(fused.len());
@@ -698,7 +714,10 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         }
 
         debug!(result_count = results.len(), "Hybrid search complete");
-        Ok(results)
+        Ok(HybridSearchOutcome {
+            hits: results,
+            missing_embeddings,
+        })
     }
 
     #[instrument(skip(self), level = "debug")]
