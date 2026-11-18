@@ -215,6 +215,11 @@ pub enum Commands {
                      URL/content, description or tags. Ignores case, punctuation and word endings \
                      (deploying finds deploy). Not a phrase match. Needs no embedding model",
                 ),
+                clap::builder::PossibleValue::new("semantic").help(
+                    "Only the bookmarks closest in meaning, ranked by similarity (1 = same \
+                     meaning); the words themselves play no role. Needs embeddings: run `bkmr \
+                     backfill` first",
+                ),
             ])
         )]
         mode: String,
@@ -845,7 +850,16 @@ mod tests {
         assert!(!help.contains("RRF"), "{help}");
         assert!(help.contains("- hybrid:"), "{help}");
         assert!(help.contains("- exact:"), "{help}");
+        assert!(help.contains("- semantic:"), "{help}");
         assert!(help.contains("default: 10"), "{help}");
+    }
+
+    #[test]
+    fn given_semantic_mode_when_hsearch_then_parses() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x", "--mode", "semantic"])
+            .expect("semantic is a valid mode");
+
+        assert!(matches!(cli.command, Some(Commands::HSearch { mode, .. }) if mode == "semantic"));
     }
 
     fn rendered_help(args: &[&str]) -> String {

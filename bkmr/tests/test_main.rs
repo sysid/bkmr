@@ -1405,6 +1405,8 @@ fn given_bookmark_when_hsearch_json_then_it_keeps_its_own_shape() {
             "created_at",
             "description",
             "id",
+            // exact mode runs only the keyword search: no `similarity`
+            "keyword_match",
             "rrf_score",
             "tags",
             "title",

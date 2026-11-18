@@ -54,6 +54,18 @@ check "empty tag filter" \
 check "exact mode" \
     "$BKMR hsearch 'iptables' --mode exact --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)>0'"
 
+# Semantic mode: cosine similarity in (0, 1], nearest first, no keyword claim
+check "semantic mode" \
+    "$BKMR hsearch 'container orchestration' --mode semantic --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); s=[x[\"similarity\"] for x in r]; assert r and all(0<v<=1 for v in s) and s==sorted(s,reverse=True) and not any(\"keyword_match\" in x for x in r)'"
+
+# Hybrid mode: every hit says whether the keyword search found it
+check "hybrid keyword_match" \
+    "$BKMR hsearch 'kubernetes' --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert all(isinstance(x[\"keyword_match\"], bool) for x in r) and any(x[\"keyword_match\"] for x in r)'"
+
+# Piped output has six columns: id, title, url, rrf_score, similarity, keyword_match
+check "piped six columns" \
+    "$BKMR hsearch 'kubernetes' --np 2>/dev/null | python3 -c 'import sys; assert all(len(l.split(\"\\t\"))==6 for l in sys.stdin.read().splitlines())'"
+
 # Limit works
 check "limit" \
     "$BKMR hsearch 'kubernetes' --limit 2 --json --np 2>/dev/null | python3 -c 'import json,sys; r=json.load(sys.stdin); assert len(r)==2'"

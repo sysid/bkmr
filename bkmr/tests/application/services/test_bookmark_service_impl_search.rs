@@ -708,3 +708,212 @@ fn given_blank_query_when_hybrid_search_then_validation_error() {
         );
     }
 }
+
+// --- hybrid_search: semantic mode, similarity and keyword_match ---
+
+/// Vector store that returns fixed (id, L2 distance) pairs, nearest first, honouring the ID filter.
+#[derive(Debug)]
+struct FixedNeighboursVectorRepository {
+    neighbours: Vec<(i32, f64)>,
+}
+
+impl bkmr::domain::repositories::vector_repository::VectorRepository
+    for FixedNeighboursVectorRepository
+{
+    fn init_vec_table(&self, _dimensions: usize) -> bkmr::domain::error::DomainResult<()> {
+        unimplemented!()
+    }
+    fn upsert_embedding(&self, _id: i32, _e: &[f32]) -> bkmr::domain::error::DomainResult<()> {
+        Ok(())
+    }
+    fn delete_embedding(&self, _id: i32) -> bkmr::domain::error::DomainResult<()> {
+        Ok(())
+    }
+    fn search_nearest(
+        &self,
+        _q: &[f32],
+        _limit: usize,
+    ) -> bkmr::domain::error::DomainResult<Vec<(i32, f64)>> {
+        unimplemented!()
+    }
+    fn has_embeddings(&self) -> bkmr::domain::error::DomainResult<bool> {
+        Ok(!self.neighbours.is_empty())
+    }
+    fn get_dimensions(&self) -> bkmr::domain::error::DomainResult<Option<usize>> {
+        Ok(Some(384))
+    }
+    fn clear_all(&self) -> bkmr::domain::error::DomainResult<()> {
+        unimplemented!()
+    }
+    fn get_embedded_ids(&self) -> bkmr::domain::error::DomainResult<HashSet<i32>> {
+        Ok(self.neighbours.iter().map(|(id, _)| *id).collect())
+    }
+    fn search_nearest_filtered(
+        &self,
+        _q: &[f32],
+        limit: usize,
+        filter_ids: Option<&HashSet<i32>>,
+    ) -> bkmr::domain::error::DomainResult<Vec<(i32, f64)>> {
+        Ok(self
+            .neighbours
+            .iter()
+            .filter(|(id, _)| filter_ids.is_none_or(|f| f.contains(id)))
+            .take(limit)
+            .copied()
+            .collect())
+    }
+}
+
+/// Embedder with real dimensions that embeds every query to the same vector.
+#[derive(Debug)]
+struct ConstantQueryEmbedder;
+
+impl bkmr::domain::embedding::Embedder for ConstantQueryEmbedder {
+    fn embed_document(&self, _text: &str) -> bkmr::domain::error::DomainResult<Option<Vec<f32>>> {
+        Ok(None)
+    }
+    fn embed_query(&self, _text: &str) -> bkmr::domain::error::DomainResult<Option<Vec<f32>>> {
+        Ok(Some(vec![0.0; 384]))
+    }
+    fn dimensions(&self) -> usize {
+        384
+    }
+}
+
+/// Service over a fresh test DB with three bookmarks, returned as (service, keyword_only,
+/// both, meaning_only). Only `keyword_only` and `both` contain the word "kubernetes";
+/// the vector store returns `both` (distance 0.6) and `meaning_only` (distance 0.8).
+fn service_with_keyword_and_meaning_hits() -> (impl BookmarkService, i32, i32, i32) {
+    let repository = Arc::new(setup_test_db());
+    // Add with the null store so adding does not depend on the neighbour ids
+    let seeding = BookmarkServiceImpl::new(
+        repository.clone(),
+        Arc::new(DummyEmbedding),
+        Arc::new(NullVectorRepository),
+        Arc::new(JsonImportRepository::new()),
+    );
+    let keyword_only = add(
+        &seeding,
+        "https://k.example.com",
+        "kubernetes cheat sheet",
+        "ops",
+    );
+    let both = add(
+        &seeding,
+        "https://b.example.com",
+        "kubernetes cluster setup",
+        "ops",
+    );
+    let meaning_only = add(
+        &seeding,
+        "https://m.example.com",
+        "container orchestration",
+        "infra",
+    );
+
+    let service = BookmarkServiceImpl::new(
+        repository,
+        Arc::new(ConstantQueryEmbedder),
+        Arc::new(FixedNeighboursVectorRepository {
+            neighbours: vec![(both, 0.6), (meaning_only, 0.8)],
+        }),
+        Arc::new(JsonImportRepository::new()),
+    );
+    (service, keyword_only, both, meaning_only)
+}
+
+fn search_with_mode(
+    service: &impl BookmarkService,
+    mode: bkmr::domain::search::SearchMode,
+) -> Vec<bkmr::domain::search::HybridSearchResult> {
+    let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+    search.mode = mode;
+    service.hybrid_search(&search).unwrap()
+}
+
+fn hit(
+    results: &[bkmr::domain::search::HybridSearchResult],
+    id: i32,
+) -> &bkmr::domain::search::HybridSearchResult {
+    results
+        .iter()
+        .find(|r| r.bookmark.id == Some(id))
+        .unwrap_or_else(|| panic!("bookmark {id} missing from results"))
+}
+
+#[test]
+fn given_semantic_mode_when_hybrid_search_then_returns_only_vector_hits_with_cosine_similarity() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let (service, keyword_only, both, meaning_only) = service_with_keyword_and_meaning_hits();
+
+    let results = search_with_mode(&service, bkmr::domain::search::SearchMode::Semantic);
+
+    // The keyword-only bookmark has no vector, so semantic mode cannot find it
+    let found: Vec<i32> = results.iter().filter_map(|r| r.bookmark.id).collect();
+    assert_eq!(
+        found,
+        vec![both, meaning_only],
+        "nearest first, no keyword hits"
+    );
+    assert!(!found.contains(&keyword_only));
+    // cosine = 1 - d²/2 for unit vectors
+    assert!((hit(&results, both).similarity.unwrap() - 0.82).abs() < 1e-9);
+    assert!((hit(&results, meaning_only).similarity.unwrap() - 0.68).abs() < 1e-9);
+    // Keyword search did not run, so there is no claim either way
+    assert!(results.iter().all(|r| r.keyword_match.is_none()));
+}
+
+#[test]
+fn given_semantic_mode_and_tag_filter_when_hybrid_search_then_only_filtered_bookmarks_are_returned()
+{
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let (service, _keyword_only, both, _meaning_only) = service_with_keyword_and_meaning_hits();
+
+    let mut search = bkmr::domain::search::HybridSearch::new("kubernetes");
+    search.mode = bkmr::domain::search::SearchMode::Semantic;
+    search.tags_all = Some(parse_tags("ops"));
+    let results = service.hybrid_search(&search).unwrap();
+
+    let found: Vec<i32> = results.iter().filter_map(|r| r.bookmark.id).collect();
+    assert_eq!(found, vec![both]);
+}
+
+#[test]
+fn given_hybrid_mode_when_hybrid_search_then_each_hit_says_whether_keyword_and_meaning_matched() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let (service, keyword_only, both, meaning_only) = service_with_keyword_and_meaning_hits();
+
+    let results = search_with_mode(&service, bkmr::domain::search::SearchMode::Hybrid);
+
+    let keyword = hit(&results, keyword_only);
+    assert_eq!(keyword.keyword_match, Some(true));
+    assert_eq!(keyword.similarity, None);
+
+    let both_hit = hit(&results, both);
+    assert_eq!(both_hit.keyword_match, Some(true));
+    assert!((both_hit.similarity.unwrap() - 0.82).abs() < 1e-9);
+
+    let meaning = hit(&results, meaning_only);
+    assert_eq!(meaning.keyword_match, Some(false));
+    assert!((meaning.similarity.unwrap() - 0.68).abs() < 1e-9);
+}
+
+#[test]
+fn given_exact_mode_when_hybrid_search_then_every_hit_is_a_keyword_match_without_similarity() {
+    let _env = init_test_env();
+    let _guard = EnvGuard::new();
+    let (service, keyword_only, both, meaning_only) = service_with_keyword_and_meaning_hits();
+
+    let results = search_with_mode(&service, bkmr::domain::search::SearchMode::Exact);
+
+    let found: HashSet<i32> = results.iter().filter_map(|r| r.bookmark.id).collect();
+    assert_eq!(found, HashSet::from([keyword_only, both]));
+    assert!(!found.contains(&meaning_only));
+    for result in &results {
+        assert_eq!(result.keyword_match, Some(true));
+        assert_eq!(result.similarity, None);
+    }
+}

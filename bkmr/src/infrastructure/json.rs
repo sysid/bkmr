@@ -48,6 +48,12 @@ pub struct JsonSearchHit {
     pub fields: JsonBookmarkFields,
     pub tags: String,
     pub rrf_score: f64,
+    /// Cosine similarity; omitted when the semantic search did not return this hit
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub similarity: Option<f64>,
+    /// Omitted when the keyword search did not run (semantic mode)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keyword_match: Option<bool>,
 }
 
 impl JsonSearchHit {
@@ -56,6 +62,8 @@ impl JsonSearchHit {
             fields: JsonBookmarkFields::from_domain(&result.bookmark),
             tags: result.bookmark.formatted_tags(),
             rrf_score: result.rrf_score,
+            similarity: result.similarity,
+            keyword_match: result.keyword_match,
         }
     }
 }
@@ -212,6 +220,43 @@ mod tests {
     use crate::util::testing::{init_test_env, EnvGuard};
     use std::collections::HashSet;
     use tempfile::NamedTempFile;
+
+    fn search_hit_json(similarity: Option<f64>, keyword_match: Option<bool>) -> serde_json::Value {
+        let bookmark = crate::domain::bookmark::Bookmark::new(
+            "https://example.com",
+            "Example",
+            "",
+            HashSet::new(),
+        )
+        .unwrap();
+        let result = HybridSearchResult::new(bookmark, 0.016, similarity, keyword_match);
+        serde_json::to_value(JsonSearchHit::from_domain(&result)).unwrap()
+    }
+
+    #[test]
+    fn given_hit_from_both_searches_when_serialized_then_has_similarity_and_keyword_match() {
+        let json = search_hit_json(Some(0.82), Some(true));
+
+        assert_eq!(json["similarity"], 0.82);
+        assert_eq!(json["keyword_match"], true);
+        assert_eq!(json["rrf_score"], 0.016);
+    }
+
+    #[test]
+    fn given_hit_without_scores_when_serialized_then_keys_are_omitted() {
+        // A key only appears when its search ran: `null` would read as "checked, no value"
+        let json = search_hit_json(None, None);
+
+        assert!(json.get("similarity").is_none(), "{json}");
+        assert!(json.get("keyword_match").is_none(), "{json}");
+    }
+
+    #[test]
+    fn given_meaning_only_hit_when_serialized_then_keyword_match_is_false() {
+        let json = search_hit_json(Some(0.68), Some(false));
+
+        assert_eq!(json["keyword_match"], false);
+    }
 
     #[test]
     fn given_valid_json_file_when_check_format_then_returns_true() {

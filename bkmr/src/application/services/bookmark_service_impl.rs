@@ -662,7 +662,7 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
 
     #[instrument(skip(self, search), level = "debug", fields(query = %search.query, mode = ?search.mode))]
     fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>> {
-        use crate::domain::search::{RankedResult, SearchMode};
+        use crate::domain::search::{cosine_from_l2, RankedResult, SearchMode};
 
         if search.query.trim().is_empty() {
             return Err(ApplicationError::Validation(
@@ -689,48 +689,62 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             None
         };
 
-        // Step 1: FTS ranked search (always runs)
-        let fts_ranked = self
-            .repository
-            .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?;
+        // Step 1: FTS ranked search (skipped in semantic mode)
+        let fts_ranked: Vec<RankedResult> = if search.mode == SearchMode::Semantic {
+            vec![]
+        } else {
+            self.repository
+                .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?
+                .into_iter()
+                .take(internal_limit)
+                .collect()
+        };
+        // `None` when FTS did not run: then no hit can claim a keyword match either way
+        let fts_ids: Option<HashSet<i32>> = (search.mode != SearchMode::Semantic)
+            .then(|| fts_ranked.iter().map(|r| r.bookmark_id).collect());
 
-        // Step 2: Semantic search (skip if exact mode or no embeddings)
-        let sem_ranked = if search.mode == SearchMode::Exact
+        // Step 2: Semantic search (skip if exact mode or no embeddings), as (id, L2 distance)
+        let nearest: Vec<(i32, f64)> = if search.mode == SearchMode::Exact
             || self.embedder.dimensions() == 0
             || !self.vector_repository.has_embeddings()?
         {
             vec![]
         } else {
-            let query_embedding = self.embedder.embed_query(&search.query)?;
-            match query_embedding {
-                Some(embedding) => {
-                    let vec_results = self.vector_repository.search_nearest_filtered(
-                        &embedding,
-                        internal_limit,
-                        filter_ids.as_ref(),
-                    )?;
-                    vec_results
-                        .into_iter()
-                        .enumerate()
-                        .map(|(rank, (id, _distance))| RankedResult {
-                            bookmark_id: id,
-                            rank,
-                        })
-                        .collect()
-                }
+            match self.embedder.embed_query(&search.query)? {
+                Some(embedding) => self.vector_repository.search_nearest_filtered(
+                    &embedding,
+                    internal_limit,
+                    filter_ids.as_ref(),
+                )?,
                 None => vec![],
             }
         };
+        let sem_ranked: Vec<RankedResult> = nearest
+            .iter()
+            .enumerate()
+            .map(|(rank, (id, _distance))| RankedResult {
+                bookmark_id: *id,
+                rank,
+            })
+            .collect();
+        let similarities: HashMap<i32, f64> = nearest
+            .iter()
+            .map(|(id, distance)| (*id, cosine_from_l2(*distance)))
+            .collect();
 
         // Step 3: RRF fusion
-        let fts_for_fusion: Vec<_> = fts_ranked.into_iter().take(internal_limit).collect();
-        let fused = RrfFusion::fuse(&fts_for_fusion, &sem_ranked, k, limit);
+        let fused = RrfFusion::fuse(&fts_ranked, &sem_ranked, k, limit);
 
         // Step 4: Hydrate bookmarks
         let mut results = Vec::with_capacity(fused.len());
         for (bookmark_id, rrf_score) in fused {
             if let Some(bookmark) = self.repository.get_by_id(bookmark_id)? {
-                results.push(HybridSearchResult::new(bookmark, rrf_score));
+                results.push(HybridSearchResult::new(
+                    bookmark,
+                    rrf_score,
+                    similarities.get(&bookmark_id).copied(),
+                    fts_ids.as_ref().map(|ids| ids.contains(&bookmark_id)),
+                ));
             }
         }
 

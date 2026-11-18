@@ -77,6 +77,8 @@ pub enum SearchMode {
     Hybrid,
     /// FTS only, skip semantic search
     Exact,
+    /// Semantic search only, skip FTS
+    Semantic,
 }
 
 impl Default for SearchMode {
@@ -212,15 +214,36 @@ pub struct HybridSearchResult {
     pub bookmark: Bookmark,
     /// Combined RRF fusion score (higher = more relevant)
     pub rrf_score: f64,
+    /// Cosine similarity to the query; `None` if the semantic search did not run or did not
+    /// return this bookmark
+    pub similarity: Option<f64>,
+    /// Whether the keyword (FTS) search returned this bookmark; `None` if it did not run
+    pub keyword_match: Option<bool>,
 }
 
 impl HybridSearchResult {
-    pub fn new(bookmark: Bookmark, rrf_score: f64) -> Self {
+    pub fn new(
+        bookmark: Bookmark,
+        rrf_score: f64,
+        similarity: Option<f64>,
+        keyword_match: Option<bool>,
+    ) -> Self {
         Self {
             bookmark,
             rrf_score,
+            similarity,
+            keyword_match,
         }
     }
+}
+
+/// Cosine similarity from the L2 distance between two unit vectors: `1 - d²/2`.
+///
+/// Exact only for unit vectors under the L2 metric. Both hold for stored embeddings: FastEmbed
+/// normalizes every text embedding, and the `vec0` table uses its default metric, L2, which
+/// returns the true Euclidean distance (not its square).
+pub fn cosine_from_l2(distance: f64) -> f64 {
+    1.0 - distance * distance / 2.0
 }
 
 /// Reciprocal Rank Fusion — merges ranked lists from multiple search engines
@@ -403,6 +426,14 @@ mod tests {
         // Top 2 by score
         assert_eq!(results[0].0, 1);
         assert_eq!(results[1].0, 2);
+    }
+
+    #[test]
+    fn given_l2_distance_of_unit_vectors_when_converted_then_returns_cosine_similarity() {
+        // identical, orthogonal and opposite unit vectors
+        assert!((cosine_from_l2(0.0) - 1.0).abs() < 1e-12);
+        assert!(cosine_from_l2(2f64.sqrt()).abs() < 1e-12);
+        assert!((cosine_from_l2(2.0) + 1.0).abs() < 1e-12);
     }
 
     // === Existing Semantic Search Tests ===

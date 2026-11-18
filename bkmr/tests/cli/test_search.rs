@@ -193,3 +193,66 @@ fn given_term_with_punctuation_when_hsearch_exact_then_punctuation_is_ignored() 
     // The title has no `++`: the term is safe to type, but not matched character by character.
     assert_eq!(hsearch_exact_titles("zqlang++"), vec!["Zqlang basics"]);
 }
+
+/// Runs `bkmr hsearch --json --np <args>` against `db` and returns stdout as JSON and stderr.
+fn hsearch_json(db: &std::path::Path, args: &[&str]) -> (Vec<serde_json::Value>, String) {
+    let result = cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args(["hsearch", "--json", "--np"])
+        .args(args)
+        .assert()
+        .success();
+    let output = result.get_output();
+    (
+        serde_json::from_slice(&output.stdout).unwrap(),
+        String::from_utf8_lossy(&output.stderr).to_string(),
+    )
+}
+
+/// Creates a database at `db` holding one bookmark titled "Zqsemantic notes", without vectors.
+fn create_db_without_vectors(db: &std::path::Path) {
+    cargo_bin_cmd!("bkmr")
+        .arg("create-db")
+        .arg(db)
+        .assert()
+        .success();
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", db)
+        .args([
+            "add",
+            "https://example.com/zq",
+            "zqtag",
+            "--title",
+            "Zqsemantic notes",
+            "--no-web",
+            "--no-embed",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn given_no_embeddings_when_hsearch_semantic_then_empty_result_and_backfill_hint() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = dir.path().join("semantic.db");
+    create_db_without_vectors(&db);
+
+    let (hits, stderr) = hsearch_json(&db, &["--mode", "semantic", "zqsemantic"]);
+
+    // The keyword matches, but semantic mode does not use keywords
+    assert!(hits.is_empty(), "{hits:?}");
+    assert!(stderr.contains("bkmr backfill"), "{stderr}");
+}
+
+#[test]
+fn given_exact_mode_when_hsearch_json_then_hits_are_keyword_matches_without_similarity() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = dir.path().join("exact.db");
+    create_db_without_vectors(&db);
+
+    let (hits, _) = hsearch_json(&db, &["--mode", "exact", "zqsemantic"]);
+
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert_eq!(hits[0]["keyword_match"], true);
+    assert!(hits[0].get("similarity").is_none(), "{}", hits[0]);
+}
