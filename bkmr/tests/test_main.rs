@@ -712,39 +712,117 @@ fn given_duplicate_name_without_update_when_importing_files_then_exits_with_dupl
     assert_eq!(output.status.code(), Some(65));
 }
 
-#[test]
-fn given_declined_prompt_when_clearing_embeddings_then_exits_with_cancel_code_and_keeps_vector() {
+/// Creates a database at `db` with one bookmark whose vector is written directly, so the
+/// embedding model is not needed. Returns the bookmark ID.
+fn create_db_with_one_embedded_bookmark(db: &std::path::Path) -> i64 {
     use bkmr::domain::repositories::vector_repository::VectorRepository;
     use bkmr::infrastructure::repositories::sqlite::register_sqlite_vec;
     use bkmr::infrastructure::repositories::sqlite::vector_repository::SqliteVectorRepository;
 
-    // Arrange: the vector is written directly, so the model is not needed
-    let dir = TempDir::new().unwrap();
-    let db = dir.path().join("exit.db");
-    create_db_with_one_bookmark(&db);
-    let bookmark_id = search_all(&db)[0]["id"].as_i64().expect("bookmark id");
+    create_db_with_one_bookmark(db);
+    let bookmark_id = search_all(db)[0]["id"].as_i64().expect("bookmark id");
     register_sqlite_vec();
     let vectors = SqliteVectorRepository::new(db.to_str().unwrap()).unwrap();
     vectors.init_vec_table(768).unwrap();
     vectors
         .upsert_embedding(bookmark_id as i32, &vec![0.1; 768])
         .unwrap();
-    drop(vectors);
+    bookmark_id
+}
 
-    // Act
+#[test]
+fn given_declined_prompt_when_backfill_clear_then_exits_with_cancel_code_and_keeps_vector() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("exit.db");
+    let bookmark_id = create_db_with_one_embedded_bookmark(&db);
+
     let output = cargo_bin_cmd!("bkmr")
         .env("BKMR_DB_URL", &db)
-        .arg("clear-embeddings")
+        .args(["backfill", "--clear"])
         .write_stdin("n\n")
         .output()
-        .expect("run bkmr clear-embeddings");
+        .expect("run bkmr backfill --clear");
 
-    // Assert
     assert_eq!(output.status.code(), Some(130));
     assert!(
         has_embedding(&db, bookmark_id),
         "declined clear deleted the vector"
     );
+}
+
+#[test]
+fn given_confirmed_prompt_when_backfill_clear_then_vectors_are_gone_and_nothing_is_embedded() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("clear.db");
+    let bookmark_id = create_db_with_one_embedded_bookmark(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--clear"])
+        .write_stdin("y\n")
+        .assert()
+        .success()
+        // Clearing only: re-embedding is `backfill` (or `backfill --force` in one step)
+        .stderr(predicate::str::contains("Updating embedding").not());
+
+    assert!(
+        !has_embedding(&db, bookmark_id),
+        "confirmed clear kept the vector"
+    );
+}
+
+#[test]
+fn given_no_vectors_when_backfill_clear_then_succeeds_without_prompt() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("empty.db");
+    create_db_with_one_bookmark(&db);
+
+    // No stdin: a prompt would read EOF and cancel with 130
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--clear"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("nothing to clear"));
+}
+
+#[test]
+fn given_content_hashes_but_no_vectors_when_backfill_clear_then_hashes_are_reset() {
+    let dir = TempDir::new().unwrap();
+    let db = dir.path().join("stale-hash.db");
+    create_db_with_one_bookmark(&db);
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    conn.execute("UPDATE bookmarks SET content_hash = x'01020304'", [])
+        .unwrap();
+    drop(conn);
+
+    // No stdin: hashes alone are cheap to rebuild, so clearing them needs no prompt
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args(["backfill", "--clear"])
+        .assert()
+        .success();
+
+    let conn = rusqlite::Connection::open(&db).unwrap();
+    let hashed: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM bookmarks WHERE content_hash IS NOT NULL",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(hashed, 0, "backfill --clear left content hashes in place");
+}
+
+#[test]
+fn given_clear_with_another_mode_when_running_backfill_then_rejected() {
+    for other in ["--force", "--prune", "--dry-run"] {
+        cargo_bin_cmd!("bkmr")
+            .args(["backfill", "--clear", other])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
 }
 
 fn access_count_of_first_bookmark(db: &std::path::Path) -> i64 {
@@ -1405,6 +1483,8 @@ fn given_bookmark_when_hsearch_json_then_it_keeps_its_own_shape() {
             "created_at",
             "description",
             "id",
+            // exact mode runs only the keyword search: no `similarity`
+            "keyword_match",
             "rrf_score",
             "tags",
             "title",

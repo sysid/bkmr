@@ -11,7 +11,7 @@ use std::path::PathBuf;
   1    valid invocation, but the operation failed
   64   usage error: invalid arguments or invalid config file
   65   duplicate name (import-files without --update), skill already installed (skill install)
-  130  confirmation declined (delete, clear-embeddings, restore --from)")]
+  130  confirmation declined (delete, backfill --clear, restore --from)")]
 /// Knowledge management for humans and agents — bookmarks, snippets, scripts, and semantic search
 pub struct Cli {
     /// Sets a custom config file
@@ -199,25 +199,11 @@ pub enum Commands {
 
         #[arg(
             long = "mode",
+            value_enum,
             default_value = "hybrid",
-            help = "how to match the search text",
-            // Must match the mode mapping in hsearch_handler. Listing the values rejects typos
-            // that would otherwise silently run in hybrid mode. Exact mode is not a phrase or
-            // literal match, which its name suggests, so the help spells out what it does.
-            value_parser = clap::builder::PossibleValuesParser::new([
-                clap::builder::PossibleValue::new("hybrid").help(
-                    "Keyword matches plus the bookmarks closest in meaning, even if they share \
-                     no words, merged into one ranking. Closeness has no cutoff, so results can \
-                     be loosely related. Without embeddings, keyword matches only",
-                ),
-                clap::builder::PossibleValue::new("exact").help(
-                    "Keyword matches only: all words must occur, in any order, in title, \
-                     URL/content, description or tags. Ignores case, punctuation and word endings \
-                     (deploying finds deploy). Not a phrase match. Needs no embedding model",
-                ),
-            ])
+            help = "how to match the search text"
         )]
-        mode: String,
+        mode: HSearchMode,
 
         #[arg(
             short = 'l',
@@ -237,17 +223,6 @@ pub enum Commands {
             help = "output the selected bookmark's URL/content to stdout instead of executing"
         )]
         stdout: bool,
-
-        #[arg(long = "np", help = "no prompt")]
-        non_interactive: bool,
-    },
-    /// Semantic search using embeddings only
-    SemSearch {
-        /// Search query (natural language)
-        query: String,
-
-        #[arg(short = 'l', long = "limit", help = "limit number of results")]
-        limit: Option<i32>,
 
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
@@ -544,6 +519,10 @@ Exit codes:
         pre_fill: bool,
     },
     /// Generate missing embeddings for embeddable bookmarks
+    #[command(after_help = "Exit codes:
+  0    success, or nothing to do
+  1    the operation failed
+  130  confirmation declined (--clear)")]
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
@@ -562,13 +541,14 @@ Exit codes:
             help = "only remove vectors of bookmarks that are not embeddable, without embedding anything"
         )]
         prune: bool,
+
+        #[arg(
+            long = "clear",
+            conflicts_with_all = ["force", "prune", "dry_run"],
+            help = "only delete all embeddings and content hashes, after asking, without embedding anything"
+        )]
+        clear: bool,
     },
-    /// Clear all embeddings and content hashes (clean slate for backfill)
-    #[command(after_help = "Exit codes:
-  0    embeddings cleared, or none found
-  1    the operation failed
-  130  confirmation declined")]
-    ClearEmbeddings {},
 
     /// Add bookmarks in bulk from a JSON array; existing bookmarks stay as they are
     ///
@@ -723,6 +703,35 @@ Exit codes:
     },
 }
 
+/// `hsearch --mode` values. The doc comments are the per-value help; exact mode is not a phrase
+/// or literal match, which its name suggests, so its help spells out what it does.
+// Mirrors domain SearchMode instead of deriving clap's ValueEnum there, because the
+// domain layer has no external dependencies. The exhaustive `From` keeps both in step.
+#[derive(clap::ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HSearchMode {
+    /// Keyword matches plus the bookmarks closest in meaning, even if they share no words,
+    /// merged into one ranking. Closeness has no cutoff, so results can be loosely related.
+    /// Without embeddings, keyword matches only
+    Hybrid,
+    /// Keyword matches only: all words must occur, in any order, in title, URL/content,
+    /// description or tags. Ignores case, punctuation and word endings (deploying finds deploy).
+    /// Not a phrase match. Needs no embedding model
+    Exact,
+    /// Only the bookmarks closest in meaning, ranked by similarity (1 = same meaning); the words
+    /// themselves play no role. Needs embeddings: run `bkmr backfill` first
+    Semantic,
+}
+
+impl From<HSearchMode> for crate::domain::search::SearchMode {
+    fn from(mode: HSearchMode) -> Self {
+        match mode {
+            HSearchMode::Hybrid => Self::Hybrid,
+            HSearchMode::Exact => Self::Exact,
+            HSearchMode::Semantic => Self::Semantic,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -845,7 +854,53 @@ mod tests {
         assert!(!help.contains("RRF"), "{help}");
         assert!(help.contains("- hybrid:"), "{help}");
         assert!(help.contains("- exact:"), "{help}");
+        assert!(help.contains("- semantic:"), "{help}");
         assert!(help.contains("default: 10"), "{help}");
+    }
+
+    #[test]
+    fn given_sem_search_when_parsing_then_rejected() {
+        // Replaced by `hsearch --mode semantic`
+        assert!(Cli::try_parse_from(["bkmr", "sem-search", "q"]).is_err());
+    }
+
+    #[test]
+    fn given_semantic_mode_when_hsearch_then_parses() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x", "--mode", "semantic"])
+            .expect("semantic is a valid mode");
+
+        assert!(matches!(
+            cli.command,
+            Some(Commands::HSearch {
+                mode: HSearchMode::Semantic,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn given_no_mode_when_hsearch_then_defaults_to_hybrid() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x"]).unwrap();
+
+        assert!(matches!(
+            cli.command,
+            Some(Commands::HSearch {
+                mode: HSearchMode::Hybrid,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn given_each_mode_flag_when_mapped_then_becomes_the_same_search_mode() {
+        use crate::domain::search::SearchMode;
+
+        assert_eq!(SearchMode::from(HSearchMode::Hybrid), SearchMode::Hybrid);
+        assert_eq!(SearchMode::from(HSearchMode::Exact), SearchMode::Exact);
+        assert_eq!(
+            SearchMode::from(HSearchMode::Semantic),
+            SearchMode::Semantic
+        );
     }
 
     fn rendered_help(args: &[&str]) -> String {
@@ -878,11 +933,25 @@ mod tests {
     }
 
     #[test]
-    fn given_clear_embeddings_help_when_rendered_then_lists_cancel_exit_code() {
-        let help = rendered_help(&["bkmr", "clear-embeddings", "--help"]);
+    fn given_backfill_help_when_rendered_then_lists_cancel_exit_code() {
+        let help = rendered_help(&["bkmr", "backfill", "--help"]);
 
         assert!(help.contains("Exit codes:"), "{help}");
         assert!(help.contains("130 "), "{help}");
+    }
+
+    #[test]
+    fn given_clear_embeddings_when_parsing_then_rejected() {
+        // Replaced by `backfill --clear`
+        assert!(Cli::try_parse_from(["bkmr", "clear-embeddings"]).is_err());
+    }
+
+    #[test]
+    fn given_top_level_help_when_rendered_then_names_backfill_clear_for_cancel() {
+        let help = rendered_help(&["bkmr", "--help"]);
+
+        assert!(help.contains("backfill --clear"), "{help}");
+        assert!(!help.contains("clear-embeddings"), "{help}");
     }
 
     #[test]

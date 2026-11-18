@@ -17,9 +17,7 @@ use crate::domain::repositories::import_repository::{
 use crate::domain::repositories::query::{BookmarkQuery, SortDirection};
 use crate::domain::repositories::repository::BookmarkRepository;
 use crate::domain::repositories::vector_repository::VectorRepository;
-use crate::domain::search::{
-    HybridSearch, HybridSearchResult, RrfFusion, SemanticSearch, SemanticSearchResult,
-};
+use crate::domain::search::{HybridSearch, HybridSearchOutcome, HybridSearchResult, RrfFusion};
 use crate::domain::system_tag::SystemTag;
 use crate::domain::tag::Tag;
 use crate::infrastructure::http;
@@ -601,68 +599,9 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
         Ok(bookmarks)
     }
 
-    #[instrument(skip(self, search), level = "debug")]
-    fn semantic_search(
-        &self,
-        search: &SemanticSearch,
-    ) -> ApplicationResult<Vec<SemanticSearchResult>> {
-        // 1. Embed the query
-        let query_embedding = match self.embedder.embed_query(&search.query)? {
-            Some(emb) => emb,
-            None => {
-                debug!("Embedder returned None for query — returning empty results");
-                return Ok(Vec::new());
-            }
-        };
-
-        // 2. Dimension mismatch detection
-        let embedder_dims = self.embedder.dimensions();
-        if let Ok(Some(stored_dims)) = self.vector_repository.get_dimensions() {
-            if stored_dims != embedder_dims {
-                warn!(
-                    "Dimension mismatch: embedder produces {} dims but vector store has {} dims. \
-                     Run `bkmr backfill --force` to regenerate embeddings.",
-                    embedder_dims, stored_dims
-                );
-                return Err(ApplicationError::Other(format!(
-                    "Embedding dimension mismatch: model={}, stored={}. Run `bkmr backfill --force` to regenerate.",
-                    embedder_dims, stored_dims
-                )));
-            }
-        }
-
-        // 3. Search nearest neighbors
-        let limit = search.limit.unwrap_or(10);
-        let nearest = self
-            .vector_repository
-            .search_nearest(&query_embedding, limit)
-            .app_context("searching nearest embeddings in vector repository")?;
-
-        // 4. Fetch bookmarks and build results
-        let mut results = Vec::with_capacity(nearest.len());
-        for (bookmark_id, distance) in nearest {
-            match self.repository.get_by_id(bookmark_id)? {
-                Some(bookmark) => {
-                    // Convert distance to similarity: 1 / (1 + distance)
-                    let similarity = 1.0 / (1.0 + distance);
-                    results.push(SemanticSearchResult::new(bookmark, similarity));
-                }
-                None => {
-                    debug!(
-                        "Bookmark {} found in vector store but not in bookmarks table — skipping",
-                        bookmark_id
-                    );
-                }
-            }
-        }
-
-        debug!(query = %search.query, result_count = results.len(), "Semantic search complete");
-        Ok(results)
-    }
-
     #[instrument(skip(self, search), level = "debug", fields(query = %search.query, mode = ?search.mode))]
-    fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<Vec<HybridSearchResult>> {
-        use crate::domain::search::{RankedResult, SearchMode};
+    fn hybrid_search(&self, search: &HybridSearch) -> ApplicationResult<HybridSearchOutcome> {
+        use crate::domain::search::{cosine_from_l2, RankedResult, SearchMode};
 
         if search.query.trim().is_empty() {
             return Err(ApplicationError::Validation(
@@ -682,60 +621,103 @@ impl<R: BookmarkRepository> BookmarkService for BookmarkServiceImpl<R> {
             let ids: std::collections::HashSet<i32> =
                 filtered.into_iter().filter_map(|b| b.id).collect();
             if ids.is_empty() {
-                return Ok(vec![]);
+                return Ok(HybridSearchOutcome {
+                    hits: vec![],
+                    missing_embeddings: false,
+                });
             }
             Some(ids)
         } else {
             None
         };
 
-        // Step 1: FTS ranked search (always runs)
-        let fts_ranked = self
-            .repository
-            .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?;
+        // Step 1: FTS ranked search, `None` in semantic mode: then no hit can claim a
+        // keyword match either way
+        let mut fts_ranked: Option<Vec<RankedResult>> = if search.mode == SearchMode::Semantic {
+            None
+        } else {
+            Some(
+                self.repository
+                    .get_bookmarks_fts_ranked(&search.fts_query(), filter_ids.as_ref())?,
+            )
+        };
+        // Taken before the cut below: a keyword hit ranked past it can still enter through
+        // semantic search, and must not then be reported as a meaning-only match
+        let fts_ids: Option<HashSet<i32>> = fts_ranked
+            .as_ref()
+            .map(|ranked| ranked.iter().map(|r| r.bookmark_id).collect());
+        if let Some(ranked) = fts_ranked.as_mut() {
+            ranked.truncate(internal_limit);
+        }
 
-        // Step 2: Semantic search (skip if exact mode or no embeddings)
-        let sem_ranked = if search.mode == SearchMode::Exact
+        // Step 2: Semantic search (skip if exact mode or no embeddings), as (id, L2 distance)
+        let missing_embeddings = search.mode != SearchMode::Exact
+            && self.embedder.dimensions() > 0
+            && !self.vector_repository.has_embeddings()?;
+        let nearest: Vec<(i32, f64)> = if search.mode == SearchMode::Exact
             || self.embedder.dimensions() == 0
-            || !self.vector_repository.has_embeddings()?
+            || missing_embeddings
         {
             vec![]
         } else {
-            let query_embedding = self.embedder.embed_query(&search.query)?;
-            match query_embedding {
-                Some(embedding) => {
-                    let vec_results = self.vector_repository.search_nearest_filtered(
-                        &embedding,
-                        internal_limit,
-                        filter_ids.as_ref(),
-                    )?;
-                    vec_results
-                        .into_iter()
-                        .enumerate()
-                        .map(|(rank, (id, _distance))| RankedResult {
-                            bookmark_id: id,
-                            rank,
-                        })
-                        .collect()
+            // sqlite-vec rejects the query too, but its message does not say how to fix it
+            let model_dims = self.embedder.dimensions();
+            if let Some(stored_dims) = self.vector_repository.get_dimensions()? {
+                if stored_dims != model_dims {
+                    return Err(ApplicationError::Other(format!(
+                        "Embedding dimension mismatch: model={}, stored={}. Run `bkmr backfill --force` to regenerate.",
+                        model_dims, stored_dims
+                    )));
                 }
+            }
+            match self.embedder.embed_query(&search.query)? {
+                Some(embedding) => self.vector_repository.search_nearest_filtered(
+                    &embedding,
+                    internal_limit,
+                    filter_ids.as_ref(),
+                )?,
                 None => vec![],
             }
         };
+        let sem_ranked: Vec<RankedResult> = nearest
+            .iter()
+            .enumerate()
+            .map(|(rank, (id, _distance))| RankedResult {
+                bookmark_id: *id,
+                rank,
+            })
+            .collect();
+        let similarities: HashMap<i32, f64> = nearest
+            .iter()
+            .map(|(id, distance)| (*id, cosine_from_l2(*distance)))
+            .collect();
 
         // Step 3: RRF fusion
-        let fts_for_fusion: Vec<_> = fts_ranked.into_iter().take(internal_limit).collect();
-        let fused = RrfFusion::fuse(&fts_for_fusion, &sem_ranked, k, limit);
+        let fused = RrfFusion::fuse(
+            fts_ranked.as_deref().unwrap_or_default(),
+            &sem_ranked,
+            k,
+            limit,
+        );
 
         // Step 4: Hydrate bookmarks
         let mut results = Vec::with_capacity(fused.len());
         for (bookmark_id, rrf_score) in fused {
             if let Some(bookmark) = self.repository.get_by_id(bookmark_id)? {
-                results.push(HybridSearchResult::new(bookmark, rrf_score));
+                results.push(HybridSearchResult::new(
+                    bookmark,
+                    rrf_score,
+                    similarities.get(&bookmark_id).copied(),
+                    fts_ids.as_ref().map(|ids| ids.contains(&bookmark_id)),
+                ));
             }
         }
 
         debug!(result_count = results.len(), "Hybrid search complete");
-        Ok(results)
+        Ok(HybridSearchOutcome {
+            hits: results,
+            missing_embeddings,
+        })
     }
 
     #[instrument(skip(self), level = "debug")]

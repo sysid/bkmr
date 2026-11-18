@@ -78,7 +78,7 @@ bkmr add "# Notes\n## Section 1" docs,_md_ --title "Project Notes"
 bkmr import-files ~/scripts/ --base-path SCRIPTS_HOME
 
 # Local semantic search (no API keys needed)
-bkmr sem-search "containerized application security"
+bkmr hsearch --mode semantic "containerized application security"
 ```
 
 ### Screenshots
@@ -148,8 +148,7 @@ bkmr search --fzf
 | Command | Description |
 |---------|-------------|
 | `search` | Full-text search with tag filtering, FZF, JSON output |
-| `hsearch` | Hybrid search: FTS + semantic with RRF fusion |
-| `sem-search` | Semantic search using local embeddings (offline, no API keys) |
+| `hsearch` | Hybrid search: FTS + semantic with RRF fusion; `--mode exact`: keywords only; `--mode semantic`: meaning only, using local embeddings (offline, no API keys). Each hit reports its cosine `similarity` and whether it was a `keyword_match` |
 | `add` | Add bookmarks (URLs, snippets, scripts, markdown, env vars) |
 | `open` | Smart action dispatch based on content type |
 | `edit` | Edit bookmarks (smart: opens source file for imports) |
@@ -164,8 +163,7 @@ bkmr search --fzf
 | `tags` | View tag taxonomy with usage counts |
 | `info` | Show configuration, database path, embedding status |
 | `create-db` | Initialize a bookmark database |
-| `backfill` | Generate missing embeddings; `--prune` removes vectors of non-embeddable bookmarks |
-| `clear-embeddings` | Clear all embeddings and content hashes |
+| `backfill` | Generate missing embeddings; `--force`: recompute all; `--prune`: remove vectors of non-embeddable bookmarks; `--clear`: delete all embeddings and content hashes, without re-embedding |
 | `skill install` | Install the bkmr-memory agent skill into an agent's skills directory |
 | `lsp` | Start LSP server for editor snippet completion |
 | `completion` | Generate shell completions (bash, zsh, fish, nushell) |

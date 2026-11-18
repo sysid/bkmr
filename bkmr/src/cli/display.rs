@@ -2,7 +2,6 @@
 
 use crate::application::services::bookmark_service::BookmarkService;
 use crate::domain::bookmark::Bookmark;
-use crate::domain::search::SemanticSearchResult;
 use crate::util::helper::{format_file_path, format_mtime};
 use chrono::{DateTime, Utc};
 use crossterm::style::Stylize;
@@ -21,7 +20,6 @@ pub enum DisplayField {
     Tags,
     AccessCount,
     LastUpdateTs,
-    Similarity,
     Embedding,
     Embeddable,
 }
@@ -36,7 +34,6 @@ impl fmt::Display for DisplayField {
             DisplayField::Tags => write!(f, "Tags"),
             DisplayField::AccessCount => write!(f, "Access Count"),
             DisplayField::LastUpdateTs => write!(f, "Last Updated"),
-            DisplayField::Similarity => write!(f, "Similarity"),
             DisplayField::Embedding => write!(f, "Embedding"),
             DisplayField::Embeddable => write!(f, "Embeddable"),
         }
@@ -64,7 +61,6 @@ pub const DEFAULT_FIELDS: &[DisplayField] = &[
     DisplayField::Description,
     DisplayField::Tags,
     DisplayField::LastUpdateTs, // shows BOTH timestamps
-    DisplayField::Similarity,
 ];
 
 pub const ALL_FIELDS: &[DisplayField] = &[
@@ -75,7 +71,6 @@ pub const ALL_FIELDS: &[DisplayField] = &[
     DisplayField::Tags,
     DisplayField::AccessCount,
     DisplayField::LastUpdateTs, // shows BOTH timestamps
-    DisplayField::Similarity,
     DisplayField::Embedding,
     DisplayField::Embeddable,
 ];
@@ -106,9 +101,6 @@ pub struct DisplayBookmark {
 
     #[builder(default = "chrono::Utc::now()")]
     pub last_update_ts: DateTime<Utc>,
-
-    #[builder(default)]
-    pub similarity: Option<f64>,
 
     #[builder(default)]
     pub embedding: String,
@@ -158,34 +150,8 @@ impl DisplayBookmark {
             DisplayField::Tags => self.tags.clone(),
             DisplayField::AccessCount => self.access_count.to_string(),
             DisplayField::LastUpdateTs => self.last_update_ts.to_string(),
-            DisplayField::Similarity => self.similarity.map_or_else(String::new, |s| s.to_string()),
             DisplayField::Embedding => self.embedding.clone(),
         }
-    }
-    pub fn from_semantic_result(
-        result: &SemanticSearchResult,
-        embedded_ids: Option<&HashSet<i32>>,
-    ) -> Self {
-        let mut builder = DisplayBookmarkBuilder::default();
-
-        // Start with the base bookmark fields
-        let base = Self::from_domain(&result.bookmark, embedded_ids);
-
-        // Build with all the base fields plus similarity
-        builder
-            .id(base.id)
-            .url(base.url)
-            .title(base.title)
-            .description(base.description)
-            .tags(base.tags)
-            .access_count(base.access_count)
-            .created_at(base.created_at)
-            .last_update_ts(base.last_update_ts)
-            .embedding(base.embedding)
-            .embeddable(base.embeddable)
-            .similarity(Some(result.similarity))
-            .build()
-            .unwrap()
     }
 }
 
@@ -202,7 +168,6 @@ impl Default for DisplayBookmark {
             access_count: 0,
             created_at: None,
             last_update_ts: Utc::now(),
-            similarity: None,
             embedding: String::new(),
             embeddable: false,
             file_path: None,
@@ -240,13 +205,6 @@ pub fn show_bookmarks(
                     title_line
                 }
             );
-        }
-
-        // Similarity score if available
-        if let Some(similarity) = bm.similarity {
-            if fields.contains(&DisplayField::Similarity) {
-                let _ = write!(&mut stderr, " [{:.3}]", similarity);
-            }
         }
 
         // ID
@@ -404,7 +362,6 @@ mod display_tests {
                 access_count: 42,
                 created_at: Some(earlier), // Created 30 days ago
                 last_update_ts: now,       // Updated now
-                similarity: Some(0.85),
                 embedding: "yes".to_string(),
                 embeddable: true,
                 file_path: None,
@@ -419,7 +376,6 @@ mod display_tests {
                 access_count: 24,
                 created_at: None,    // No creation date
                 last_update_ts: now, // Updated now
-                similarity: None,
                 embedding: "".to_string(),
                 embeddable: false,
                 file_path: None,
@@ -434,7 +390,6 @@ mod display_tests {
                 access_count: 12,
                 created_at: Some(now), // Created now (same as updated)
                 last_update_ts: now,   // Updated now
-                similarity: Some(0.62),
                 embedding: "yes".to_string(),
                 embeddable: true,
                 file_path: None,
@@ -478,7 +433,7 @@ mod display_tests {
         println!("\n\nTEST: Colored Bookmark Display - All Fields\n");
         let bookmarks = create_test_bookmarks();
 
-        // Create a version of ALL_FIELDS that includes Similarity and Embedding
+        // Create a version of ALL_FIELDS that includes Embedding
         let extended_fields = &[
             DisplayField::Id,
             DisplayField::Title,
@@ -487,7 +442,6 @@ mod display_tests {
             DisplayField::Tags,
             DisplayField::AccessCount,
             DisplayField::LastUpdateTs,
-            DisplayField::Similarity,
             DisplayField::Embedding,
         ];
 

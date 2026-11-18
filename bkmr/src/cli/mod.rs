@@ -32,7 +32,6 @@ pub fn execute_command_with_services(
             handler.execute(cli)
         }
         Some(Commands::HSearch { .. }) => hsearch_handler::hybrid_search(cli, &services, settings),
-        Some(Commands::SemSearch { .. }) => bookmark_commands::semantic_search(cli, &services),
         Some(Commands::Open { .. }) => bookmark_commands::open(
             cli,
             services.bookmark_service.clone(),
@@ -71,9 +70,6 @@ pub fn execute_command_with_services(
         Some(Commands::Tags { .. }) => tag_commands::show_tags(cli, &services),
         Some(Commands::Surprise { .. }) => bookmark_commands::surprise(cli, &services),
         Some(Commands::Backfill { .. }) => bookmark_commands::backfill(cli, &services),
-        Some(Commands::ClearEmbeddings { .. }) => {
-            bookmark_commands::clear_embeddings(cli, &services)
-        }
         Some(Commands::LoadJson { .. }) => bookmark_commands::load_json(cli, &services),
         Some(Commands::ImportFiles { .. }) => {
             bookmark_commands::import_files(cli, &services, settings)

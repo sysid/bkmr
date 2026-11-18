@@ -81,7 +81,6 @@ BKMR_INVOCATION = re.compile(r"(?:^|[\s;&|(/])bkmr\s+(--?\w[\w-]*|[a-z][a-z-]*)"
 
 OPERATIONS = {
     "hsearch": "READ",
-    "sem-search": "READ",
     "search": "READ",
     "add": "WRITE",
     "update": "UPDATE",

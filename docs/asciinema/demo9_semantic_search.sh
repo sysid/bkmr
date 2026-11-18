@@ -16,4 +16,4 @@ asciinema rec -t "bkmr: Semantic Search" bkmr_semantic_search.cast
 
 echo "Let's try semantic search capabilities where we search by meaning rather than keywords"
 
-bkmr sem-search "How do transformers work in deep learning?"
+bkmr hsearch --mode semantic "How do transformers work in deep learning?"

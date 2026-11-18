@@ -15,7 +15,7 @@ four renderings and measures where the target memory ranks:
 
 Arms per query:
   hsearch  bkmr hsearch (RRF of FTS + semantic)  -> rank of target
-  sem      bkmr sem-search (embedding only)      -> rank of target
+  sem      bkmr hsearch --mode semantic          -> rank of target
   fts      bkmr search with hsearch's FTS query  -> hit / miss (FTS uses AND)
 
 Plus a truncation probe: the same key fact stored short vs. buried after a
@@ -34,7 +34,6 @@ import glob
 import json
 import logging
 import os
-import re
 import shutil
 import statistics
 import subprocess
@@ -47,7 +46,6 @@ CORPUS = HERE / "markdown_corpus.json"
 LIMIT = 100  # larger than any DB -> every memory gets a rank
 VARIANTS = ["plain", "md_light", "md_heavy", "consolidated"]
 EMBED_MAX_TOKENS = 512  # fastembed DEFAULT_MAX_LENGTH, silently truncates
-SEM_LINE = re.compile(r"^(\d+)\t")
 
 log = logging.getLogger("markdown-retrieval")
 
@@ -118,10 +116,11 @@ def rank_hsearch(bkmr: str, db: Path, q: str, target: int) -> int | None:
 
 
 def rank_sem(bkmr: str, db: Path, q: str, target: int) -> int | None:
-    # sem-search has no --json; rows are "id\ttitle\turl\tscore". Multi-line
-    # markdown urls spill over lines, so only lines starting "<digits>\t" count.
-    out = run(bkmr, db, "sem-search", q, "--np", "-l", str(LIMIT))
-    ids = [int(m.group(1)) for line in out.splitlines() if (m := SEM_LINE.match(line))]
+    rows = json.loads(
+        run(bkmr, db, "hsearch", q, "--mode", "semantic", "--json", "--np", "-l", str(LIMIT))
+        or "[]"
+    )
+    ids = [r["id"] for r in rows]
     return ids.index(target) + 1 if target in ids else None
 
 

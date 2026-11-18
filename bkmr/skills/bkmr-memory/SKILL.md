@@ -148,13 +148,17 @@ bkmr search -t _mem_ -n gotcha --json --np
     "url": "The auth service uses JWT with 24h expiry. Refresh tokens are stored in Redis, not the DB.",
     "title": "Auth token architecture",
     "tags": ",_mem_,fact,auth,",
-    "rrf_score": 0.032
+    "rrf_score": 0.032,
+    "similarity": 0.71,
+    "keyword_match": true
   }
 ]
 ```
 
 The `url` field contains the actual memory content. The `rrf_score` indicates relevance —
-higher is better. Use `id` to reference a specific memory for updates. A `description`, if set, says
+higher is better. `similarity` (closer to 1 = closer in meaning) and `keyword_match` say what found
+the hit: `keyword_match: false` with a low `similarity` is a loosely related hit that only matched by
+meaning, since the semantic search has no cutoff. Use `id` to reference a specific memory for updates. A `description`, if set, says
 what last corrected or checked the memory. `created_at` and `verified_at` show its age: `verified_at`
 is when someone last checked its current text, and `null` means not since it last changed. A restored
 deleted memory counts from the restore. The older it is, the more a memory is a hint.
