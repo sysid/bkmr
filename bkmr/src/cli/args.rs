@@ -11,7 +11,7 @@ use std::path::PathBuf;
   1    valid invocation, but the operation failed
   64   usage error: invalid arguments or invalid config file
   65   duplicate name (import-files without --update), skill already installed (skill install)
-  130  confirmation declined (delete, clear-embeddings, restore --from)")]
+  130  confirmation declined (delete, backfill --clear, restore --from)")]
 /// Knowledge management for humans and agents — bookmarks, snippets, scripts, and semantic search
 pub struct Cli {
     /// Sets a custom config file
@@ -538,6 +538,10 @@ Exit codes:
         pre_fill: bool,
     },
     /// Generate missing embeddings for embeddable bookmarks
+    #[command(after_help = "Exit codes:
+  0    success, or nothing to do
+  1    the operation failed
+  130  confirmation declined (--clear)")]
     Backfill {
         #[arg(short = 'd', long = "dry-run", help = "only show what would be done")]
         dry_run: bool,
@@ -556,13 +560,14 @@ Exit codes:
             help = "only remove vectors of bookmarks that are not embeddable, without embedding anything"
         )]
         prune: bool,
+
+        #[arg(
+            long = "clear",
+            conflicts_with_all = ["force", "prune", "dry_run"],
+            help = "only delete all embeddings and content hashes, after asking, without embedding anything"
+        )]
+        clear: bool,
     },
-    /// Clear all embeddings and content hashes (clean slate for backfill)
-    #[command(after_help = "Exit codes:
-  0    embeddings cleared, or none found
-  1    the operation failed
-  130  confirmation declined")]
-    ClearEmbeddings {},
 
     /// Add bookmarks in bulk from a JSON array; existing bookmarks stay as they are
     ///
@@ -887,11 +892,25 @@ mod tests {
     }
 
     #[test]
-    fn given_clear_embeddings_help_when_rendered_then_lists_cancel_exit_code() {
-        let help = rendered_help(&["bkmr", "clear-embeddings", "--help"]);
+    fn given_backfill_help_when_rendered_then_lists_cancel_exit_code() {
+        let help = rendered_help(&["bkmr", "backfill", "--help"]);
 
         assert!(help.contains("Exit codes:"), "{help}");
         assert!(help.contains("130 "), "{help}");
+    }
+
+    #[test]
+    fn given_clear_embeddings_when_parsing_then_rejected() {
+        // Replaced by `backfill --clear`
+        assert!(Cli::try_parse_from(["bkmr", "clear-embeddings"]).is_err());
+    }
+
+    #[test]
+    fn given_top_level_help_when_rendered_then_names_backfill_clear_for_cancel() {
+        let help = rendered_help(&["bkmr", "--help"]);
+
+        assert!(help.contains("backfill --clear"), "{help}");
+        assert!(!help.contains("clear-embeddings"), "{help}");
     }
 
     #[test]

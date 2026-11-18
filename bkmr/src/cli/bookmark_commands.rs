@@ -34,9 +34,9 @@ use crate::util::helper::{format_file_path, format_mtime};
 use chrono;
 use crossterm::style::{Color, Stylize};
 use std::collections::HashSet;
+use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use std::fs;
 use tracing::{info, instrument, warn};
 
 // Helper function to get and validate IDs
@@ -1041,14 +1041,15 @@ pub fn surprise(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
 }
 
 /// Clear all embeddings from vec_bookmarks and reset all content hashes.
-/// Shared by `clear-embeddings` and `backfill --force`.
+/// Shared by `backfill --clear` and `backfill --force`.
 fn purge_all_embeddings(services: &ServiceContainer) -> CliResult<()> {
     services.vector_repository.clear_all()?;
     services.bookmark_repository.clear_all_content_hashes()?;
     Ok(())
 }
 
-pub fn clear_embeddings(_cli: Cli, services: &ServiceContainer) -> CliResult<()> {
+/// Deletes all embeddings and content hashes after asking. Needs no embedding model.
+fn clear_embeddings(services: &ServiceContainer) -> CliResult<()> {
     let has = services.vector_repository.has_embeddings()?;
     if !has {
         eprintln!("No embeddings found — nothing to clear.");
@@ -1071,8 +1072,13 @@ pub fn backfill(cli: Cli, services: &ServiceContainer) -> CliResult<()> {
         dry_run,
         force,
         prune,
+        clear,
     } = cli.command.unwrap()
     {
+        if clear {
+            return clear_embeddings(services);
+        }
+
         // Check if real embeddings are available
         if services.embedder.dimensions() == 0 {
             eprintln!(
