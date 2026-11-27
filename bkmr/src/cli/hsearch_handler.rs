@@ -11,31 +11,11 @@ use crate::config::Settings;
 use crate::domain::bookmark::Bookmark;
 use crate::domain::error_context::CliErrorContext;
 use crate::domain::search::{HybridSearch, HybridSearchResult, SearchMode};
-use crate::domain::tag::Tag;
 use crate::infrastructure::di::ServiceContainer;
 use crate::infrastructure::json::{write_bookmarks_as_json, JsonSearchHit};
+use crate::util::argument_processor::ArgumentProcessor;
 use crate::util::helper::is_stdout_piped;
 use tracing::instrument;
-
-/// Parse a comma-separated tag string into a HashSet<Tag>
-fn parse_tags(s: &str) -> Option<std::collections::HashSet<Tag>> {
-    let tags: std::collections::HashSet<Tag> = s
-        .split(',')
-        .filter_map(|t| {
-            let trimmed = t.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Tag::new(trimmed).ok()
-            }
-        })
-        .collect();
-    if tags.is_empty() {
-        None
-    } else {
-        Some(tags)
-    }
-}
 
 /// Tab-delimited line for piping: id, title, url, rrf_score, similarity, keyword_match.
 ///
@@ -113,15 +93,11 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer, settings: &Settings)
     let mut stderr = std::io::stderr();
     if let Commands::HSearch {
         query,
-        tags_all,
-        tags_all_not,
-        tags_any,
-        tags_any_not,
-        tags_exact,
+        tags,
         mode,
         limit,
         is_json,
-        is_fuzzy,
+        fzf,
         stdout,
         non_interactive,
     } = cli.command.unwrap()
@@ -131,12 +107,13 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer, settings: &Settings)
         search.limit = limit.map(|l| l as usize);
         search.mode = mode.into();
 
-        // Apply tag filters
-        search.tags_all = tags_all.as_deref().and_then(parse_tags);
-        search.tags_all_not = tags_all_not.as_deref().and_then(parse_tags);
-        search.tags_any = tags_any.as_deref().and_then(parse_tags);
-        search.tags_any_not = tags_any_not.as_deref().and_then(parse_tags);
-        search.tags_exact = tags_exact.as_deref().and_then(parse_tags);
+        // Same tag semantics as `search`, including the prefixes shell wrappers rely on
+        let tags = ArgumentProcessor::process_search_tag_parameters(&tags)?;
+        search.tags_exact = tags.exact_tags;
+        search.tags_all = tags.all_tags;
+        search.tags_all_not = tags.all_not_tags;
+        search.tags_any = tags.any_tags;
+        search.tags_any_not = tags.any_not_tags;
 
         // Perform hybrid search
         let outcome = services
@@ -167,12 +144,21 @@ pub fn hybrid_search(cli: Cli, services: &ServiceContainer, settings: &Settings)
 
         // JSON wins when combined with the picker: --fzf was ignored when --json
         // was set before this change, and scripts may rely on that.
-        if is_fuzzy && !is_json {
+        if fzf.is_fuzzy && !is_json {
             let bookmarks: Vec<Bookmark> = results
                 .iter()
                 .map(|result| result.bookmark.clone())
                 .collect();
-            fzf_process(&bookmarks, "classic", services, settings, stdout)?;
+            fzf_process(
+                &bookmarks,
+                fzf.fzf_style.as_deref().unwrap_or("classic"),
+                // Keep the RRF ranking while typing; typing only filters.
+                // Revisit if users miss skim's match-score sorting here.
+                true,
+                services,
+                settings,
+                stdout,
+            )?;
             return Ok(());
         }
 

@@ -256,3 +256,76 @@ fn given_exact_mode_when_hsearch_json_then_hits_are_keyword_matches_without_simi
     assert_eq!(hits[0]["keyword_match"], true);
     assert!(hits[0].get("similarity").is_none(), "{}", hits[0]);
 }
+
+#[test]
+fn given_ntags_prefix_and_ntags_when_hsearch_then_both_exclusions_apply() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = dir.path().join("prefix.db");
+    create_db_without_vectors(&db);
+
+    // The bookmark carries `zqtag`: excluded via the prefix alone, and via the plain flag
+    // while a wrapper-style prefix is also set
+    let (by_prefix, _) = hsearch_json(
+        &db,
+        &["--mode", "exact", "--Ntags-prefix", "zqtag", "zqsemantic"],
+    );
+    let (by_both, _) = hsearch_json(
+        &db,
+        &[
+            "--mode",
+            "exact",
+            "--Ntags-prefix",
+            "_imported_",
+            "-N",
+            "zqtag",
+            "zqsemantic",
+        ],
+    );
+
+    assert!(by_prefix.is_empty(), "{by_prefix:?}");
+    assert!(by_both.is_empty(), "{by_both:?}");
+}
+
+#[test]
+fn given_invalid_tag_when_hsearch_then_fails_instead_of_dropping_the_filter() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = dir.path().join("badtag.db");
+    create_db_without_vectors(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args([
+            "hsearch",
+            "--json",
+            "--np",
+            "--mode",
+            "exact",
+            "-N",
+            "zqtag,bad tag",
+            "zqsemantic",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("bad tag"));
+}
+
+#[test]
+fn given_invalid_tag_when_search_then_fails_instead_of_dropping_the_filter() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let db = dir.path().join("badtag.db");
+    create_db_without_vectors(&db);
+
+    cargo_bin_cmd!("bkmr")
+        .env("BKMR_DB_URL", &db)
+        .args([
+            "search",
+            "--json",
+            "--np",
+            "-N",
+            "zqtag,bad tag",
+            "zqsemantic",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("bad tag"));
+}

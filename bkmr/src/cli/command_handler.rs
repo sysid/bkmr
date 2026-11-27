@@ -1,4 +1,4 @@
-use crate::cli::args::{Cli, Commands};
+use crate::cli::args::{Cli, Commands, TagFilterArgs};
 use crate::cli::display::{lookup_embedded_ids, show_bookmarks, DisplayBookmark, DisplayField};
 use crate::cli::error::{CliError, CliResult};
 use crate::cli::fzf::fzf_process;
@@ -83,34 +83,14 @@ impl SearchCommandHandler {
     fn build_search_query(
         &self,
         fts_query: Option<String>,
-        tags_exact: Option<String>,
-        tags_exact_prefix: Option<String>,
-        tags_all: Option<String>,
-        tags_all_prefix: Option<String>,
-        tags_all_not: Option<String>,
-        tags_all_not_prefix: Option<String>,
-        tags_any: Option<String>,
-        tags_any_prefix: Option<String>,
-        tags_any_not: Option<String>,
-        tags_any_not_prefix: Option<String>,
+        tags: &TagFilterArgs,
         order_desc: bool,
         order_asc: bool,
         sort_field: Option<String>,
         limit: Option<i32>,
     ) -> CliResult<BookmarkQuery> {
         // Process all tag parameters using centralized logic
-        let search_tags = ArgumentProcessor::process_search_tag_parameters(
-            &tags_exact,
-            &tags_exact_prefix,
-            &tags_all,
-            &tags_all_prefix,
-            &tags_all_not,
-            &tags_all_not_prefix,
-            &tags_any,
-            &tags_any_prefix,
-            &tags_any_not,
-            &tags_any_not_prefix,
-        );
+        let search_tags = ArgumentProcessor::process_search_tag_parameters(tags)?;
 
         // Determine sort criteria
         let sort_criteria = determine_sort_criteria(sort_field.as_deref(), order_desc, order_asc)?;
@@ -180,7 +160,14 @@ impl SearchCommandHandler {
         match (is_fuzzy, is_json) {
             (true, _) => {
                 let style = fzf_style.as_deref().unwrap_or("classic");
-                fzf_process(bookmarks, style, &self.services, &self.settings, stdout)?;
+                fzf_process(
+                    bookmarks,
+                    style,
+                    false,
+                    &self.services,
+                    &self.settings,
+                    stdout,
+                )?;
             }
             (_, true) => {
                 let embedded_ids = lookup_embedded_ids(&*self.services.bookmark_service);
@@ -249,22 +236,12 @@ impl SearchCommandHandler {
     pub fn execute(&self, cli: Cli) -> CliResult<()> {
         if let Commands::Search {
             fts_query,
-            tags_exact,
-            tags_exact_prefix,
-            tags_all,
-            tags_all_prefix,
-            tags_all_not,
-            tags_all_not_prefix,
-            tags_any,
-            tags_any_prefix,
-            tags_any_not,
-            tags_any_not_prefix,
+            mut tags,
             order_desc,
             order_asc,
             sort_field,
             non_interactive,
-            is_fuzzy,
-            fzf_style,
+            fzf,
             is_json,
             limit,
             interpolate,
@@ -282,33 +259,16 @@ impl SearchCommandHandler {
             }
 
             // Stubs exist only for shell bookmarks: filter in the query, so --limit counts them
-            let tags_all = if shell_stubs {
-                Some(match tags_all {
+            if shell_stubs {
+                tags.tags_all = Some(match tags.tags_all {
                     Some(tags) => format!("{tags},_shell_"),
                     None => "_shell_".to_string(),
-                })
-            } else {
-                tags_all
-            };
+                });
+            }
 
             // Build search query
-            let query = self.build_search_query(
-                fts_query,
-                tags_exact,
-                tags_exact_prefix,
-                tags_all,
-                tags_all_prefix,
-                tags_all_not,
-                tags_all_not_prefix,
-                tags_any,
-                tags_any_prefix,
-                tags_any_not,
-                tags_any_not_prefix,
-                order_desc,
-                order_asc,
-                sort_field,
-                limit,
-            )?;
+            let query = self
+                .build_search_query(fts_query, &tags, order_desc, order_asc, sort_field, limit)?;
 
             // Execute search
             let mut bookmarks = self.services.bookmark_service.search_bookmarks(&query)?;
@@ -326,9 +286,9 @@ impl SearchCommandHandler {
             // Handle output mode
             self.handle_output_mode(
                 &bookmarks,
-                is_fuzzy,
+                fzf.is_fuzzy,
                 is_json,
-                fzf_style,
+                fzf.fzf_style,
                 &fields,
                 non_interactive,
                 stdout,

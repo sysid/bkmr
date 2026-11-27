@@ -46,55 +46,8 @@ pub enum Commands {
         /// FTS query (full text search)
         fts_query: Option<String>,
 
-        #[arg(
-            short = 'e',
-            long = "exact",
-            help = "exact tag match (comma-separated)"
-        )]
-        tags_exact: Option<String>,
-
-        #[arg(long = "exact-prefix", help = "prefix tags combined with --exact")]
-        tags_exact_prefix: Option<String>,
-
-        #[arg(
-            short = 't',
-            long = "tags",
-            help = "must have ALL these tags (comma-separated)"
-        )]
-        tags_all: Option<String>,
-
-        #[arg(long = "tags-prefix", help = "prefix tags combined with --tags")]
-        tags_all_prefix: Option<String>,
-
-        #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "exclude if has ALL these tags (comma-separated)"
-        )]
-        tags_all_not: Option<String>,
-
-        #[arg(long = "Tags-prefix", help = "prefix tags combined with --Tags")]
-        tags_all_not_prefix: Option<String>,
-
-        #[arg(
-            short = 'n',
-            long = "ntags",
-            help = "must have ANY of these tags (comma-separated)"
-        )]
-        tags_any: Option<String>,
-
-        #[arg(long = "ntags-prefix", help = "prefix tags combined with --ntags")]
-        tags_any_prefix: Option<String>,
-
-        #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "exclude if has ANY of these tags (comma-separated)"
-        )]
-        tags_any_not: Option<String>,
-
-        #[arg(long = "Ntags-prefix", help = "prefix tags combined with --Ntags")]
-        tags_any_not_prefix: Option<String>,
+        #[command(flatten)]
+        tags: TagFilterArgs,
 
         #[arg(
             short = 'o',
@@ -119,18 +72,8 @@ pub enum Commands {
         #[arg(long = "np", help = "no prompt")]
         non_interactive: bool,
 
-        #[arg(
-            long = "fzf",
-            help = "use fuzzy finder: [CTRL-O: copy to clipboard (shell scripts: copy 'bkmr open --no-edit <id> --' command), CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]"
-        )]
-        is_fuzzy: bool,
-
-        #[arg(
-            long = "fzf-style",
-            help = "fuzzy finder style: classic or enhanced",
-            default_value = "classic"
-        )]
-        fzf_style: Option<String>,
+        #[command(flatten)]
+        fzf: FzfArgs,
 
         #[arg(long = "json", help = "non-interactive mode, output as json")]
         is_json: bool,
@@ -158,44 +101,14 @@ pub enum Commands {
     },
     /// Search by keywords and by meaning, merged into one ranking
     #[command(name = "hsearch")]
+    // Shared --fzf help plus the one difference: the picker keeps the hsearch ranking
+    #[command(mut_arg("is_fuzzy", |a| a.help(FZF_HELP.replacen("use fuzzy finder", "use fuzzy finder, keeping the ranking", 1))))]
     HSearch {
         /// Search text; special characters need no quoting (for phrases, AND/OR/NOT or prefix* use `search`)
         query: String,
 
-        #[arg(
-            short = 't',
-            long = "tags",
-            help = "must have ALL these tags (comma-separated)"
-        )]
-        tags_all: Option<String>,
-
-        #[arg(
-            short = 'T',
-            long = "Tags",
-            help = "exclude if has ALL these tags (comma-separated)"
-        )]
-        tags_all_not: Option<String>,
-
-        #[arg(
-            short = 'n',
-            long = "ntags",
-            help = "must have ANY of these tags (comma-separated)"
-        )]
-        tags_any: Option<String>,
-
-        #[arg(
-            short = 'N',
-            long = "Ntags",
-            help = "exclude if has ANY of these tags (comma-separated)"
-        )]
-        tags_any_not: Option<String>,
-
-        #[arg(
-            short = 'e',
-            long = "exact",
-            help = "must have exactly these tags, no others (comma-separated)"
-        )]
-        tags_exact: Option<String>,
+        #[command(flatten)]
+        tags: TagFilterArgs,
 
         #[arg(
             long = "mode",
@@ -215,8 +128,8 @@ pub enum Commands {
         #[arg(long = "json", help = "output as JSON (includes rrf_score)")]
         is_json: bool,
 
-        #[arg(long = "fzf", help = "use fzf for interactive selection")]
-        is_fuzzy: bool,
+        #[command(flatten)]
+        fzf: FzfArgs,
 
         #[arg(
             long = "stdout",
@@ -703,6 +616,82 @@ Exit codes:
     },
 }
 
+/// Tag filters shared by `search` and `hsearch`, so both accept the same flags.
+/// Each `*-prefix` flag is merged with its plain flag: a shell wrapper fixes the prefix
+/// (e.g. `--Ntags-prefix _imported_`) and the caller can still pass the plain flag.
+#[derive(clap::Args, Clone, Debug, Default)]
+pub struct TagFilterArgs {
+    #[arg(
+        short = 'e',
+        long = "exact",
+        help = "must have exactly these tags, no others (comma-separated)"
+    )]
+    pub tags_exact: Option<String>,
+
+    #[arg(long = "exact-prefix", help = "prefix tags combined with --exact")]
+    pub tags_exact_prefix: Option<String>,
+
+    #[arg(
+        short = 't',
+        long = "tags",
+        help = "must have ALL these tags (comma-separated)"
+    )]
+    pub tags_all: Option<String>,
+
+    #[arg(long = "tags-prefix", help = "prefix tags combined with --tags")]
+    pub tags_all_prefix: Option<String>,
+
+    #[arg(
+        short = 'T',
+        long = "Tags",
+        help = "exclude if has ALL these tags (comma-separated)"
+    )]
+    pub tags_all_not: Option<String>,
+
+    #[arg(long = "Tags-prefix", help = "prefix tags combined with --Tags")]
+    pub tags_all_not_prefix: Option<String>,
+
+    #[arg(
+        short = 'n',
+        long = "ntags",
+        help = "must have ANY of these tags (comma-separated)"
+    )]
+    pub tags_any: Option<String>,
+
+    #[arg(long = "ntags-prefix", help = "prefix tags combined with --ntags")]
+    pub tags_any_prefix: Option<String>,
+
+    #[arg(
+        short = 'N',
+        long = "Ntags",
+        help = "exclude if has ANY of these tags (comma-separated)"
+    )]
+    pub tags_any_not: Option<String>,
+
+    #[arg(long = "Ntags-prefix", help = "prefix tags combined with --Ntags")]
+    pub tags_any_not_prefix: Option<String>,
+}
+
+/// Fuzzy finder flags shared by `search` and `hsearch`.
+#[derive(clap::Args, Clone, Debug, Default)]
+pub struct FzfArgs {
+    #[arg(
+        long = "fzf",
+        help = FZF_HELP
+    )]
+    pub is_fuzzy: bool,
+
+    #[arg(
+        long = "fzf-style",
+        help = "fuzzy finder style",
+        value_parser = ["classic", "enhanced"],
+        default_value = "classic"
+    )]
+    pub fzf_style: Option<String>,
+}
+
+const FZF_HELP: &str = "use fuzzy finder: [CTRL-O: copy to clipboard (shell scripts: copy 'bkmr open --no-edit <id> --' command), CTRL-E: edit, CTRL-D: delete, CTRL-A: clone, CTRL-P: show details, ENTER: open]";
+
 /// `hsearch --mode` values. The doc comments are the per-value help; exact mode is not a phrase
 /// or literal match, which its name suggests, so its help spells out what it does.
 // Mirrors domain SearchMode instead of deriving clap's ValueEnum there, because the
@@ -876,6 +865,96 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn given_fzf_style_when_hsearch_then_parses() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x", "--fzf", "--fzf-style", "enhanced"])
+            .expect("--fzf-style is accepted like in search");
+
+        match cli.command {
+            Some(Commands::HSearch { fzf, .. }) => {
+                assert_eq!(fzf.fzf_style.as_deref(), Some("enhanced"))
+            }
+            _ => panic!("expected hsearch"),
+        }
+    }
+
+    #[test]
+    fn given_hsearch_help_when_rendered_then_fzf_says_it_keeps_the_ranking() {
+        let hsearch = rendered_help(&["bkmr", "hsearch", "--help"]);
+        let search = rendered_help(&["bkmr", "search", "--help"]);
+
+        assert!(hsearch.contains("keeping the ranking"), "{hsearch}");
+        assert!(!search.contains("keeping the ranking"), "{search}");
+    }
+
+    #[test]
+    fn given_unknown_fzf_style_when_search_or_hsearch_then_rejected() {
+        // A typo must not silently fall back to the classic picker
+        for cmd in ["search", "hsearch"] {
+            let result = Cli::try_parse_from(["bkmr", cmd, "x", "--fzf", "--fzf-style", "enhaced"]);
+
+            assert!(result.is_err(), "{cmd} accepted an unknown --fzf-style");
+        }
+    }
+
+    #[test]
+    fn given_no_fzf_style_when_hsearch_then_defaults_to_classic() {
+        let cli = Cli::try_parse_from(["bkmr", "hsearch", "x"]).unwrap();
+
+        match cli.command {
+            Some(Commands::HSearch { fzf, .. }) => {
+                assert_eq!(fzf.fzf_style.as_deref(), Some("classic"))
+            }
+            _ => panic!("expected hsearch"),
+        }
+    }
+
+    #[test]
+    fn given_tag_flag_and_its_prefix_when_hsearch_then_both_are_kept() {
+        // A shell wrapper fixes the prefix, so the caller can still pass the plain flag
+        let cli = Cli::try_parse_from([
+            "bkmr",
+            "hsearch",
+            "x",
+            "--exact-prefix",
+            "e1",
+            "--tags-prefix",
+            "a1",
+            "--Tags-prefix",
+            "an1",
+            "--ntags-prefix",
+            "o1",
+            "--Ntags-prefix",
+            "_imported_",
+            "-N",
+            "draft",
+        ])
+        .expect("all prefix flags are accepted like in search");
+
+        match cli.command {
+            Some(Commands::HSearch { tags, .. }) => {
+                assert_eq!(tags.tags_exact_prefix.as_deref(), Some("e1"));
+                assert_eq!(tags.tags_all_prefix.as_deref(), Some("a1"));
+                assert_eq!(tags.tags_all_not_prefix.as_deref(), Some("an1"));
+                assert_eq!(tags.tags_any_prefix.as_deref(), Some("o1"));
+                assert_eq!(tags.tags_any_not.as_deref(), Some("draft"));
+                assert_eq!(tags.tags_any_not_prefix.as_deref(), Some("_imported_"));
+            }
+            _ => panic!("expected hsearch"),
+        }
+    }
+
+    #[test]
+    fn given_hsearch_and_search_help_when_rendered_then_fzf_documents_the_same_keys() {
+        let hsearch = rendered_help(&["bkmr", "hsearch", "--help"]);
+        let search = rendered_help(&["bkmr", "search", "--help"]);
+
+        for key in ["CTRL-O", "CTRL-E", "CTRL-D", "CTRL-A", "CTRL-P"] {
+            assert!(search.contains(key), "search: {search}");
+            assert!(hsearch.contains(key), "hsearch: {hsearch}");
+        }
     }
 
     #[test]

@@ -148,7 +148,7 @@ bkmr search --fzf
 | Command | Description |
 |---------|-------------|
 | `search` | Full-text search with tag filtering, FZF, JSON output |
-| `hsearch` | Hybrid search: FTS + semantic with RRF fusion; `--mode exact`: keywords only; `--mode semantic`: meaning only, using local embeddings (offline, no API keys). Each hit reports its cosine `similarity` and whether it was a `keyword_match` |
+| `hsearch` | Hybrid search: FTS + semantic with RRF fusion; `--mode exact`: keywords only; `--mode semantic`: meaning only, using local embeddings (offline, no API keys). Each hit reports its cosine `similarity` and whether it was a `keyword_match`. Same tag filters (incl. `--*-prefix`) and FZF picker as `search`; the picker keeps the ranking while you type |
 | `add` | Add bookmarks (URLs, snippets, scripts, markdown, env vars) |
 | `open` | Smart action dispatch based on content type |
 | `edit` | Edit bookmarks (smart: opens source file for imports) |

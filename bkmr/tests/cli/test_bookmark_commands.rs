@@ -1,4 +1,4 @@
-use bkmr::cli::args::{Cli, Commands};
+use bkmr::cli::args::{Cli, Commands, FzfArgs, TagFilterArgs};
 use bkmr::domain::tag::Tag;
 use bkmr::util::argument_processor::ArgumentProcessor;
 use bkmr::util::testing::{init_test_env, EnvGuard};
@@ -31,22 +31,23 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
         generate_config: false,
         command: Some(Commands::Search {
             fts_query: None,
-            tags_exact: Some("tag1".to_string()),
-            tags_exact_prefix: Some("prefix1".to_string()),
-            tags_all: Some("tag2".to_string()),
-            tags_all_prefix: Some("prefix2".to_string()),
-            tags_all_not: Some("tag3".to_string()),
-            tags_all_not_prefix: Some("prefix3".to_string()),
-            tags_any: Some("tag4".to_string()),
-            tags_any_prefix: Some("prefix4".to_string()),
-            tags_any_not: Some("tag5".to_string()),
-            tags_any_not_prefix: Some("prefix5".to_string()),
+            tags: TagFilterArgs {
+                tags_exact: Some("tag1".to_string()),
+                tags_exact_prefix: Some("prefix1".to_string()),
+                tags_all: Some("tag2".to_string()),
+                tags_all_prefix: Some("prefix2".to_string()),
+                tags_all_not: Some("tag3".to_string()),
+                tags_all_not_prefix: Some("prefix3".to_string()),
+                tags_any: Some("tag4".to_string()),
+                tags_any_prefix: Some("prefix4".to_string()),
+                tags_any_not: Some("tag5".to_string()),
+                tags_any_not_prefix: Some("prefix5".to_string()),
+            },
             order_desc: false,
             order_asc: false,
             sort_field: None,
             non_interactive: true,
-            is_fuzzy: false,
-            fzf_style: None,
+            fzf: FzfArgs::default(),
             is_json: true, // Use JSON output for easier testing
             limit: None,
             interpolate: false,
@@ -62,8 +63,8 @@ fn given_tag_prefix_options_when_search_then_combines_tag_sets() {
 
     // Verify the tag string parsing using ArgumentProcessor
     let exact_tags = ArgumentProcessor::apply_prefix_tags(
-        ArgumentProcessor::parse_tag_string(&Some("tag1".to_string())),
-        ArgumentProcessor::parse_tag_string(&Some("prefix1".to_string())),
+        ArgumentProcessor::parse_tag_string(&Some("tag1".to_string())).unwrap(),
+        ArgumentProcessor::parse_tag_string(&Some("prefix1".to_string())).unwrap(),
     );
 
     // Assert
@@ -97,22 +98,23 @@ fn given_search_command_with_prefixes_when_executed_then_performs_search() {
         generate_config: false,
         command: Some(Commands::Search {
             fts_query: None,
-            tags_exact: Some("tag1".to_string()),
-            tags_exact_prefix: Some("prefix1".to_string()),
-            tags_all: None,
-            tags_all_prefix: None,
-            tags_all_not: None,
-            tags_all_not_prefix: None,
-            tags_any: None,
-            tags_any_prefix: None,
-            tags_any_not: None,
-            tags_any_not_prefix: None,
+            tags: TagFilterArgs {
+                tags_exact: Some("tag1".to_string()),
+                tags_exact_prefix: Some("prefix1".to_string()),
+                tags_all: None,
+                tags_all_prefix: None,
+                tags_all_not: None,
+                tags_all_not_prefix: None,
+                tags_any: None,
+                tags_any_prefix: None,
+                tags_any_not: None,
+                tags_any_not_prefix: None,
+            },
             order_desc: false,
             order_asc: false,
             sort_field: None,
             non_interactive: true,
-            is_fuzzy: false,
-            fzf_style: None,
+            fzf: FzfArgs::default(),
             is_json: true,
             limit: None,
             interpolate: false,
@@ -188,22 +190,23 @@ fn test_search_command_structure_with_interpolate() {
         generate_config: false,
         command: Some(Commands::Search {
             fts_query: Some("test query".to_string()),
-            tags_exact: None,
-            tags_exact_prefix: None,
-            tags_all: Some("_snip_".to_string()),
-            tags_all_prefix: None,
-            tags_all_not: None,
-            tags_all_not_prefix: None,
-            tags_any: None,
-            tags_any_prefix: None,
-            tags_any_not: None,
-            tags_any_not_prefix: None,
+            tags: TagFilterArgs {
+                tags_exact: None,
+                tags_exact_prefix: None,
+                tags_all: Some("_snip_".to_string()),
+                tags_all_prefix: None,
+                tags_all_not: None,
+                tags_all_not_prefix: None,
+                tags_any: None,
+                tags_any_prefix: None,
+                tags_any_not: None,
+                tags_any_not_prefix: None,
+            },
             order_desc: false,
             order_asc: false,
             sort_field: None,
             non_interactive: true,
-            is_fuzzy: false,
-            fzf_style: None,
+            fzf: FzfArgs::default(),
             is_json: true,
             limit: Some(50),
             interpolate: true, // Test with interpolation enabled
@@ -215,7 +218,7 @@ fn test_search_command_structure_with_interpolate() {
     // Extract the command and verify structure
     if let Some(Commands::Search {
         interpolate,
-        tags_all,
+        tags,
         is_json,
         limit,
         ..
@@ -223,7 +226,7 @@ fn test_search_command_structure_with_interpolate() {
     {
         assert!(interpolate, "interpolate should be true");
         assert!(is_json, "is_json should be true");
-        assert_eq!(tags_all, Some("_snip_".to_string()));
+        assert_eq!(tags.tags_all, Some("_snip_".to_string()));
         assert_eq!(limit, Some(50));
     } else {
         panic!("Expected Search command");
