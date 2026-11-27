@@ -334,36 +334,18 @@ fn get_selected_bookmarks(output: &SkimOutput, bookmarks: &[Bookmark]) -> Vec<Bo
     selected
 }
 
-/// Processes bookmarks using the fzf-like selector interface
-#[instrument(skip(bookmarks), level = "debug")]
-pub fn fzf_process(
-    bookmarks: &[Bookmark],
-    style: &str,
-    services: &ServiceContainer,
-    settings: &crate::config::Settings,
-    stdout: bool,
-) -> CliResult<()> {
-    if bookmarks.is_empty() {
-        eprintln!("No bookmarks to display");
-        return Ok(());
-    }
-
-    // Bookmarks arrive pre-sorted by the query layer
-    let max_id_width = bookmarks
-        .iter()
-        .map(|b| b.id.unwrap_or(0).to_string().len())
-        .max()
-        .unwrap_or(0);
-
-    let fzf_opts = &settings.fzf_opts;
-
-    // Build skim options
+/// Skim options for the bookmark picker.
+///
+/// `keep_order` stops skim from re-sorting by match score while the user types, so a ranked
+/// list (hsearch) keeps its order and typing only filters it.
+fn skim_options(style: &str, keep_order: bool, fzf_opts: &crate::config::FzfOpts) -> SkimOptions {
     let mut options = SkimOptions::default();
     options.height = fzf_opts.height.clone();
     options.reverse = fzf_opts.reverse;
     options.multi = false;
     options.ansi = true;
     options.query = Some("".to_string());
+    options.no_sort = keep_order;
 
     if style == "enhanced" {
         options.preview = Some("".to_string());
@@ -382,7 +364,33 @@ pub fn fzf_process(
     ];
 
     // Finalize options (processes bind strings into keymap, applies defaults)
-    let options = options.build();
+    options.build()
+}
+
+/// Processes bookmarks using the fzf-like selector interface
+#[instrument(skip(bookmarks), level = "debug")]
+pub fn fzf_process(
+    bookmarks: &[Bookmark],
+    style: &str,
+    keep_order: bool,
+    services: &ServiceContainer,
+    settings: &crate::config::Settings,
+    stdout: bool,
+) -> CliResult<()> {
+    if bookmarks.is_empty() {
+        eprintln!("No bookmarks to display");
+        return Ok(());
+    }
+
+    // Bookmarks arrive pre-sorted by the query layer
+    let max_id_width = bookmarks
+        .iter()
+        .map(|b| b.id.unwrap_or(0).to_string().len())
+        .max()
+        .unwrap_or(0);
+
+    let fzf_opts = &settings.fzf_opts;
+    let options = skim_options(style, keep_order, fzf_opts);
 
     // Build items based on style
     let items: Vec<FzfBookmarkItem> = bookmarks
@@ -659,6 +667,29 @@ pub fn pick_restore_ids(items: Vec<RestorePickItem>) -> CliResult<Option<Vec<i32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn given_keep_order_when_building_skim_options_then_typing_does_not_resort() {
+        let options = skim_options("classic", true, &crate::config::FzfOpts::default());
+
+        assert!(options.no_sort);
+    }
+
+    #[test]
+    fn given_no_keep_order_when_building_skim_options_then_skim_sorts_by_match_score() {
+        let options = skim_options("classic", false, &crate::config::FzfOpts::default());
+
+        assert!(!options.no_sort);
+    }
+
+    #[test]
+    fn given_enhanced_style_when_building_skim_options_then_preview_is_on() {
+        let enhanced = skim_options("enhanced", false, &crate::config::FzfOpts::default());
+        let classic = skim_options("classic", false, &crate::config::FzfOpts::default());
+
+        assert!(enhanced.preview.is_some());
+        assert!(classic.preview.is_none());
+    }
 
     #[test]
     fn given_extended_skim_query_when_query_may_match_then_keeps_the_preview() {
