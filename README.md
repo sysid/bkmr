@@ -83,15 +83,15 @@ bkmr hsearch --mode semantic "containerized application security"
 
 ### Screenshots
 
-**General Usage:**
+**General Usage: Store anything, find it, act on it (humans)**
 
 ![bkmr demo](docs/demo.gif)
 
-**Fuzzy Search with FZF:**
+**Fuzzy Search with FZF: Interactive Picker**
 
 ![fzf demo](docs/fzf-demo.gif)
 
-**Agent Memory:**
+**Agent Memory: Memory an agent can trust**
 
 ![agent demo](docs/agent-demo.gif)
 
